@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
@@ -9,7 +8,6 @@ import { supabase } from '@/utils/supabase';
 type Role = 'client' | 'provider';
 
 export default function RoleScreen() {
-  const router = useRouter();
   const [submitting, setSubmitting] = useState<Role | null>(null);
 
   const handleSelect = async (role: Role) => {
@@ -18,22 +16,46 @@ export default function RoleScreen() {
     if (userError || !userResult.user) {
       setSubmitting(null);
       Alert.alert('Not signed in', 'Please sign in again to continue.');
-      router.replace('/(auth)/login');
       return;
     }
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .upsert({ id: userResult.user.id, email: userResult.user.email, role });
-
-    setSubmitting(null);
+      .upsert({ id: userResult.user.id, email: userResult.user.email, role, active_role: role });
 
     if (profileError) {
+      setSubmitting(null);
       Alert.alert('Could not save role', profileError.message);
       return;
     }
 
-    router.replace('/(tabs)');
+    // Track role in user_roles to allow dual roles and switching
+    const { error: rolesError } = await supabase
+      .from('user_roles')
+      .upsert({ user_id: userResult.user.id, role, is_active: true }, { onConflict: 'user_id,role' });
+
+    if (rolesError) {
+      setSubmitting(null);
+      Alert.alert('Saved profile but could not record role', rolesError.message);
+      return;
+    }
+
+    await supabase
+      .from('user_roles')
+      .update({ is_active: false })
+      .eq('user_id', userResult.user.id)
+      .neq('role', role);
+
+    setSubmitting(null);
+
+    // Metadata sync is optional; layout guard relies on profiles/user_roles.
+    supabase.auth
+      .updateUser({ data: { role, app_role: role } })
+      .then(({ error: metaError }) => {
+        if (!metaError) return;
+        Alert.alert('Role saved', 'Role was saved, but account metadata sync failed. You can continue.');
+      })
+      .catch(() => {});
   };
 
   return (

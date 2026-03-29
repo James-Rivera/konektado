@@ -1,12 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSupabaseAuth } from '@/hooks/use-supabase-auth';
+import { useProfileStatus } from '@/hooks/use-profile-status';
 
 
 export const unstable_settings = {
@@ -15,7 +16,9 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const { session, loading } = useSupabaseAuth();
+  const router = useRouter();
+  const segments = useSegments();
+  const { loading, authenticated, needsRole, needsProfile } = useProfileStatus();
   const [fontsLoaded] = useFonts({
     AvantGarde: require('../assets/images/fonts/ITC Avant Garde Gothic CE Demi.otf'),
     'Satoshi-Black': require('../assets/images/fonts/Satoshi-Black.otf'),
@@ -29,6 +32,31 @@ export default function RootLayout() {
     'Satoshi-MediumItalic': require('../assets/images/fonts/Satoshi-MediumItalic.otf'),
     'Satoshi-Regular': require('../assets/images/fonts/Satoshi-Regular.otf'),
   });
+
+  useEffect(() => {
+    if (loading) return;
+
+    const activeGroup = segments[0];
+    const targetGroup = !authenticated
+      ? '(auth)'
+      : needsRole
+      ? '(auth)'
+      : needsProfile
+      ? '(onboarding)'
+      : '(tabs)';
+
+    const targetPath = !authenticated
+      ? '/(auth)/login'
+      : needsRole
+      ? '/(auth)/role'
+      : needsProfile
+      ? '/(onboarding)'
+      : '/(tabs)';
+
+    if (activeGroup !== targetGroup) {
+      router.replace(targetPath);
+    }
+  }, [authenticated, loading, needsProfile, needsRole, router, segments]);
 
   if (!fontsLoaded) {
     return (
@@ -48,11 +76,10 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack
-        initialRouteName={session ? '(tabs)' : '(auth)'}
-        screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />

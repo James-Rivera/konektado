@@ -73,19 +73,45 @@ export default function ProfileScreen() {
       birthdate: form.birthdate ? form.birthdate : null,
       street_address: form.streetAddress.trim() || null,
       city: form.city.trim() || null,
-      service_type: form.serviceType.trim() || null,
       phone: form.phone.trim() || null,
       about: form.about.trim() || null,
       availability: form.availability.trim() || null,
     };
 
     const { error: updateError } = await supabase.from('profiles').upsert(updates);
-    setSaving(false);
-
     if (updateError) {
+      setSaving(false);
       Alert.alert('Unable to save profile', updateError.message);
       return;
     }
+
+    const { data: providerRoleRows } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', profile.id)
+      .eq('role', 'provider')
+      .limit(1);
+
+    const hasProviderRole =
+      (providerRoleRows?.length ?? 0) > 0 ||
+      profile.active_role === 'provider' ||
+      profile.role === 'provider';
+
+    if (hasProviderRole) {
+      const { error: providerProfileError } = await supabase.from('provider_profiles').upsert({
+        user_id: profile.id,
+        service_type: form.serviceType.trim() || null,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (providerProfileError) {
+        setSaving(false);
+        Alert.alert('Profile saved, but provider details failed to save', providerProfileError.message);
+        return;
+      }
+    }
+
+    setSaving(false);
 
     setEditing(false);
     refresh();
@@ -121,11 +147,16 @@ export default function ProfileScreen() {
         <ThemedText type="title">{getDisplayName(profile)}</ThemedText>
         <ThemedText style={styles.muted}>{profile.email}</ThemedText>
         <ThemedText style={styles.badge}>{profile.role?.toUpperCase() ?? 'UNSET'}</ThemedText>
-        {profile.verified_at ? (
-          <ThemedText style={styles.verified}>Barangay Verified</ThemedText>
-        ) : (
-          <ThemedText style={styles.helper}>Not verified yet</ThemedText>
-        )}
+        <View style={styles.statusRow}>
+          {profile.has_certifications || profile.certification_status === 'approved' ? (
+            <ThemedText style={styles.certified}>Certified Skills</ThemedText>
+          ) : null}
+          {profile.verified_at ? (
+            <ThemedText style={styles.verified}>Barangay Verified</ThemedText>
+          ) : (
+            <ThemedText style={styles.helper}>Not verified yet</ThemedText>
+          )}
+        </View>
       </ThemedView>
 
       <ThemedView style={styles.section}>
@@ -324,6 +355,16 @@ const styles = StyleSheet.create({
   verified: {
     color: '#059669',
     fontWeight: '600',
+  },
+  certified: {
+    color: '#166534',
+    fontWeight: '600',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    alignItems: 'center',
   },
   section: {
     borderRadius: 16,

@@ -6,6 +6,7 @@ export type ProfileRecord = {
   id: string;
   email: string | null;
   role: string | null;
+  active_role: string | null;
   full_name: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -14,10 +15,18 @@ export type ProfileRecord = {
   street_address: string | null;
   city: string | null;
   service_type: string | null;
+  has_certifications: boolean | null;
+  certification_status: string | null;
   phone: string | null;
   about: string | null;
   availability: string | null;
   verified_at: string | null;
+};
+
+type ProviderProfileRecord = {
+  service_type: string | null;
+  has_certifications: boolean | null;
+  certification_status: string | null;
 };
 
 export function useProfile() {
@@ -41,7 +50,7 @@ export function useProfile() {
     const { data, error: profileError } = await supabase
       .from("profiles")
       .select(
-        "id, email, role, full_name, first_name, last_name, birthdate, barangay, street_address, city, service_type, phone, about, availability, verified_at",
+        "id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at",
       )
       .eq("id", userResult.user.id)
       .maybeSingle();
@@ -50,7 +59,21 @@ export function useProfile() {
       setProfile(null);
       setError(profileError.message);
     } else {
-      setProfile(data as ProfileRecord);
+      const base = data as ProfileRecord;
+      const { data: providerData } = await supabase
+        .from("provider_profiles")
+        .select("service_type, has_certifications, certification_status")
+        .eq("user_id", userResult.user.id)
+        .maybeSingle();
+
+      const providerProfile =
+        (providerData as ProviderProfileRecord | null) ?? null;
+      setProfile({
+        ...base,
+        service_type: providerProfile?.service_type ?? null,
+        has_certifications: providerProfile?.has_certifications ?? null,
+        certification_status: providerProfile?.certification_status ?? null,
+      });
     }
     setLoading(false);
   }, []);

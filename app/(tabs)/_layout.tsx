@@ -1,44 +1,13 @@
-import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { Tabs } from 'expo-router';
+import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useProfileStatus } from '@/hooks/use-profile-status';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
-  const { loading, needsRole, authenticated } = useProfileStatus();
-  const [redirecting, setRedirecting] = useState(false);
-
-  useEffect(() => {
-    if (loading) return;
-
-    if (!authenticated) {
-      router.replace('/(auth)/login');
-      setRedirecting(true);
-      return;
-    }
-
-    if (needsRole) {
-      router.replace('/(auth)/role');
-      setRedirecting(true);
-      return;
-    }
-
-    setRedirecting(false);
-  }, [loading, authenticated, needsRole, needsProfile, needsCertificationReview, router]);
-
-  if (loading || redirecting) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
 
   return (
     <Tabs
