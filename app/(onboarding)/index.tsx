@@ -1,10 +1,16 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import {
+  OnboardingButton,
+  OnboardingFormScaffold,
+  OnboardingTextInput,
+  onboardingColors,
+} from '@/components/onboarding/FigmaOnboarding';
 
 import { useOnboarding } from './onboarding-context';
 
@@ -32,95 +38,80 @@ export default function BasicsStep() {
       Alert.alert('Add your name', 'First and last name are required.');
       return;
     }
+
     updateDraft({
+      birthdate: localBirthdate,
       firstName: localFirst,
       lastName: localLast,
-      birthdate: localBirthdate,
     });
     router.push('/(onboarding)/location');
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Tell us about you</ThemedText>
-      <TextInput
-        style={styles.input}
-        placeholder="First name"
-        value={localFirst}
-        onChangeText={setLocalFirst}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Last name"
-        value={localLast}
-        onChangeText={setLocalLast}
-      />
-
-      <View style={styles.fieldGroup}>
-        <ThemedText type="defaultSemiBold">Birthdate</ThemedText>
-        <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-          <ThemedText>{localBirthdate || 'Select your birthdate'}</ThemedText>
-        </Pressable>
-        <ThemedText style={styles.helper}>Use the calendar picker for faster and accurate input.</ThemedText>
-      </View>
-
-      {showDatePicker ? (
-        <DateTimePicker
-          value={selectedDate}
-          mode="date"
-          display="default"
-          maximumDate={new Date()}
-          onChange={onDateChange}
+    <>
+      <StatusBar style="dark" />
+      <OnboardingFormScaffold
+        currentStep={3}
+        footer={<OnboardingButton label="Next" onPress={next} />}
+        helper="Make sure each detail matches official documents"
+        onBack={() => router.back()}
+        title="Enter your details">
+        <OnboardingTextInput
+          autoCapitalize="words"
+          onChangeText={setLocalFirst}
+          placeholder="First Name"
+          textContentType="givenName"
+          value={localFirst}
         />
-      ) : null}
+        <OnboardingTextInput
+          autoCapitalize="words"
+          onChangeText={setLocalLast}
+          placeholder="Last Name"
+          textContentType="familyName"
+          value={localLast}
+        />
 
-      <TouchableOpacity style={styles.primary} onPress={next}>
-        <ThemedText type="defaultSemiBold" style={styles.primaryText}>Continue</ThemedText>
-      </TouchableOpacity>
-    </ThemedView>
+        <Pressable accessibilityRole="button" onPress={() => setShowDatePicker(true)} style={styles.dateInput}>
+          <Text style={[styles.dateText, !localBirthdate ? styles.placeholder : undefined]}>
+            {localBirthdate || 'Date of Birth'}
+          </Text>
+          <MaterialIcons color={onboardingColors.placeholder} name="calendar-today" size={22} />
+        </Pressable>
+
+        {showDatePicker ? (
+          <DateTimePicker
+            display="default"
+            maximumDate={new Date()}
+            mode="date"
+            onChange={onDateChange}
+            value={selectedDate}
+          />
+        ) : null}
+      </OnboardingFormScaffold>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    gap: 12,
-    justifyContent: 'center',
-  },
-  title: {
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: '#fff',
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  dateButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: '#fff',
-  },
-  helper: {
-    color: '#6b7280',
-    fontSize: 12,
-  },
-  primary: {
-    marginTop: 12,
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
+  dateInput: {
     alignItems: 'center',
+    backgroundColor: onboardingColors.surface,
+    borderColor: onboardingColors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    height: 46,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  primaryText: {
-    color: '#fff',
+  dateText: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  placeholder: {
+    color: onboardingColors.placeholder,
   },
 });

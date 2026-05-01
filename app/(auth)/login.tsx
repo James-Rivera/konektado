@@ -1,90 +1,117 @@
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import {
+  AuthShell,
+  OnboardingButton,
+  OnboardingTextInput,
+  onboardingColors,
+} from '@/components/onboarding/FigmaOnboarding';
 import { supabase } from '@/utils/supabase';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const onLogin = async () => {
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       Alert.alert('Missing fields', 'Please enter email and password.');
       return;
     }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
     setLoading(false);
+
     if (error) {
       Alert.alert('Sign in failed', error.message);
     }
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Konektado</ThemedText>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      <TouchableOpacity style={styles.button} onPress={onLogin} disabled={loading}>
-        <ThemedText type="defaultSemiBold" style={styles.buttonText}>
-          {loading ? 'Signing in...' : 'Sign in'}
-        </ThemedText>
-      </TouchableOpacity>
-      <ThemedText>
-        No account?{' '}
-        <Link href="/(auth)/register" style={styles.link}>
-          Create one
-        </Link>
-      </ThemedText>
-    </ThemedView>
+    <>
+      <StatusBar style="dark" />
+      <AuthShell
+        onClose={() => router.replace('/(auth)')}
+        title="Sign in"
+        footer={
+          <Pressable accessibilityRole="link" onPress={() => router.push('/(auth)/role')} style={styles.footerLink}>
+            <Text style={styles.footerText}>
+              First time to connect? <Text style={styles.footerTextStrong}>Sign Up</Text>
+            </Text>
+          </Pressable>
+        }>
+        <View style={styles.form}>
+          <OnboardingTextInput
+            autoCapitalize="none"
+            keyboardType="email-address"
+            onChangeText={setEmail}
+            placeholder="Email"
+            textContentType="emailAddress"
+            value={email}
+          />
+          <OnboardingTextInput
+            onChangeText={setPassword}
+            placeholder="Password"
+            secureTextEntry
+            textContentType="password"
+            value={password}
+          />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => Alert.alert('Password reset', 'Password reset is not configured yet.')}
+            style={styles.forgotLink}>
+            <Text style={styles.forgotText}>Forgot Password?</Text>
+          </Pressable>
+        </View>
+
+        <OnboardingButton label="Login" loading={loading} onPress={onLogin} style={styles.submitButton} />
+      </AuthShell>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    gap: 12,
+  form: {
+    gap: 10,
+  },
+  forgotLink: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    minHeight: 28,
     justifyContent: 'center',
   },
-  title: {
-    fontFamily: 'AvantGarde',
-    textAlign: 'center',
-    marginBottom: 24,
+  forgotText: {
+    color: '#3A90F8',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 20,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
+  submitButton: {
+    marginTop: 42,
   },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
+  footerLink: {
     alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  buttonText: {
-    color: '#fff',
+  footerText: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Light',
+    fontSize: 16,
+    lineHeight: 20,
+    textAlign: 'center',
   },
-  link: {
-    color: '#2563eb',
+  footerTextStrong: {
+    color: '#3A90F8',
+    fontFamily: 'Satoshi-Black',
+    textDecorationLine: 'underline',
   },
 });

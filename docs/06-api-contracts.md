@@ -8,10 +8,10 @@ Recommended service folder:
 /services
   auth.service.ts
   profile.service.ts
-  skill.service.ts
+  service-profile.service.ts
   verification.service.ts
   job.service.ts
-  application.service.ts
+  conversation.service.ts
   review.service.ts
   admin.service.ts
 ```
@@ -53,30 +53,30 @@ Purpose: Own profile, roles, and public provider profile reads.
 | `getPublicProfile(userId)` | `{ userId: string }` | `ServiceResult<PublicProfile>` | Returns public-safe fields only. |
 | `setActiveRole(role)` | `{ role: AppRole }` | `ServiceResult<UserRole>` | Switches current active role if user owns that role. |
 | `addRole(role)` | `{ role: AppRole }` | `ServiceResult<UserRole>` | Adds client/provider role for current user. Admin role is excluded. |
-| `listProviders(filters)` | `ProviderSearchFilters` | `ServiceResult<PublicProvider[]>` | Searches public provider profiles. |
+| `listProviders(filters)` | `ProviderSearchFilters` | `ServiceResult<PublicProvider[]>` | Searches public provider/service profiles. |
 
 Rules:
 
 - Birthdate, street address, and verification files are not public profile fields.
 - `barangay_verified_at` is admin-controlled only.
 
-## SkillService
+## ServiceProfileService
 
-Purpose: Own provider skill/service profiles.
+Purpose: Own provider service profiles.
 
 | Function | Input | Output | Behavior |
 | --- | --- | --- | --- |
-| `listMySkills()` | none | `ServiceResult<Skill[]>` | Lists current provider's skills, active and inactive. |
-| `createSkill(input)` | `CreateSkillInput` | `ServiceResult<Skill>` | Creates a skill for current provider. |
-| `updateSkill(id, input)` | `{ id: string; input: UpdateSkillInput }` | `ServiceResult<Skill>` | Updates owned skill. |
-| `setSkillActive(id, isActive)` | `{ id: string; isActive: boolean }` | `ServiceResult<Skill>` | Shows or hides a skill from public search. |
-| `deleteSkill(id)` | `{ id: string }` | `ServiceResult<void>` | Deletes owned skill if allowed. |
-| `searchSkills(filters)` | `SkillSearchFilters` | `ServiceResult<SkillSearchResult[]>` | Searches active public skills. |
+| `listMyServices()` | none | `ServiceResult<ServiceProfile[]>` | Lists current provider's services, active and inactive. |
+| `createService(input)` | `CreateServiceInput` | `ServiceResult<ServiceProfile>` | Creates a service for current provider. |
+| `updateService(id, input)` | `{ id: string; input: UpdateServiceInput }` | `ServiceResult<ServiceProfile>` | Updates owned service. |
+| `setServiceActive(id, isActive)` | `{ id: string; isActive: boolean }` | `ServiceResult<ServiceProfile>` | Shows or hides a service from public search. |
+| `deleteService(id)` | `{ id: string }` | `ServiceResult<void>` | Deletes owned service if allowed. |
+| `searchServices(filters)` | `ServiceSearchFilters` | `ServiceResult<ServiceSearchResult[]>` | Searches active public services. |
 
 Rules:
 
-- Only providers can create skills.
-- Screens should not know the table structure for `skills`.
+- Only verified providers can create public services.
+- Screens should not know whether services are backed by `services` or the temporary `provider_profiles.service_type` field.
 
 ## VerificationService
 
@@ -115,23 +115,28 @@ Rules:
 - Providers can read open jobs.
 - Budget is informational, not a payment transaction.
 
-## ApplicationService
+## ConversationService
 
-Purpose: Own provider applications and client application review.
+Purpose: Own message-based job interest and basic chat.
 
 | Function | Input | Output | Behavior |
 | --- | --- | --- | --- |
-| `applyToJob(input)` | `{ jobId: string; message?: string }` | `ServiceResult<JobApplication>` | Creates provider application if job is open. |
-| `withdrawApplication(id)` | `{ id: string }` | `ServiceResult<JobApplication>` | Marks owned application as withdrawn if allowed. |
-| `listMyApplications()` | none | `ServiceResult<JobApplication[]>` | Lists applications submitted by current provider. |
-| `listApplicationsForJob(jobId)` | `{ jobId: string }` | `ServiceResult<JobApplicationDetail[]>` | Client lists applications for own job. |
-| `updateApplicationStatus(id, status)` | `{ id: string; status: ApplicationStatus }` | `ServiceResult<JobApplication>` | Client accepts/rejects/shortlists for own job. |
+| `listMyConversations(filters)` | optional filters | `ServiceResult<ConversationSummary[]>` | Lists inbox rows for Messages tab. |
+| `getConversation(id)` | `{ id: string }` | `ServiceResult<ConversationDetail>` | Gets job/service context and messages. |
+| `startJobConversation(input)` | `{ jobId: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a job conversation to show interest. |
+| `startServiceConversation(input)` | `{ providerId: string; serviceId?: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a service request conversation. |
+| `sendMessage(input)` | `{ conversationId: string; body: string }` | `ServiceResult<Message>` | Sends a text message. |
+| `markWorkerHired(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Client marks the provider hired for the job. |
+| `declineConversation(input)` | `{ conversationId: string; reason?: string }` | `ServiceResult<ConversationDetail>` | Declines a request/interest without deleting history. |
+| `archiveConversation(input)` | `{ conversationId: string }` | `ServiceResult<void>` | Removes conversation from current user's active list if supported. |
 
 Rules:
 
-- Unique application per provider per job.
-- Provider cannot apply to own job.
-- Accepting an application can optionally set `jobs.accepted_provider_id`.
+- Only verified users can start or send messages.
+- A provider cannot start a job conversation on their own job.
+- One active job conversation per provider per job.
+- "Mark hired" is client-only for jobs owned by that client.
+- Keep MVP messaging text-only.
 
 ## ReviewService
 

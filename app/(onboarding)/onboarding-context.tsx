@@ -39,7 +39,7 @@ export type OnboardingContextValue = {
   loading: boolean;
   saving: boolean;
   setVerificationFiles: (files: VerificationUpload[]) => void;
-  saveProfile: (options?: { requiresCertificationReview?: boolean }) => Promise<void>;
+  saveProfile: (options?: { requiresCertificationReview?: boolean }) => Promise<boolean>;
 };
 
 function buildCertificationDetails(draft: OnboardingDraft) {
@@ -151,7 +151,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     async ({ requiresCertificationReview }: { requiresCertificationReview?: boolean } = {}) => {
       if (!userMeta) {
         Alert.alert('Not signed in', 'Please sign in again to continue.');
-        return;
+        return false;
       }
 
       setSaving(true);
@@ -178,7 +178,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       if (profileError) {
         setSaving(false);
         Alert.alert('Could not save profile', profileError.message);
-        return;
+        return false;
       }
 
       if (cachedRole === 'provider') {
@@ -195,7 +195,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         if (providerProfileError) {
           setSaving(false);
           Alert.alert('Could not save provider profile', providerProfileError.message);
-          return;
+          return false;
         }
       }
 
@@ -208,7 +208,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         if (clientProfileError) {
           setSaving(false);
           Alert.alert('Could not save client profile', clientProfileError.message);
-          return;
+          return false;
         }
       }
 
@@ -222,7 +222,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         if (verificationError || !verification) {
           setSaving(false);
           Alert.alert('Profile saved, but could not start verification', verificationError?.message ?? 'Unknown error');
-          return;
+          return false;
         }
 
         for (const file of draft.verificationFiles) {
@@ -241,7 +241,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
           if (storageError || !storageResult?.path) {
             setSaving(false);
             Alert.alert('Verification upload failed', storageError?.message ?? 'Unknown error');
-            return;
+            return false;
           }
 
           const publicUrl = supabase.storage.from('verification-files').getPublicUrl(storageResult.path).data
@@ -256,7 +256,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
           if (vfError) {
             setSaving(false);
             Alert.alert('Verification record failed', vfError.message);
-            return;
+            return false;
           }
         }
       } else if (cachedRole === 'provider' && draft.wantsBarangayVerification) {
@@ -266,6 +266,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       }
 
       setSaving(false);
+      return true;
     },
     [cachedRole, draft, userMeta]
   );

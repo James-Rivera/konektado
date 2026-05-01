@@ -1,197 +1,307 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 
-const TOP_CLUSTER_LINES = [
-  { left: "66%", top: 42, width: 90, rotate: "-18deg" },
-  { left: "76%", top: 72, width: 36, rotate: "-135deg" },
-  { left: "62%", top: 78, width: 82, rotate: "124deg" },
-  { left: "56%", top: 38, width: 44, rotate: "72deg" },
-  { left: "61%", top: 130, width: 42, rotate: "32deg" },
-];
+import {
+  GradientImageScreen,
+  OnboardingButton,
+  onboardingColors,
+} from '@/components/onboarding/FigmaOnboarding';
 
-const BOTTOM_CLUSTER_LINES = [
-  { left: "-8%", top: 645, width: 90, rotate: "30deg" },
-  { left: "4%", top: 635, width: 130, rotate: "-10deg" },
-  { left: "19%", top: 685, width: 110, rotate: "-152deg" },
-  { left: "39%", top: 702, width: 70, rotate: "121deg" },
-  { left: "49%", top: 613, width: 63, rotate: "77deg" },
-];
+const SLIDE_DURATION_MS = 7000;
+const PAGE_TRANSITION_MS = 1100;
+const PROGRESS_WIDTH = 144;
+const PROGRESS_GAP = 8;
+const PROGRESS_SEGMENT_WIDTH = (PROGRESS_WIDTH - PROGRESS_GAP * 2) / 3;
 
-const TOP_CLUSTER_DOTS = [
-  { left: "64%", top: 28, size: 8, color: "#F4F7FF" },
-  { left: "73%", top: 20, size: 12, color: "#F4F7FF" },
-  { left: "86%", top: 28, size: 12, color: "#F4F7FF" },
-  { left: "66%", top: 70, size: 12, color: "#F4F7FF" },
-  { left: "77%", top: 106, size: 12, color: "#F4F7FF" },
-  { left: "88%", top: 96, size: 8, color: "#D8E8FF" },
-  { left: "63%", top: 124, size: 12, color: "#F4BB37" },
-];
+const INTRO_SLIDES = [
+  {
+    title: 'Opportunities are closer than you think.',
+    subtitle: 'Find work within your community.',
+    source: require('../../assets/images/onboarding-intro-1-figma.jpg'),
+    darkness: 0.2,
+  },
+  {
+    title: 'Work with people you can trust.',
+    subtitle: 'Approved by your barangay.',
+    source: require('../../assets/images/onboarding-intro-2-figma.jpg'),
+    darkness: 0.2,
+  },
+  {
+    title: 'Find help or offer your skills.',
+    subtitle: 'Post jobs, apply for work, and connect with verified residents.',
+    source: require('../../assets/images/onboarding-intro-3-figma.jpg'),
+    darkness: 0.32,
+  },
+] as const;
 
-const BOTTOM_CLUSTER_DOTS = [
-  { left: "-4%", top: 618, size: 16, color: "#E8F1FF" },
-  { left: "13%", top: 610, size: 12, color: "#F4F7FF" },
-  { left: "13%", top: 665, size: 12, color: "#F4F7FF" },
-  { left: "31%", top: 744, size: 12, color: "#E8F1FF" },
-  { left: "20%", top: 735, size: 18, color: "#F4BB37" },
-  { left: "49%", top: 604, size: 16, color: "#F4F7FF" },
-  { left: "53%", top: 665, size: 20, color: "#F4BB37" },
-  { left: "34%", top: 716, size: 16, color: "#E8F1FF" },
-];
+const CAROUSEL_SLIDES = [...INTRO_SLIDES, INTRO_SLIDES[0]];
 
-export default function AuthSplashScreen() {
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      router.replace("/(auth)/login");
-    }, 1700);
+export default function AuthIntroScreen() {
+  const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const pageRef = useRef(0);
+  const scrollTransitionRef = useRef<Animated.CompositeAnimation | null>(null);
+  const { width } = useWindowDimensions();
+  const [page, setPage] = useState(0);
 
-    return () => clearTimeout(timeout);
+  const goToLogin = () => {
+    router.push('/(auth)/login');
+  };
+
+  const goToRole = () => {
+    router.push('/(auth)/role');
+  };
+
+  const setVisiblePage = useCallback((nextPage: number) => {
+    pageRef.current = nextPage;
+    setPage(nextPage);
   }, []);
 
+  const showPage = useCallback(
+    (nextPage: number) => {
+      scrollTransitionRef.current?.stop();
+
+      const fromX = pageRef.current * width;
+      const toX = nextPage * width;
+      const scrollX = new Animated.Value(fromX);
+      const listenerId = scrollX.addListener(({ value }) => {
+        scrollRef.current?.scrollTo({ animated: false, x: value });
+      });
+
+      const transition = Animated.timing(scrollX, {
+        duration: PAGE_TRANSITION_MS,
+        easing: Easing.inOut(Easing.cubic),
+        toValue: toX,
+        useNativeDriver: false,
+      });
+
+      scrollTransitionRef.current = transition;
+
+      transition.start(({ finished }) => {
+        scrollX.removeListener(listenerId);
+        scrollTransitionRef.current = null;
+
+        if (!finished) return;
+
+        if (nextPage >= INTRO_SLIDES.length) {
+          scrollRef.current?.scrollTo({ animated: false, x: 0 });
+          setVisiblePage(0);
+          return;
+        }
+
+        setVisiblePage(nextPage);
+      });
+    },
+    [setVisiblePage, width]
+  );
+
+  useEffect(() => {
+    return () => {
+      scrollTransitionRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (pageRef.current !== page) {
+      pageRef.current = page;
+    }
+  }, [page]);
+
+  useEffect(() => {
+    if (!width) return;
+    scrollRef.current?.scrollTo({ animated: false, x: pageRef.current * width });
+  }, [width]);
+
+  const snapToPage = useCallback(
+    (nextPage: number) => {
+      if (nextPage >= INTRO_SLIDES.length) {
+        scrollRef.current?.scrollTo({ animated: false, x: 0 });
+        setVisiblePage(0);
+        return;
+      }
+
+      setVisiblePage(nextPage);
+    },
+    [setVisiblePage]
+  );
+
+  useEffect(() => {
+    progressAnim.setValue(0);
+    const animation = Animated.timing(progressAnim, {
+      duration: SLIDE_DURATION_MS,
+      easing: Easing.linear,
+      toValue: 1,
+      useNativeDriver: false,
+    });
+
+    animation.start(({ finished }) => {
+      if (!finished) return;
+      showPage(page === INTRO_SLIDES.length - 1 ? INTRO_SLIDES.length : page + 1);
+    });
+
+    return () => {
+      animation.stop();
+    };
+  }, [page, progressAnim, showPage]);
+
+  const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const nextPage = Math.round(event.nativeEvent.contentOffset.x / width);
+    snapToPage(nextPage);
+  };
+
   return (
-    <Pressable
-      style={styles.container}
-      onPress={() => router.replace("/(auth)/login")}
-    >
-      <StatusBar style="light" />
-      <LinearGradient
-        colors={["#6AA5EC", "#4B8CDB", "#3D80D2"]}
-        locations={[0, 0.52, 1]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={styles.gradient}
-      >
-        <View style={styles.overlay}>
-          {TOP_CLUSTER_LINES.map((line, index) => (
-            <View
-              key={`top-line-${index}`}
-              style={[
-                styles.line,
-                {
-                  left: line.left,
-                  top: line.top,
-                  width: line.width,
-                  transform: [{ rotate: line.rotate }],
-                },
-              ]}
-            />
-          ))}
+    <View style={styles.screen}>
+      <StatusBar style="light" translucent />
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        pagingEnabled
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
+        style={styles.carousel}>
+        {CAROUSEL_SLIDES.map((slide, index) => (
+          <View key={`${slide.title}-${index}`} style={[styles.slide, { width }]}>
+            <GradientImageScreen darkness={slide.darkness} source={slide.source}>
+              <View style={styles.slideContent}>
+                <View style={styles.copyBlock}>
+                  <Text style={styles.title}>{slide.title}</Text>
+                  <Text style={styles.subtitle}>{slide.subtitle}</Text>
+                  <IntroPagination currentPage={page} progress={progressAnim} />
+                </View>
 
-          {BOTTOM_CLUSTER_LINES.map((line, index) => (
-            <View
-              key={`bottom-line-${index}`}
-              style={[
-                styles.line,
-                {
-                  left: line.left,
-                  top: line.top,
-                  width: line.width,
-                  transform: [{ rotate: line.rotate }],
-                },
-              ]}
-            />
-          ))}
-
-          {TOP_CLUSTER_DOTS.map((dot, index) => (
-            <View
-              key={`top-dot-${index}`}
-              style={[
-                styles.dot,
-                {
-                  left: dot.left,
-                  top: dot.top,
-                  width: dot.size,
-                  height: dot.size,
-                  borderRadius: dot.size / 2,
-                  backgroundColor: dot.color,
-                },
-              ]}
-            />
-          ))}
-
-          {BOTTOM_CLUSTER_DOTS.map((dot, index) => (
-            <View
-              key={`bottom-dot-${index}`}
-              style={[
-                styles.dot,
-                {
-                  left: dot.left,
-                  top: dot.top,
-                  width: dot.size,
-                  height: dot.size,
-                  borderRadius: dot.size / 2,
-                  backgroundColor: dot.color,
-                },
-              ]}
-            />
-          ))}
-
-          <View style={styles.centerContent}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoText}>Konektado</Text>
-              <View style={styles.logoDot} />
-            </View>
-            <Text style={styles.tagline}>Trabaho sa Komunidad. Isang App.</Text>
+                <View style={styles.actionBlock}>
+                  <OnboardingButton label="Get Started" onPress={goToRole} />
+                  <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
+                    <Text style={styles.loginText}>
+                      Already have an account? <Text style={styles.loginTextBold}>Login</Text>
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </GradientImageScreen>
           </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function IntroPagination({
+  currentPage,
+  progress,
+}: {
+  currentPage: number;
+  progress: Animated.Value;
+}) {
+  const animatedWidth = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, PROGRESS_SEGMENT_WIDTH],
+  });
+
+  return (
+    <View style={styles.progressRow}>
+      {INTRO_SLIDES.map((slide, index) => (
+        <View key={slide.title} style={styles.progressSegment}>
+          {index < currentPage ? <View style={styles.progressFillComplete} /> : null}
+          {index === currentPage ? <Animated.View style={[styles.progressFillAnimated, { width: animatedWidth }]} /> : null}
         </View>
-      </LinearGradient>
-    </Pressable>
+      ))}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
+    backgroundColor: '#1D4F91',
     flex: 1,
   },
-  gradient: {
+  carousel: {
     flex: 1,
   },
-  overlay: {
+  slide: {
     flex: 1,
   },
-  centerContent: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: "42%",
-    alignItems: "center",
+  slideContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    paddingHorizontal: 26,
+    paddingTop: 50,
   },
-  logoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+  copyBlock: {
+    alignItems: 'flex-start',
+    gap: 10,
+    maxWidth: 333,
   },
-  logoText: {
-    fontFamily: "AvantGarde",
-    color: "#FFFFFF",
-    fontSize: 52,
-    lineHeight: 56,
-    letterSpacing: -1,
+  title: {
+    color: onboardingColors.white,
+    fontFamily: 'Satoshi-Black',
+    fontSize: 40,
+    lineHeight: 39,
   },
-  logoDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#F4BB37",
-    marginTop: 16,
-    marginLeft: 3,
-  },
-  tagline: {
+  subtitle: {
+    color: onboardingColors.white,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 14,
+    lineHeight: 20,
     marginTop: 10,
-    color: "#F5F9FF",
-    fontFamily: "Satoshi-Regular",
-    fontSize: 18,
-    lineHeight: 24,
   },
-  line: {
-    position: "absolute",
-    height: 1,
-    backgroundColor: "#D3E5FF",
-    opacity: 0.95,
+  actionBlock: {
+    gap: 5,
+    paddingBottom: 16,
+    paddingHorizontal: 3,
   },
-  dot: {
-    position: "absolute",
+  loginLink: {
+    alignItems: 'center',
+    minHeight: 26,
+    justifyContent: 'center',
+  },
+  loginText: {
+    color: onboardingColors.white,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  loginTextBold: {
+    fontFamily: 'Satoshi-Bold',
+    textDecorationLine: 'underline',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    gap: PROGRESS_GAP,
+    height: 6,
+    width: PROGRESS_WIDTH,
+  },
+  progressSegment: {
+    backgroundColor: 'rgba(246, 246, 239, 0.6)',
+    borderRadius: 3,
+    height: 6,
+    overflow: 'hidden',
+    width: PROGRESS_SEGMENT_WIDTH,
+  },
+  progressFillComplete: {
+    backgroundColor: '#D7CA09',
+    height: '100%',
+    width: '100%',
+  },
+  progressFillAnimated: {
+    backgroundColor: '#D7CA09',
+    height: '100%',
   },
 });

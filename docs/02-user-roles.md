@@ -8,32 +8,39 @@ Konektado has three primary roles:
 - Client / Employer
 - Barangay Admin
 
-All app users are residents or local users by context, but not all users are verified service providers. A user may be both a client and a provider. The app should use an `active_role` so screens can show the correct actions for the current mode.
+All app users are residents or local users by context, but not all users are verified service providers. A user may be both a client and a provider in one account.
+
+The user-facing profile model is:
+
+- Work Profile: services offered, rate, availability, completed work, worker reviews.
+- Hiring Profile: jobs posted, workers hired, open jobs, client reviews.
+
+The app may still use an `active_role` internally for queries and permissions, but the UI should not feel like two separate accounts.
 
 ## Resident / Service Provider
 
-Service providers are users who offer skills or services to others in Barangay San Pedro.
+Service providers are users who offer services to others in Barangay San Pedro.
 
 ### Can Do
 
 | Permission | Description |
 | --- | --- |
 | Manage own profile | Add and update name, location, contact, about, and availability. |
-| Manage own skills | Create, update, hide, or delete own skill/service profiles. |
+| Manage own services | Create, update, hide, or delete own service profiles. |
 | Upload credentials | Add certificates, ID documents, or proof of experience for verification. |
 | Request verification | Submit a barangay verification request. |
 | Browse jobs | View open jobs that clients posted. |
-| Apply to jobs | Submit an application to an open job. |
-| Withdraw own applications | Withdraw before acceptance or closure. |
+| Message about jobs | Start or continue a job-related conversation to show interest. |
+| Withdraw interest | Stop pursuing a job before being marked hired. |
 | Receive reviews | Receive ratings and feedback after completed work. |
 | Report issues | Report suspicious jobs, users, or reviews. |
 
 ### Cannot Do
 
 - Approve their own verification.
-- Edit other users' profiles, skills, jobs, applications, or reviews.
-- Apply to closed or cancelled jobs.
-- Apply to the same job more than once.
+- Edit other users' profiles, services, jobs, conversations, or reviews.
+- Message closed or cancelled jobs as a new interested worker.
+- Create duplicate active interest for the same job.
 - Delete reviews written by other users.
 - Access admin queues unless assigned as barangay admin.
 
@@ -46,21 +53,21 @@ Clients are users who need services or want to post jobs.
 | Permission | Description |
 | --- | --- |
 | Manage own profile | Add and update basic profile and contact details. |
-| Browse providers | Search providers by service category, location, verification status, and availability. |
-| View provider profiles | See public provider details, skills, badges, and ratings. |
+| Browse providers | Search providers by service category, location, and availability. |
+| View provider profiles | See public provider details, services, badges, and ratings. |
 | Post jobs | Create simple job posts with title, description, location, budget, and category. |
 | Manage own jobs | Edit, close, cancel, or archive own jobs. |
-| Review applications | View applications for own jobs. |
-| Accept or reject applications | Mark one or more applications based on MVP rules. |
+| Review interested workers | View workers who messaged or showed interest in own jobs. |
+| Mark worker hired | Mark one worker or the needed number of workers as hired based on MVP rules. |
 | Leave reviews | Rate providers after a completed job. |
-| Report issues | Report users, jobs, applications, or reviews. |
+| Report issues | Report users, jobs, conversations, or reviews. |
 
 ### Cannot Do
 
 - Verify providers.
 - Edit provider profiles or credentials.
 - View private verification documents.
-- Apply to their own job as a provider using the same active session.
+- Message or mark themselves hired on their own job.
 - Leave reviews for jobs they did not participate in.
 - Manage jobs posted by other clients.
 
@@ -96,4 +103,5 @@ Barangay admins are authorized personnel who support trust and moderation.
 - Verification documents must never appear in public user profiles.
 - Role changes should be recorded in `user_roles`.
 - Screens must check permissions through service functions, not only UI visibility.
+- Messaging, posting, saving, and review actions must check barangay verification status before writing data.
 

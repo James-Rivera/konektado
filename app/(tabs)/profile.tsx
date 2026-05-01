@@ -1,436 +1,324 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import type { ComponentProps } from 'react';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useProfile, type ProfileRecord } from '@/hooks/use-profile';
-import { supabase } from '@/utils/supabase';
+import { AppHeader } from '@/components/AppHeader';
+import { NoticeBanner } from '@/components/NoticeBanner';
+import { Pill } from '@/components/Pill';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { hiringHistory, profileServices, workHistory } from '@/constants/demo-data';
+import { color, radius, space, typography } from '@/constants/theme';
+
+type ProfileMode = 'work' | 'hiring';
 
 export default function ProfileScreen() {
-  const router = useRouter();
-  const { profile, loading, error, refresh } = useProfile();
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    birthdate: '',
-    streetAddress: '',
-    city: '',
-    serviceType: '',
-    phone: '',
-    about: '',
-    availability: '',
-  });
-
-  useEffect(() => {
-    if (!profile) return;
-    setForm({
-      firstName: profile.first_name ?? profile.full_name?.split(' ')[0] ?? '',
-      lastName: profile.last_name ?? profile.full_name?.split(' ').slice(1).join(' ') ?? '',
-      birthdate: profile.birthdate ?? '',
-      streetAddress: profile.street_address ?? '',
-      city: profile.city ?? '',
-      serviceType: profile.service_type ?? '',
-      phone: profile.phone ?? '',
-      about: profile.about ?? '',
-      availability: profile.availability ?? '',
-    });
-  }, [profile]);
-
-  const onSignOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/(auth)/login');
-  };
-
-  const onSave = async () => {
-    if (!profile) return;
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      Alert.alert('Missing name', 'Please enter both first and last name.');
-      return;
-    }
-
-    if (form.birthdate && isNaN(Date.parse(form.birthdate))) {
-      Alert.alert('Invalid birthdate', 'Birthdate must be in YYYY-MM-DD format.');
-      return;
-    }
-
-    setSaving(true);
-    const updates: Record<string, any> = {
-      id: profile.id,
-      first_name: form.firstName.trim(),
-      last_name: form.lastName.trim(),
-      full_name: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
-      birthdate: form.birthdate ? form.birthdate : null,
-      street_address: form.streetAddress.trim() || null,
-      city: form.city.trim() || null,
-      phone: form.phone.trim() || null,
-      about: form.about.trim() || null,
-      availability: form.availability.trim() || null,
-    };
-
-    const { error: updateError } = await supabase.from('profiles').upsert(updates);
-    if (updateError) {
-      setSaving(false);
-      Alert.alert('Unable to save profile', updateError.message);
-      return;
-    }
-
-    const { data: providerRoleRows } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', profile.id)
-      .eq('role', 'provider')
-      .limit(1);
-
-    const hasProviderRole =
-      (providerRoleRows?.length ?? 0) > 0 ||
-      profile.active_role === 'provider' ||
-      profile.role === 'provider';
-
-    if (hasProviderRole) {
-      const { error: providerProfileError } = await supabase.from('provider_profiles').upsert({
-        user_id: profile.id,
-        service_type: form.serviceType.trim() || null,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (providerProfileError) {
-        setSaving(false);
-        Alert.alert('Profile saved, but provider details failed to save', providerProfileError.message);
-        return;
-      }
-    }
-
-    setSaving(false);
-
-    setEditing(false);
-    refresh();
-  };
-
-  if (loading) {
-    return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <ThemedText>Loading profile...</ThemedText>
-      </ThemedView>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <ThemedView style={styles.centered}>
-        <ThemedText type="title">No profile data</ThemedText>
-        {error ? <ThemedText style={styles.helper}>{error}</ThemedText> : null}
-        <TouchableOpacity style={styles.button} onPress={refresh}>
-          <ThemedText style={styles.buttonText}>Retry</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={onSignOut}>
-          <ThemedText style={styles.secondaryButtonText}>Sign out</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
-    );
-  }
+  const [mode, setMode] = useState<ProfileMode>('work');
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <ThemedView style={styles.card}>
-        <ThemedText type="title">{getDisplayName(profile)}</ThemedText>
-        <ThemedText style={styles.muted}>{profile.email}</ThemedText>
-        <ThemedText style={styles.badge}>{profile.role?.toUpperCase() ?? 'UNSET'}</ThemedText>
-        <View style={styles.statusRow}>
-          {profile.has_certifications || profile.certification_status === 'approved' ? (
-            <ThemedText style={styles.certified}>Certified Skills</ThemedText>
-          ) : null}
-          {profile.verified_at ? (
-            <ThemedText style={styles.verified}>Barangay Verified</ThemedText>
-          ) : (
-            <ThemedText style={styles.helper}>Not verified yet</ThemedText>
-          )}
-        </View>
-      </ThemedView>
+    <View style={styles.screen}>
+      <AppHeader
+        actionIcon="settings"
+        actionLabel="Profile settings"
+        eyebrow="One account"
+        title="Profile"
+        subtitle="Manage your Work Profile and Hiring Profile."
+      />
 
-      <ThemedView style={styles.section}>
-        <SectionRow label="First name" value={profile.first_name ?? 'Not set'} />
-        <SectionRow label="Last name" value={profile.last_name ?? 'Not set'} />
-        <SectionRow label="Birthdate" value={profile.birthdate ?? 'Not set'} />
-        <SectionRow label="Age" value={getAgeLabel(profile.birthdate)} />
-        <SectionRow label="Barangay" value={profile.barangay ?? 'Unknown'} />
-        <SectionRow
-          label="Street"
-          value={profile.street_address ?? 'Not provided'}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>JR</Text>
+          </View>
+          <View style={styles.profileCopy}>
+            <Text style={styles.name}>Juan Reyes</Text>
+            <Text style={styles.location}>Barangay San Pedro</Text>
+            <View style={styles.profilePills}>
+              <Pill icon="verified" label="Barangay verified" tone="success" />
+              <Pill label="Services ready" tone="primary" />
+            </View>
+          </View>
+        </View>
+
+        <NoticeBanner
+          message="Verification status belongs here and will gate posting, messaging, saving, and reviews when connected."
+          title="Profile shell uses static data for this slice"
+          variant="info"
         />
-        <SectionRow label="City" value={profile.city ?? 'Not set'} />
-        <SectionRow label="Services" value={profile.service_type ?? 'Not set'} />
-        <SectionRow label="Phone" value={profile.phone ?? 'Not set'} />
-        <SectionRow label="Availability" value={profile.availability ?? 'Not set'} />
-        <SectionRow label="About" value={profile.about ?? 'Tell people about yourself'} multiline />
-      </ThemedView>
 
-      {editing ? (
-        <View style={styles.form}>
-          <Field label="First name">
-            <TextInput
-              style={styles.input}
-              value={form.firstName}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, firstName: text }))}
-              autoCapitalize="words"
-            />
-          </Field>
-          <Field label="Last name">
-            <TextInput
-              style={styles.input}
-              value={form.lastName}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, lastName: text }))}
-              autoCapitalize="words"
-            />
-          </Field>
-          <Field label="Birthdate (YYYY-MM-DD)">
-            <TextInput
-              style={styles.input}
-              value={form.birthdate}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, birthdate: text }))}
-              keyboardType="numbers-and-punctuation"
-            />
-          </Field>
-          <Field label="Street / Sitio">
-            <TextInput
-              style={styles.input}
-              value={form.streetAddress}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, streetAddress: text }))}
-            />
-          </Field>
-          <Field label="City / Municipality">
-            <TextInput
-              style={styles.input}
-              value={form.city}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, city: text }))}
-            />
-          </Field>
-          <Field label="Services you offer">
-            <TextInput
-              style={styles.input}
-              value={form.serviceType}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, serviceType: text }))}
-              placeholder="e.g. IT support, cleaning"
-            />
-          </Field>
-          <Field label="Phone number">
-            <TextInput
-              style={styles.input}
-              value={form.phone}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, phone: text }))}
-              keyboardType="phone-pad"
-            />
-          </Field>
-          <Field label="Availability">
-            <TextInput
-              style={styles.input}
-              value={form.availability}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, availability: text }))}
-              placeholder="Weekdays 9am-5pm"
-            />
-          </Field>
-          <Field label="About you">
-            <TextInput
-              style={[styles.input, styles.multiline]}
-              value={form.about}
-              onChangeText={(text) => setForm((prev) => ({ ...prev, about: text }))}
-              placeholder="Share experience, certifications, etc."
-              multiline
-            />
-          </Field>
-          <TouchableOpacity style={styles.button} onPress={onSave} disabled={saving}>
-            <ThemedText style={styles.buttonText}>{saving ? 'Saving...' : 'Save changes'}</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={() => {
-              setEditing(false);
-              refresh();
-            }}
-            disabled={saving}
-          >
-            <ThemedText style={styles.secondaryButtonText}>Cancel</ThemedText>
-          </TouchableOpacity>
+        <View style={styles.segmented}>
+          <PrimaryButton
+            label="Work Profile"
+            onPress={() => setMode('work')}
+            variant={mode === 'work' ? 'primary' : 'ghost'}
+          />
+          <PrimaryButton
+            label="Hiring Profile"
+            onPress={() => setMode('hiring')}
+            variant={mode === 'hiring' ? 'primary' : 'ghost'}
+          />
         </View>
-      ) : (
-        <TouchableOpacity style={styles.button} onPress={() => setEditing(true)}>
-          <ThemedText style={styles.buttonText}>Edit profile</ThemedText>
-        </TouchableOpacity>
-      )}
 
-      <TouchableOpacity style={[styles.button, styles.dangerButton]} onPress={onSignOut}>
-        <ThemedText style={styles.dangerButtonText}>Sign out</ThemedText>
-      </TouchableOpacity>
-    </ScrollView>
+        {mode === 'work' ? <WorkProfile /> : <HiringProfile />}
+      </ScrollView>
+    </View>
   );
 }
 
-function SectionRow({
+function WorkProfile() {
+  return (
+    <View style={styles.stack}>
+      <View style={styles.metricRow}>
+        <Metric icon="star" label="Worker rating" value="4.9" />
+        <Metric icon="check-circle" label="Jobs done" value="29" />
+        <Metric icon="schedule" label="Hours worked" value="86" />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Availability</Text>
+        <Text style={styles.body}>Weekdays after 2:00 PM and Saturday mornings.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Services</Text>
+        <View style={styles.pillWrap}>
+          {profileServices.map((service) => (
+            <Pill key={service} label={service} />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Work history</Text>
+        {workHistory.map((item) => (
+          <HistoryRow
+            key={item.title}
+            icon="work-outline"
+            meta={`${item.rating} rating`}
+            subtitle={item.detail}
+            title={item.title}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function HiringProfile() {
+  return (
+    <View style={styles.stack}>
+      <View style={styles.metricRow}>
+        <Metric icon="star" label="Client rating" value="4.8" />
+        <Metric icon="person-add-alt" label="Workers hired" value="14" />
+        <Metric icon="assignment" label="Jobs posted" value="9" />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Open jobs</Text>
+        <Text style={styles.body}>2 jobs are open and waiting for worker messages.</Text>
+        <PrimaryButton disabled icon="list-alt" label="Manage job posts" variant="secondary" />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Job history</Text>
+        {hiringHistory.map((item) => (
+          <HistoryRow
+            key={item.title}
+            icon="history"
+            meta={item.status}
+            subtitle={item.detail}
+            title={item.title}
+          />
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Reviews from workers</Text>
+        <Text style={styles.body}>
+          Workers can review this Hiring Profile after completed jobs in a later slice.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function Metric({
+  icon,
   label,
   value,
-  multiline,
 }: {
+  icon: ComponentProps<typeof MaterialIcons>['name'];
   label: string;
   value: string;
-  multiline?: boolean;
 }) {
   return (
-    <View style={[styles.row, multiline && styles.rowMultiline]}>
-      <ThemedText type="defaultSemiBold">{label}</ThemedText>
-      <ThemedText style={styles.rowValue}>{value}</ThemedText>
+    <View style={styles.metricCard}>
+      <MaterialIcons color={color.primary} name={icon} size={18} />
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function HistoryRow({
+  icon,
+  title,
+  subtitle,
+  meta,
+}: {
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  title: string;
+  subtitle: string;
+  meta: string;
+}) {
   return (
-    <View style={styles.fieldGroup}>
-      <ThemedText type="defaultSemiBold">{label}</ThemedText>
-      {children}
+    <View style={styles.historyRow}>
+      <View style={styles.historyIcon}>
+        <MaterialIcons color={color.textMuted} name={icon} size={18} />
+      </View>
+      <View style={styles.historyCopy}>
+        <Text style={styles.historyTitle}>{title}</Text>
+        <Text style={styles.historySubtitle}>{subtitle}</Text>
+      </View>
+      <Text style={styles.historyMeta}>{meta}</Text>
     </View>
   );
-}
-
-function getDisplayName(profile: ProfileRecord | null) {
-  if (!profile) return 'Unnamed user';
-  const joined = [profile.first_name, profile.last_name]
-    .filter((part) => Boolean(part && part.trim()))
-    .join(' ')
-    .trim();
-  return joined || profile.full_name || 'Unnamed user';
-}
-
-function getAgeLabel(birthdate?: string | null) {
-  if (!birthdate || isNaN(Date.parse(birthdate))) {
-    return 'Not available';
-  }
-  const dob = new Date(birthdate);
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const m = now.getMonth() - dob.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) {
-    age -= 1;
-  }
-  return `${age} years old`;
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    padding: 20,
-    gap: 16,
-  },
-  centered: {
+  screen: {
+    backgroundColor: color.screenBackground,
     flex: 1,
+  },
+  content: {
+    gap: space.lg,
+    padding: space.xl,
+    paddingBottom: space['3xl'],
+  },
+  profileCard: {
     alignItems: 'center',
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    padding: space.lg,
+  },
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    height: 60,
     justifyContent: 'center',
-    gap: 12,
-    padding: 20,
+    width: 60,
   },
-  card: {
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    gap: 8,
+  avatarText: {
+    ...typography.sectionTitle,
+    color: color.primary,
   },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    fontSize: 12,
-    backgroundColor: '#dbeafe',
-    color: '#1d4ed8',
+  profileCopy: {
+    flex: 1,
+    gap: space.xs,
   },
-  verified: {
-    color: '#059669',
-    fontWeight: '600',
+  name: {
+    ...typography.screenTitle,
+    color: color.text,
   },
-  certified: {
-    color: '#166534',
-    fontWeight: '600',
+  location: {
+    ...typography.body,
+    color: color.textMuted,
   },
-  statusRow: {
+  profilePills: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    alignItems: 'center',
+    gap: space.sm,
+  },
+  segmented: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    padding: space.xs,
+  },
+  stack: {
+    gap: space.lg,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  metricCard: {
+    alignItems: 'flex-start',
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flex: 1,
+    gap: space['2xs'],
+    padding: space.md,
+  },
+  metricValue: {
+    ...typography.sectionTitle,
+    color: color.text,
+  },
+  metricLabel: {
+    ...typography.caption,
+    color: color.textMuted,
   },
   section: {
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    padding: 16,
-    gap: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  rowMultiline: {
-    flexDirection: 'column',
-  },
-  rowValue: {
-    color: '#4b5563',
-  },
-  form: {
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    padding: 16,
-    gap: 12,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  input: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: '#fff',
+    gap: space.md,
+    padding: space.lg,
   },
-  multiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
+  sectionTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
   },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 16,
-    borderRadius: 12,
+  body: {
+    ...typography.body,
+    color: color.textMuted,
+  },
+  pillWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  historyRow: {
+    alignItems: 'flex-start',
+    borderTopColor: color.border,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    paddingTop: space.md,
+  },
+  historyIcon: {
     alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    borderRadius: radius.pill,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
   },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
+  historyCopy: {
+    flex: 1,
+    gap: space['2xs'],
   },
-  secondaryButton: {
-    backgroundColor: '#e5e7eb',
+  historyTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
   },
-  secondaryButtonText: {
-    color: '#1f2937',
-    fontWeight: '600',
+  historySubtitle: {
+    ...typography.caption,
+    color: color.textMuted,
   },
-  dangerButton: {
-    backgroundColor: '#fee2e2',
-  },
-  dangerButtonText: {
-    color: '#b91c1c',
-    fontWeight: '600',
-  },
-  helper: {
-    color: '#6b7280',
-  },
-  muted: {
-    color: '#6b7280',
+  historyMeta: {
+    ...typography.captionMedium,
+    color: color.primary,
   },
 });

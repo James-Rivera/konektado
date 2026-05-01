@@ -12,9 +12,9 @@ Konektado exists to make local hiring safer and easier inside the barangay.
 
 The app should:
 
-- Help residents show their skills, availability, credentials, and contact details.
+- Help residents show their services, availability, credentials, and contact details.
 - Help clients find verified local service providers.
-- Help clients post simple jobs that providers can apply to.
+- Help clients post simple jobs that workers can view and respond to through messaging.
 - Help barangay admins verify resident identities and review platform activity.
 - Keep trust visible through barangay verification, ratings, and clear profile information.
 
@@ -26,15 +26,15 @@ Before barangay verification, a user is treated as an unverified viewer:
 
 - They may browse limited public marketplace content.
 - They may understand available jobs, workers, and services.
-- They may not post jobs, create public service posts, apply to jobs, message users, or leave reviews.
+- They may not post jobs, create public service posts, message users, save marketplace items, or leave reviews.
 
-The heavier information requirements belong in the verification flow, not the first entry flow. Verification should collect or confirm the user's contact details, optional email, ID documents, skills/services, credentials, selfie/photo for manual comparison, and other barangay-required information.
+The heavier information requirements belong in the verification flow, not the first entry flow. Verification should collect or confirm the user's contact details, optional email, ID documents, services, credentials, selfie/photo for manual comparison, and other barangay-required information.
 
 ## Target Users
 
 | User Type | Description | Primary Need |
 | --- | --- | --- |
-| Resident / Service Provider | A Barangay San Pedro resident who offers skills or services. | Create a trusted profile and find job opportunities. |
+| Resident / Service Provider | A Barangay San Pedro resident who offers services. | Create a trusted work profile and find job opportunities. |
 | Client / Employer | A resident or local client looking for help with a task. | Find nearby providers or post jobs. |
 | Barangay Admin | Authorized barangay personnel who verify users and moderate activity. | Review verification requests, reports, and platform activity. |
 
@@ -51,7 +51,7 @@ The MVP should focus on a working, demo-ready flow:
 - Barangay verification request workflow.
 - Job posting by clients.
 - Job browsing by providers.
-- Job applications by providers.
+- Message-based job interest and coordination.
 - Search and filtering for jobs and providers.
 - Ratings and feedback after a completed job.
 - Basic admin dashboard for verification and moderation.
@@ -72,9 +72,35 @@ The MVP must not include:
 
 Payments, agreements, scheduling details, and final negotiation happen outside the app.
 
+## Current Product Direction
+
+The current Figma direction has moved Konektado away from a strict Upwork-style application model and closer to a barangay marketplace model.
+
+Final app navigation:
+
+- Home
+- Post
+- Messages
+- Profile
+
+Core interaction model:
+
+- Home is a mixed discovery feed for jobs and workers.
+- Search is for comparison and filtering.
+- Post is for creating and managing job posts or service visibility.
+- Messages is the main coordination path after a user shows interest.
+- Profile has two modes in one account: Work Profile and Hiring Profile.
+
+Important product language:
+
+- Use "Services" in the UI instead of "Skills" when describing what a worker offers.
+- Use "Message", "View Job", "View Profile", "Mark Hired", and "Job History".
+- Do not use "Apply" or "Application" as the primary user-facing flow unless a future formal application feature is added.
+- Public feed cards do not need repeated verification badges because interaction is already verification-gated.
+
 ## Current Project References
 
 - Prototype: Expo Go / React Native project in this repository.
 - UI source of truth: Figma file for Konektado.
 - Current implementation direction: Expo Router, Supabase Auth, PostgreSQL tables, and React hooks.
-- Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Workers filters, worker/job cards, verification badges, and bottom navigation for Home, Post, Messages, and Profile.
+- Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Workers filters, worker/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.

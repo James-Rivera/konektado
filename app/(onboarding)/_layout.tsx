@@ -12,6 +12,7 @@ export default function OnboardingLayout() {
         <Stack.Screen name="certifications" />
         <Stack.Screen name="verification" />
         <Stack.Screen name="review" />
+        <Stack.Screen name="complete" />
       </Stack>
     </OnboardingProvider>
   );

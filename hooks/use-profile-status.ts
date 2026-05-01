@@ -229,7 +229,7 @@ export function useProfileStatus(): ProfileStatus {
           needsCertificationReview,
           profile: profile ?? null,
         });
-      } catch (err) {
+      } catch {
         if (!active) return;
         setState({
           loading: false,

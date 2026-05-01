@@ -1,9 +1,14 @@
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import {
+  OnboardingButton,
+  OnboardingFormScaffold,
+  OnboardingTextInput,
+  onboardingColors,
+} from '@/components/onboarding/FigmaOnboarding';
 
 import { useOnboarding } from './onboarding-context';
 
@@ -21,95 +26,78 @@ export default function CertificationsStep() {
 
   const next = () => {
     updateDraft({
-      hasCertifications: hasCerts,
       certificationDetails: details,
+      hasCertifications: hasCerts,
     });
     router.push('/(onboarding)/verification');
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Certified skills</ThemedText>
-      <ThemedText style={styles.helper}>
-        This is optional, but adding TESDA or related certification helps you stand out.
-      </ThemedText>
+    <>
+      <StatusBar style="dark" />
+      <OnboardingFormScaffold
+        currentStep={3}
+        footer={<OnboardingButton label="Next" onPress={next} />}
+        helper="This is optional, but TESDA or related proof can help clients trust your work."
+        onBack={() => router.back()}
+        title="Certified skills">
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleCopy}>
+            <Text style={styles.toggleTitle}>I have certifications</Text>
+            <Text style={styles.toggleDescription}>TESDA, trade certificates, or proof of related experience</Text>
+          </View>
+          <Switch
+            onValueChange={setHasCerts}
+            thumbColor={hasCerts ? onboardingColors.brandYellow : '#F4F4F4'}
+            trackColor={{ false: '#D5D7DA', true: '#F5F5EF' }}
+            value={hasCerts}
+          />
+        </View>
 
-      <View style={styles.rowBetween}>
-        <ThemedText>I have TESDA or other certifications</ThemedText>
-        <Switch value={hasCerts} onValueChange={setHasCerts} />
-      </View>
-      {hasCerts && (
-        <TextInput
-          style={styles.input}
-          placeholder="Add TESDA NC level or related experience (optional but helps clients trust you)"
-          multiline
-          value={details}
-          onChangeText={setDetails}
-        />
-      )}
-
-      <View style={styles.row}>
-        <TouchableOpacity style={styles.secondary} onPress={() => router.back()}>
-          <ThemedText>Back</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.primary} onPress={next}>
-          <ThemedText type="defaultSemiBold" style={styles.primaryText}>Continue</ThemedText>
-        </TouchableOpacity>
-      </View>
-    </ThemedView>
+        {hasCerts ? (
+          <OnboardingTextInput
+            multiline
+            onChangeText={setDetails}
+            placeholder="Add TESDA NC level or related experience"
+            style={styles.multilineInput}
+            textAlignVertical="top"
+            value={details}
+          />
+        ) : null}
+      </OnboardingFormScaffold>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    gap: 12,
-    justifyContent: 'center',
-  },
-  title: {
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  rowBetween: {
+  toggleRow: {
+    alignItems: 'center',
+    borderColor: onboardingColors.borderSoft,
+    borderRadius: 12,
+    borderWidth: 1,
     flexDirection: 'row',
+    gap: 12,
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
     padding: 12,
-    backgroundColor: '#fff',
-    minHeight: 100,
-    textAlignVertical: 'top',
   },
-  helper: {
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  secondary: {
+  toggleCopy: {
     flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
+    gap: 4,
   },
-  primary: {
-    flex: 1,
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
+  toggleTitle: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  primaryText: {
-    color: '#fff',
+  toggleDescription: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  multilineInput: {
+    height: 112,
+    paddingTop: 12,
   },
 });

@@ -17,11 +17,11 @@ MVP features:
 - Authentication.
 - Lightweight onboarding with unverified viewer access.
 - User profiles.
-- Skill/service profiles.
+- Service profiles.
 - Barangay verification workflow.
 - Job posting.
 - Job browsing.
-- Job applications.
+- Message-based job interest and hiring.
 - Search and filtering.
 - Ratings and feedback.
 - Basic admin dashboard.
@@ -33,7 +33,7 @@ Out of scope for MVP:
 - AI-powered matching.
 - National ID API integration.
 - Municipal or national government system integration.
-- Full in-app messaging unless explicitly requested.
+- Advanced messaging such as attachments, calls, read receipts, or group chat.
 
 Architecture rules:
 - Keep screens thin.
@@ -51,12 +51,16 @@ Architecture rules:
 
 Onboarding and verification rules:
 - Keep initial onboarding lightweight so users can enter the app quickly.
-- Do not require all ID, skills, and credential details before the user can view the app.
+- Do not require all ID, services, and credential details before the user can view the app.
 - Prefer phone-first account entry if feasible, with optional email collected during verification.
 - Before barangay verification, users are unverified viewers.
-- Unverified viewers may browse limited public content but may not post jobs, create public service posts, apply, message users, or leave reviews.
-- The verification flow is where heavier requirements belong: mobile/contact confirmation, optional email, ID documents, skills/services, credentials, selfie/photo for manual barangay comparison, and supporting details.
+- Unverified viewers may browse limited public content but may not post jobs, create public service posts, message users, save if verification-gated, or leave reviews.
+- The verification flow is where heavier requirements belong: mobile/contact confirmation, optional email, ID documents, services, credentials, selfie/photo for manual barangay comparison, and supporting details.
 - Barangay verification is the trust gate for marketplace interaction.
+- The main app navigation is Home, Post, Messages, Profile.
+- One account can have both Work Profile and Hiring Profile.
+- Use Services in UI, not Skills, unless referring to internal database/history.
+- Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.
 
 Before editing code:
 - List the files you plan to change.

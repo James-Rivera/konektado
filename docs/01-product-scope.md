@@ -8,12 +8,13 @@
 | Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Do not force all verification details before the user understands the app. |
 | Roles | Client, provider, and barangay admin. | A user can have one or more roles, but one active role is used in the app at a time. |
 | Profiles | Basic identity, address, contact, about, availability, and verification status. | Keep private identity fields protected. |
-| Skill Profiles | Provider service categories, descriptions, experience, availability, and optional rate text. | Use clear categories, not AI matching. |
+| Service Profiles | Provider service categories, descriptions, experience, availability, and optional rate text. | Use "Services" in the UI; avoid abstract "skills" language for low-literacy users. |
 | Credentials | Upload records for IDs, certificates, or proof of experience. | Store files in Supabase Storage and metadata in PostgreSQL. |
 | Verification | Resident submits required details and documents; admin approves or rejects. | Verification unlocks interaction features and grants the verified badge. |
 | Jobs | Client creates, edits, closes, or cancels a job post. | Payments and agreements remain outside the app. |
 | Job Browsing | Providers browse open jobs. | Search/filter by category, location, status, budget, and date. |
-| Applications | Providers apply to open jobs; clients review applications. | Keep application statuses simple. |
+| Messages / Interest | Verified users message job posters or workers to show interest and coordinate. | This replaces a formal application flow for MVP. |
+| Hiring Decision | Clients can mark a worker as hired from a job-related conversation. | Keep the decision simple: interested, hired, completed, declined/cancelled. |
 | Reviews | Completed job participants can leave rating and feedback. | One review per reviewer/reviewee/job. |
 | Admin Dashboard | Basic review queues for verification requests, reports, users, jobs, and reviews. | Admin UI can be simple but must be reliable. |
 
@@ -38,7 +39,7 @@ The following are intentionally out of scope for MVP:
 
 These can be considered after the MVP is stable:
 
-- Advanced messaging features after basic MVP chat is stable.
+- Advanced messaging features after basic MVP chat is stable, such as attachments, read receipts, calls, and group chat.
 - Saved jobs and saved providers.
 - Provider availability calendar.
 - Notification center and push notifications.
@@ -57,14 +58,28 @@ Highest demo priority:
 
 1. A resident can register and complete a profile.
 2. A new user can enter the app as an unverified viewer with limited access.
-3. A user can request barangay verification with mobile/contact confirmation, optional email, ID, skills/services, and supporting details.
+3. A user can request barangay verification with mobile/contact confirmation, optional email, ID, services, and supporting details.
 4. A barangay admin can approve or reject verification.
-5. A verified provider can create a skill/service profile.
+5. A verified provider can create a service profile.
 6. A verified client can post a job.
-7. A verified provider can browse and apply to a job.
-8. A client can review applications.
-9. Verified users show a clear verification badge.
+7. A verified provider can browse a job and message the client to show interest.
+8. A client can view interested workers in Messages and mark a worker as hired.
+9. Verification-gated actions clearly block unverified users.
 10. A completed job can receive a rating/review.
+
+## Final MVP Screen Set
+
+The coding MVP should prioritize the screens already represented in the current Figma structure:
+
+| Tab / Area | Screens |
+| --- | --- |
+| Auth / Onboarding | Splash, login/register, role intent, light profile setup, verification gate. |
+| Home | Dashboard feed, search mode, jobs/workers filters, empty state, verification prompt. |
+| Post | Post dashboard, create job, offer service, drafts/active/paused states. |
+| Details | Job details, public worker profile, public client profile. |
+| Messages | Locked state, inbox, search contacts/messages, job conversation, service request, empty chat, report/delete dialogs. |
+| Profile | Own Work Profile, own Hiring Profile, complete profile prompts, services, job history, worker feedback. |
+| Admin | Web/admin-only verification queue and review details can be simpler than the mobile app. |
 
 Demo acceptance standard:
 

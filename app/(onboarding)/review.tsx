@@ -1,108 +1,84 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import {
+  CheckRow,
+  OnboardingButton,
+  OnboardingFormScaffold,
+  ReviewField,
+  onboardingColors,
+} from '@/components/onboarding/FigmaOnboarding';
 
 import { useOnboarding } from './onboarding-context';
 
 export default function ReviewStep() {
   const router = useRouter();
   const { draft, role, saveProfile, saving } = useOnboarding();
+  const [acceptedTerms, setAcceptedTerms] = useState(true);
+  const [confirmedInfo, setConfirmedInfo] = useState(false);
   const isProvider = role === 'provider';
 
   const submit = async () => {
-    await saveProfile({ requiresCertificationReview: isProvider && !!draft.hasCertifications });
+    if (!acceptedTerms || !confirmedInfo) {
+      Alert.alert('Confirm your details', 'Please agree to the terms and confirm your information is correct.');
+      return;
+    }
+
+    const saved = await saveProfile({ requiresCertificationReview: isProvider && !!draft.hasCertifications });
+    if (saved) {
+      router.replace('/(onboarding)/complete');
+    }
   };
 
+  const fullName = `${draft.firstName} ${draft.lastName}`.trim() || 'Not provided';
+  const address = [
+    draft.streetAddress.trim(),
+    draft.barangay ? `Brgy. ${draft.barangay}` : '',
+    [draft.city, 'Batangas'].filter(Boolean).join(', '),
+  ]
+    .filter(Boolean)
+    .join('\n');
+
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Review your info</ThemedText>
-
-      <View style={styles.card}>
-        <ThemedText type="defaultSemiBold">Name</ThemedText>
-        <ThemedText>{draft.firstName} {draft.lastName}</ThemedText>
-      </View>
-
-      <View style={styles.card}>
-        <ThemedText type="defaultSemiBold">Birthdate</ThemedText>
-        <ThemedText>{draft.birthdate || '—'}</ThemedText>
-      </View>
-
-      <View style={styles.card}>
-        <ThemedText type="defaultSemiBold">Location</ThemedText>
-        <ThemedText>{draft.streetAddress || '—'}, {draft.city || '—'}</ThemedText>
-      </View>
-
-      {isProvider ? (
-        <View style={styles.card}>
-          <ThemedText type="defaultSemiBold">Job</ThemedText>
-          <ThemedText>{draft.serviceType || '—'}</ThemedText>
+    <>
+      <StatusBar style="dark" />
+      <OnboardingFormScaffold
+        currentStep={4}
+        footer={<OnboardingButton label={saving ? 'Saving...' : 'Next'} loading={saving} onPress={submit} />}
+        helper="Review your information before entering Konektado"
+        onBack={() => router.back()}
+        title="Almost there.">
+        <View style={styles.reviewCard}>
+          <ReviewField label="Full Name" value={fullName} />
+          <ReviewField label="Address" multiline value={address || 'Not provided'} />
+          <ReviewField label="Birthdate" value={draft.birthdate || 'Not provided'} />
+          {isProvider ? <ReviewField label="Services" value={draft.serviceType || 'Not provided'} /> : null}
         </View>
-      ) : null}
 
-      {isProvider ? (
-        <View style={styles.card}>
-          <ThemedText type="defaultSemiBold">Certifications</ThemedText>
-          <ThemedText>
-            {draft.hasCertifications ? draft.certificationDetails || 'Provided' : 'None'}
-          </ThemedText>
+        <View style={styles.checks}>
+          <CheckRow checked={acceptedTerms} onPress={() => setAcceptedTerms((value) => !value)}>
+            I agree to the Terms of Use and Privacy Policy
+          </CheckRow>
+          <CheckRow checked={confirmedInfo} onPress={() => setConfirmedInfo((value) => !value)}>
+            I confirm that the information I provided is correct
+          </CheckRow>
         </View>
-      ) : null}
-
-      <View style={styles.row}>
-        <TouchableOpacity style={styles.secondary} onPress={() => router.back()}>
-          <ThemedText>Back</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.primary} onPress={submit} disabled={saving}>
-          <ThemedText type="defaultSemiBold" style={styles.primaryText}>
-            {saving ? 'Saving...' : 'Submit'}
-          </ThemedText>
-        </TouchableOpacity>
-      </View>
-    </ThemedView>
+      </OnboardingFormScaffold>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    gap: 12,
-    justifyContent: 'center',
-  },
-  title: {
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  card: {
-    padding: 12,
-    borderRadius: 10,
+  reviewCard: {
+    borderColor: onboardingColors.borderSoft,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
+    overflow: 'hidden',
   },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  secondary: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-  },
-  primary: {
-    flex: 1,
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  primaryText: {
-    color: '#fff',
+  checks: {
+    gap: 7,
+    marginTop: 2,
   },
 });

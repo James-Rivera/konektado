@@ -34,6 +34,7 @@ Current prototype note:
 
 - Some screens currently call Supabase directly.
 - As features are completed, move those queries into `/services`.
+- Current app screens still reflect an older Home/Explore/Profile prototype. Replace them with the Figma-aligned Home/Post/Messages/Profile structure.
 
 ## Coding Rules
 
@@ -67,7 +68,7 @@ Types:
 
 Functions:
 
-- Service functions use verbs: `createJob`, `searchJobs`, `applyToJob`.
+- Service functions use verbs: `createJob`, `searchJobs`, `startJobConversation`, `sendMessage`, `markWorkerHired`.
 - Hooks start with `use`: `useProfile`, `useJobs`.
 
 ## State Management Rules
@@ -123,13 +124,13 @@ router.push(`/jobs/${result.data.id}`);
 - Log technical errors only during development or through a controlled logger.
 - Do not show raw SQL or Supabase errors directly to users.
 - Validate form inputs before calling services.
-- Services should normalize common errors like duplicate applications.
+- Services should normalize common errors like duplicate job conversations.
 - Destructive actions require confirmation.
 
 Examples:
 
-- Good: "You already applied to this job."
-- Bad: "duplicate key value violates unique constraint job_applications_job_id_applicant_id_key"
+- Good: "You already have a conversation for this job."
+- Bad: "duplicate key value violates unique constraint conversations_job_id_provider_id_key"
 
 ## Testing and Debugging Rules
 
@@ -144,8 +145,9 @@ Minimum checks before marking a feature done:
 Manual test examples:
 
 - Register -> role selection -> onboarding -> tabs.
-- Provider creates skill -> client sees provider.
-- Client posts job -> provider sees job -> provider applies.
+- Provider creates service -> client sees provider.
+- Client posts job -> provider sees job -> provider messages client.
+- Client marks interested worker hired from Messages.
 - Admin approves verification -> badge appears.
 
 ## Dependency Rules

@@ -1,133 +1,224 @@
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+  type ImageSourcePropType,
+} from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import {
+  GradientImageScreen,
+  KonektadoWordmark,
+  OnboardingButton,
+  onboardingColors,
+  RoleChoiceStack,
+  type RoleChoiceOption,
+} from '@/components/onboarding/FigmaOnboarding';
+import { saveUserRole, type AppRole } from '@/utils/save-role';
 import { supabase } from '@/utils/supabase';
 
-type Role = 'client' | 'provider';
+type SessionUser = {
+  email: string | null;
+  id: string;
+};
+
+const roleBackgrounds: Record<AppRole | 'default', ImageSourcePropType> = {
+  client: require('../../assets/images/onboarding-role-client-wide.jpg'),
+  default: require('../../assets/images/onboarding-role.jpg'),
+  provider: require('../../assets/images/onboarding-role-work-wide.jpg'),
+};
+
+const roleChoices: RoleChoiceOption<AppRole>[] = [
+  {
+    bullets: ['Find jobs near your barangay', 'Show your skills and get hired', 'Get paid directly'],
+    description: 'Show my skills to people in my barangay',
+    icon: 'business-center',
+    selectedDescription: 'Find jobs and earn in your barangay',
+    title: 'I want to find work',
+    value: 'provider',
+  },
+  {
+    bullets: ['Hire people near you', 'View ratings and past work', 'Support your community'],
+    description: 'Find trusted workers near you',
+    icon: 'search',
+    title: 'I want to hire someone',
+    value: 'client',
+  },
+];
 
 export default function RoleScreen() {
-  const [submitting, setSubmitting] = useState<Role | null>(null);
+  const router = useRouter();
+  const [selectedRole, setSelectedRole] = useState<AppRole | null>(null);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSelect = async (role: Role) => {
-    setSubmitting(role);
-    const { data: userResult, error: userError } = await supabase.auth.getUser();
-    if (userError || !userResult.user) {
-      setSubmitting(null);
-      Alert.alert('Not signed in', 'Please sign in again to continue.');
-      return;
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
     }
 
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert({ id: userResult.user.id, email: userResult.user.email, role, active_role: role });
+    let active = true;
 
-    if (profileError) {
-      setSubmitting(null);
-      Alert.alert('Could not save role', profileError.message);
-      return;
-    }
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active || !data.user) return;
+      setSessionUser({ id: data.user.id, email: data.user.email ?? null });
+    });
 
-    // Track role in user_roles to allow dual roles and switching
-    const { error: rolesError } = await supabase
-      .from('user_roles')
-      .upsert({ user_id: userResult.user.id, role, is_active: true }, { onConflict: 'user_id,role' });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-    if (rolesError) {
-      setSubmitting(null);
-      Alert.alert('Saved profile but could not record role', rolesError.message);
-      return;
-    }
+  const selectRole = (role: AppRole) => {
+    if (selectedRole === role) return;
 
-    await supabase
-      .from('user_roles')
-      .update({ is_active: false })
-      .eq('user_id', userResult.user.id)
-      .neq('role', role);
-
-    setSubmitting(null);
-
-    // Metadata sync is optional; layout guard relies on profiles/user_roles.
-    supabase.auth
-      .updateUser({ data: { role, app_role: role } })
-      .then(({ error: metaError }) => {
-        if (!metaError) return;
-        Alert.alert('Role saved', 'Role was saved, but account metadata sync failed. You can continue.');
-      })
-      .catch(() => {});
+    LayoutAnimation.configureNext({
+      create: {
+        property: LayoutAnimation.Properties.opacity,
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      delete: {
+        property: LayoutAnimation.Properties.opacity,
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      duration: 320,
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+    });
+    setSelectedRole(role);
   };
 
-  return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Choose your role</ThemedText>
-      <ThemedText style={styles.subtitle}>You can change this later in Profile.</ThemedText>
+  const continueWithRole = async () => {
+    if (!selectedRole) {
+      Alert.alert('Choose how you will use Konektado', 'Select one option to continue.');
+      return;
+    }
 
-      <View style={styles.cards}>
-        <RoleCard
-          title="Client"
-          description="I need to find providers for a task."
-          onPress={() => handleSelect('client')}
-          loading={submitting === 'client'}
-        />
-        <RoleCard
-          title="Provider"
-          description="I offer services and want to get hired."
-          onPress={() => handleSelect('provider')}
-          loading={submitting === 'provider'}
-        />
-      </View>
-    </ThemedView>
-  );
-}
+    if (!sessionUser) {
+      router.push(`/(auth)/register?role=${selectedRole}`);
+      return;
+    }
 
-function RoleCard({
-  title,
-  description,
-  onPress,
-  loading,
-}: {
-  title: string;
-  description: string;
-  onPress: () => void;
-  loading: boolean;
-}) {
+    setSubmitting(true);
+    const saveError = await saveUserRole({
+      email: sessionUser.email,
+      role: selectedRole,
+      userId: sessionUser.id,
+    });
+
+    if (saveError) {
+      setSubmitting(false);
+      Alert.alert('Could not save role', saveError.message);
+      return;
+    }
+
+    const { error: metaError } = await supabase.auth.updateUser({
+      data: { app_role: selectedRole, role: selectedRole },
+    });
+
+    setSubmitting(false);
+
+    if (metaError) {
+      Alert.alert('Role saved', 'Role was saved, but account metadata sync failed. You can continue.');
+    }
+
+    router.replace('/(onboarding)');
+  };
+
+  const goToLogin = () => {
+    router.push('/(auth)/login');
+  };
+
+  const backgroundSource = selectedRole ? roleBackgrounds[selectedRole] : roleBackgrounds.default;
+
   return (
-    <Pressable style={styles.card} onPress={onPress} disabled={loading}>
-      <ThemedText type="subtitle" style={styles.cardTitle}>{title}</ThemedText>
-      <ThemedText style={styles.cardDescription}>{loading ? 'Saving...' : description}</ThemedText>
-    </Pressable>
+    <View style={styles.screen}>
+      <StatusBar style="light" translucent />
+      <GradientImageScreen
+        backgroundTransitionDuration={460}
+        blueOpacity={0.4}
+        darkness={0.2}
+        source={backgroundSource}>
+        <View style={styles.content}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>How will you use</Text>
+            <KonektadoWordmark color="light" size="large" />
+          </View>
+
+          <RoleChoiceStack onSelect={selectRole} options={roleChoices} selectedValue={selectedRole} style={styles.cards} />
+
+          <View style={styles.footer}>
+            <OnboardingButton
+              disabled={!selectedRole}
+              label={sessionUser ? 'Continue' : 'Create Account'}
+              loading={submitting}
+              onPress={continueWithRole}
+              variant="yellow"
+            />
+            <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
+              <Text style={styles.loginText}>
+                Already have an account? <Text style={styles.loginTextBold}>Login</Text>
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </GradientImageScreen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
+    backgroundColor: '#1D4F91',
     flex: 1,
-    padding: 20,
-    gap: 12,
-    justifyContent: 'center',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 70,
+  },
+  titleBlock: {
+    gap: 8,
+    paddingHorizontal: 4,
   },
   title: {
-    marginBottom: 6,
-  },
-  subtitle: {
-    marginBottom: 16,
-    color: '#6b7280',
+    color: onboardingColors.white,
+    fontFamily: 'Satoshi-Black',
+    fontSize: 38,
+    lineHeight: 50,
   },
   cards: {
-    gap: 12,
+    flex: 1,
+    gap: 42,
+    justifyContent: 'center',
+    paddingVertical: 26,
   },
-  card: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    backgroundColor: '#fff',
+  footer: {
+    gap: 4,
   },
-  cardTitle: {
-    marginBottom: 4,
+  loginLink: {
+    alignItems: 'center',
+    minHeight: 26,
+    justifyContent: 'center',
   },
-  cardDescription: {
-    color: '#4b5563',
+  loginText: {
+    color: onboardingColors.white,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  loginTextBold: {
+    fontFamily: 'Satoshi-Bold',
+    textDecorationLine: 'underline',
   },
 });

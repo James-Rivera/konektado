@@ -25,12 +25,12 @@ Failure states:
 3. App explains that barangay verification is required before interacting with other users.
 4. App lets the user enter the main tabs in viewer mode.
 5. Viewer can browse limited jobs, workers, service posts, and educational prompts.
-6. Viewer sees locked actions for posting, applying, messaging, reviewing, and creating public service posts.
+6. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
 7. When the viewer taps a locked action, app routes to verification.
 
 Rules:
 
-- Do not overload first-time onboarding with all profile, ID, credential, and skill details.
+- Do not overload first-time onboarding with all profile, ID, credential, and service details.
 - The first entry experience should help users understand Konektado quickly.
 - Viewer mode is read-only for user-to-user marketplace interactions.
 - Viewer mode still requires a lightweight authenticated account; it is not anonymous public browsing.
@@ -46,7 +46,7 @@ Rules:
 7. App explains that email is used for verification updates, support, account recovery, and future login support if implemented.
 8. User selects ID type.
 9. User uploads or captures required ID front and ID back.
-10. User adds intended skills/services, work categories, or client purpose as needed.
+10. User adds intended services, work categories, or client purpose as needed.
 11. User may upload supporting certificates or proof of experience.
 12. User takes or uploads a selfie/photo for manual barangay comparison if required by the barangay.
 13. App shows a review and submit screen so the user can check contact details, ID type, uploaded files, and selfie/photo before submission.
@@ -60,8 +60,8 @@ Rules:
 Verification unlocks:
 
 - Posting jobs.
-- Creating public skill/service profiles or service posts.
-- Applying to jobs.
+- Creating public service profiles or service posts.
+- Messaging about jobs or services.
 - Messaging other users.
 - Leaving reviews after completed jobs.
 
@@ -73,22 +73,22 @@ Contact details rules:
 - Email can be required for verification if the project needs reliable follow-up, but it must include a short privacy explanation.
 - Email should not be displayed on public profiles, job cards, service cards, or worker cards.
 
-## Skill Profile Creation Flow
+## Service Profile Creation Flow
 
-1. Provider opens profile or provider setup.
+1. Provider opens Work Profile, Post, or provider setup.
 2. Provider selects one or more service categories.
 3. Provider adds service title, description, availability, experience, and optional rate text.
-4. Provider may attach credentials related to the skill.
+4. Provider may attach credentials related to the service.
 5. App validates required fields.
-6. `SkillService.createSkill` saves the skill.
-7. Skill appears on provider public profile and search results if active.
+6. `ServiceProfileService.createService` saves the service.
+7. Service appears on provider public profile, Home feed, and search results if active.
 
 Rules:
 
-- A provider can have multiple skills.
-- A skill belongs to one provider.
-- Inactive skills are hidden from public search.
-- Admin verification belongs to the user/profile, while credentials can support a skill.
+- A provider can have multiple services.
+- A service belongs to one provider.
+- Inactive services are hidden from public search.
+- Admin verification belongs to the user/profile, while credentials can support a service.
 
 ## Job Posting Flow
 
@@ -96,33 +96,44 @@ Rules:
 2. Client enters title, description, category, location, budget, and schedule text.
 3. App validates title, description, and location.
 4. `JobService.createJob` saves the job with status `open`.
-5. Job appears in provider browsing and feed results.
+5. Job appears in Home, job search, post dashboard, and provider browsing.
 6. Client can edit the job while it is open.
 7. Client can close or cancel the job.
 
 Rules:
 
 - Payments and job agreements happen outside the app.
-- Jobs should be clear enough for providers to decide whether to apply.
-- Closed or cancelled jobs should not accept new applications.
+- Jobs should be clear enough for providers to decide whether to message.
+- Closed or cancelled jobs should not accept new interested workers.
 
-## Job Application Flow
+## Job Interest and Messaging Flow
 
 1. Provider browses open jobs.
-2. Provider opens a job or taps Apply.
-3. App checks that provider has not already applied.
-4. Provider optionally adds a short message.
-5. `ApplicationService.applyToJob` creates a `job_applications` row.
-6. Application status starts as `applied`.
-7. Client reviews applications for their job.
-8. Client marks an application as `accepted` or `rejected`.
-9. Provider sees updated application status.
+2. Provider opens a job or taps Message.
+3. App checks barangay verification.
+4. App checks that the provider is not messaging their own job.
+5. `ConversationService.startJobConversation` creates or reuses a job-related conversation.
+6. Provider sends the first message or uses a suggested quick message.
+7. Client sees the worker in Messages as an interested worker.
+8. Client can reply, view the worker profile, mark hired, decline through a menu, or report.
+9. Provider sees the conversation and job context in Messages.
 
 Rules:
 
-- A provider can apply to the same job only once.
-- A provider cannot apply to their own job.
-- Applications cannot be created for closed or cancelled jobs.
+- A provider should have only one active job conversation per job.
+- A provider cannot show interest in their own job.
+- Conversations cannot be started for closed or cancelled jobs.
+- "Apply" should not be used in the UI for the MVP unless a formal application feature is added later.
+
+## Message-Based Hiring Flow
+
+1. Client receives one or more interested workers in Messages.
+2. Client opens the job conversation.
+3. Client can use quick prompts to confirm time, location, payment, and what to bring.
+4. Client taps Mark Hired when a worker is chosen.
+5. App updates the job or conversation with hired worker status.
+6. Job History shows the job as active, worker hired, in progress, or completed.
+7. After completion, both sides can leave feedback if the review flow is enabled.
 
 ## Admin Verification Flow
 

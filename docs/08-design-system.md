@@ -10,12 +10,15 @@ Current Figma direction observed from the dashboard:
 
 - Clean mobile feed.
 - White content surfaces with light gray dividers.
-- Blue primary actions.
-- Green verification badge.
+- Blue primary actions used sparingly.
+- Green verification badge only where trust state is central, not repeated on every feed card.
 - Rounded pill filters and action buttons.
 - Bottom navigation with Home, Post, Messages, and Profile.
 - Search bar for "Search nearby jobs or workers".
 - Feed sections for jobs and workers.
+- Post dashboard for creating and managing job/service posts.
+- Messages screens for job/service coordination.
+- Profile with Work Profile and Hiring Profile tabs.
 
 ## Colors
 
@@ -116,7 +119,7 @@ States:
 
 Rules:
 
-- Use clear action labels like "Apply", "Post job", "Submit request".
+- Use clear action labels like "Message", "View Job", "Post job", "Submit request", and "Mark Hired".
 - For icon buttons, include accessibility labels.
 
 ### Input
@@ -175,7 +178,7 @@ Tabs:
 
 MVP note:
 
-- Messages can be present visually but routed to a deferred/placeholder screen if full chat is not implemented.
+- Messages is part of the current MVP direction. Keep it simple: inbox, job/service context, text messages, quick prompts, and safety/report actions.
 
 ### Search Bar
 
@@ -201,7 +204,15 @@ Required content:
 - Budget text, if provided.
 - Short description.
 - Tags such as category, urgent, near you.
-- Primary action: Apply or View Job.
+- Primary action: View Job.
+- Secondary action where appropriate: Message.
+
+Rules:
+
+- Job cards are task-first. Do not add large client avatars to feed job cards.
+- Use title-first layout, like a marketplace listing.
+- Use schedule language such as "Starts 3:00 PM" instead of worker availability language.
+- Public job cards do not need a repeated verified badge if interaction is already verification-gated.
 
 ### Profile Card
 
@@ -209,12 +220,19 @@ Required content:
 
 - Profile photo or placeholder.
 - Provider name.
-- Service title/category.
+- Service title/category or short match reason.
 - Barangay/city.
 - Availability.
 - Verification badge if verified.
 - Rating summary when available.
 - Primary action: View Profile.
+- Secondary action where appropriate: Message.
+
+Rules:
+
+- Worker cards are person-first.
+- Use "Services" for what a worker offers.
+- Use muted pills in Home/feed; reserve blue for active filters and primary actions.
 
 ### Verification Badge
 
@@ -229,6 +247,35 @@ Rules:
 
 - Public cards should only show positive verified badge or no badge.
 - Pending/rejected status should be shown mainly to the owner/admin.
+- Since Konektado gates posting and messaging through verification, avoid putting the verified badge on every feed/search card unless the screen specifically needs a trust reminder.
+
+### Profile Tabs
+
+Own profile uses two tabs:
+
+- Work Profile
+- Hiring Profile
+
+Work Profile should show:
+
+- Worker rating.
+- Jobs done/taken.
+- Hours worked if available.
+- Availability.
+- Services.
+- Work history.
+
+Hiring Profile should show:
+
+- Client rating.
+- Workers hired.
+- Jobs posted.
+- Open jobs.
+- Manage job posts CTA.
+- Job history.
+- Reviews from workers.
+
+Saved workers/jobs should not live primarily in Profile. They belong closer to Home/Search or a future saved items surface.
 
 ### Admin Review Card
 

@@ -1,10 +1,16 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import {
+  OnboardingButton,
+  OnboardingFormScaffold,
+  OnboardingTextInput,
+  onboardingColors,
+} from '@/components/onboarding/FigmaOnboarding';
 
 import type { VerificationUpload } from './onboarding-context';
 import { useOnboarding } from './onboarding-context';
@@ -25,13 +31,14 @@ export default function VerificationStep() {
   const pickFile = async (fileType: VerificationUpload['fileType']) => {
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
     if (result.canceled || !result.assets?.length) return;
+
     const asset = result.assets[0];
     const next: VerificationUpload = {
-      uri: asset.uri,
-      name: asset.name ?? 'upload',
       fileType,
       mimeType: asset.mimeType ?? undefined,
+      name: asset.name ?? 'upload',
       size: asset.size ?? null,
+      uri: asset.uri,
     };
 
     setFiles((prev) => {
@@ -43,7 +50,7 @@ export default function VerificationStep() {
 
   const removeFile = (uri: string) => {
     setFiles((prev) => {
-      const updated = prev.filter((f) => f.uri !== uri);
+      const updated = prev.filter((file) => file.uri !== uri);
       setVerificationFiles(updated);
       return updated;
     });
@@ -55,180 +62,215 @@ export default function VerificationStep() {
       const hasIdBack = files.some((file) => file.fileType === 'id_back');
 
       if (!hasIdFront || !hasIdBack) {
-        Alert.alert(
-          'ID required for verification',
-          'Please upload both ID front and ID back to request barangay verification.'
-        );
+        Alert.alert('ID required for verification', 'Please upload both ID front and ID back.');
         return;
       }
     }
 
     updateDraft({
-      wantsBarangayVerification: wantsVerification,
-      verificationNote,
       verificationFiles: files,
+      verificationNote,
+      wantsBarangayVerification: wantsVerification,
     });
     router.push('/(onboarding)/review');
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Barangay verification</ThemedText>
-      <ThemedText style={styles.helper}>
-        Verified providers are easier to trust for nearby jobs. This is recommended.
-      </ThemedText>
-
-      <View style={styles.rowBetween}>
-        <ThemedText>Request barangay verification</ThemedText>
-        <Switch value={wantsVerification} onValueChange={setWantsVerification} />
-      </View>
-
-      {wantsVerification ? (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Note to barangay (optional)"
-            multiline
-            value={verificationNote}
-            onChangeText={setVerificationNote}
+    <>
+      <StatusBar style="dark" />
+      <OnboardingFormScaffold
+        contentStyle={styles.content}
+        currentStep={3}
+        footer={<OnboardingButton label="Next" onPress={next} />}
+        helper="Barangay verification unlocks posting, messaging, and higher-trust marketplace actions."
+        onBack={() => router.back()}
+        title="Barangay verification">
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleCopy}>
+            <Text style={styles.toggleTitle}>Request verification now</Text>
+            <Text style={styles.toggleDescription}>You can also finish setup and verify later.</Text>
+          </View>
+          <Switch
+            onValueChange={setWantsVerification}
+            thumbColor={wantsVerification ? onboardingColors.brandYellow : '#F4F4F4'}
+            trackColor={{ false: '#D5D7DA', true: '#F5F5EF' }}
+            value={wantsVerification}
           />
-
-          <ThemedText type="subtitle">Required ID uploads</ThemedText>
-          <View style={styles.fileRow}>
-            <Pressable style={styles.fileButton} onPress={() => pickFile('id_front')}>
-              <ThemedText>Add ID front</ThemedText>
-            </Pressable>
-            <Pressable style={styles.fileButton} onPress={() => pickFile('id_back')}>
-              <ThemedText>Add ID back</ThemedText>
-            </Pressable>
-          </View>
-
-          <ThemedText type="subtitle">Optional supporting files</ThemedText>
-          <View style={styles.fileRow}>
-            <Pressable style={styles.fileButton} onPress={() => pickFile('certification')}>
-              <ThemedText>Add cert proof</ThemedText>
-            </Pressable>
-            <Pressable style={styles.fileButton} onPress={() => pickFile('experience')}>
-              <ThemedText>Add work proof</ThemedText>
-            </Pressable>
-          </View>
-
-          {files.length ? (
-            <View style={styles.list}>
-              {files.map((file) => (
-                <View key={file.uri} style={styles.listItem}>
-                  <ThemedText>{file.fileType}: {file.name}</ThemedText>
-                  <Pressable onPress={() => removeFile(file.uri)}>
-                    <ThemedText style={styles.remove}>Remove</ThemedText>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </>
-      ) : (
-        <View style={styles.skippedCard}>
-          <ThemedText>You can skip for now and request verification later in profile settings.</ThemedText>
         </View>
-      )}
 
-      <View style={styles.row}>
-        <TouchableOpacity style={styles.secondary} onPress={() => router.back()}>
-          <ThemedText>Back</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.primary} onPress={next}>
-          <ThemedText type="defaultSemiBold" style={styles.primaryText}>Continue</ThemedText>
-        </TouchableOpacity>
-      </View>
-    </ThemedView>
+        {wantsVerification ? (
+          <>
+            <OnboardingTextInput
+              multiline
+              onChangeText={setVerificationNote}
+              placeholder="Note to barangay (optional)"
+              style={styles.noteInput}
+              textAlignVertical="top"
+              value={verificationNote}
+            />
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Required ID uploads</Text>
+              <View style={styles.fileGrid}>
+                <FileButton label="ID front" onPress={() => pickFile('id_front')} />
+                <FileButton label="ID back" onPress={() => pickFile('id_back')} />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Optional supporting files</Text>
+              <View style={styles.fileGrid}>
+                <FileButton label="Certificate" onPress={() => pickFile('certification')} />
+                <FileButton label="Work proof" onPress={() => pickFile('experience')} />
+              </View>
+            </View>
+
+            {files.length ? (
+              <View style={styles.fileList}>
+                {files.map((file) => (
+                  <View key={file.uri} style={styles.fileListItem}>
+                    <View style={styles.fileNameRow}>
+                      <MaterialIcons color={onboardingColors.textMuted} name="attach-file" size={16} />
+                      <Text numberOfLines={1} style={styles.fileName}>
+                        {file.name}
+                      </Text>
+                    </View>
+                    <Pressable accessibilityRole="button" hitSlop={8} onPress={() => removeFile(file.uri)}>
+                      <Text style={styles.removeText}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <View style={styles.skipCard}>
+            <Text style={styles.skipText}>You can browse in viewer mode and request verification later in Profile.</Text>
+          </View>
+        )}
+      </OnboardingFormScaffold>
+    </>
+  );
+}
+
+function FileButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.fileButton}>
+      <MaterialIcons color={onboardingColors.actionBlue} name="upload-file" size={20} />
+      <Text style={styles.fileButtonText}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    gap: 12,
-    justifyContent: 'center',
+  content: {
+    paddingTop: 36,
   },
-  title: {
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  helper: {
-    color: '#6b7280',
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  toggleRow: {
     alignItems: 'center',
-  },
-  input: {
+    borderColor: onboardingColors.borderSoft,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
     padding: 12,
-    backgroundColor: '#fff',
-    minHeight: 100,
-    textAlignVertical: 'top',
   },
-  fileRow: {
+  toggleCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  toggleTitle: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  toggleDescription: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  noteInput: {
+    height: 92,
+    paddingTop: 12,
+  },
+  section: {
+    gap: 8,
+  },
+  sectionTitle: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  fileGrid: {
     flexDirection: 'row',
     gap: 10,
   },
   fileButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f8fafc',
     alignItems: 'center',
-  },
-  list: {
-    marginTop: 8,
+    borderColor: onboardingColors.borderSoft,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 8,
+    flex: 1,
+    flexDirection: 'row',
     gap: 6,
+    justifyContent: 'center',
+    minHeight: 46,
+    paddingHorizontal: 10,
   },
-  listItem: {
+  fileButtonText: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  fileList: {
+    borderColor: onboardingColors.borderSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  fileListItem: {
+    alignItems: 'center',
+    borderBottomColor: onboardingColors.borderSoft,
+    borderBottomWidth: 1,
     flexDirection: 'row',
+    gap: 8,
     justifyContent: 'space-between',
+    padding: 10,
+  },
+  fileNameRow: {
     alignItems: 'center',
-  },
-  remove: {
-    color: '#ef4444',
-  },
-  skippedCard: {
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: '#fff',
-  },
-  row: {
+    flex: 1,
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+    gap: 4,
   },
-  secondary: {
+  fileName: {
+    color: onboardingColors.text,
     flex: 1,
-    padding: 14,
-    borderRadius: 8,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  removeText: {
+    color: '#B91C1C',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  skipCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: onboardingColors.borderSoft,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
+    padding: 12,
   },
-  primary: {
-    flex: 1,
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  primaryText: {
-    color: '#fff',
+  skipText: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

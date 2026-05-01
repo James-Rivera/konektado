@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current prototype note: the repo already has `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `jobs`, and `job_applications` migrations. This document is the source of truth for the next stable schema. Existing fields like `provider_profiles.service_type` can be migrated into the `skills` table when the skill profile feature is expanded.
+Current prototype note: the repo already has `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `jobs`, and legacy `job_applications` migrations. This document is the source of truth for the next stable schema. Existing fields like `provider_profiles.service_type` can seed the first record in the `services` table when the service profile feature is expanded.
 
 ## Common Types
 
@@ -12,8 +12,9 @@ Recommended enum values can be implemented as PostgreSQL enums or `text check` c
 | --- | --- |
 | `app_role` | `client`, `provider`, `barangay_admin` |
 | `verification_status` | `pending`, `approved`, `rejected`, `cancelled` |
-| `job_status` | `open`, `in_progress`, `completed`, `closed`, `cancelled` |
-| `application_status` | `applied`, `shortlisted`, `accepted`, `rejected`, `withdrawn` |
+| `job_status` | `open`, `reviewing`, `in_progress`, `completed`, `closed`, `cancelled` |
+| `conversation_status` | `active`, `hired`, `declined`, `archived`, `reported` |
+| `saved_item_type` | `job`, `provider` |
 | `report_status` | `open`, `reviewing`, `resolved`, `dismissed` |
 
 ## users
@@ -64,7 +65,7 @@ Purpose: Shared user profile and resident identity details.
 Relationships:
 
 - One profile belongs to one auth user.
-- One profile can have many roles, skills, jobs, applications, reviews, reports, and verification requests.
+- One profile can have many roles, services, jobs, conversations, reviews, reports, saved items, and verification requests.
 
 Important constraints:
 
@@ -94,7 +95,7 @@ Important constraints:
 - Only one active non-admin user role should be active at a time.
 - `barangay_admin` assignment must be admin-only or manual in Supabase.
 
-## skills
+## services
 
 Purpose: Provider service profile entries shown in search and provider profiles.
 
@@ -114,14 +115,18 @@ Purpose: Provider service profile entries shown in search and provider profiles.
 
 Relationships:
 
-- A provider can have many skills.
-- Credentials can optionally connect to a skill.
+- A provider can have many services.
+- Credentials can optionally connect to a service.
 
 Important constraints:
 
-- Only provider owner can create/update/delete their skills.
-- Public queries should only show active skills.
+- Only provider owner can create/update/delete their services.
+- Public queries should only show active services.
 - `category` and `title` are required.
+
+Implementation note:
+
+- The older docs and SQL may still mention `skills` or `provider_profiles.service_type`. The current UI language is Services. For development, prefer a `services` table or map the old `service_type` field into service-style UI until the table is added.
 
 ## credentials
 
@@ -131,7 +136,7 @@ Purpose: Metadata for certificates, IDs, and proof-of-experience files.
 | --- | --- | --- |
 | `id` | `uuid` | Primary key. |
 | `provider_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `skill_id` | `uuid` | Nullable reference to `skills(id)` on delete set null. |
+| `service_id` | `uuid` | Nullable reference to `services(id)` on delete set null. |
 | `credential_type` | `text` | `id_front`, `id_back`, `certificate`, `experience`, `other`. |
 | `title` | `text` | User-facing label. |
 | `issuer` | `text` | Optional issuing school, agency, company, or person. |
@@ -143,7 +148,7 @@ Purpose: Metadata for certificates, IDs, and proof-of-experience files.
 Relationships:
 
 - Belongs to provider.
-- Optionally belongs to a skill.
+- Optionally belongs to a service.
 - Can be linked to a verification request through `verification_files`.
 
 Important constraints:
@@ -159,7 +164,7 @@ Purpose: Barangay verification workflow for residents/providers.
 | --- | --- | --- |
 | `id` | `uuid` | Primary key. |
 | `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `request_type` | `text` | `barangay_identity`, `provider_skill`, or `other`. |
+| `request_type` | `text` | `barangay_identity`, `provider_service`, or `other`. |
 | `status` | `verification_status` | Default `pending`. |
 | `submitted_note` | `text` | Optional note from resident. |
 | `reviewer_id` | `uuid` | Nullable reference to admin profile. |
@@ -225,40 +230,86 @@ Purpose: Client-posted work opportunities.
 Relationships:
 
 - One client can create many jobs.
-- One job can have many applications.
+- One job can have many job-related conversations.
 - One job can have reviews after completion.
 
 Important constraints:
 
 - Only client owner can edit own open jobs.
-- New applications allowed only when status is `open`.
+- New job-interest conversations allowed only when status is `open` or `reviewing`.
 - Budget is informational only; payment is outside the app.
 
-## job_applications
+## conversations
 
-Purpose: Provider applications to client jobs.
+Purpose: Conversation thread between two users, usually tied to a job or a service.
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | `uuid` | Primary key. |
-| `job_id` | `uuid` | References `jobs(id)` on delete cascade. |
+| `job_id` | `uuid` | Nullable reference to `jobs(id)` on delete set null. |
+| `service_id` | `uuid` | Nullable reference to `services(id)` on delete set null. |
+| `client_id` | `uuid` | References `profiles(id)` on delete cascade. |
 | `provider_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `message` | `text` | Optional application note. |
-| `status` | `application_status` | Default `applied`. |
+| `started_by` | `uuid` | References `profiles(id)`. |
+| `status` | `conversation_status` | Default `active`. |
+| `hired_at` | `timestamptz` | Nullable. Set when client marks worker hired. |
 | `created_at` | `timestamptz` | Default `now()`. |
 | `updated_at` | `timestamptz` | Updated on status change. |
 
 Relationships:
 
-- Belongs to one job.
-- Belongs to one provider.
+- Belongs to a client and provider.
+- May belong to a job.
+- May belong to a service.
+- Has many messages.
 
 Important constraints:
 
-- Unique `(job_id, provider_id)`.
-- Provider cannot apply to own job.
-- Only job owner can accept/reject.
-- Provider can withdraw own application before final decision.
+- Unique active `(job_id, provider_id)` when `job_id` is present.
+- Provider cannot start interest on their own job.
+- Only job owner/client can mark a worker hired for that job.
+- Both participants can archive their own view if per-user conversation state is later added.
+
+## messages
+
+Purpose: Basic in-app text messages for marketplace coordination.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `conversation_id` | `uuid` | References `conversations(id)` on delete cascade. |
+| `sender_id` | `uuid` | References `profiles(id)` on delete cascade. |
+| `body` | `text` | Message text. |
+| `read_at` | `timestamptz` | Nullable. |
+| `created_at` | `timestamptz` | Default `now()`. |
+
+Relationships:
+
+- Message belongs to one conversation.
+- Sender must be one of the conversation participants.
+
+Important constraints:
+
+- Only conversation participants can read messages.
+- Only verified users can send messages.
+- MVP messages are text-only. Attachments, read receipts, calls, and group chat are future features.
+
+## saved_items
+
+Purpose: One-tap bookmark state for saved jobs and providers.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
+| `item_type` | `saved_item_type` | `job` or `provider`. |
+| `item_id` | `uuid` | Target record ID. |
+| `created_at` | `timestamptz` | Default `now()`. |
+
+Important constraints:
+
+- Unique `(user_id, item_type, item_id)`.
+- Saving is verification-gated if final product requires all interactions to be gated. If time is tight, save can be a local/demo-only state.
 
 ## reviews
 
@@ -288,13 +339,13 @@ Important constraints:
 
 ## reports
 
-Purpose: Optional MVP moderation queue for unsafe users, jobs, applications, or reviews.
+Purpose: Optional MVP moderation queue for unsafe users, jobs, conversations, messages, or reviews.
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | `uuid` | Primary key. |
 | `reporter_id` | `uuid` | References `profiles(id)` on delete set null. |
-| `target_type` | `text` | `user`, `job`, `application`, `review`, `message`. |
+| `target_type` | `text` | `user`, `job`, `conversation`, `review`, `message`. |
 | `target_id` | `uuid` | ID of reported record. |
 | `reason` | `text` | Required short reason. |
 | `details` | `text` | Optional explanation. |
@@ -314,27 +365,3 @@ Important constraints:
 - Admins can read/update report status.
 - Public users cannot browse all reports.
 
-## messages
-
-Purpose: Optional/deferred direct messaging. MVP may use external communication instead.
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | `uuid` | Primary key. |
-| `job_id` | `uuid` | Nullable reference to `jobs(id)` on delete set null. |
-| `sender_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `recipient_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `body` | `text` | Message text. |
-| `read_at` | `timestamptz` | Nullable. |
-| `created_at` | `timestamptz` | Default `now()`. |
-
-Relationships:
-
-- Sender and recipient are profiles.
-- Message may be connected to a job.
-
-Important constraints:
-
-- Only sender and recipient can read the message.
-- Keep deferred unless the MVP timeline supports it.
-- External SMS/Messenger/contact flow is acceptable for MVP.

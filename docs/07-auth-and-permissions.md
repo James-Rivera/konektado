@@ -11,7 +11,7 @@ Required behavior:
 - App stores sessions through Supabase's React Native auth storage.
 - Screens must use an auth/session hook or service, not direct auth logic in every screen.
 - App data must be protected with PostgreSQL Row Level Security.
-- Authentication alone does not grant full marketplace interaction. Barangay verification is required for posting, applying, messaging, and reviewing.
+- Authentication alone does not grant full marketplace interaction. Barangay verification is required for posting, messaging, saving if enabled, and reviewing.
 
 ## Unverified Viewer Mode
 
@@ -28,8 +28,7 @@ Unverified viewers can:
 Unverified viewers cannot:
 
 - Post jobs.
-- Create public skill/service profiles or service posts.
-- Apply to jobs.
+- Create public service profiles or service posts.
 - Message users.
 - Leave reviews.
 - Appear as verified users in public search.
@@ -42,12 +41,12 @@ Unverified viewers cannot:
 | Read own profile | Yes | Yes | Yes |
 | Update own profile | Yes | Yes | Yes |
 | Read public provider profiles | Yes | Yes | Yes |
-| Create skill profile | Yes | No | No, unless acting as provider |
-| Update own skill profile | Yes | No | No, unless owner |
+| Create service profile | Yes | No | No, unless acting as provider |
+| Update own service profile | Yes | No | No, unless owner |
 | Create job | No, unless active client role | Yes | No, unless acting as client |
 | Browse open jobs | Yes | Yes | Yes |
-| Apply to job | Yes | No | No, unless acting as provider |
-| Review applications for own job | No | Yes | Admin read only for moderation |
+| Message about job/service | Yes | Yes | Admin read only for moderation |
+| Mark worker hired for own job | No | Yes | Admin read only for moderation |
 | Submit verification request | Yes | Optional | No |
 | Approve/reject verification | No | No | Yes |
 | Create review | Yes, if job participant | Yes, if job participant | No, unless job participant |
@@ -62,14 +61,14 @@ These role permissions apply after the user's barangay verification is approved.
 | --- | --- | --- | --- | --- |
 | `profiles` | Owner can read full profile. Public users can read safe public fields. Admin can read needed fields. | Created for authenticated user. | Owner can update editable fields. Admin can update verification fields only through admin service. | Hard delete should be admin-only or handled through account deletion. |
 | `user_roles` | Owner can read own roles. Admin can read roles. | Users can add client/provider role for self. | Owner can switch active client/provider role. Admin role is protected. | Admin-only or restricted. |
-| `skills` | Authenticated viewers can read active public skills. Owner can read all own skills. Admin can read for moderation. | Verified provider owner only. | Verified provider owner only. Admin can hide/moderate if needed. | Provider owner can delete own skills if no required history depends on it. |
+| `services` | Authenticated viewers can read active public services. Owner can read all own services. Admin can read for moderation. | Verified provider owner only. | Verified provider owner only. Admin can hide/moderate if needed. | Provider owner can delete own services if no required history depends on it. |
 | `credentials` | Owner and admin can read. Public cannot read private files. | Provider owner only. | Provider owner can update metadata. Admin can update review status. | Owner can delete unused credentials. Admin can hide for moderation. |
 | `verification_requests` | Owner and admin can read. | Owner can create own request. | Admin approves/rejects. Owner can cancel pending request. | Avoid hard delete; use status. |
 | `jobs` | Open jobs are readable by authenticated viewers. Owner can read own jobs. Admin can read for moderation. | Verified client owner only. | Verified job owner can edit own open job. Admin can moderate. | Prefer status `cancelled` or `closed`; hard delete owner/admin only if safe. |
-| `job_applications` | Verified provider can read own applications. Job owner can read applications to own jobs. Admin can read for moderation. | Verified provider only. | Verified provider can withdraw own. Job owner can accept/reject. | Prefer status changes. |
+| `conversations` | Participants can read their own conversations. Job owner can read conversations tied to own jobs. Admin can read for moderation when reported. | Verified user only. | Participants can archive/decline where allowed. Job owner can mark hired. | Prefer status changes. |
+| `messages` | Conversation participants only. Admin can read only for moderation/report workflows. | Verified sender only. | Avoid editing messages in MVP. | Prefer archive/report over hard delete. |
 | `reviews` | Public can read approved public reviews. | Verified job participants only after completion. | Reviewer can edit own review if allowed. Admin can hide/moderate reported reviews. | Avoid hard delete; admin moderation preferred. |
 | `reports` | Reporter can read own report. Admin can read all. | Authenticated users. | Admin updates status. | Admin-only. |
-| `messages` | Sender and recipient only. | Sender only. | Sender can edit/delete only if feature supports it. | Sender/admin based on moderation rules. |
 
 ## Admin Rules
 
@@ -88,7 +87,7 @@ These role permissions apply after the user's barangay verification is approved.
 - Rejection stores a reason or note.
 - Public UI should show verification status as a badge, not expose private files.
 - Verification is the gate for user-to-user interaction features.
-- The verification page is where heavier requirements belong: mobile/contact confirmation, optional email, ID, skills/services, credentials, selfie/photo for manual comparison, and supporting details.
+- The verification page is where heavier requirements belong: mobile/contact confirmation, optional email, ID, services, credentials, selfie/photo for manual comparison, and supporting details.
 - Verification contact details should reuse onboarding/profile values instead of asking the user to retype them.
 - First name and last name can be edited during verification only to correct mismatches with the user's ID.
 - Email collected during verification is private and used for verification updates, support, account recovery, and future login support if implemented.

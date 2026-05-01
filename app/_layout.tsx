@@ -57,7 +57,10 @@ export default function RootLayout() {
           ? "/(onboarding)"
           : "/(tabs)";
 
-    if (activeGroup !== targetGroup) {
+    const isOnboardingComplete =
+      activeGroup === "(onboarding)" && segments[1] === "complete";
+
+    if (activeGroup !== targetGroup && !(targetGroup === "(tabs)" && isOnboardingComplete)) {
       router.replace(targetPath);
     }
   }, [authenticated, loading, needsProfile, needsRole, router, segments]);
@@ -81,7 +84,7 @@ export default function RootLayout() {
         <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </ThemeProvider>
   );
 }

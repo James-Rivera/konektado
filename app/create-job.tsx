@@ -50,14 +50,14 @@ function CreateJobScreen() {
     }
 
     Alert.alert('Job posted', 'Your job is now live.');
-    router.replace('/(tabs)/explore');
+    router.replace('/(tabs)/post');
   };
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="title">Post a new job</ThemedText>
-        <ThemedText style={styles.muted}>Create a listing so providers can apply.</ThemedText>
+        <ThemedText style={styles.muted}>Create a job so nearby workers can message you.</ThemedText>
 
         <View style={styles.fieldGroup}>
           <ThemedText type="defaultSemiBold">Title</ThemedText>
