@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -11,6 +11,13 @@ import { managedPosts, postStats } from '@/constants/demo-data';
 import { color, radius, space, typography } from '@/constants/theme';
 
 export default function PostScreen() {
+  const showVerificationPrompt = () => {
+    Alert.alert(
+      'Verification required',
+      'Barangay verification unlocks posting jobs and creating public service posts.',
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <AppHeader
@@ -42,11 +49,13 @@ export default function PostScreen() {
             description="Describe the task, location, budget, and schedule."
             icon="work-outline"
             label="Post a job"
+            onPress={showVerificationPrompt}
           />
           <PostAction
             description="Make your services visible to nearby residents."
             icon="handyman"
             label="Offer service"
+            onPress={showVerificationPrompt}
           />
         </View>
 
@@ -86,10 +95,12 @@ function PostAction({
   label,
   description,
   icon,
+  onPress,
 }: {
   label: string;
   description: string;
   icon: ComponentProps<typeof MaterialIcons>['name'];
+  onPress: () => void;
 }) {
   return (
     <View style={styles.actionCard}>
@@ -100,7 +111,7 @@ function PostAction({
         <Text style={styles.actionTitle}>{label}</Text>
         <Text style={styles.actionDescription}>{description}</Text>
       </View>
-      <PrimaryButton disabled label={label} variant="secondary" />
+      <PrimaryButton label={label} onPress={onPress} variant="secondary" />
     </View>
   );
 }

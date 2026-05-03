@@ -1,6 +1,6 @@
-export type AppRole = 'client' | 'provider';
+export type AppRole = "client" | "provider";
 
-export type OnboardingIntent = AppRole | 'both';
+export type OnboardingIntent = AppRole;
 
 export type UserPreferences = {
   customNeededServices: string[];
@@ -14,7 +14,7 @@ export type UserPreferences = {
 export type VerificationUpload = {
   uri: string;
   name: string;
-  fileType: 'certification' | 'experience' | 'id_front' | 'id_back';
+  fileType: "certification" | "experience" | "id_front" | "id_back";
   mimeType?: string | null;
   size?: number | null;
 };

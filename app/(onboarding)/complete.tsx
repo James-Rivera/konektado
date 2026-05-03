@@ -4,8 +4,8 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import {
-  KonektadoWordmark,
   OnboardingButton,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';

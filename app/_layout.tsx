@@ -27,7 +27,6 @@ export default function RootLayout() {
   const { loading, authenticated, needsRole, needsProfile } =
     useProfileStatus();
   const [fontsLoaded] = useFonts({
-    AvantGarde: require("../assets/images/fonts/ITC Avant Garde Gothic CE Demi.otf"),
     "Satoshi-Black": require("../assets/images/fonts/Satoshi-Black.otf"),
     "Satoshi-BlackItalic": require("../assets/images/fonts/Satoshi-BlackItalic.otf"),
     "Satoshi-Bold": require("../assets/images/fonts/Satoshi-Bold.otf"),

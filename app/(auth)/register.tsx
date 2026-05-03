@@ -2,37 +2,37 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type StyleProp,
-  type ViewStyle,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
+    type StyleProp,
+    type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import {
-  FloatingOnboardingInput,
-  KonektadoWordmark,
-  OnboardingBackButton,
-  OnboardingButton,
-  OnboardingLoadingOverlay,
-  OtpCodeInput,
-  PasswordRequirementRow,
-  ProgressBars,
-  onboardingColors,
+    FloatingOnboardingInput,
+    OnboardingBackButton,
+    OnboardingButton,
+    onboardingColors,
+    OnboardingLoadingOverlay,
+    OtpCodeInput,
+    PasswordRequirementRow,
+    ProgressBars,
 } from '@/components/onboarding/FigmaOnboarding';
 import {
-  getCurrentAuthUser,
-  requestSignupEmailOtp,
-  resendSignupEmailOtp,
-  setSignupPassword,
-  verifySignupEmailOtp,
+    getCurrentAuthUser,
+    requestSignupEmailOtp,
+    resendSignupEmailOtp,
+    setSignupPassword,
+    verifySignupEmailOtp,
 } from '@/services/auth.service';
 import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 
@@ -40,8 +40,8 @@ type AccountStep = 'email' | 'code' | 'password';
 const EMAIL_OTP_LENGTH = 6;
 
 function normalizeRole(raw: unknown): OnboardingIntent | null {
-  if (raw === 'client' || raw === 'provider' || raw === 'both') return raw;
-  if (Array.isArray(raw) && (raw[0] === 'client' || raw[0] === 'provider' || raw[0] === 'both')) {
+  if (raw === 'client' || raw === 'provider') return raw;
+  if (Array.isArray(raw) && (raw[0] === 'client' || raw[0] === 'provider')) {
     return raw[0];
   }
   return null;

@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppHeader } from '@/components/AppHeader';
 import { JobCard } from '@/components/JobCard';
-import { NoticeBanner } from '@/components/NoticeBanner';
-import { Pill } from '@/components/Pill';
-import { SearchBar } from '@/components/SearchBar';
+import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { WorkerCard } from '@/components/WorkerCard';
 import { homeFilters, nearbyJobs, nearbyWorkers } from '@/constants/demo-data';
-import { color, space, typography } from '@/constants/theme';
+import { color, radius, space, typography } from '@/constants/theme';
+import { useProfile } from '@/hooks/use-profile';
 import { getMyUserPreferences } from '@/services/onboarding.service';
 import type { UserPreferences } from '@/types/onboarding.types';
+
+type FeedItem =
+  | { key: string; type: 'job'; item: (typeof nearbyJobs)[number] }
+  | { key: string; type: 'worker'; item: (typeof nearbyWorkers)[number] };
 
 function scoreTags(tags: string[] | undefined, preferences: UserPreferences | null) {
   if (!preferences || !tags?.length) return 0;
@@ -32,9 +36,26 @@ function scoreTags(tags: string[] | undefined, preferences: UserPreferences | nu
   }, 0);
 }
 
+function getDefaultFilter(preferences: UserPreferences | null) {
+  if (preferences?.intent === 'provider') return 'Jobs';
+  if (preferences?.intent === 'client') return 'Workers';
+  return 'For you';
+}
+
+function showBrowseOnlyPrompt(label: string) {
+  Alert.alert(
+    `${label} preview`,
+    'Details will open from this card in a later slice. Browsing stays available in viewer mode.',
+  );
+}
+
 export default function HomeScreen() {
   const [selectedFilter, setSelectedFilter] = useState(homeFilters[0]);
+  const [userSelectedFilter, setUserSelectedFilter] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [showSetupCard, setShowSetupCard] = useState(true);
+  const { profile } = useProfile();
+  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
   useEffect(() => {
     let active = true;
@@ -42,114 +63,438 @@ export default function HomeScreen() {
     getMyUserPreferences().then((result) => {
       if (!active || result.error) return;
       setPreferences(result.data);
+      if (!userSelectedFilter) {
+        setSelectedFilter(getDefaultFilter(result.data));
+      }
     });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [userSelectedFilter]);
 
-  const sortedJobs = useMemo(
-    () =>
-      [...nearbyJobs].sort(
-        (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
-      ),
-    [preferences],
-  );
-  const sortedWorkers = useMemo(
-    () =>
-      [...nearbyWorkers].sort(
-        (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
-      ),
-    [preferences],
-  );
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const sortedJobs = [...nearbyJobs].sort(
+      (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
+    );
+    const sortedWorkers = [...nearbyWorkers].sort(
+      (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
+    );
+
+    if (selectedFilter === 'Jobs') {
+      return sortedJobs.map((job) => ({ key: `job-${job.title}`, type: 'job', item: job }));
+    }
+
+    if (selectedFilter === 'Workers') {
+      return sortedWorkers.map((worker) => ({
+        key: `worker-${worker.name}`,
+        type: 'worker',
+        item: worker,
+      }));
+    }
+
+    const mixed: FeedItem[] = [];
+    const maxItems = Math.max(sortedJobs.length, sortedWorkers.length);
+
+    for (let index = 0; index < maxItems; index += 1) {
+      const job = sortedJobs[index];
+      const worker = sortedWorkers[index];
+
+      if (job) {
+        mixed.push({ key: `job-${job.title}`, type: 'job', item: job });
+      }
+
+      if (worker) {
+        mixed.push({ key: `worker-${worker.name}`, type: 'worker', item: worker });
+      }
+    }
+
+    return mixed;
+  }, [preferences, selectedFilter]);
+
+  const showVerificationPrompt = () => {
+    Alert.alert(
+      'Verification required',
+      'Barangay verification unlocks messaging, saving, posting, and reviews.',
+    );
+  };
+
+  const showSetupPrompt = (label: string) => {
+    Alert.alert(label, 'This setup step will open from Profile or Verification in a later slice.');
+  };
+
+  const handleFilterPress = (filter: string) => {
+    setUserSelectedFilter(true);
+    setSelectedFilter(filter);
+  };
 
   return (
     <View style={styles.screen}>
-      <AppHeader
-        actionIcon="notifications-none"
-        actionLabel="Notifications"
-        eyebrow="Barangay San Pedro"
-        title="Konektado"
-        subtitle="Find nearby jobs and trusted local services.">
-        <SearchBar editable={false} />
-      </AppHeader>
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.topHeader}>
+          <View style={styles.headerContent}>
+            <KonektadoWordmark color="dark" size="small" />
+            <Pressable
+              accessibilityLabel="Notifications"
+              accessibilityRole="button"
+              onPress={() => showSetupPrompt('Notifications')}
+              style={styles.notificationButton}>
+              <MaterialIcons color={color.primary} name="notifications" size={24} />
+            </Pressable>
+          </View>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <NoticeBanner
-          actionLabel="Start verification"
-          message="Browse verified jobs and workers. Verify to post, message, and get hired."
-          title="Viewer mode"
-          variant="warning"
-        />
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.searchContainer}>
+            <Pressable
+              accessibilityRole="search"
+              onPress={() => showSetupPrompt('Search')}
+              style={styles.searchBar}>
+              <Text style={styles.searchPlaceholder}>Search nearby jobs or workers</Text>
+              <MaterialIcons color={color.primary} name="search" size={24} />
+            </Pressable>
+          </View>
 
-        <View style={styles.filterRow}>
-          {homeFilters.map((filter) => (
-            <Pill
-              key={filter}
-              label={filter}
-              onPress={() => setSelectedFilter(filter)}
-              selected={selectedFilter === filter}
+          {!isVerified && showSetupCard ? (
+            <SetupCard
+              onAddPhoto={() => showSetupPrompt('Add photo')}
+              onAddServices={() => showSetupPrompt('Add Services')}
+              onDismiss={() => setShowSetupCard(false)}
+              onVerify={showVerificationPrompt}
             />
-          ))}
-        </View>
+          ) : null}
 
-        <SectionHeader title="Nearby jobs" action="See all" />
-        <View style={styles.stack}>
-          {sortedJobs.map((job) => (
-            <JobCard key={job.title} {...job} />
-          ))}
-        </View>
+          <View style={styles.filterBand}>
+            {homeFilters.map((filter) => (
+              <FilterPill
+                key={filter}
+                label={filter}
+                onPress={() => handleFilterPress(filter)}
+                selected={selectedFilter === filter}
+              />
+            ))}
+          </View>
 
-        <SectionHeader title="Workers near you" action="See all" />
-        <View style={styles.stack}>
-          {sortedWorkers.map((worker) => (
-            <WorkerCard key={worker.name} {...worker} />
-          ))}
-        </View>
-      </ScrollView>
+          <SectionHeader onFilterPress={() => showSetupPrompt('Filters')} />
+
+          <View style={styles.stack}>
+            {feedItems.map((feedItem) =>
+              feedItem.type === 'job' ? (
+                <JobCard
+                  key={feedItem.key}
+                  {...feedItem.item}
+                  onMessage={isVerified ? undefined : showVerificationPrompt}
+                  onSave={isVerified ? undefined : showVerificationPrompt}
+                  onViewJob={() => showBrowseOnlyPrompt('Job')}
+                />
+              ) : (
+                <WorkerCard
+                  key={feedItem.key}
+                  {...feedItem.item}
+                  onMessage={isVerified ? undefined : showVerificationPrompt}
+                  onSave={isVerified ? undefined : showVerificationPrompt}
+                  onViewProfile={() => showBrowseOnlyPrompt('Profile')}
+                />
+              ),
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
 
-function SectionHeader({ title, action }: { title: string; action?: string }) {
+function SetupCard({
+  onAddPhoto,
+  onAddServices,
+  onDismiss,
+  onVerify,
+}: {
+  onAddPhoto: () => void;
+  onAddServices: () => void;
+  onDismiss: () => void;
+  onVerify: () => void;
+}) {
+  return (
+    <View style={styles.setupBand}>
+      <View style={styles.setupCard}>
+        <View style={styles.setupHeader}>
+          <View style={styles.setupCopy}>
+            <Text style={styles.setupEyebrow}>Build trust faster</Text>
+            <Text style={styles.setupTitle}>Finish Setup</Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Dismiss setup card"
+            accessibilityRole="button"
+            onPress={onDismiss}
+            style={styles.dismissButton}>
+            <Text style={styles.dismissText}>x</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.setupDescription}>
+          Complete these so people feel safer contacting you.
+        </Text>
+        <View style={styles.setupActions}>
+          <SetupPill label="Verify Yourself" onPress={onVerify} selected />
+          <SetupPill label="Add Services" onPress={onAddServices} />
+          <SetupPill label="Add photo" onPress={onAddPhoto} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SetupPill({
+  label,
+  onPress,
+  selected = false,
+}: {
+  label: string;
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.setupPill,
+        selected && styles.setupPillSelected,
+        pressed && styles.pressed,
+      ]}>
+      <Text style={[styles.setupPillText, selected && styles.setupPillTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function FilterPill({
+  label,
+  onPress,
+  selected,
+}: {
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.filterPill,
+        selected && styles.filterPillSelected,
+        pressed && styles.pressed,
+      ]}>
+      <Text style={[styles.filterText, selected && styles.filterTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SectionHeader({ onFilterPress }: { onFilterPress: () => void }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {action ? <Text style={styles.sectionAction}>{action}</Text> : null}
+      <Text style={styles.sectionTitle}>Latest in your barangay</Text>
+      <Pressable
+        accessibilityLabel="Feed filters"
+        accessibilityRole="button"
+        onPress={onFilterPress}
+        style={styles.feedFilterButton}>
+        <MaterialIcons color={color.primary} name="tune" size={22} />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.border,
     flex: 1,
   },
+  safeArea: {
+    backgroundColor: color.background,
+    flex: 1,
+  },
+  topHeader: {
+    backgroundColor: color.background,
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
+    paddingBottom: space.md,
+    paddingHorizontal: space['2xl'],
+    paddingTop: space.sm,
+  },
+  headerContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  notificationButton: {
+    alignItems: 'center',
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
   content: {
-    gap: space.lg,
-    padding: space.xl,
+    backgroundColor: color.screenBackground,
     paddingBottom: space['3xl'],
   },
-  filterRow: {
+  searchContainer: {
+    backgroundColor: color.background,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+  },
+  searchBar: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 42,
+    paddingHorizontal: space.md,
+  },
+  searchPlaceholder: {
+    ...typography.caption,
+    color: color.textSubtle,
+    flex: 1,
+  },
+  setupBand: {
+    backgroundColor: color.background,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+  },
+  setupCard: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: space.sm,
+    padding: space.lg,
+  },
+  setupHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  setupCopy: {
+    flex: 1,
+    gap: space['2xs'],
+  },
+  setupEyebrow: {
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 10,
+    lineHeight: 16,
+    color: color.text,
+  },
+  setupTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  dismissButton: {
+    alignItems: 'center',
+    backgroundColor: color.primary,
+    borderRadius: radius.pill,
+    height: 25,
+    justifyContent: 'center',
+    width: 25,
+  },
+  dismissText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 15,
+    lineHeight: 18,
+  },
+  setupDescription: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  setupActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.sm,
   },
+  setupPill: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 26,
+    paddingHorizontal: space.md,
+  },
+  setupPillSelected: {
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
+  },
+  setupPillText: {
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 11,
+    lineHeight: 14,
+    color: color.textMuted,
+  },
+  setupPillTextSelected: {
+    color: color.primary,
+  },
+  filterBand: {
+    backgroundColor: color.background,
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.sm,
+  },
+  filterPill: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+    minWidth: 81,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  filterPillSelected: {
+    backgroundColor: '#F5F5EF',
+    borderColor: color.primary,
+  },
+  filterText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  filterTextSelected: {
+    color: color.primary,
+  },
   sectionHeader: {
     alignItems: 'center',
+    backgroundColor: color.background,
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
   sectionTitle: {
     ...typography.sectionTitle,
     color: color.text,
   },
-  sectionAction: {
-    ...typography.captionMedium,
-    color: color.primary,
+  feedFilterButton: {
+    alignItems: 'center',
+    height: 30,
+    justifyContent: 'center',
+    width: 30,
   },
   stack: {
-    gap: space.md,
+    gap: 2,
+  },
+  pressed: {
+    opacity: 0.72,
   },
 });

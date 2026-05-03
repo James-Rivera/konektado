@@ -1,0 +1,15 @@
+
+> mvp@1.0.0 start
+> expo start --host lan --port 8082
+
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_KEY EXPO_PUBLIC_SUPABASE_URL
+Starting project at C:\konektado
+React Compiler enabled
+Starting Metro Bundler
+
+ ERROR  An unknown error occurred while installing React Native DevTools. Details:
+
+spawn EPERM
+Waiting on http://localhost:8082
+Logs for your project will appear below.

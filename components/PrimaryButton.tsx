@@ -15,6 +15,7 @@ type PrimaryButtonProps = {
   loading?: boolean;
   icon?: MaterialIconName;
   children?: ReactNode;
+  compact?: boolean;
 };
 
 export function PrimaryButton({
@@ -25,6 +26,7 @@ export function PrimaryButton({
   loading = false,
   icon,
   children,
+  compact = false,
 }: PrimaryButtonProps) {
   const buttonDisabled = disabled || loading;
   const foregroundColor = getForegroundColor(variant, buttonDisabled);
@@ -37,6 +39,7 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
+        compact && styles.compact,
         styles[variant],
         buttonDisabled && styles.disabled,
         pressed && !buttonDisabled && styles.pressed,
@@ -57,6 +60,7 @@ export function PrimaryButton({
 function getForegroundColor(variant: ButtonVariant, disabled: boolean) {
   if (disabled) return color.textSubtle;
   if (variant === 'primary') return color.white;
+  if (variant === 'secondary') return color.primary;
   if (variant === 'danger') return color.danger;
   return color.text;
 }
@@ -69,6 +73,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
+  },
+  compact: {
+    borderRadius: radius.pill,
+    minHeight: 34,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
   },
   content: {
     alignItems: 'center',

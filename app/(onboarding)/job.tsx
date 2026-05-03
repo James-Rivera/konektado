@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
-  OnboardingButton,
-  OnboardingFormScaffold,
-  OnboardingTextInput,
-  onboardingColors,
+    OnboardingButton,
+    OnboardingFormScaffold,
+    OnboardingTextInput,
+    onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 
 import { useOnboarding } from './onboarding-context';
@@ -46,8 +46,8 @@ function parseCustomServices(value: string) {
 export default function JobStep() {
   const router = useRouter();
   const { draft, role, updateDraft } = useOnboarding();
-  const collectsOffered = role === 'provider' || role === 'both';
-  const collectsNeeded = role === 'client' || role === 'both';
+  const collectsOffered = role === 'provider';
+  const collectsNeeded = role === 'client';
   const [offeredServices, setOfferedServices] = useState<string[]>(draft.offeredServices);
   const [neededServices, setNeededServices] = useState<string[]>(draft.neededServices);
   const [customOffered, setCustomOffered] = useState(draft.customOfferedServices.join(', '));
@@ -109,9 +109,7 @@ export default function JobStep() {
         title={
           role === 'client'
             ? 'What help do you need nearby?'
-            : role === 'provider'
-              ? 'What services can you offer?'
-              : 'Set up your feed'
+            : 'What services can you offer?'
         }>
         {collectsOffered ? (
           <ServiceSection

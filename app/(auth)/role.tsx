@@ -2,24 +2,24 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
-  LayoutAnimation,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  UIManager,
-  View,
-  type ImageSourcePropType,
+    Alert,
+    LayoutAnimation,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    UIManager,
+    View,
+    type ImageSourcePropType,
 } from 'react-native';
 
+import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import {
-  GradientImageScreen,
-  KonektadoWordmark,
-  OnboardingButton,
-  onboardingColors,
-  RoleChoiceStack,
-  type RoleChoiceOption,
+    GradientImageScreen,
+    OnboardingButton,
+    onboardingColors,
+    RoleChoiceStack,
+    type RoleChoiceOption,
 } from '@/components/onboarding/FigmaOnboarding';
 import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 import { supabase } from '@/utils/supabase';
@@ -30,7 +30,6 @@ type SessionUser = {
 };
 
 const roleBackgrounds: Record<OnboardingIntent | 'default', ImageSourcePropType> = {
-  both: require('../../assets/images/onboarding-role.jpg'),
   client: require('../../assets/images/onboarding-role-client-wide.jpg'),
   default: require('../../assets/images/onboarding-role.jpg'),
   provider: require('../../assets/images/onboarding-role-work-wide.jpg'),
@@ -51,14 +50,6 @@ const roleChoices: RoleChoiceOption<OnboardingIntent>[] = [
     icon: 'search',
     title: 'I want to hire someone',
     value: 'client',
-  },
-  {
-    bullets: ['Offer services and hire help', 'Keep one account for both uses', 'Switch modes later in Profile'],
-    description: 'Find work and hire nearby workers',
-    icon: 'swap-horiz',
-    selectedDescription: 'Use one account for work and hiring',
-    title: 'Both',
-    value: 'both',
   },
 ];
 

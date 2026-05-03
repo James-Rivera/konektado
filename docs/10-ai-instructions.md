@@ -53,6 +53,10 @@ Onboarding and verification rules:
 - Keep initial onboarding lightweight so users can enter the app quickly.
 - First onboarding uses role intent plus taste setup: "What services can you offer?" for workers, "What help do you need nearby?" for clients, and both sections for both-role users.
 - Store taste setup in `user_preferences`; do not treat these preferences as certificates or barangay verification data.
+- The first onboarding path is role intent -> basic identity/location -> service preferences -> review -> complete -> Home viewer mode.
+- First onboarding completion requires `user_preferences.onboarding_completed_at` plus basic profile identity: first name, last name or full name, city, and barangay.
+- First onboarding must not collect certificates, ID documents, selfie/photo uploads, or verification files.
+- Home default filter comes from `user_preferences.intent`: provider opens Jobs, client opens Workers, both or missing opens For you.
 - Do not require all ID, services, and credential details before the user can view the app.
 - Use Supabase email OTP signup plus password creation for the MVP; login is email/password.
 - Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing, but the Magic Link and Confirm sign up email templates must include `{{ .Token }}` for the app's email-code flow.
@@ -69,6 +73,7 @@ Onboarding and verification rules:
 - One account can have both Work Profile and Hiring Profile.
 - Use Services in UI, not Skills, unless referring to internal database/history.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.
+- Current implementation limitations: Home is still mostly demo/static, locked actions need full verification routing, and verified-origin database filtering is pending.
 
 Before editing code:
 - List the files you plan to change.

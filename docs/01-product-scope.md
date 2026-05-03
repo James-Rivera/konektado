@@ -5,7 +5,7 @@
 | Area | Included in MVP | Notes |
 | --- | --- | --- |
 | Authentication | Email OTP signup, email/password login, logout, session handling. | Use Supabase Auth. |
-| Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Do not force all verification details before the user understands the app. |
+| Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Role intent -> basic identity/location -> service preferences -> review -> complete -> Home. Do not collect certificates, ID documents, or verification uploads here. |
 | Roles | Client, provider, both, and barangay admin. | Both-role users receive client and provider role rows, but one active role is used in the app at a time. |
 | Profiles | Basic identity, address, contact, about, availability, and verification status. | Keep private identity fields protected. |
 | Service Profiles | Provider service categories, descriptions, experience, availability, and optional rate text. | Use "Services" in the UI; avoid abstract "skills" language for low-literacy users. |
@@ -87,3 +87,9 @@ Demo acceptance standard:
 - The data should persist in Supabase/PostgreSQL.
 - The UI should follow the Figma direction closely enough to demonstrate the intended product.
 - Error states should be clear and non-technical.
+
+## Current Implementation Limitations
+
+- Home is still mostly demo/static and uses preferences only for ordering and filter defaults.
+- Locked actions still need full verification routing.
+- Verified-origin database filtering is pending.

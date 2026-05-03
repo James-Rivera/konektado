@@ -40,6 +40,7 @@ Use this file as the first stop for any AI or agent working in this repository.
 - Shared types belong in `/types`.
 - Prefer existing project patterns and Expo-compatible packages.
 - Do not invent features outside documented MVP scope.
+- Do not start the Expo dev server automatically. The user will run Expo manually when they want to test the app.
 
 ## Documentation Rules
 

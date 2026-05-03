@@ -1,5 +1,5 @@
-import { supabase } from '@/utils/supabase';
-import type { AppRole, OnboardingIntent } from '@/types/onboarding.types';
+import type { AppRole, OnboardingIntent } from "@/types/onboarding.types";
+import { supabase } from "@/utils/supabase";
 
 export type { AppRole, OnboardingIntent };
 
@@ -14,12 +14,17 @@ export async function saveUserRole({
   role: OnboardingIntent;
   userId: string;
 }) {
-  const selectedActiveRole = activeRole ?? (role === 'provider' ? 'provider' : 'client');
-  const roles: AppRole[] = role === 'both' ? ['client', 'provider'] : [role];
+  const selectedActiveRole = activeRole ?? role;
+  const roles: AppRole[] = [role];
 
   const { error: profileError } = await supabase
-    .from('profiles')
-    .upsert({ id: userId, email, role: selectedActiveRole, active_role: selectedActiveRole });
+    .from("profiles")
+    .upsert({
+      id: userId,
+      email,
+      role: selectedActiveRole,
+      active_role: selectedActiveRole,
+    });
 
   if (profileError) {
     return profileError;
@@ -27,10 +32,14 @@ export async function saveUserRole({
 
   for (const nextRole of roles) {
     const { error: rolesError } = await supabase
-      .from('user_roles')
+      .from("user_roles")
       .upsert(
-        { user_id: userId, role: nextRole, is_active: nextRole === selectedActiveRole },
-        { onConflict: 'user_id,role' },
+        {
+          user_id: userId,
+          role: nextRole,
+          is_active: nextRole === selectedActiveRole,
+        },
+        { onConflict: "user_id,role" },
       );
 
     if (rolesError) {
@@ -39,10 +48,10 @@ export async function saveUserRole({
   }
 
   const { error: deactivateError } = await supabase
-    .from('user_roles')
+    .from("user_roles")
     .update({ is_active: false })
-    .eq('user_id', userId)
-    .neq('role', selectedActiveRole);
+    .eq("user_id", userId)
+    .neq("role", selectedActiveRole);
 
   return deactivateError;
 }

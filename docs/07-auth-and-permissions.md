@@ -46,6 +46,23 @@ First onboarding supports:
 
 These preferences personalize browsing and do not replace barangay verification.
 
+First onboarding path:
+
+1. Role intent.
+2. Basic profile identity and location.
+3. Offered and/or needed service preferences.
+4. Review.
+5. Complete.
+6. Home in viewer mode.
+
+Completion requires `user_preferences.onboarding_completed_at` plus basic profile identity: first name, last name or full name, city, and barangay. First onboarding does not collect certificates, ID documents, selfie/photo uploads, or verification files.
+
+Home default filter rules:
+
+- Provider intent opens Jobs.
+- Client intent opens Workers.
+- Both intent, missing intent, or missing preferences open For you.
+
 Unverified viewers can:
 
 - Browse limited public jobs, workers, and service posts.

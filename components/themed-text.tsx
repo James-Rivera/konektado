@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   title: {
-    fontFamily: 'AvantGarde',
+    fontFamily: 'Satoshi-Black',
     fontSize: 32,
     lineHeight: 32,
   },

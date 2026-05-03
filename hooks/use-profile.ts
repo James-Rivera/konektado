@@ -21,6 +21,7 @@ export type ProfileRecord = {
   about: string | null;
   availability: string | null;
   verified_at: string | null;
+  barangay_verified_at: string | null;
 };
 
 type ProviderProfileRecord = {
@@ -50,7 +51,7 @@ export function useProfile() {
     const { data, error: profileError } = await supabase
       .from("profiles")
       .select(
-        "id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at",
+        "id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at, barangay_verified_at",
       )
       .eq("id", userResult.user.id)
       .maybeSingle();

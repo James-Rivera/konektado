@@ -36,6 +36,23 @@ During first onboarding, users choose whether they want to find work, hire someo
 
 These choices personalize the first viewer feed. They are not certificates, proof, or barangay verification data.
 
+The first onboarding path is:
+
+1. Role intent.
+2. Basic identity and location.
+3. Lightweight service preferences.
+4. Review.
+5. Complete.
+6. Home in viewer mode.
+
+First onboarding completion means `user_preferences.onboarding_completed_at` is set and the user has basic profile identity: first name, last name or full name, city, and barangay. It does not collect certificates, ID documents, selfie/photo uploads, or other verification files.
+
+Home uses onboarding intent to choose the first selected feed filter:
+
+- Provider intent opens Home on Jobs.
+- Client intent opens Home on Workers.
+- Both intent, missing intent, or missing preferences open Home on For you.
+
 The heavier information requirements belong in the verification flow, not the first entry flow. Verification should collect or confirm the user's contact details, email, optional phone number, ID documents, services, credentials, selfie/photo for manual comparison, and other barangay-required information.
 
 ## Target Users
@@ -112,3 +129,9 @@ Important product language:
 - UI source of truth: Figma file for Konektado.
 - Current implementation direction: Expo Router, Supabase Auth, PostgreSQL tables, and React hooks.
 - Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Workers filters, worker/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
+
+## Current Implementation Limitations
+
+- Home is still mostly demo/static and uses preferences only for ordering and filter defaults.
+- Locked actions still need full verification routing.
+- Verified-origin database filtering is pending.

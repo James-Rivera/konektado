@@ -7,10 +7,11 @@
 3. If no session exists, show login/register screens.
 4. User registers by entering an email, verifying the email OTP code, and creating a password, or logs in with email/password.
 5. App creates or loads the user's `profiles` row.
-6. If no role exists, route to role selection.
+6. If no role exists, route to role selection (2 options: Provider or Client).
 7. App collects only the minimum onboarding details needed to orient the user.
-8. User enters the main app as an unverified viewer if barangay verification is not complete.
-9. Verified users can access marketplace interactions based on their role.
+8. User reviews the lightweight onboarding details and completes onboarding.
+9. User enters Home as an unverified viewer if barangay verification is not complete.
+10. Verified users can access marketplace interactions based on their role.
 
 Failure states:
 
@@ -21,23 +22,27 @@ Failure states:
 ## Lightweight Onboarding / Viewer Entry Flow
 
 1. User registers with email OTP plus password, or logs in with email/password.
-2. User selects intended role: find work, hire someone, or both.
-3. App collects lightweight taste setup data: offered services for workers, needed services for clients, or both sets for both-role users.
-4. App explains that barangay verification is required before interacting with other users.
-5. App lets the user enter the main tabs in viewer mode.
-6. Viewer can browse verified jobs, verified workers, service posts, and educational prompts.
-7. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
-8. When the viewer taps a locked action, app routes to verification.
+2. User selects intended role: find work or hire someone (2 options only).
+3. App collects basic profile identity and location.
+4. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both).
+5. App shows review.
+6. App saves onboarding and shows complete.
+7. App lets the user enter Home in viewer mode.
+8. Viewer can browse jobs, workers, service posts, and educational prompts.
+9. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
+10. When the viewer taps a locked action, app shows a verification prompt or routes to verification.
 
 Rules:
 
 - Do not overload first-time onboarding with all profile, ID, credential, and service details.
+- Do not collect certificates, ID documents, selfie/photo uploads, or verification files during first onboarding.
+- First onboarding is complete when `user_preferences.onboarding_completed_at` is set and the profile has basic identity: first name, last name or full name, city, and barangay.
 - The first entry experience should help users understand Konektado quickly.
 - Service preference choices personalize browsing; they are not verification proof.
 - Viewer mode is read-only for user-to-user marketplace interactions.
 - Viewer mode still requires a lightweight authenticated account; it is not anonymous public browsing.
-
-## Resident Verification Flow
+- Provider intent opens Home on Jobs, client intent opens Home on Workers.
+- Users can add a second profile (Work Profile or Hiring Profile) later from Profile tab without re-entering full onboarding.
 
 1. Unverified user starts verification from a locked action, profile prompt, or verification page.
 2. App shows a verification intro explaining what verification unlocks.
