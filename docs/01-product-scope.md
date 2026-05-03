@@ -91,5 +91,5 @@ Demo acceptance standard:
 ## Current Implementation Limitations
 
 - Home is still mostly demo/static and uses preferences only for ordering and filter defaults.
-- Locked actions still need full verification routing.
+- Locked actions now route to a Figma-matched verification intro and users can submit a pending verification request with contact details, ID files, services/purpose, and supporting files.
 - Verified-origin database filtering is pending.

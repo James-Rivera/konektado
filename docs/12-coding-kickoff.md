@@ -25,22 +25,36 @@ Recently completed work:
   - View Profile, View Job, Message, and Save actions.
 - `KonektadoWordmark` is now shared from `components/KonektadoWordmark.tsx` and reused by onboarding/auth/dashboard.
 - Feed cards were updated to match the Figma card direction:
-  - `components/WorkerCard.tsx`
-  - `components/JobCard.tsx`
-  - Job card metadata icons use the primary blue tint.
-  - Pill rows use the Figma full-width clipped frame behavior, with fixed-width filled pills and a right-edge chevron.
+- `components/WorkerCard.tsx`
+- `components/JobCard.tsx`
+- Job card metadata icons use the primary blue tint.
+- Pill rows use the Figma full-width clipped frame behavior, with fixed-width filled pills and a right-edge chevron.
+- Browse-only detail routes now exist for static feed items:
+  - `app/job/[jobId].tsx`
+  - `app/worker/[workerId].tsx`
+- Root routing allows authenticated, onboarded users to stay on `job`, `worker`, and `verification` routes instead of redirecting back to tabs.
+- Locked Home, Job Detail, Worker Detail, and Post actions route to `app/verification.tsx`, a Figma-matched verification intro/request flow.
+- The verification intro now continues into a multi-step request flow:
+  - Contact details prefilled from profile.
+  - ID front and ID back uploads.
+  - Optional certificate/work proof uploads.
+  - Services or hiring purpose.
+  - Review/confirm before submission.
+  - Pending request saved through `services/verification.service.ts`.
 - Demo feed data is still static in `constants/demo-data.ts`.
-- Message, Save, and post-related actions are gated behind verification prompts.
-- View Profile and View Job remain browse-only prompts for now.
+- Message, Save, and post-related actions are gated behind verification routing.
+- View Profile and View Job are available to unverified viewer-mode users as browse-only static details.
 - Konektado uses Satoshi only. Do not add or reintroduce other font families.
+- Established Figma file: `https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado`. Check this file before implementing user-facing UI, and use nearby Konektado Figma patterns when an exact screen is missing.
 - `AGENTS.md` says not to start the Expo dev server automatically. The user will run Expo manually.
 
 Current limitations to preserve in docs and implementation:
 
 - Home is still mostly demo/static.
-- Locked actions need full verification routing, not just prompts.
+- Locked actions route to the Figma-matched verification intro/request flow.
 - Verified-origin database filtering is pending.
-- Job detail, worker profile detail, real search, real messaging, saved items persistence, and post creation are not finished yet.
+- Admin verification review, approval/rejection, and post-approval unlock refresh are not connected yet.
+- Real search, real messaging, saved items persistence, full service posting, and verified-origin feed data are not finished yet.
 - Do not add Apply/Application as the primary flow. Use Messages and Mark Hired.
 
 ## Current Important Files
@@ -54,34 +68,34 @@ Current limitations to preserve in docs and implementation:
 - `services/onboarding.service.ts` - onboarding/preferences access.
 - `hooks/use-profile.ts` - profile state used by Home verification checks.
 - `app/(tabs)/post.tsx` - current Post tab placeholder/gated entry.
+- `app/job/[jobId].tsx` - static browse-only job detail route.
+- `app/worker/[workerId].tsx` - static browse-only worker profile detail route.
+- `app/verification.tsx` - Figma-matched verification intro/request flow for locked actions.
+- `services/verification.service.ts` - verification prefill, request creation, and file upload service.
+- `types/verification.types.ts` - verification request/status types.
 
 ## Recommended Next Slice
 
-Start with detail routing and verification gates before building database ranking.
+Continue from the connected verification request flow before building database ranking.
 
-1. Implement browse-only detail routes:
-   - Job detail route from View Job.
-   - Worker profile detail route from View Profile.
-   - Use the same static/demo feed data first.
-   - Keep these readable in viewer mode.
-2. Replace locked-action alerts with consistent verification routing:
-   - Message routes to verification when unverified.
-   - Save routes to verification or shows a consistent verification prompt.
-   - Post tab routes to verification when unverified.
-   - Keep View Job and View Profile ungated.
-3. Build the Post tab's first real MVP surface:
+1. Build admin verification review:
+   - List pending `verifications` rows.
+   - Show submitted profile snapshot and uploaded files.
+   - Approve/reject with reviewer note.
+   - On approval, set the profile verification timestamp.
+2. Build the Post tab's first real MVP surface:
    - Verified users can start a job post flow.
    - Unverified users see the verification gate.
-   - Do not implement full admin verification here.
-4. Add real Home search/filter UI only after detail routes exist:
+   - Use services instead of direct Supabase writes.
+3. Add real Home search/filter UI only after detail routes exist:
    - Keep filtering local/static first.
    - Do not build full database ranking yet.
-5. Move remaining direct Supabase reads/writes out of screens as each touched screen is updated.
+4. Move remaining direct Supabase reads/writes out of screens as each touched screen is updated.
 
 ## Do Not Start With
 
 - Full admin dashboard.
-- Full verification upload/review pipeline.
+- Full admin verification review pipeline.
 - Advanced chat features.
 - Push notifications.
 - Payment logic.
@@ -120,14 +134,15 @@ Current context:
 - Do not start the Expo dev server automatically; I will run Expo manually.
 
 Next task:
-Implement the next dashboard slice: browse-only Job Detail and Worker Profile Detail routes from the Home feed, then wire locked Message/Save/Post actions to a consistent verification gate.
+Continue from the connected verification request flow. Build admin verification review next, then let verified users start the real job post flow from the Post tab.
 
 Please:
-1. Inspect the current Home, JobCard, WorkerCard, demo data, routing, and verification code.
+1. Inspect the current Home, JobCard, WorkerCard, Job Detail, Worker Detail, Post tab, demo data, routing, and verification code.
 2. List the files you intend to change before editing.
-3. Keep feed data static/demo for this slice.
+3. Keep feed data static/demo until the verification/posting slice is stable.
 4. Keep View Job and View Profile available to unverified viewer-mode users.
-5. Gate Message, Save, and Post actions behind verification.
-6. Keep screens thin and put reusable UI in /components.
-7. Run npm run lint and npx tsc --noEmit when possible.
+5. Keep Message, Save, and Post actions behind barangay verification.
+6. Put backend calls in /services and avoid Supabase queries in reusable UI components.
+7. Keep screens thin and put reusable UI in /components.
+8. Run npm run lint and npx tsc --noEmit when possible.
 ```

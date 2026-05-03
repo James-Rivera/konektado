@@ -2,8 +2,11 @@ import { Platform } from 'react-native';
 
 export const color = {
   primary: '#69A4EC',
+  verificationBlue: '#0D99FF',
   primaryPressed: '#4F8FDC',
   primarySoft: '#EEF5FF',
+  accentYellow: '#FCC03B',
+  brandYellow: '#F2E640',
   success: '#7BBE7A',
   successSoft: '#EEF8EE',
   warning: '#B7791F',
@@ -11,6 +14,7 @@ export const color = {
   danger: '#B91C1C',
   dangerSoft: '#FEF2F2',
   text: '#111111',
+  textSecondary: 'rgba(60, 60, 67, 0.6)',
   textMuted: '#46576C',
   textSubtle: '#738293',
   border: '#E5E7EB',
@@ -18,6 +22,7 @@ export const color = {
   screenBackground: '#F8FAFC',
   surface: '#FFFFFF',
   surfaceAlt: '#F3F6FA',
+  verificationCard: '#F5F5EF',
   white: '#FFFFFF',
 } as const;
 

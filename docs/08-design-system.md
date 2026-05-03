@@ -4,7 +4,18 @@
 
 Figma is the visual source of truth for Konektado.
 
+Established Konektado Figma file:
+
+- `https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado`
+
 Implementation should follow the Figma file first, then translate the design into reusable React Native components. Do not invent a separate visual style unless the Figma design is missing a necessary state.
+
+Before implementing or changing a user-facing screen/component:
+
+- Check the established Konektado Figma file for the matching screen or component.
+- If a matching design exists, implement from that node as closely as practical.
+- If the exact design does not exist, use nearby Konektado Figma screens/components as visual reference.
+- If Figma wording conflicts with accepted MVP product rules, keep the Figma layout but use the documented product language. For example, do not use "Apply" as the primary job flow; use messaging and job interest language.
 
 Current Figma direction observed from the dashboard:
 

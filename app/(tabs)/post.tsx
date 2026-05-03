@@ -1,5 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
@@ -7,16 +9,70 @@ import { EmptyState } from '@/components/EmptyState';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { Pill } from '@/components/Pill';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { managedPosts, postStats } from '@/constants/demo-data';
 import { color, radius, space, typography } from '@/constants/theme';
+import { useProfile } from '@/hooks/use-profile';
+import { listMyJobs } from '@/services/job.service';
+import { listMyServices } from '@/services/service-profile.service';
+import type { JobSummary, ProviderService } from '@/types/marketplace.types';
 
 export default function PostScreen() {
+  const router = useRouter();
+  const { profile } = useProfile();
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [services, setServices] = useState<ProviderService[]>([]);
+  const [loading, setLoading] = useState(true);
+  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([listMyJobs(), listMyServices()]).then(([jobResult, serviceResult]) => {
+      if (!active) return;
+
+      if (jobResult.error || !jobResult.data) {
+        Alert.alert('Posts', jobResult.error ?? 'Could not load jobs.');
+      } else {
+        setJobs(jobResult.data);
+      }
+
+      if (serviceResult.error || !serviceResult.data) {
+        Alert.alert('Services', serviceResult.error ?? 'Could not load services.');
+      } else {
+        setServices(serviceResult.data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const showVerificationPrompt = () => {
-    Alert.alert(
-      'Verification required',
-      'Barangay verification unlocks posting jobs and creating public service posts.',
-    );
+    router.push('/verification');
   };
+
+  const handlePostJob = () => {
+    if (!isVerified) {
+      showVerificationPrompt();
+      return;
+    }
+
+    router.push('/create-job');
+  };
+
+  const handleOfferService = () => {
+    if (!isVerified) {
+      showVerificationPrompt();
+      return;
+    }
+
+    router.push('/create-service');
+  };
+
+  const activePosts = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status)).length;
+  const completedJobs = jobs.filter((job) => job.status === 'completed').length;
 
   return (
     <View style={styles.screen}>
@@ -36,12 +92,9 @@ export default function PostScreen() {
         />
 
         <View style={styles.statsRow}>
-          {postStats.map((stat) => (
-            <View key={stat.label} style={styles.statCard}>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-            </View>
-          ))}
+          <StatCard label="Active jobs" value={String(activePosts)} />
+          <StatCard label="Services" value={String(services.length)} />
+          <StatCard label="Completed" value={String(completedJobs)} />
         </View>
 
         <View style={styles.actionGrid}>
@@ -49,44 +102,74 @@ export default function PostScreen() {
             description="Describe the task, location, budget, and schedule."
             icon="work-outline"
             label="Post a job"
-            onPress={showVerificationPrompt}
+            onPress={handlePostJob}
           />
           <PostAction
             description="Make your services visible to nearby residents."
             icon="handyman"
             label="Offer service"
-            onPress={showVerificationPrompt}
+            onPress={handleOfferService}
           />
         </View>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your posts</Text>
-          <Pill label="Demo data" tone="primary" />
+          <Pill label={loading ? 'Loading' : `${jobs.length + services.length} posts`} tone="primary" />
         </View>
 
         <View style={styles.stack}>
-          {managedPosts.map((post) => (
-            <View key={post.title} style={styles.postCard}>
+          {jobs.map((job) => (
+            <View key={job.id} style={styles.postCard}>
               <View style={styles.postIcon}>
                 <MaterialIcons color={color.primary} name="article" size={20} />
               </View>
               <View style={styles.postCopy}>
                 <View style={styles.postTitleRow}>
-                  <Text style={styles.postTitle}>{post.title}</Text>
-                  <Pill label={post.status} tone={post.status === 'Draft' ? 'warning' : 'success'} />
+                  <Text style={styles.postTitle}>{job.title}</Text>
+                  <Pill label={job.status} tone={job.status === 'open' ? 'success' : 'neutral'} />
                 </View>
-                <Text style={styles.postDetail}>{post.detail}</Text>
+                <Text style={styles.postDetail}>
+                  {job.locationText ?? job.barangay ?? 'Nearby'} · {job.scheduleText ?? 'Schedule to coordinate'}
+                </Text>
+              </View>
+            </View>
+          ))}
+
+          {services.map((service) => (
+            <View key={service.id} style={styles.postCard}>
+              <View style={styles.postIcon}>
+                <MaterialIcons color={color.primary} name="handyman" size={20} />
+              </View>
+              <View style={styles.postCopy}>
+                <View style={styles.postTitleRow}>
+                  <Text style={styles.postTitle}>{service.title}</Text>
+                  <Pill label={service.isActive ? 'active' : 'hidden'} tone={service.isActive ? 'success' : 'neutral'} />
+                </View>
+                <Text style={styles.postDetail}>
+                  {service.category} · {service.availabilityText ?? 'Availability to coordinate'}
+                </Text>
               </View>
             </View>
           ))}
         </View>
 
-        <EmptyState
-          description="Saved drafts and paused posts will appear here when the database flow is added."
-          icon="inventory-2"
-          title="No more posts to manage"
-        />
+        {!loading && !jobs.length && !services.length ? (
+          <EmptyState
+            description="Post a job or offer a service after barangay verification."
+            icon="inventory-2"
+            title="No posts yet"
+          />
+        ) : null}
       </ScrollView>
+    </View>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }

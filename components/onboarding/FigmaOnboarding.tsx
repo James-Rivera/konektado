@@ -479,27 +479,46 @@ export function OtpCodeInput({ autoFocus = false, disabled = false, onChangeText
   const digits = value.split('');
   const activeIndex = Math.min(value.length, 5);
 
+  useEffect(() => {
+    if (!autoFocus || disabled) return;
+
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, Platform.OS === 'android' ? 300 : 50);
+
+    return () => clearTimeout(timer);
+  }, [autoFocus, disabled]);
+
+  const focusInput = () => {
+    if (!disabled) {
+      inputRef.current?.focus();
+    }
+  };
+
   return (
-    <Pressable accessibilityRole="button" disabled={disabled} onPress={() => inputRef.current?.focus()} style={styles.otpPressable}>
-      <TextInput
-        ref={inputRef}
-        autoFocus={autoFocus}
-        caretHidden
-        editable={!disabled}
-        keyboardType="number-pad"
-        maxLength={6}
-        onChangeText={(nextValue) => onChangeText(nextValue.replace(/\D/g, '').slice(0, 6))}
-        style={styles.otpHiddenInput}
-        textContentType="oneTimeCode"
-        value={value}
-      />
-      <View style={styles.otpRow}>
+    <Pressable accessibilityRole="button" disabled={disabled} onPress={focusInput} style={styles.otpPressable}>
+      <View pointerEvents="none" style={styles.otpRow}>
         {Array.from({ length: 6 }).map((_, index) => (
           <View key={index} style={[styles.otpBox, index === activeIndex ? styles.otpBoxActive : undefined]}>
             <Text style={styles.otpDigit}>{digits[index] ?? ''}</Text>
           </View>
         ))}
       </View>
+      <TextInput
+        ref={inputRef}
+        autoFocus={autoFocus}
+        autoComplete="sms-otp"
+        caretHidden
+        editable={!disabled}
+        inputMode="numeric"
+        keyboardType={Platform.OS === 'android' ? 'numeric' : 'number-pad'}
+        maxLength={6}
+        onChangeText={(nextValue) => onChangeText(nextValue.replace(/\D/g, '').slice(0, 6))}
+        onPressIn={focusInput}
+        style={styles.otpHiddenInput}
+        textContentType="oneTimeCode"
+        value={value}
+      />
     </Pressable>
   );
 }
@@ -923,13 +942,16 @@ const styles = StyleSheet.create({
     width: 30,
   },
   otpPressable: {
+    position: 'relative',
     width: '100%',
   },
   otpHiddenInput: {
-    height: 40,
-    left: -9999,
+    ...StyleSheet.absoluteFillObject,
+    color: 'transparent',
+    fontSize: 1,
+    opacity: 0.01,
     position: 'absolute',
-    width: 40,
+    zIndex: 1,
   },
   otpRow: {
     flexDirection: 'row',

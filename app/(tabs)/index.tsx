@@ -1,23 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JobCard } from '@/components/JobCard';
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { WorkerCard } from '@/components/WorkerCard';
-import { homeFilters, nearbyJobs, nearbyWorkers } from '@/constants/demo-data';
+import { homeFilters } from '@/constants/demo-data';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { searchJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { searchServices } from '@/services/service-profile.service';
+import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
 
 type FeedItem =
-  | { key: string; type: 'job'; item: (typeof nearbyJobs)[number] }
-  | { key: string; type: 'worker'; item: (typeof nearbyWorkers)[number] };
+  | { key: string; type: 'job'; item: JobSummary }
+  | { key: string; type: 'worker'; item: ServiceSearchResult };
 
-function scoreTags(tags: string[] | undefined, preferences: UserPreferences | null) {
-  if (!preferences || !tags?.length) return 0;
+function scoreText(values: (string | null | undefined)[], preferences: UserPreferences | null) {
+  if (!preferences) return 0;
 
   const preferenceTerms = [
     ...preferences.neededServices,
@@ -26,8 +30,8 @@ function scoreTags(tags: string[] | undefined, preferences: UserPreferences | nu
     ...preferences.customOfferedServices,
   ].map((value) => value.toLowerCase());
 
-  return tags.reduce((score, tag) => {
-    const normalizedTag = tag.toLowerCase();
+  return values.reduce((score, value) => {
+    const normalizedTag = value?.toLowerCase() ?? '';
     return preferenceTerms.some(
       (term) => normalizedTag.includes(term) || term.includes(normalizedTag),
     )
@@ -42,20 +46,25 @@ function getDefaultFilter(preferences: UserPreferences | null) {
   return 'For you';
 }
 
-function showBrowseOnlyPrompt(label: string) {
-  Alert.alert(
-    `${label} preview`,
-    'Details will open from this card in a later slice. Browsing stays available in viewer mode.',
-  );
-}
-
 export default function HomeScreen() {
+  const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState(homeFilters[0]);
   const [userSelectedFilter, setUserSelectedFilter] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [services, setServices] = useState<ServiceSearchResult[]>([]);
+  const [loadingFeed, setLoadingFeed] = useState(true);
   const [showSetupCard, setShowSetupCard] = useState(true);
+  const [headerStackHeight, setHeaderStackHeight] = useState(0);
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const intent = preferences?.intent;
+  const needsFinishSetup =
+    !isVerified && intent === 'provider' && !profile?.service_type?.trim();
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const headerStackHeightRef = useRef(0);
+  const lastScrollOffset = useRef(0);
+  const headerVisibleRef = useRef(true);
 
   useEffect(() => {
     let active = true;
@@ -73,21 +82,51 @@ export default function HomeScreen() {
     };
   }, [userSelectedFilter]);
 
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([searchJobs(), searchServices()]).then(([jobResult, serviceResult]) => {
+      if (!active) return;
+
+      if (jobResult.error || !jobResult.data) {
+        Alert.alert('Home', jobResult.error);
+      } else {
+        setJobs(jobResult.data);
+      }
+
+      if (serviceResult.error || !serviceResult.data) {
+        Alert.alert('Home', serviceResult.error);
+      } else {
+        setServices(serviceResult.data);
+      }
+
+      setLoadingFeed(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const feedItems = useMemo<FeedItem[]>(() => {
-    const sortedJobs = [...nearbyJobs].sort(
-      (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
+    const sortedJobs = [...jobs].sort(
+      (left, right) =>
+        scoreText([right.title, right.description, right.category], preferences) -
+        scoreText([left.title, left.description, left.category], preferences),
     );
-    const sortedWorkers = [...nearbyWorkers].sort(
-      (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
+    const sortedWorkers = [...services].sort(
+      (left, right) =>
+        scoreText([right.title, right.description, right.category], preferences) -
+        scoreText([left.title, left.description, left.category], preferences),
     );
 
     if (selectedFilter === 'Jobs') {
-      return sortedJobs.map((job) => ({ key: `job-${job.title}`, type: 'job', item: job }));
+      return sortedJobs.map((job) => ({ key: `job-${job.id}`, type: 'job', item: job }));
     }
 
     if (selectedFilter === 'Workers') {
       return sortedWorkers.map((worker) => ({
-        key: `worker-${worker.name}`,
+        key: `worker-${worker.id}`,
         type: 'worker',
         item: worker,
       }));
@@ -101,26 +140,31 @@ export default function HomeScreen() {
       const worker = sortedWorkers[index];
 
       if (job) {
-        mixed.push({ key: `job-${job.title}`, type: 'job', item: job });
+        mixed.push({ key: `job-${job.id}`, type: 'job', item: job });
       }
 
       if (worker) {
-        mixed.push({ key: `worker-${worker.name}`, type: 'worker', item: worker });
+        mixed.push({ key: `worker-${worker.id}`, type: 'worker', item: worker });
       }
     }
 
     return mixed;
-  }, [preferences, selectedFilter]);
+  }, [jobs, preferences, selectedFilter, services]);
 
   const showVerificationPrompt = () => {
-    Alert.alert(
-      'Verification required',
-      'Barangay verification unlocks messaging, saving, posting, and reviews.',
-    );
+    router.push('/verification');
   };
 
   const showSetupPrompt = (label: string) => {
     Alert.alert(label, 'This setup step will open from Profile or Verification in a later slice.');
+  };
+
+  const openJobDetails = (job: JobSummary) => {
+    router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } });
+  };
+
+  const openWorkerDetails = (worker: ServiceSearchResult) => {
+    router.push({ pathname: '/worker/[workerId]', params: { workerId: worker.providerId } });
   };
 
   const handleFilterPress = (filter: string) => {
@@ -128,23 +172,74 @@ export default function HomeScreen() {
     setSelectedFilter(filter);
   };
 
+  const handleHeaderStackLayout = (event: { nativeEvent: { layout: { height: number } } }) => {
+    if (headerStackHeightRef.current) return;
+    const height = Math.round(event.nativeEvent.layout.height);
+    if (!height) return;
+    headerStackHeightRef.current = height;
+    setHeaderStackHeight(height);
+  };
+
+  const setHeaderVisible = (visible: boolean) => {
+    if (!headerStackHeightRef.current) return;
+    if (headerVisibleRef.current === visible) return;
+    headerVisibleRef.current = visible;
+    Animated.timing(headerTranslateY, {
+      toValue: visible ? 0 : -headerStackHeightRef.current,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const offset = event.nativeEvent.contentOffset.y;
+    const delta = offset - lastScrollOffset.current;
+
+    if (offset <= 0) {
+      setHeaderVisible(true);
+      lastScrollOffset.current = offset;
+      return;
+    }
+
+    if (offset < 24) {
+      setHeaderVisible(true);
+      lastScrollOffset.current = offset;
+      return;
+    }
+
+    if (Math.abs(delta) < 6) {
+      lastScrollOffset.current = offset;
+      return;
+    }
+
+    if (delta > 0) {
+      setHeaderVisible(false);
+    } else if (delta < 0) {
+      setHeaderVisible(true);
+    }
+
+    lastScrollOffset.current = offset;
+  };
+
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <View style={styles.topHeader}>
-          <View style={styles.headerContent}>
-            <KonektadoWordmark color="dark" size="small" />
-            <Pressable
-              accessibilityLabel="Notifications"
-              accessibilityRole="button"
-              onPress={() => showSetupPrompt('Notifications')}
-              style={styles.notificationButton}>
-              <MaterialIcons color={color.primary} name="notifications" size={24} />
-            </Pressable>
+        <Animated.View
+          onLayout={handleHeaderStackLayout}
+          style={[styles.headerStack, { transform: [{ translateY: headerTranslateY }] }]}>
+          <View style={styles.topHeader}>
+            <View style={styles.headerContent}>
+              <KonektadoWordmark color="dark" size="small" />
+              <Pressable
+                accessibilityLabel="Notifications"
+                accessibilityRole="button"
+                onPress={() => showSetupPrompt('Notifications')}
+                style={styles.notificationButton}>
+                <MaterialIcons color={color.primary} name="notifications" size={24} />
+              </Pressable>
+            </View>
           </View>
-        </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.searchContainer}>
             <Pressable
               accessibilityRole="search"
@@ -154,15 +249,6 @@ export default function HomeScreen() {
               <MaterialIcons color={color.primary} name="search" size={24} />
             </Pressable>
           </View>
-
-          {!isVerified && showSetupCard ? (
-            <SetupCard
-              onAddPhoto={() => showSetupPrompt('Add photo')}
-              onAddServices={() => showSetupPrompt('Add Services')}
-              onDismiss={() => setShowSetupCard(false)}
-              onVerify={showVerificationPrompt}
-            />
-          ) : null}
 
           <View style={styles.filterBand}>
             {homeFilters.map((filter) => (
@@ -174,26 +260,79 @@ export default function HomeScreen() {
               />
             ))}
           </View>
+        </Animated.View>
+
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingTop: headerStackHeight }]}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}>
+          {!isVerified && showSetupCard ? (
+            needsFinishSetup ? (
+              <FinishSetupCard
+                onAddPhoto={() => showSetupPrompt('Add photo')}
+                onAddServices={() => showSetupPrompt('Add Services')}
+                onDismiss={() => setShowSetupCard(false)}
+                onVerify={showVerificationPrompt}
+              />
+            ) : (
+              <VerificationBanner
+                onDismiss={() => setShowSetupCard(false)}
+                onVerify={showVerificationPrompt}
+              />
+            )
+          ) : null}
 
           <SectionHeader onFilterPress={() => showSetupPrompt('Filters')} />
 
           <View style={styles.stack}>
+            {loadingFeed ? <Text style={styles.feedStatus}>Loading nearby posts...</Text> : null}
+            {!loadingFeed && !feedItems.length ? (
+              <Text style={styles.feedStatus}>No open jobs or active services yet.</Text>
+            ) : null}
             {feedItems.map((feedItem) =>
               feedItem.type === 'job' ? (
                 <JobCard
                   key={feedItem.key}
-                  {...feedItem.item}
-                  onMessage={isVerified ? undefined : showVerificationPrompt}
-                  onSave={isVerified ? undefined : showVerificationPrompt}
-                  onViewJob={() => showBrowseOnlyPrompt('Job')}
+                  budget={formatBudget(feedItem.item.budgetAmount)}
+                  description={feedItem.item.description ?? 'No description provided yet.'}
+                  location={feedItem.item.locationText ?? feedItem.item.barangay ?? 'Nearby'}
+                  postedAt={formatDate(feedItem.item.createdAt)}
+                  postedBy={feedItem.item.client?.fullName ?? 'Konektado resident'}
+                  schedule={feedItem.item.scheduleText ?? 'Schedule to coordinate'}
+                  tags={[feedItem.item.category, feedItem.item.barangay].filter(Boolean) as string[]}
+                  title={feedItem.item.title}
+                  onMessage={isVerified ? () => openJobDetails(feedItem.item) : showVerificationPrompt}
+                  onSave={isVerified ? () => showSetupPrompt('Save') : showVerificationPrompt}
+                  onViewJob={() => openJobDetails(feedItem.item)}
                 />
               ) : (
                 <WorkerCard
                   key={feedItem.key}
-                  {...feedItem.item}
-                  onMessage={isVerified ? undefined : showVerificationPrompt}
-                  onSave={isVerified ? undefined : showVerificationPrompt}
-                  onViewProfile={() => showBrowseOnlyPrompt('Profile')}
+                  availability={feedItem.item.availabilityText ?? 'Availability to coordinate'}
+                  budgetHint={feedItem.item.rateText ?? undefined}
+                  completedJobs={
+                    feedItem.item.reviewCount ? `${feedItem.item.reviewCount} reviews` : undefined
+                  }
+                  description={feedItem.item.description ?? undefined}
+                  headline={feedItem.item.provider?.about ?? undefined}
+                  location={
+                    [feedItem.item.provider?.barangay, feedItem.item.provider?.city]
+                      .filter(Boolean)
+                      .join(', ') || 'Nearby'
+                  }
+                  name={feedItem.item.provider?.fullName ?? 'Konektado worker'}
+                  rating={feedItem.item.averageRating ? `${feedItem.item.averageRating.toFixed(1)} rating` : undefined}
+                  serviceTitle={feedItem.item.title}
+                  tags={[feedItem.item.category]}
+                  verified={Boolean(feedItem.item.provider?.barangayVerifiedAt || feedItem.item.provider?.verifiedAt)}
+                  onMessage={
+                    isVerified
+                      ? () => Alert.alert('Service messages', 'Service request messaging is deferred for this MVP slice.')
+                      : showVerificationPrompt
+                  }
+                  onSave={isVerified ? () => showSetupPrompt('Save') : showVerificationPrompt}
+                  onViewProfile={() => openWorkerDetails(feedItem.item)}
                 />
               ),
             )}
@@ -204,7 +343,53 @@ export default function HomeScreen() {
   );
 }
 
-function SetupCard({
+function formatBudget(value: number | null) {
+  if (value === null) return undefined;
+  return `PHP ${value.toLocaleString('en-PH')}`;
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Recently';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function VerificationBanner({
+  onDismiss,
+  onVerify,
+}: {
+  onDismiss: () => void;
+  onVerify: () => void;
+}) {
+  return (
+    <View style={styles.setupBand}>
+      <View style={styles.verificationCard}>
+        <Pressable
+          accessibilityLabel="Start verification"
+          accessibilityRole="button"
+          onPress={onVerify}
+          style={({ pressed }) => [styles.verificationContent, pressed && styles.pressed]}>
+          <MaterialIcons color={color.primary} name="warning-amber" size={22} />
+          <View style={styles.verificationCopy}>
+            <Text style={styles.verificationTitle}>Complete verification to build trust faster.</Text>
+            <Text style={styles.verificationMessage}>
+              Submit your barangay information to unlock trust cues.
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Dismiss verification reminder"
+          accessibilityRole="button"
+          onPress={onDismiss}
+          style={styles.dismissButton}>
+          <Text style={styles.dismissText}>x</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function FinishSetupCard({
   onAddPhoto,
   onAddServices,
   onDismiss,
@@ -236,7 +421,7 @@ function SetupCard({
         </Text>
         <View style={styles.setupActions}>
           <SetupPill label="Verify Yourself" onPress={onVerify} selected />
-          <SetupPill label="Add Services" onPress={onAddServices} />
+          <SetupPill label="Add services" onPress={onAddServices} />
           <SetupPill label="Add photo" onPress={onAddPhoto} />
         </View>
       </View>
@@ -308,12 +493,20 @@ function SectionHeader({ onFilterPress }: { onFilterPress: () => void }) {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: color.border,
+    backgroundColor: color.background,
     flex: 1,
   },
   safeArea: {
     backgroundColor: color.background,
     flex: 1,
+  },
+  headerStack: {
+    backgroundColor: color.background,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 10,
   },
   topHeader: {
     backgroundColor: color.background,
@@ -336,7 +529,7 @@ const styles = StyleSheet.create({
     width: 36,
   },
   content: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     paddingBottom: space['3xl'],
   },
   searchContainer: {
@@ -392,13 +585,42 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: color.text,
   },
+  verificationCard: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+  },
+  verificationContent: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: space.md,
+  },
+  verificationCopy: {
+    flex: 1,
+    gap: space['2xs'],
+  },
+  verificationTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  verificationMessage: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
   dismissButton: {
     alignItems: 'center',
     backgroundColor: color.primary,
     borderRadius: radius.pill,
-    height: 25,
+    height: 28,
     justifyContent: 'center',
-    width: 25,
+    width: 28,
   },
   dismissText: {
     color: color.white,
@@ -422,7 +644,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 26,
+    minHeight: 30,
     paddingHorizontal: space.md,
   },
   setupPillSelected: {
@@ -492,7 +714,13 @@ const styles = StyleSheet.create({
     width: 30,
   },
   stack: {
-    gap: 2,
+    gap: 0,
+  },
+  feedStatus: {
+    ...typography.body,
+    color: color.textMuted,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
   pressed: {
     opacity: 0.72,

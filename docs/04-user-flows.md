@@ -45,24 +45,21 @@ Rules:
 - Users can add a second profile (Work Profile or Hiring Profile) later from Profile tab without re-entering full onboarding.
 
 1. Unverified user starts verification from a locked action, profile prompt, or verification page.
-2. App shows a verification intro explaining what verification unlocks.
-3. App shows the requirements before starting: valid ID, clear face photo/selfie, and good lighting.
-4. App shows a contact details step with onboarding/profile data prefilled.
-5. User confirms or edits first name and last name so they match the ID.
-6. User confirms their email address and adds or confirms a phone/contact number if required by the barangay.
-7. App explains that email is used for login, verification updates, support, and account recovery.
-8. User selects ID type.
-9. User uploads or captures required ID front and ID back.
-10. User adds intended services, work categories, or client purpose as needed.
-11. User may upload supporting certificates or proof of experience.
-12. User takes or uploads a selfie/photo for manual barangay comparison if required by the barangay.
-13. App shows a review and submit screen so the user can check contact details, ID type, uploaded files, and selfie/photo before submission.
-14. App creates a `verification_requests` row with status `pending`.
-15. App stores uploaded files in Supabase Storage and links metadata in `verification_files` or `credentials`.
-16. User sees a pending verification state and remains in viewer mode.
-17. Barangay admin reviews the request.
-18. If approved, app sets verification status to `approved` and records `barangay_verified_at`.
-19. If rejected, app stores the admin reason and lets the user resubmit.
+2. App shows the Figma verification intro explaining what verification unlocks.
+3. App shows the Figma "Before you continue" requirements: valid ID, clear face photo, and good lighting.
+4. App shows account details with onboarding/profile data prefilled.
+5. User confirms or edits first name, last name, date of birth, and contact number so they match the document.
+6. App shows the contact-code UI from Figma for contact confirmation. MVP does not add SMS OTP; this is a visual/contact-confirmation step until provider-backed OTP is added.
+7. User selects ID type: Barangay Certificate, National ID, Driver's License, or Passport.
+8. If Barangay Certificate is selected, user uploads or captures the certificate. Otherwise, user uploads or captures ID front and ID back.
+9. App shows face-photo guidance, then user uploads or captures a clear face photo for manual barangay comparison.
+10. App shows the Figma review and submit screen so the user can check personal details, ID type, uploaded files, face photo, and barangay before submission.
+11. App creates a pending row in the current live `verifications` table.
+12. App stores uploaded files in Supabase Storage and links metadata in `verification_files`. Face photo currently uses `file_type = other` because the live table only accepts the initial file-type values.
+13. User sees a pending verification state and remains in viewer mode.
+14. Barangay admin reviews the request.
+15. If approved, app sets verification status to `approved` and records `barangay_verified_at`.
+16. If rejected, app stores the admin reason and lets the user resubmit.
 
 Verification unlocks:
 

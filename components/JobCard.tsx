@@ -46,7 +46,7 @@ export function JobCard({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.poster}>
             Posted by {postedBy}
-            {postedAt ? ` - ${postedAt}` : ''}
+            {postedAt ? ` · ${postedAt}` : ''}
           </Text>
         </View>
         <View style={styles.headerActions}>
@@ -255,9 +255,7 @@ const styles = StyleSheet.create({
   tagPill: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
-    borderColor: color.primary,
     borderRadius: radius.pill,
-    borderWidth: 1,
     height: 21,
     justifyContent: 'center',
     overflow: 'hidden',
@@ -267,7 +265,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 10,
     lineHeight: 14,
-    color: color.primary,
+    color: color.textSubtle,
     textAlign: 'center',
     width: 80,
   },

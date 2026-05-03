@@ -12,6 +12,8 @@ Core context:
 - Backend planned with Supabase Auth, PostgreSQL, and Supabase Storage.
 - Architecture must stay migration-friendly in case the backend moves to a self-hosted server later.
 - Figma is the visual source of truth for UI.
+- Established Konektado Figma file: https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado
+- Before implementing or changing user-facing UI, check the established Konektado Figma file. If a matching screen/component exists, follow it closely. If not, derive the UI from nearby Konektado Figma patterns.
 
 MVP features:
 - Authentication.
@@ -73,7 +75,7 @@ Onboarding and verification rules:
 - One account can have both Work Profile and Hiring Profile.
 - Use Services in UI, not Skills, unless referring to internal database/history.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.
-- Current implementation limitations: Home is still mostly demo/static, locked actions need full verification routing, and verified-origin database filtering is pending.
+- Current implementation limitations: Home is still mostly demo/static, locked actions route to a Figma-matched verification intro/request flow, admin verification review is still pending, and verified-origin database filtering is pending.
 
 Before editing code:
 - List the files you plan to change.

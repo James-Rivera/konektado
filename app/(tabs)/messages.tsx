@@ -1,15 +1,44 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { Pill } from '@/components/Pill';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import { SearchBar } from '@/components/SearchBar';
-import { conversations } from '@/constants/demo-data';
 import { color, radius, space, typography } from '@/constants/theme';
+import { useProfile } from '@/hooks/use-profile';
+import { listMyConversations } from '@/services/conversation.service';
+import type { ConversationSummary } from '@/types/marketplace.types';
 
 export default function MessagesScreen() {
+  const router = useRouter();
+  const { profile } = useProfile();
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+
+  useEffect(() => {
+    let active = true;
+
+    listMyConversations().then((result) => {
+      if (!active) return;
+
+      if (result.error || !result.data) {
+        Alert.alert('Messages', result.error ?? 'Could not load conversations.');
+      } else {
+        setConversations(result.data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <View style={styles.screen}>
       <AppHeader
@@ -22,52 +51,68 @@ export default function MessagesScreen() {
       </AppHeader>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <NoticeBanner
-          message="Unverified users can preview the inbox, but sending messages unlocks after barangay approval."
-          title="Messaging is locked until verified"
-          variant="warning"
-        />
+        {!isVerified ? (
+          <NoticeBanner
+            message="Unverified users can preview the inbox, but sending messages unlocks after barangay approval."
+            title="Messaging is locked until verified"
+            variant="warning"
+          />
+        ) : null}
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Inbox preview</Text>
-          <Pill label="3 conversations" />
+          <Text style={styles.sectionTitle}>Inbox</Text>
+          <Pill label={loading ? 'Loading' : `${conversations.length} conversations`} />
         </View>
 
         <View style={styles.stack}>
-          {conversations.map((conversation) => (
-            <View key={`${conversation.name}-${conversation.context}`} style={styles.messageCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(conversation.name)}</Text>
-              </View>
-              <View style={styles.messageBody}>
-                <View style={styles.messageTop}>
-                  <Text style={styles.name}>{conversation.name}</Text>
-                  <Text style={styles.time}>{conversation.time}</Text>
+          {conversations.map((conversation) => {
+            const other =
+              conversation.clientId === profile?.id ? conversation.provider : conversation.client;
+            const context = conversation.job?.title ?? conversation.service?.title ?? 'Marketplace chat';
+
+            return (
+              <Pressable
+                accessibilityRole="button"
+                key={conversation.id}
+                onPress={() =>
+                  router.push({
+                    pathname: '/conversation/[conversationId]',
+                    params: { conversationId: conversation.id },
+                  })
+                }
+                style={({ pressed }) => [styles.messageCard, pressed && styles.pressed]}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
                 </View>
-                <Text style={styles.context}>{conversation.context}</Text>
-                <Text numberOfLines={2} style={styles.preview}>
-                  {conversation.preview}
-                </Text>
-                <View style={styles.messageFooter}>
-                  <Pill
-                    icon={conversation.unread ? 'markunread' : 'drafts'}
-                    label={conversation.status}
-                    tone={conversation.unread ? 'primary' : 'neutral'}
-                  />
-                  {conversation.canMarkHired ? (
-                    <PrimaryButton disabled label="Mark Hired" variant="secondary" />
-                  ) : null}
+                <View style={styles.messageBody}>
+                  <View style={styles.messageTop}>
+                    <Text style={styles.name}>{other?.fullName ?? 'Konektado resident'}</Text>
+                    <Text style={styles.time}>{formatDate(conversation.updatedAt)}</Text>
+                  </View>
+                  <Text style={styles.context}>{context}</Text>
+                  <Text numberOfLines={2} style={styles.preview}>
+                    {conversation.lastMessage?.body ?? 'No messages yet.'}
+                  </Text>
+                  <View style={styles.messageFooter}>
+                    <Pill
+                      icon={conversation.status === 'hired' ? 'check-circle' : 'drafts'}
+                      label={conversation.status}
+                      tone={conversation.status === 'hired' ? 'success' : 'neutral'}
+                    />
+                  </View>
                 </View>
-              </View>
-            </View>
-          ))}
+              </Pressable>
+            );
+          })}
         </View>
 
-        <EmptyState
-          description="The next slice can connect this shell to conversations, quick prompts, and safety reporting."
-          icon="chat-bubble-outline"
-          title="Chat details are not connected yet"
-        />
+        {!loading && !conversations.length ? (
+          <EmptyState
+            description="Conversations start from a job detail page when a verified worker messages a client."
+            icon="chat-bubble-outline"
+            title="No conversations yet"
+          />
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -80,6 +125,12 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 const styles = StyleSheet.create({
@@ -159,5 +210,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: space.sm,
     justifyContent: 'space-between',
+  },
+  pressed: {
+    opacity: 0.72,
   },
 });

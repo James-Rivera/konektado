@@ -55,7 +55,7 @@ export function WorkerCard({
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.service}>
               {serviceTitle}
-              {postedAt ? ` - ${postedAt}` : ''}
+              {postedAt ? ` · ${postedAt}` : ''}
             </Text>
           </View>
         </View>
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 10,
     lineHeight: 14,
-    color: color.textMuted,
+    color: color.textSubtle,
     textAlign: 'center',
     width: 80,
   },

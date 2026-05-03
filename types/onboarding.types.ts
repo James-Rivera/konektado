@@ -14,7 +14,7 @@ export type UserPreferences = {
 export type VerificationUpload = {
   uri: string;
   name: string;
-  fileType: "certification" | "experience" | "id_front" | "id_back";
+  fileType: "certification" | "experience" | "id_front" | "id_back" | "other";
   mimeType?: string | null;
   size?: number | null;
 };

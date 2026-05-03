@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import {
-  CheckRow,
-  OnboardingButton,
-  OnboardingFormScaffold,
-  ReviewField,
-  onboardingColors,
+    CheckRow,
+    OnboardingButton,
+    OnboardingFormScaffold,
+    ReviewField,
+    onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 
 import { useOnboarding } from './onboarding-context';
@@ -55,10 +55,10 @@ export default function ReviewStep() {
           <ReviewField label="Full Name" value={fullName} />
           <ReviewField label="Address" multiline value={address || 'Not provided'} />
           <ReviewField label="Birthdate" value={draft.birthdate || 'Not provided'} />
-          {role === 'provider' || role === 'both' ? (
+          {role === 'provider' ? (
             <ReviewField label="Offered services" value={offeredServices || 'Not provided'} />
           ) : null}
-          {role === 'client' || role === 'both' ? (
+          {role === 'client' ? (
             <ReviewField label="Needed services" value={neededServices || 'Not provided'} />
           ) : null}
         </View>

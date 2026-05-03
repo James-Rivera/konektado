@@ -5,7 +5,7 @@ import { Alert, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useProfile } from '@/hooks/use-profile';
-import { supabase } from '@/utils/supabase';
+import { createJob } from '@/services/job.service';
 
 function CreateJobScreen() {
   const router = useRouter();
@@ -34,18 +34,17 @@ function CreateJobScreen() {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('jobs').insert({
-      owner_id: profile.id,
+    const result = await createJob({
       title: title.trim(),
-      description: description.trim() || null,
-      location: location.trim() || null,
-      budget: normalizedBudget,
-      status: 'open',
+      description: description.trim(),
+      locationText: location.trim() || null,
+      barangay: profile.barangay,
+      budgetAmount: normalizedBudget,
     });
     setSaving(false);
 
-    if (error) {
-      Alert.alert('Could not create job', error.message);
+    if (result.error) {
+      Alert.alert('Could not create job', result.error);
       return;
     }
 

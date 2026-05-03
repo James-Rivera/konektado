@@ -74,9 +74,21 @@ export default function RootLayout() {
       activeGroup === "(auth)" &&
       segments[1] === "register" &&
       (needsRole || needsProfile);
+    const isMainAppRootRoute =
+      targetGroup === "(tabs)" &&
+      [
+        "admin",
+        "conversation",
+        "create-job",
+        "create-service",
+        "job",
+        "verification",
+        "worker",
+      ].includes(String(activeGroup));
 
     if (
       activeGroup !== targetGroup &&
+      !isMainAppRootRoute &&
       !(targetGroup === "(tabs)" && isOnboardingComplete) &&
       !isCompletingAuthRegistration
     ) {
@@ -97,6 +109,13 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
+          <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />
+          <Stack.Screen name="create-job" options={{ headerShown: false }} />
+          <Stack.Screen name="create-service" options={{ headerShown: false }} />
+          <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
+          <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
+          <Stack.Screen name="verification" options={{ headerShown: false }} />
           <Stack.Screen
             name="modal"
             options={{ presentation: "modal", title: "Modal" }}
