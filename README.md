@@ -1,100 +1,130 @@
-# Welcome to your Expo app 👋
+# Konektado
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Konektado is a barangay-level mobile app for connecting local hiring and local work services.
 
-## Current feature slices
+Stack:
 
-### Slice 1 – Auth + onboarding
+- Expo Router + React Native + TypeScript
+- Supabase Auth, Postgres, and Storage
 
-- Supabase email OTP signup plus email/password login wired through session gating in `app/_layout.tsx`.
-- Role selection screen (`client` or `provider`) stored in `profiles.role`.
-- Profile setup flow that runs immediately after selecting a role and blocks entry to tabs until completed.
+This repository is currently in MVP build mode. The UI is largely aligned to the Konektado Figma, with core authentication, onboarding, verification, and admin verification review already wired.
 
-### Slice 2 – Detailed profile management
+## Current App State
 
-- Profile onboarding is now a multi-screen flow (`app/(auth)/profile-setup/*`) that walks through personal info, location, profession, and an optional certification review step instead of dumping every field on one form.
-- Saying "yes" on the certification step writes `profiles.certification_status = 'pending'` and sends the user to a waiting screen until barangay admins approve the documents; skipping drops them right into the tabs experience.
-- Profile tab (`app/(tabs)/profile.tsx`) shows government-friendly identity info (derived age, address, contact details) and provides an inline edit form plus sign-out.
-- `hooks/use-profile.ts` centralizes access to the extended profile schema while `hooks/use-profile-status.ts` ensures the tabs stay behind the guard if any required data is missing or if certifications are pending.
+### Implemented and working
 
-### Upcoming slices (planned)
+- Auth flow
+  - Email OTP signup + password creation.
+  - Email/password login.
+  - Session-based routing guards.
+- Role and onboarding flow
+  - Role intent supports client, provider, and both.
+  - Multi-step onboarding under app/(onboarding).
+  - Onboarding completion tracked through user_preferences and profile basics.
+- Home dashboard foundation
+  - Figma-style Home structure (top header, search, setup banner, filter pills, feed section).
+  - Intent-based default feed filter (Jobs, Workers, or For you).
+- Verification flow (resident side)
+  - Multi-step verification request UI in app/verification.tsx and components/verification/FigmaVerificationFlow.tsx.
+  - Prefill account details.
+  - ID type selection, document upload placeholders, face-photo placeholder, review, submit, pending/success/failure states.
+  - Writes verification request data and files to Supabase-backed tables/storage.
+- Verification flow (admin side)
+  - Admin verification dashboard in app/admin/verifications.tsx.
+  - Queue listing and detail review.
+  - Approve/reject actions with reviewer notes.
+  - Profile verification status updates after admin action.
+- Core marketplace foundations
+  - Home and search surfaces are available.
+  - Browse-only job and worker detail routes are available.
+  - Message/Save/Post actions remain verification-gated for unverified users.
 
-1. Provider services & barangay verification (certificate uploads, admin approval).
-2. Role hierarchy tooling (barangay admin vs superadmin dashboards).
-3. Job marketplace (clients post tasks, providers apply).
+### Partially implemented (active MVP work)
 
-## Get started
+- Post flow is still being finalized as a complete verified path.
+- Home/search feed quality and ranking are not final.
+- Messaging is connected at a basic level but not feature-complete.
+- Profile management is functional but still needs service-layer and UX polish.
 
-1. Install dependencies
+### Not complete yet (known gaps)
 
-   ```bash
-   npm install
-   ```
+- Full real-time messaging feature set (attachments, read receipts, push notifications, group chat).
+- Saved items persistence polish.
+- Full moderation/reporting beyond verification review.
+- Advanced search/filter ranking.
+- In-app payments (out of MVP scope).
 
-2. Start the app
+## Product Rules Used in This Repo
 
-   ```bash
-   npx expo start
-   ```
+- Main tabs: Home, Post, Messages, Profile.
+- One account can have both Work Profile and Hiring Profile.
+- Use Services in UI wording, not Skills.
+- Do not use Apply/Application as the main flow. Use Messages and Mark Hired.
+- Verification gates posting, messaging, saving (if enabled), and reviews.
 
-In the output, you'll find options to open the app in a
+For detailed scope and decisions, read docs in order:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- docs/00-project-brief.md
+- docs/01-product-scope.md
+- docs/03-feature-map.md
+- docs/04-user-flows.md
+- docs/07-auth-and-permissions.md
+- docs/08-design-system.md
+- docs/09-development-rules.md
+- docs/10-ai-instructions.md
+- docs/11-decision-log.md
+- docs/12-coding-kickoff.md
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction). The current navigation flow is:
+## Current Route Overview
 
-```
-login/register → role selection → profile setup (personal → location → profession → certifications) → tabs (home/explore/profile)
-```
+- Auth: app/(auth)/index.tsx, app/(auth)/login.tsx, app/(auth)/register.tsx, app/(auth)/role.tsx
+- Onboarding: app/(onboarding)/\*
+- Main tabs: app/(tabs)/\*
+- Verification: app/verification.tsx
+- Admin verification review: app/admin/verifications.tsx
+- Detail screens: app/job/[jobId].tsx, app/worker/[workerId].tsx, app/conversation/[conversationId].tsx
 
-## Get a fresh project
+## Run Locally
 
-When you're ready, run:
+1. Install dependencies:
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Set up environment variables (Supabase URL and anon key) in your local Expo env setup.
 
-## Learn more
+3. Run the app:
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Supabase profile schema
-
-Slice 2 requires the `profiles` table to include richer identity fields. Run this SQL inside the Supabase SQL editor (adjust column types if you already created them):
-
-```sql
-alter table profiles
-   add column if not exists first_name text,
-   add column if not exists last_name text,
-   add column if not exists birthdate date,
-   add column if not exists street_address text,
-   add column if not exists city text,
-   add column if not exists service_type text,
-   add column if not exists phone text,
-   add column if not exists about text,
-   add column if not exists availability text,
-   add column if not exists verified_at timestamptz,
-   add column if not exists has_certifications boolean default false,
-   add column if not exists certification_details text,
-   add column if not exists certification_status text default 'not_required';
+```bash
+npx expo start
 ```
 
-The same script lives in [sql/20260329_profile_details.sql](sql/20260329_profile_details.sql) so you can re-run or tweak it later.
+Note:
 
-All existing policies remain valid; authenticated users must be able to `select` their own `profiles` rows for the new screens to load.
+- Do not auto-start Expo from agent scripts. Start it manually when testing.
 
-## Join the community
+## Database and Migrations
 
-Join our community of developers creating universal apps.
+- Schema and migration scripts are under sql and supabase/migrations.
+- Current project-aligned SQL references include:
+  - sql/20260329_app_schema.sql
+  - sql/20260329_profile_details.sql
+  - sql/20260329_role_profile_split.sql
+  - sql/20260329_strict_cert_status_decoupling.sql
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+If setting up a fresh backend, apply the migration set and verify RLS policies for profiles, onboarding, verification requests, and verification files.
+
+## Recommended Next Priorities
+
+1. Finalize verified Post flow end-to-end (creation and visibility in browse paths).
+2. Complete verification capture polish where needed for production reliability.
+3. Strengthen messaging and hire flow (Messages and Mark Hired path).
+4. Add review flow polish.
+5. Improve search/feed quality and saved-item persistence.
+
+## Design Source of Truth
+
+- Figma source: https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado
+
+Implement user-facing screens from Figma-first patterns, then adapt to existing project components and service-layer rules.
