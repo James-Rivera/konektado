@@ -2,9 +2,7 @@ import type { ServiceResult } from '@/services/auth.service';
 import {
   compactText,
   loadPublicProfiles,
-  mapProfile,
   requireVerifiedUser,
-  type ProfileRow,
 } from '@/services/marketplace.helpers';
 import type { CreateReviewInput, Review } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';

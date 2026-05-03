@@ -1,16 +1,17 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { ComponentProps } from 'react';
-import { useEffect, useState } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import { color, radius, space, typography } from '@/constants/theme';
+import {
+  findDemoWorkerDetailById,
+  type DemoWorkHistoryItem,
+  type DemoWorkerDetailVariant,
+} from '@/constants/marketplace-demo-data';
+import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { listProfileReviews } from '@/services/review.service';
-import { searchServices } from '@/services/service-profile.service';
-import type { Review, ServiceSearchResult } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -19,84 +20,50 @@ function getParamValue(value: string | string[] | undefined) {
   return value;
 }
 
+function getVariant(value: string | string[] | undefined): DemoWorkerDetailVariant {
+  const variant = getParamValue(value);
+  return variant === 'match' ? 'match' : 'default';
+}
+
 export default function WorkerDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
-  const params = useLocalSearchParams<{ workerId?: string | string[] }>();
-  const rawWorkerId = getParamValue(params.workerId);
-  const [workerServices, setWorkerServices] = useState<ServiceSearchResult[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
+  const params = useLocalSearchParams<{
+    workerId?: string | string[];
+    variant?: string | string[];
+  }>();
+  const workerId = getParamValue(params.workerId);
+  const variant = getVariant(params.variant);
+  const worker = workerId ? findDemoWorkerDetailById(workerId) : null;
 
-  useEffect(() => {
-    let active = true;
-
-    if (!rawWorkerId) {
-      setLoading(false);
-      return;
-    }
-
-    Promise.all([searchServices(), listProfileReviews(rawWorkerId)]).then(
-      ([serviceResult, reviewResult]) => {
-        if (!active) return;
-
-        if (serviceResult.error || !serviceResult.data) {
-          Alert.alert('Worker profile', serviceResult.error ?? 'Could not load worker services.');
-        } else {
-          setWorkerServices(serviceResult.data.filter((service) => service.providerId === rawWorkerId));
-        }
-
-        if (!reviewResult.error && reviewResult.data) {
-          setReviews(reviewResult.data);
-        }
-
-        setLoading(false);
-      },
-    );
-
-    return () => {
-      active = false;
-    };
-  }, [rawWorkerId]);
-
-  const worker = workerServices[0] ?? null;
-
-  const showComingSoon = (label: string) => {
+  const showPlaceholder = (label: string) => {
     Alert.alert(label, 'This will open from Worker Profile in a later slice.');
   };
 
-  const handleMessage = () => {
+  const handleLockedAction = (label: string) => {
     if (!isVerified) {
       router.push('/verification');
       return;
     }
 
-    showComingSoon('Message');
-  };
-
-  const handleSave = () => {
-    if (!isVerified) {
-      router.push('/verification');
-      return;
-    }
-
-    showComingSoon('Save');
+    showPlaceholder(label);
   };
 
   if (!worker) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
         <View style={styles.screen}>
-          <Header onBack={() => router.back()} onMore={() => showComingSoon('Options')} />
+          <DetailHeader onBack={() => router.back()} onMore={() => showPlaceholder('Options')} />
           <View style={styles.emptyWrap}>
             <EmptyState
               actionLabel="Go back"
-              description={loading ? 'Loading worker details.' : 'This worker profile is no longer available.'}
+              description="This worker profile is no longer available."
               icon="person-search"
               onActionPress={() => router.back()}
-              title={loading ? 'Loading worker' : 'Worker not found'}
+              title="Worker not found"
             />
           </View>
         </View>
@@ -107,105 +74,102 @@ export default function WorkerDetailScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <Header onBack={() => router.back()} onMore={() => showComingSoon('Options')} />
+        <DetailHeader onBack={() => router.back()} onMore={() => showPlaceholder('Options')} />
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.heroSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(worker.provider?.fullName ?? 'Worker')}</Text>
-              {worker.provider?.barangayVerifiedAt || worker.provider?.verifiedAt ? <View style={styles.avatarBadge} /> : null}
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: 24 + Math.max(insets.bottom, 12) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          style={styles.scroll}>
+          <WorkerProfileHero
+            location={worker.location}
+            name={worker.name}
+            verificationText={worker.verificationText}
+          />
+
+          {variant === 'match' && worker.matchSummary ? (
+            <SectionBand style={styles.matchSection}>
+              <MatchNoticeCard body={worker.matchSummary.body} title={worker.matchSummary.title} />
+            </SectionBand>
+          ) : null}
+
+          <SectionBand style={styles.skillsSection}>
+            <Text style={styles.sectionTitle}>Services and rate</Text>
+            <View style={styles.serviceRateRow}>
+              <View style={styles.servicesWrap}>
+                {worker.services.map((service) => (
+                  <View key={service} style={styles.servicePill}>
+                    <Text style={styles.servicePillText}>{service}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.ratePill}>
+                <MaterialIcons color={color.primary} name="payments" size={16} />
+                <Text style={styles.ratePillText}>{worker.rateLine}</Text>
+              </View>
             </View>
+          </SectionBand>
 
-            <View style={styles.heroCopy}>
-              <Text style={styles.name}>{worker.provider?.fullName ?? 'Konektado worker'}</Text>
-              <Text style={styles.service}>{worker.title}</Text>
-              <Text style={styles.location}>
-                {[worker.provider?.barangay, worker.provider?.city].filter(Boolean).join(', ') || 'Nearby'}
-              </Text>
-            </View>
+          <SectionBand style={styles.detailsSection}>
+            <Text style={styles.sectionTitle}>Worker details</Text>
+            <WorkerMetricGrid metrics={worker.metrics} />
+          </SectionBand>
 
-            <View style={styles.pillRow}>
-              {worker.provider?.barangayVerifiedAt || worker.provider?.verifiedAt ? (
-                <BadgePill icon="verified" label="Verified resident" tone="success" />
+          <SectionBand style={styles.historySection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Work History</Text>
+              {variant === 'default' ? (
+                <Pressable
+                  accessibilityLabel="Work history options"
+                  accessibilityRole="button"
+                  onPress={() => showPlaceholder('Work History options')}
+                  style={({ pressed }) => [styles.utilityButton, pressed && styles.pressed]}>
+                  <MaterialIcons color={color.textSubtle} name="tune" size={18} />
+                </Pressable>
               ) : null}
-              {reviews.length ? <BadgePill icon="star" label={`${averageRating(reviews)} rating`} /> : null}
-              {reviews.length ? (
-                <BadgePill icon="check-circle" label={`${reviews.length} reviews`} />
-              ) : null}
             </View>
-          </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Availability</Text>
-            <MetaRow icon="schedule" text={worker.availabilityText ?? 'Availability to coordinate'} />
-            {worker.rateText ? (
-              <MetaRow icon="payments" text={worker.rateText} tint="primary" />
-            ) : null}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About this worker</Text>
-            <Text style={styles.bodyText}>{worker.provider?.about ?? worker.title}</Text>
-            {worker.description ? <Text style={styles.bodyText}>{worker.description}</Text> : null}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Services</Text>
-            <View style={styles.tagWrap}>
-              {workerServices.map((service) => (
-                <View key={service.id} style={styles.tagPill}>
-                  <Text style={styles.tagText}>{service.title}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Work history</Text>
-            {reviews.length ? (
-              reviews.map((review) => (
-                <HistoryRow
-                  detail={review.comment ?? `${review.rating} star review`}
-                  key={review.id}
-                  title={review.reviewer?.fullName ?? 'Konektado resident'}
-                />
-              ))
+            {worker.workHistory.length ? (
+              <View style={styles.historyList}>
+                {worker.workHistory.map((item) => (
+                  <WorkHistoryCard
+                    item={item}
+                    key={item.id}
+                    onView={() => showPlaceholder('Work History')}
+                  />
+                ))}
+              </View>
             ) : (
-              <HistoryRow detail="Reviews appear after completed jobs." title="No reviews yet" />
+              <View style={styles.emptyHistoryCard}>
+                <Text style={styles.emptyHistoryTitle}>No work history yet</Text>
+                <Text style={styles.emptyHistoryBody}>
+                  Completed jobs will appear here after this worker finishes marketplace work.
+                </Text>
+              </View>
             )}
-          </View>
+          </SectionBand>
         </ScrollView>
 
-        <View style={styles.actionBar}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleMessage}
-            style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
-            <MaterialIcons color={color.primary} name="chat-bubble" size={16} />
-            <Text style={styles.primaryActionText}>Message</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleSave}
-            style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}>
-            <MaterialIcons color={color.textSubtle} name="bookmark-border" size={18} />
-            <Text style={styles.secondaryActionText}>Save</Text>
-          </Pressable>
-        </View>
+        <DetailActionRow
+          bottomInset={insets.bottom}
+          onMessage={() => handleLockedAction('Message')}
+          onSave={() => handleLockedAction('Save')}
+        />
       </View>
     </SafeAreaView>
   );
 }
 
-function Header({ onBack, onMore }: { onBack: () => void; onMore: () => void }) {
+function DetailHeader({ onBack, onMore }: { onBack: () => void; onMore: () => void }) {
   return (
     <View style={styles.header}>
       <Pressable
         accessibilityLabel="Go back"
         accessibilityRole="button"
         onPress={onBack}
-        style={styles.headerIcon}>
+        style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
         <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
       </Pressable>
       <Text style={styles.headerTitle}>Worker Profile</Text>
@@ -213,59 +177,190 @@ function Header({ onBack, onMore }: { onBack: () => void; onMore: () => void }) 
         accessibilityLabel="More options"
         accessibilityRole="button"
         onPress={onMore}
-        style={styles.headerIcon}>
-        <MaterialIcons color={color.textSubtle} name="more-vert" size={20} />
+        style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+        <MaterialIcons color={color.textSubtle} name="more-horiz" size={20} />
       </Pressable>
     </View>
   );
 }
 
-function MetaRow({
-  icon,
-  text,
-  tint = 'subtle',
+function WorkerProfileHero({
+  name,
+  location,
+  verificationText,
 }: {
-  icon: MaterialIconName;
-  text: string;
-  tint?: 'subtle' | 'primary';
+  name: string;
+  location: string;
+  verificationText: string;
 }) {
   return (
-    <View style={styles.metaRow}>
-      <MaterialIcons color={color.primary} name={icon} size={16} />
-      <Text style={[styles.metaText, tint === 'primary' && styles.metaTextPrimary]}>{text}</Text>
+    <SectionBand style={styles.workerInfoSection}>
+      <View style={styles.heroRow}>
+        <View style={styles.heroAvatar}>
+          <Text style={styles.heroAvatarText}>{getInitials(name)}</Text>
+          <View style={styles.heroAvatarBadge} />
+        </View>
+
+        <View style={styles.heroCopy}>
+          <Text style={styles.heroName}>{name}</Text>
+          <View style={styles.heroLocationRow}>
+            <MaterialIcons color={color.primary} name="location-on" size={14} />
+            <Text style={styles.heroLocationText}>{location} (2km)</Text>
+          </View>
+        </View>
+
+        <BadgePill icon="verified" label={verificationText} tone="success" />
+      </View>
+    </SectionBand>
+  );
+}
+
+function MatchNoticeCard({ title: _title, body }: { title: string; body: string }) {
+  return (
+    <View style={styles.matchCard}>
+      <Text style={styles.matchTitle}>Good match</Text>
+      <Text style={styles.matchBody}>{body}</Text>
     </View>
   );
+}
+
+function WorkerMetricGrid({ metrics: _metrics }: { metrics: { label: string; value: string }[] }) {
+  const mappedMetrics = [
+    { label: 'Location', value: 'Sto. Tomas' },
+    { label: 'Jobs completed', value: '3' },
+    { label: 'Availability', value: 'Before 3:00 PM' },
+    { label: 'Hours worked', value: '12 hrs' },
+  ];
+
+  return (
+    <View style={styles.metricGrid}>
+      {mappedMetrics.map((metric) => (
+        <View key={metric.label} style={styles.metricCell}>
+          <Text style={styles.metricLabel}>{metric.label}</Text>
+          <Text style={styles.metricValue}>{metric.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function WorkHistoryCard({
+  item,
+  onView,
+}: {
+  item: DemoWorkHistoryItem;
+  onView: () => void;
+}) {
+  return (
+    <View style={styles.historyCard}>
+      <View style={styles.historyTopRow}>
+        <View style={styles.historyCopy}>
+          <Text style={styles.historyTitle}>{item.title}</Text>
+          <View style={styles.historyRatingRow}>
+            <MaterialIcons color={color.brandYellow} name="star" size={14} />
+            <Text style={styles.historyRatingText}>4.50</Text>
+            <View style={styles.historyDot} />
+            <Text style={styles.historyTagText}>Konektado job</Text>
+          </View>
+        </View>
+        <Text style={styles.historyDate}>Today</Text>
+      </View>
+
+      <Text style={styles.historyBody}>{item.description}</Text>
+      <Text style={styles.workedForLabel}>Worked for</Text>
+
+      <View style={styles.posterCard}>
+        <View style={styles.historyPoster}>
+          <View style={styles.posterTopRow}>
+            <View style={styles.posterIdentity}>
+              <View style={styles.historyPosterAvatar}>
+                <Text style={styles.historyPosterAvatarText}>{getInitials(item.posterName)}</Text>
+              </View>
+              <View style={styles.historyPosterCopy}>
+                <Text style={styles.historyPosterName}>{item.posterName}</Text>
+                <Text style={styles.historyPosterMeta}>Verified resident</Text>
+              </View>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={onView}
+              style={({ pressed }) => [styles.viewButton, pressed && styles.pressed]}>
+              <Text style={styles.viewButtonText}>View</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.posterBottomRow}>
+            <View style={styles.posterLocationRow}>
+              <MaterialIcons color={color.primary} name="location-on" size={14} />
+              <Text style={styles.posterLocationText}>Brgy San Pedro</Text>
+            </View>
+            <Text style={styles.historyEarnings}>Earned  500</Text>
+          </View>
+        </View>
+
+        <View style={styles.historyPhotoBox}>
+          <View style={styles.historyPhotoCircle} />
+          <Text style={styles.historyPhotoText}>Work reference photo</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function DetailActionRow({
+  bottomInset,
+  onMessage,
+  onSave,
+}: {
+  bottomInset: number;
+  onMessage: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <View style={[styles.actionRow, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onMessage}
+        style={({ pressed }) => [styles.messageButton, pressed && styles.pressed]}>
+        <MaterialIcons color={color.verificationBlue} name="chat-bubble" size={18} />
+        <Text style={styles.messageButtonText}>Message</Text>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={onSave}
+        style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}>
+        <MaterialIcons color={color.textSubtle} name="bookmark-border" size={18} />
+        <Text style={styles.saveButtonText}>Save</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function SectionBand({ children, style }: { children: ReactNode; style?: object }) {
+  return <View style={[styles.sectionBand, style]}>{children}</View>;
 }
 
 function BadgePill({
   icon,
   label,
-  tone = 'primary',
+  tone = 'default',
 }: {
   icon: MaterialIconName;
   label: string;
-  tone?: 'primary' | 'success';
+  tone?: 'default' | 'success';
 }) {
-  const iconColor = tone === 'success' ? color.success : color.primary;
-
   return (
     <View style={[styles.badgePill, tone === 'success' && styles.badgePillSuccess]}>
-      <MaterialIcons color={iconColor} name={icon} size={14} />
-      <Text style={styles.badgeText}>{label}</Text>
-    </View>
-  );
-}
-
-function HistoryRow({ title, detail }: { title: string; detail: string }) {
-  return (
-    <View style={styles.historyRow}>
-      <View style={styles.historyIcon}>
-        <MaterialIcons color={color.textMuted} name="work-outline" size={18} />
-      </View>
-      <View style={styles.historyCopy}>
-        <Text style={styles.historyTitle}>{title}</Text>
-        <Text style={styles.historyDetail}>{detail}</Text>
-      </View>
+      <MaterialIcons
+        color={tone === 'success' ? color.success : color.textMuted}
+        name={icon}
+        size={16}
+      />
+      <Text style={[styles.badgePillText, tone === 'success' && styles.badgePillTextSuccess]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -279,19 +374,20 @@ function getInitials(name: string) {
     .join('');
 }
 
-function averageRating(reviews: Review[]) {
-  const value = reviews.reduce((total, review) => total + review.rating, 0) / reviews.length;
-  return value.toFixed(1);
-}
-
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: color.background,
+    backgroundColor: color.screenBackground,
     flex: 1,
   },
   screen: {
-    backgroundColor: color.background,
+    backgroundColor: color.screenBackground,
     flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    gap: 2,
   },
   header: {
     alignItems: 'center',
@@ -300,220 +396,491 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: space['2xl'],
-    paddingVertical: space.md,
+    height: 55,
+    paddingHorizontal: 24,
   },
-  headerIcon: {
+  headerButton: {
     alignItems: 'center',
-    height: 28,
+    height: 24,
     justifyContent: 'center',
-    width: 28,
+    width: 24,
   },
   headerTitle: {
+    color: color.text,
     fontFamily: 'Satoshi-Bold',
     fontSize: 18,
     lineHeight: 24,
-    color: color.text,
   },
-  content: {
-    paddingBottom: space['3xl'],
-  },
-  heroSection: {
-    alignItems: 'center',
+  sectionBand: {
     backgroundColor: color.background,
-    borderBottomColor: color.border,
-    borderBottomWidth: 1,
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space['2xl'],
+    width: '100%',
   },
-  avatar: {
+  workerInfoSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  matchSection: {
+    paddingHorizontal: 18,
+    paddingVertical: 19,
+  },
+  skillsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  detailsSection: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
+  historySection: {
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  heroRow: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 44,
+  },
+  heroAvatar: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
     borderRadius: radius.pill,
-    height: 78,
+    height: 44,
     justifyContent: 'center',
-    width: 78,
+    position: 'relative',
+    width: 44,
   },
-  avatarText: {
+  heroAvatarText: {
+    color: color.text,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 24,
-    lineHeight: 30,
-    color: color.primary,
+    fontSize: 15,
+    lineHeight: 20,
   },
-  avatarBadge: {
-    backgroundColor: color.success,
-    borderColor: color.background,
+  heroAvatarBadge: {
+    backgroundColor: color.brandYellow,
+    borderColor: color.white,
     borderRadius: radius.pill,
-    borderWidth: 3,
-    bottom: 4,
-    height: 18,
+    borderWidth: 2,
+    bottom: 0,
     position: 'absolute',
-    right: 4,
-    width: 18,
+    right: 0,
+    height: 10,
+    width: 10,
   },
   heroCopy: {
-    alignItems: 'center',
-    gap: space.xs,
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
   },
-  name: {
-    ...typography.screenTitle,
+  heroName: {
     color: color.text,
-    textAlign: 'center',
-  },
-  service: {
-    ...typography.bodyMedium,
-    color: color.textMuted,
-    textAlign: 'center',
-  },
-  location: {
-    ...typography.caption,
-    color: color.textSubtle,
-    textAlign: 'center',
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-    justifyContent: 'center',
-  },
-  section: {
-    backgroundColor: color.background,
-    borderBottomColor: color.border,
-    borderBottomWidth: 1,
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.xl,
-  },
-  sectionTitle: {
-    ...typography.bodyMedium,
-    color: color.text,
-  },
-  bodyText: {
-    ...typography.body,
-    color: color.textMuted,
-  },
-  metaRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: space.xs,
-  },
-  metaText: {
-    ...typography.caption,
-    color: color.textSubtle,
-  },
-  metaTextPrimary: {
     fontFamily: 'Satoshi-Bold',
-    color: color.primary,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  tagWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-  },
-  tagPill: {
+  heroLocationRow: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: 26,
-    paddingHorizontal: space.md,
+    flexDirection: 'row',
+    gap: 4,
   },
-  tagText: {
-    ...typography.captionMedium,
+  heroLocationText: {
+    fontFamily: 'Satoshi-Regular',
     color: color.textSubtle,
+    fontSize: 12,
+    lineHeight: 18,
   },
   badgePill: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
-    borderColor: '#D6E8FF',
-    borderRadius: radius.pill,
+    backgroundColor: color.successSoft,
+    borderColor: color.success,
     borderWidth: 1,
+    borderRadius: radius.pill,
     flexDirection: 'row',
-    gap: space.xs,
-    minHeight: 24,
-    paddingHorizontal: space.sm,
+    flexShrink: 1,
+    gap: 6,
+    height: 28,
+    paddingHorizontal: 10,
   },
   badgePillSuccess: {
     backgroundColor: color.successSoft,
     borderColor: color.success,
   },
-  badgeText: {
-    ...typography.captionMedium,
+  badgePillText: {
+    color: color.text,
+    flexShrink: 1,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  badgePillTextSuccess: {
     color: color.text,
   },
-  historyRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: space.md,
+  matchCard: {
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    width: '100%',
   },
-  historyIcon: {
+  matchTitle: {
+    color: '#050505',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  matchBody: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  sectionTitle: {
+    color: '#050505',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  serviceRateRow: {
+    gap: 12,
+    marginTop: 12,
+  },
+  servicesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  servicePill: {
     alignItems: 'center',
-    backgroundColor: color.surfaceAlt,
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
     borderRadius: radius.pill,
-    height: 34,
+    borderWidth: 1,
+    height: 32,
     justifyContent: 'center',
-    width: 34,
+    minWidth: 81,
+    paddingHorizontal: 12,
+  },
+  servicePillText: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  ratePill: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: color.white,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    height: 32,
+    paddingHorizontal: 12,
+  },
+  ratePillText: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  metricGrid: {
+    columnGap: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    rowGap: 12,
+  },
+  metricCell: {
+    flexGrow: 1,
+    flexBasis: '48%',
+    minWidth: 132,
+  },
+  metricLabel: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  metricValue: {
+    color: color.textSubtle,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  sectionHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  utilityButton: {
+    alignItems: 'center',
+    height: 18,
+    justifyContent: 'center',
+    width: 18,
+  },
+  historyList: {
+    gap: 10,
+  },
+  historyCard: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    padding: 16,
+    width: '100%',
+  },
+  historyTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   historyCopy: {
     flex: 1,
-    gap: space['2xs'],
+    gap: 2,
   },
   historyTitle: {
-    ...typography.bodyMedium,
     color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  historyDetail: {
-    ...typography.caption,
+  historyRatingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  historyRatingText: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyDot: {
+    backgroundColor: '#D9D9D9',
+    borderRadius: 3,
+    height: 6,
+    marginHorizontal: 2,
+    width: 6,
+  },
+  historyTagText: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyDate: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyBody: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  workedForLabel: {
+    color: color.text,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 20,
+  },
+  posterCard: {
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  posterTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    width: '100%',
+  },
+  posterIdentity: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+    minWidth: 0,
+  },
+  posterBottomRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 4,
+  },
+  posterLocationRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  posterLocationText: {
+    color: color.textSubtle,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyPhotoBox: {
+    alignItems: 'center',
+    backgroundColor: '#DCEBFF',
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 14,
+    justifyContent: 'center',
+    marginTop: 14,
+    minHeight: 129,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    width: '100%',
+  },
+  historyPhotoCircle: {
+    borderColor: color.primary,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    height: 36,
+    width: 36,
+  },
+  historyPhotoText: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyPoster: {
+    gap: 4,
+  },
+  historyPosterAvatar: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  historyPosterAvatarText: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyPosterCopy: {
+    flex: 1,
+    gap: 1,
+    minWidth: 0,
+  },
+  historyPosterName: {
+    color: '#050505',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyPosterMeta: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 10,
+    lineHeight: 17,
+  },
+  historyEarnings: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  viewButton: {
+    alignItems: 'center',
+    backgroundColor: color.verificationBlue,
+    borderRadius: 24,
+    height: 25,
+    justifyContent: 'center',
+    width: 65,
+  },
+  viewButtonText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 11,
+    lineHeight: 20,
+  },
+  emptyHistoryCard: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+    padding: 14,
+    width: '100%',
+  },
+  emptyHistoryTitle: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  emptyHistoryBody: {
+    ...typography.body,
     color: color.textMuted,
   },
-  actionBar: {
+  actionRow: {
     backgroundColor: color.background,
     borderTopColor: color.border,
     borderTopWidth: 1,
     flexDirection: 'row',
-    gap: space.sm,
-    paddingBottom: space.xl,
-    paddingHorizontal: space.xl,
-    paddingTop: space.md,
+    gap: 4,
+    paddingHorizontal: 20,
+    paddingTop: 13,
   },
-  primaryAction: {
+  messageButton: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
     borderRadius: radius.pill,
     flex: 1,
     flexDirection: 'row',
-    gap: space.sm,
+    gap: 8,
     justifyContent: 'center',
     minHeight: 34,
-    paddingHorizontal: space.lg,
   },
-  primaryActionText: {
-    ...typography.captionMedium,
-    color: color.primary,
+  messageButtonText: {
+    color: color.verificationBlue,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 16,
   },
-  secondaryAction: {
+  saveButton: {
     alignItems: 'center',
     backgroundColor: color.background,
-    borderColor: color.border,
     borderRadius: radius.pill,
+    borderColor: color.border,
     borderWidth: 1,
     flex: 1,
     flexDirection: 'row',
-    gap: space.sm,
+    gap: 8,
     justifyContent: 'center',
     minHeight: 34,
-    paddingHorizontal: space.lg,
   },
-  secondaryActionText: {
-    ...typography.captionMedium,
+  saveButtonText: {
     color: color.textSubtle,
-  },
-  pressed: {
-    opacity: 0.72,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 16,
   },
   emptyWrap: {
     flex: 1,
-    padding: space.lg,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

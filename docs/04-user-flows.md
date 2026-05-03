@@ -51,15 +51,15 @@ Rules:
 5. User confirms or edits first name, last name, date of birth, and contact number so they match the document.
 6. App shows the contact-code UI from Figma for contact confirmation. MVP does not add SMS OTP; this is a visual/contact-confirmation step until provider-backed OTP is added.
 7. User selects ID type: Barangay Certificate, National ID, Driver's License, or Passport.
-8. If Barangay Certificate is selected, user uploads or captures the certificate. Otherwise, user uploads or captures ID front and ID back.
-9. App shows face-photo guidance, then user uploads or captures a clear face photo for manual barangay comparison.
+8. If Barangay Certificate is selected, user uploads the certificate. Otherwise, user uploads ID front and ID back. Camera capture can be added as a verification-polish task, but file/image picker upload is the current MVP path.
+9. App shows face-photo guidance, then user uploads a clear face photo for manual barangay comparison. Camera selfie capture is planned but should not block the verified Post slice.
 10. App shows the Figma review and submit screen so the user can check personal details, ID type, uploaded files, face photo, and barangay before submission.
-11. App creates a pending row in the current live `verifications` table.
-12. App stores uploaded files in Supabase Storage and links metadata in `verification_files`. Face photo currently uses `file_type = other` because the live table only accepts the initial file-type values.
+11. App uploads selected files to Supabase Storage, creates a pending row in the current live `verifications` table, and links metadata in `verification_files`.
+12. Face photo currently uses `file_type = other` because the live table only accepts the initial file-type values.
 13. User sees a pending verification state and remains in viewer mode.
-14. Barangay admin reviews the request.
-15. If approved, app sets verification status to `approved` and records `barangay_verified_at`.
-16. If rejected, app stores the admin reason and lets the user resubmit.
+14. Barangay admin reviews the request in the verification dashboard, including profile snapshot, notes, and attached files.
+15. If approved, app sets verification status to `approved`, records reviewer metadata, and sets `barangay_verified_at` and `verified_at` on the profile.
+16. If rejected, app stores the admin reason and lets the user resubmit a corrected request.
 
 Verification unlocks:
 
@@ -107,6 +107,9 @@ Rules:
 
 Rules:
 
+- This is the next vertical implementation slice after verification completion.
+- Unverified users opening Post must still be routed to verification.
+- Approved users must be able to create a real job without relogging if profile refresh has received the approval state.
 - Payments and job agreements happen outside the app.
 - Jobs should be clear enough for providers to decide whether to message.
 - Closed or cancelled jobs should not accept new interested workers.
@@ -143,12 +146,12 @@ Rules:
 ## Admin Verification Flow
 
 1. Barangay admin logs in.
-2. Admin opens the verification queue.
-3. Admin views pending requests sorted by creation date.
-4. Admin opens a request and reviews profile details, uploaded ID, credentials, and notes.
-5. Admin approves or rejects with an optional note.
-6. App updates `verification_requests.status`, reviewer fields, and timestamps.
-7. On approval, app updates the user's public verification badge state.
+2. Admin is routed to the verification dashboard instead of resident onboarding or normal Home.
+3. Admin views pending, reviewed, or all requests sorted by creation date.
+4. Admin opens a request and reviews profile details, uploaded ID files, face photo/work proof if present, and notes. Image files can be previewed in app; non-image files can open externally.
+5. Admin approves or rejects. A rejection requires a reviewer note.
+6. App updates the current MVP `verifications.status`, reviewer fields, and timestamps.
+7. On approval, app updates the user's profile verification timestamps and public verification badge state.
 8. On rejection, the provider can see the reason and submit again.
 
 Admin safety rules:
@@ -156,6 +159,7 @@ Admin safety rules:
 - Admin actions must be logged with reviewer ID and timestamp.
 - Admins should only access documents for valid verification or moderation work.
 - Admin UI should not expose passwords or Supabase Auth internals.
+- The MVP implementation continues to use `verifications` and `verification_files.verification_id`; renaming to `verification_requests` is deferred until after the demo-critical flow is stable.
 
 ## Ratings/Review Flow
 

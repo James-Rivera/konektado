@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { color, space, typography } from '@/constants/theme';
+import { color, space } from '@/constants/theme';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -13,29 +13,26 @@ const TAB_META: Record<
   { label: string; activeIcon: MaterialIconName; inactiveIcon: MaterialIconName }
 > = {
   index: { label: 'Home', activeIcon: 'home', inactiveIcon: 'home' },
-  post: { label: 'Post', activeIcon: 'add-circle', inactiveIcon: 'add-circle-outline' },
+  post: { label: 'Post', activeIcon: 'add-box', inactiveIcon: 'add-box' },
   messages: {
     label: 'Messages',
-    activeIcon: 'chat-bubble',
-    inactiveIcon: 'chat-bubble-outline',
+    activeIcon: 'chat',
+    inactiveIcon: 'chat',
   },
-  profile: { label: 'Profile', activeIcon: 'person', inactiveIcon: 'person-outline' },
+  profile: { label: 'Profile', activeIcon: 'person', inactiveIcon: 'person' },
 };
 
 export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
-      {state.routes.map((route, index) => {
+      {visibleRoutes.map((route) => {
         const descriptor = descriptors[route.key];
-        const isFocused = state.index === index;
-        const meta = TAB_META[route.name] ?? {
-          label: descriptor.options.title ?? route.name,
-          activeIcon: 'circle',
-          inactiveIcon: 'circle',
-        };
-        const tint = isFocused ? color.primary : color.textSubtle;
+        const isFocused = state.routes[state.index]?.key === route.key;
+        const meta = TAB_META[route.name];
+        const tint = isFocused ? color.verificationBlue : color.textSubtle;
 
         return (
           <Pressable
@@ -66,7 +63,9 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
               name={isFocused ? meta.activeIcon : meta.inactiveIcon}
               size={24}
             />
-            <Text style={[styles.label, { color: tint }]}>{meta.label}</Text>
+            <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive, { color: tint }]}>
+              {meta.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -77,21 +76,31 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
 const styles = StyleSheet.create({
   container: {
     backgroundColor: color.background,
-    borderTopColor: color.border,
+    borderColor: color.border,
     borderTopWidth: 1,
     flexDirection: 'row',
-    paddingHorizontal: space.sm,
-    paddingTop: space.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 10,
   },
   tab: {
     alignItems: 'center',
-    flex: 1,
-    gap: space['2xs'],
+    gap: 6,
     justifyContent: 'center',
-    minHeight: 54,
+    minHeight: 60,
+    width: 60,
   },
   label: {
-    ...typography.captionMedium,
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
+    width: 60,
+  },
+  labelActive: {
+    fontFamily: 'Satoshi-Regular',
+  },
+  labelInactive: {
+    fontFamily: 'Satoshi-Bold',
   },
   pressed: {
     opacity: 0.7,

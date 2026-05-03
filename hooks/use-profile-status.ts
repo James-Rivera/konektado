@@ -15,6 +15,10 @@ function isOnboardingIntent(role: string | null | undefined) {
   return normalized === "client" || normalized === "provider" || normalized === "both";
 }
 
+function isAdminRole(role: string | null | undefined) {
+  return (role ?? "").toLowerCase() === "barangay_admin";
+}
+
 function activeRoleFromIntent(role: string | null | undefined): "client" | "provider" | null {
   const normalized = (role ?? "").toLowerCase();
   if (normalized === "provider") return "provider";
@@ -28,6 +32,7 @@ export type ProfileStatus = {
   needsRole: boolean;
   needsProfile: boolean;
   needsCertificationReview: boolean;
+  isAdmin: boolean;
   profile: {
     role?: string | null;
     full_name?: string | null;
@@ -43,6 +48,7 @@ export function useProfileStatus(): ProfileStatus {
     needsRole: false,
     needsProfile: false,
     needsCertificationReview: false,
+    isAdmin: false,
     profile: null,
   });
 
@@ -75,6 +81,7 @@ export function useProfileStatus(): ProfileStatus {
             profile: null,
             needsRole: false,
             needsProfile: false,
+            isAdmin: false,
           }));
           return;
         }
@@ -166,6 +173,7 @@ export function useProfileStatus(): ProfileStatus {
             needsRole: true,
             needsProfile: true,
             needsCertificationReview: false,
+            isAdmin: false,
             profile: null,
           });
           return;
@@ -178,13 +186,15 @@ export function useProfileStatus(): ProfileStatus {
         const candidateRole = candidateRoleSource ? String(candidateRoleSource).toLowerCase() : null;
         const intentSource = preferences?.intent || metadataRole || candidateRole;
         const needsRole = !candidateRole;
+        const isAdmin = isAdminRole(candidateRole);
         const hasName = Boolean(
           profile?.full_name?.trim() ||
           (profile?.first_name?.trim() && profile?.last_name?.trim()),
         );
         const hasCompletedTasteSetup = Boolean(preferences?.onboarding_completed_at);
 
-        const needsProfile = !hasName || !hasCompletedTasteSetup || !isOnboardingIntent(intentSource);
+        const needsProfile =
+          !isAdmin && (!hasName || !hasCompletedTasteSetup || !isOnboardingIntent(intentSource));
 
         const needsCertificationReview = false;
 
@@ -206,6 +216,7 @@ export function useProfileStatus(): ProfileStatus {
           needsRole,
           needsProfile,
           needsCertificationReview,
+          isAdmin,
           profile: profile ?? null,
         });
       } catch {
@@ -216,6 +227,7 @@ export function useProfileStatus(): ProfileStatus {
           needsRole: false,
           needsProfile: false,
           needsCertificationReview: false,
+          isAdmin: false,
           profile: null,
         });
       } finally {

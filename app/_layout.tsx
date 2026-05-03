@@ -13,6 +13,7 @@ import { Platform } from "react-native";
 import "react-native-reanimated";
 
 import { AppSplashScreen } from "@/components/app-splash-screen";
+import { color } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useProfileStatus } from "@/hooks/use-profile-status";
 
@@ -24,7 +25,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
-  const { loading, authenticated, needsRole, needsProfile } =
+  const { loading, authenticated, needsRole, needsProfile, isAdmin } =
     useProfileStatus();
   const [fontsLoaded] = useFonts({
     "Satoshi-Black": require("../assets/images/fonts/Satoshi-Black.otf"),
@@ -57,6 +58,8 @@ export default function RootLayout() {
         ? "(auth)"
         : needsProfile
           ? "(onboarding)"
+          : isAdmin
+            ? "admin"
           : "(tabs)";
 
     const targetPath = !authenticated
@@ -65,6 +68,8 @@ export default function RootLayout() {
         ? "/(auth)/role"
         : needsProfile
           ? "/(onboarding)"
+          : isAdmin
+            ? "/admin/verifications"
           : "/(tabs)";
 
     const isOnboardingComplete =
@@ -94,7 +99,7 @@ export default function RootLayout() {
     ) {
       router.replace(targetPath);
     }
-  }, [authenticated, loading, needsProfile, needsRole, router, segments]);
+  }, [authenticated, isAdmin, loading, needsProfile, needsRole, router, segments]);
 
   if (!fontsLoaded) {
     return <AppSplashScreen />;
@@ -123,7 +128,7 @@ export default function RootLayout() {
           <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         </Stack>
-        <StatusBar style="dark" />
+        <StatusBar backgroundColor={color.background} style="dark" translucent={false} />
       </SafeAreaProvider>
     </ThemeProvider>
   );

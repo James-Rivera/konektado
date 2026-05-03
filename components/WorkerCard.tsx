@@ -1,120 +1,98 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { color, radius, space, typography } from '@/constants/theme';
+import { color, radius, typography } from '@/constants/theme';
 
 export type WorkerCardProps = {
   name: string;
-  serviceTitle: string;
-  postedAt?: string;
+  statusLine: string;
+  rateLine: string;
+  headline: string;
+  tags: string[];
+  ratingText: string;
+  jobsDoneText: string;
   location: string;
-  availability: string;
-  headline?: string;
-  description?: string;
-  budgetHint?: string;
-  rating?: string;
-  completedJobs?: string;
-  tags?: string[];
-  verified?: boolean;
+  imageUrl?: string;
+  onPress?: () => void;
   onViewProfile?: () => void;
-  onMessage?: () => void;
   onSave?: () => void;
 };
 
 export function WorkerCard({
   name,
-  serviceTitle,
-  postedAt = '1d ago',
-  location,
-  availability,
+  statusLine,
+  rateLine,
   headline,
-  description,
-  budgetHint,
-  rating,
-  completedJobs,
-  tags = [],
+  tags,
+  ratingText,
+  jobsDoneText,
+  location,
+  imageUrl,
+  onPress,
   onViewProfile,
-  onMessage,
   onSave,
 }: WorkerCardProps) {
-  const initials = getInitials(name);
-  const visibleTags = tags.slice(0, 4);
-
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.identityRow}>
-          <View style={styles.avatarWrap}>
+    <Pressable
+      accessibilityLabel={`${name} worker profile`}
+      accessibilityRole="button"
+      onPress={onPress ?? onViewProfile}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      <View style={styles.topBlock}>
+        <View style={styles.headerRow}>
+          <View style={styles.identityRow}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
+              <Text style={styles.avatarText}>{getInitials(name)}</Text>
+              <View style={styles.statusDot} />
             </View>
-            <View style={styles.statusDot} />
+            <View style={styles.titleWrap}>
+              <Text numberOfLines={1} style={styles.name}>
+                {name}
+              </Text>
+              <Text style={styles.statusLine}>{statusLine}</Text>
+            </View>
           </View>
-          <View style={styles.identity}>
-            <Text style={styles.name}>{name}</Text>
-            <Text style={styles.service}>
-              {serviceTitle}
-              {postedAt ? ` · ${postedAt}` : ''}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.headerActions}>
-          <IconButton icon="more-horiz" label="More worker options" />
           <IconButton icon="bookmark-border" label="Save worker" onPress={onSave} />
         </View>
+        <Text style={styles.rateLine}>{rateLine}</Text>
+        <Text style={styles.headline}>{headline}</Text>
+      </View>
+
+      {imageUrl ? <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photo} /> : null}
+
+      <View style={styles.tagRow}>
+        <View style={styles.tagClip}>
+          {tags.map((tag) => (
+            <View key={tag} style={styles.tagPill}>
+              <Text numberOfLines={1} style={styles.tagText}>
+                {tag}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <MaterialIcons color={color.textSubtle} name="chevron-right" size={20} />
       </View>
 
       <View style={styles.metaRow}>
-        <Summary icon="location-on" label={location} />
-        <Summary icon="schedule" label={availability} />
-        {budgetHint ? <Text style={styles.budgetHint}>{budgetHint}</Text> : null}
+        <Meta icon="star-border" text={ratingText} />
+        <Meta icon="check-circle" text={jobsDoneText} />
+        <Meta icon="location-on" text={location} />
       </View>
-
-      <View style={styles.copy}>
-        <Text numberOfLines={2} style={styles.headline}>
-          {headline ?? serviceTitle}
-        </Text>
-        {description ? (
-          <Text numberOfLines={2} style={styles.description}>
-            {description}
-          </Text>
-        ) : null}
-      </View>
-
-      {rating || completedJobs ? (
-        <View style={styles.statsRow}>
-          {rating ? <Summary icon="star" label={rating} /> : null}
-          {completedJobs ? <Summary icon="check-circle" label={completedJobs} /> : null}
-        </View>
-      ) : null}
-
-      {visibleTags.length ? (
-        <View style={styles.tagFrame}>
-          <View style={styles.tagClip}>
-            {visibleTags.map((tag) => (
-              <TagPill key={tag} label={tag} />
-            ))}
-          </View>
-          <View style={styles.tagChevron}>
-            <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.actions}>
-        <FeedActionButton icon="visibility" label="View Profile" onPress={onViewProfile} />
-        <FeedActionButton icon="chat-bubble" label="Message" onPress={onMessage} />
-      </View>
-    </View>
+    </Pressable>
   );
 }
 
-function Summary({ icon, label }: { icon: ComponentProps<typeof MaterialIcons>['name']; label: string }) {
+function Meta({ icon, text }: { icon: keyof typeof MaterialIcons.glyphMap; text: string }) {
   return (
-    <View style={styles.summaryItem}>
-      <MaterialIcons color={icon === 'location-on' ? color.primary : color.textSubtle} name={icon} size={15} />
-      <Text style={styles.summaryText}>{label}</Text>
+    <View style={styles.metaItem}>
+      <MaterialIcons
+        color={icon === 'star-border' ? color.brandYellow : color.textSubtle}
+        name={icon}
+        size={icon === 'location-on' ? 14 : 16}
+      />
+      <Text numberOfLines={1} style={styles.metaText}>
+        {text}
+      </Text>
     </View>
   );
 }
@@ -124,38 +102,20 @@ function IconButton({
   label,
   onPress,
 }: {
-  icon: ComponentProps<typeof MaterialIcons>['name'];
+  icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
   onPress?: () => void;
 }) {
   return (
-    <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} style={styles.iconButton}>
-      <MaterialIcons color={color.textMuted} name={icon} size={18} />
-    </Pressable>
-  );
-}
-
-function TagPill({ label }: { label: string }) {
-  return (
-    <View style={styles.tagPill}>
-      <Text style={styles.tagText}>{label}</Text>
-    </View>
-  );
-}
-
-function FeedActionButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: ComponentProps<typeof MaterialIcons>['name'];
-  label: string;
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.actionButton}>
-      <MaterialIcons color={color.textSubtle} name={icon} size={16} />
-      <Text style={styles.actionText}>{label}</Text>
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={(event) => {
+        event.stopPropagation();
+        onPress?.();
+      }}
+      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+      <MaterialIcons color={color.textSubtle} name={icon} size={30} />
     </Pressable>
   );
 }
@@ -172,177 +132,130 @@ function getInitials(name: string) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: 0,
-    borderWidth: 0,
-    borderBottomWidth: 1,
-    borderTopWidth: 1,
-    gap: space.md,
-    padding: space.lg,
+    gap: 18,
+    padding: 16,
   },
-  header: {
+  pressed: {
+    opacity: 0.78,
+  },
+  topBlock: {
+    gap: 12,
+  },
+  headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: space.md,
     justifyContent: 'space-between',
   },
   identityRow: {
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    gap: space.md,
-    minWidth: 0,
-  },
-  avatarWrap: {
-    height: 44,
-    width: 44,
+    gap: 10,
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
+    backgroundColor: color.surfaceAlt,
     borderRadius: radius.pill,
     height: 44,
     justifyContent: 'center',
+    position: 'relative',
     width: 44,
   },
+  avatarText: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 16,
+    lineHeight: 20,
+  },
   statusDot: {
-    backgroundColor: color.success,
+    backgroundColor: color.brandYellow,
     borderColor: color.background,
     borderRadius: radius.pill,
     borderWidth: 2,
-    bottom: 0,
-    height: 12,
+    bottom: 1,
+    height: 10,
     position: 'absolute',
-    right: 0,
-    width: 12,
+    right: 1,
+    width: 10,
   },
-  avatarText: {
-    ...typography.captionMedium,
-    color: color.primary,
-  },
-  identity: {
-    flex: 1,
-    gap: space['2xs'],
+  titleWrap: {
+    gap: 2,
     minWidth: 0,
   },
   name: {
-    ...typography.sectionTitle,
     color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 15,
+    lineHeight: 20,
   },
-  service: {
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
-    lineHeight: 18,
+  statusLine: {
+    ...typography.caption,
     color: color.textMuted,
-  },
-  headerActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: space.sm,
   },
   iconButton: {
     alignItems: 'center',
-    height: 26,
+    height: 44,
     justifyContent: 'center',
-    width: 20,
+    width: 34,
   },
-  metaRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-  },
-  summaryItem: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: space['2xs'],
-  },
-  summaryText: {
+  rateLine: {
     ...typography.caption,
     color: color.textMuted,
-  },
-  budgetHint: {
-    ...typography.captionMedium,
-    color: color.primary,
-  },
-  copy: {
-    gap: space.sm,
   },
   headline: {
-    ...typography.bodyMedium,
     color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 16,
+    lineHeight: 20,
   },
-  description: {
-    ...typography.caption,
-    color: color.textMuted,
+  photo: {
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    height: 238,
+    width: '100%',
   },
-  tagFrame: {
+  tagRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    height: 31,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    width: '100%',
+    gap: 7,
+    minHeight: 31,
   },
   tagClip: {
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    gap: space.xs,
-    minWidth: 0,
+    gap: 6,
     overflow: 'hidden',
   },
   tagPill: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
-    borderRadius: radius.pill,
-    height: 21,
+    borderRadius: 13,
+    height: 27,
     justifyContent: 'center',
-    overflow: 'hidden',
-    width: 80,
+    paddingHorizontal: 14,
   },
   tagText: {
+    color: '#42474C',
     fontFamily: 'Satoshi-Bold',
     fontSize: 10,
     lineHeight: 14,
-    color: color.textSubtle,
-    textAlign: 'center',
-    width: 80,
   },
-  tagChevron: {
+  metaRow: {
     alignItems: 'center',
-    height: 31,
-    justifyContent: 'center',
-    width: 18,
-  },
-  actions: {
     flexDirection: 'row',
-    gap: space.md,
+    gap: 12,
+    minHeight: 18,
   },
-  actionButton: {
+  metaItem: {
     alignItems: 'center',
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flex: 1,
     flexDirection: 'row',
-    gap: space.sm,
-    height: 34,
-    justifyContent: 'center',
-    minWidth: 0,
-    paddingHorizontal: space.md,
+    gap: 4,
+    maxWidth: 136,
   },
-  actionText: {
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 16,
+  metaText: {
+    ...typography.caption,
     color: color.textSubtle,
-    textAlign: 'center',
   },
 });

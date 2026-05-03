@@ -1,3 +1,5 @@
+import { File } from 'expo-file-system';
+
 import type { ServiceResult } from '@/services/auth.service';
 import type { VerificationUpload } from '@/types/onboarding.types';
 import type {
@@ -75,13 +77,13 @@ async function uploadVerificationFile({
   verificationId: string;
 }): Promise<ServiceResult<string>> {
   try {
-    const response = await fetch(file.uri);
-    const blob = await response.blob();
+    const localFile = new File(file.uri);
+    const fileBuffer = await localFile.arrayBuffer();
     const path = `${userId}/${verificationId}/${Date.now()}-${index}-${getFileName(file, index)}`;
 
     const { error: uploadError } = await supabase.storage
       .from(VERIFICATION_BUCKET)
-      .upload(path, blob, {
+      .upload(path, fileBuffer, {
         contentType: file.mimeType ?? 'application/octet-stream',
         upsert: false,
       });
@@ -301,35 +303,46 @@ export async function createVerificationRequest(
     return { data: null, error: verificationError.message };
   }
 
-  for (const [index, file] of input.files.entries()) {
-    const uploaded = await uploadVerificationFile({
-      file,
-      index,
-      userId: user.id,
-      verificationId: verification.id,
-    });
+  const uploadedFiles = await Promise.all(
+    input.files.map(async (file, index) => {
+      const uploaded = await uploadVerificationFile({
+        file,
+        index,
+        userId: user.id,
+        verificationId: verification.id,
+      });
 
-    if (uploaded.error) {
-      await supabase
-        .from('verifications')
-        .update({
-          status: 'cancelled',
-          reviewer_note: 'File upload failed before submission could be completed.',
-        })
-        .eq('id', verification.id);
+      return { file, uploaded };
+    }),
+  );
 
-      return { data: null, error: uploaded.error };
-    }
+  const failedUpload = uploadedFiles.find((item) => item.uploaded.error || !item.uploaded.data);
 
-    const { error: fileError } = await supabase.from('verification_files').insert({
+  if (failedUpload) {
+    await supabase
+      .from('verifications')
+      .update({
+        status: 'cancelled',
+        reviewer_note: 'File upload failed before submission could be completed.',
+      })
+      .eq('id', verification.id);
+
+    return {
+      data: null,
+      error: failedUpload.uploaded.error ?? `Could not upload ${failedUpload.file.name || failedUpload.file.fileType}.`,
+    };
+  }
+
+  const { error: fileError } = await supabase.from('verification_files').insert(
+    uploadedFiles.map(({ file, uploaded }) => ({
       verification_id: verification.id,
       file_type: file.fileType,
-      url: uploaded.data,
-    });
+      url: uploaded.data as string,
+    })),
+  );
 
-    if (fileError) {
-      return { data: null, error: fileError.message };
-    }
+  if (fileError) {
+    return { data: null, error: fileError.message };
   }
 
   return {

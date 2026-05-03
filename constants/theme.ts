@@ -19,9 +19,10 @@ export const color = {
   textSubtle: '#738293',
   border: '#E5E7EB',
   background: '#FFFFFF',
-  screenBackground: '#F8FAFC',
+  screenBackground: '#E5E7EB',
   surface: '#FFFFFF',
   surfaceAlt: '#F3F6FA',
+  cardTint: '#F5F5EF',
   verificationCard: '#F5F5EF',
   white: '#FFFFFF',
 } as const;
@@ -79,6 +80,11 @@ export const typography = {
     fontFamily: 'Satoshi-Bold',
     fontSize: 14,
     lineHeight: 18,
+  },
+  tiny: {
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 10,
+    lineHeight: 20,
   },
 } as const;
 

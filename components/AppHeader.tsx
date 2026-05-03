@@ -1,9 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { color, space, typography } from '@/constants/theme';
+import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -26,10 +26,10 @@ export function AppHeader({
   onActionPress,
   children,
 }: AppHeaderProps) {
-  const insets = useSafeAreaInsets();
+  const topInset = useSafeTopInset();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + space.md }]}>
+    <View style={[styles.container, { paddingTop: topInset + space.md }]}>
       <View style={styles.row}>
         <View style={styles.titleWrap}>
           {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}

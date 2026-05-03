@@ -5,6 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { findDemoJobById } from '@/constants/marketplace-demo-data';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startJobConversation } from '@/services/conversation.service';
@@ -24,6 +25,7 @@ export default function JobDetailScreen() {
   const params = useLocalSearchParams<{ jobId?: string | string[] }>();
   const rawJobId = getParamValue(params.jobId);
   const [job, setJob] = useState<JobDetail | null>(null);
+  const demoJob = rawJobId ? findDemoJobById(rawJobId) : null;
   const [loading, setLoading] = useState(true);
   const [messaging, setMessaging] = useState(false);
 
@@ -31,6 +33,11 @@ export default function JobDetailScreen() {
     let active = true;
 
     if (!rawJobId) {
+      setLoading(false);
+      return;
+    }
+
+    if (demoJob) {
       setLoading(false);
       return;
     }
@@ -50,7 +57,7 @@ export default function JobDetailScreen() {
     return () => {
       active = false;
     };
-  }, [rawJobId]);
+  }, [demoJob, rawJobId]);
 
   const showVerificationPrompt = () => {
     router.push('/verification');
@@ -60,7 +67,7 @@ export default function JobDetailScreen() {
     Alert.alert(label, 'This will open from Job Details in a later slice.');
   };
 
-  if (!job) {
+  if (!job && !demoJob) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
         <View style={styles.screen}>
@@ -96,13 +103,13 @@ export default function JobDetailScreen() {
     );
   }
 
-  const jobTitle = job.title;
-  const postedAt = formatDate(job.createdAt);
+  const jobTitle = demoJob?.title ?? job?.title ?? 'Job details';
+  const postedAt = formatDate(demoJob?.postedAt ?? job?.createdAt ?? '');
   const postedAgo = `Posted ${postedAt}`;
 
-  const jobStatus = job.status;
+  const jobStatus = demoJob ? 'open' : job?.status ?? 'open';
   const workersNeeded = 2;
-  const acceptedCount = job.acceptedProviderId ? 1 : 0;
+  const acceptedCount = demoJob ? 0 : job?.acceptedProviderId ? 1 : 0;
 
   const handleMessage = () => {
     if (!isVerified) {
@@ -110,10 +117,15 @@ export default function JobDetailScreen() {
       return;
     }
 
+    if (demoJob) {
+      showComingSoon('Message');
+      return;
+    }
+
     setMessaging(true);
     startJobConversation({
-      jobId: job.id,
-      message: `Hi, I am interested in "${job.title}". Is this job still available?`,
+      jobId: job!.id,
+      message: `Hi, I am interested in "${jobTitle}". Is this job still available?`,
     }).then((result) => {
       setMessaging(false);
 
@@ -180,9 +192,17 @@ export default function JobDetailScreen() {
             <Text style={styles.postedAgo}>{postedAgo}</Text>
 
             <View style={styles.metaStack}>
-              <MetaRow icon="location-on" text={job.locationText ?? job.barangay ?? 'Nearby'} />
-              <MetaRow icon="schedule" text={job.scheduleText ?? 'Schedule to coordinate'} />
-              {job.budgetAmount ? <MetaRow icon="local-offer" text={formatBudget(job.budgetAmount)} tint="primary" /> : null}
+              <MetaRow
+                icon="location-on"
+                text={demoJob?.location ?? job?.locationText ?? job?.barangay ?? 'Nearby'}
+              />
+              <MetaRow
+                icon="schedule"
+                text={demoJob?.schedule ?? job?.scheduleText ?? 'Schedule to coordinate'}
+              />
+              {job?.budgetAmount ? (
+                <MetaRow icon="local-offer" text={formatBudget(job.budgetAmount)} tint="primary" />
+              ) : null}
             </View>
           </View>
 
@@ -205,12 +225,14 @@ export default function JobDetailScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>What you will do</Text>
-            <Text style={styles.bodyText}>{job.description ?? 'No description provided yet.'}</Text>
+            <Text style={styles.bodyText}>{demoJob?.description ?? job?.description ?? 'No description provided yet.'}</Text>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>What to bring</Text>
-            <Text style={styles.bodyText}>Bring a valid ID and water. No special tools needed.</Text>
+            <Text style={styles.bodyText}>
+              {demoJob?.whatToBring ?? 'Bring a valid ID and water. No special tools needed.'}
+            </Text>
           </View>
 
           <View style={styles.section}>
@@ -219,11 +241,14 @@ export default function JobDetailScreen() {
               <View style={styles.posterRow}>
                 <View style={styles.posterInfo}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{(job.client?.fullName ?? 'R').slice(0, 1).toUpperCase()}</Text>
-                    <View style={styles.avatarBadge} />
+                    <Text style={styles.avatarText}>
+                      {(demoJob?.clientName ?? job?.client?.fullName ?? 'R').slice(0, 1).toUpperCase()}
+                    </Text>
+                    {demoJob ? <View style={styles.avatarBadge} /> : null}
+                    {!demoJob ? <View style={styles.avatarBadge} /> : null}
                   </View>
                   <View style={styles.posterCopy}>
-                    <Text style={styles.posterName}>{job.client?.fullName ?? 'Konektado resident'}</Text>
+                    <Text style={styles.posterName}>{demoJob?.clientName ?? job?.client?.fullName ?? 'Konektado resident'}</Text>
                     <Text style={styles.posterMeta}>Verified resident</Text>
                   </View>
                 </View>
@@ -247,7 +272,7 @@ export default function JobDetailScreen() {
                 <BadgePill label="4.8 Reviews" />
                 <BadgePill label="Usually replies" />
                 <BadgePill label="2 Jobs Posted" />
-                {job.category ? <BadgePill label={job.category} /> : null}
+                {demoJob?.category || job?.category ? <BadgePill label={demoJob?.category ?? job?.category ?? ''} /> : null}
                 <View style={styles.badgeChevron}>
                   <MaterialIcons color={color.textSubtle} name="chevron-right" size={20} />
                 </View>

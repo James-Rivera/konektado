@@ -64,6 +64,8 @@ All demo accounts use password `Test12345!`.
 | `viewer@konektado.test` | Unverified viewer with pending verification | Test verification-gated actions and admin approval. |
 | `rejected@konektado.test` | Unverified provider with rejected verification | Test rejected verification correction state. |
 
+`admin@konektado.test` is a barangay admin account, not a resident marketplace onboarding account. It should bypass the resident onboarding path and be used directly with `/admin/verifications`.
+
 The seed includes:
 
 - 6 auth users/profiles.

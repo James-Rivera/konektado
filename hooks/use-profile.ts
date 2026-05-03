@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AppState } from "react-native";
 
 import { supabase } from "@/utils/supabase";
 
@@ -81,16 +82,68 @@ export function useProfile() {
 
   useEffect(() => {
     let active = true;
+    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const subscribeToProfile = async () => {
+      if (profileChannel) {
+        await supabase.removeChannel(profileChannel);
+        profileChannel = null;
+      }
+
+      const { data } = await supabase.auth.getUser();
+      const userId = data.user?.id;
+      if (!active || !userId) return;
+
+      profileChannel = supabase
+        .channel(`profile-refresh-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "profiles",
+            filter: `id=eq.${userId}`,
+          },
+          () => {
+            load();
+          },
+        )
+        .subscribe();
+    };
+
     load();
+    subscribeToProfile();
+
     const { data: subscription } = supabase.auth.onAuthStateChange(() => {
       if (active) {
+        load();
+        subscribeToProfile();
+      }
+    });
+
+    const appStateSubscription = AppState.addEventListener("change", (status) => {
+      if (active && status === "active") {
         load();
       }
     });
 
+    pollTimer = setInterval(() => {
+      if (active) {
+        load();
+      }
+    }, 5000);
+
     return () => {
       active = false;
       subscription?.subscription.unsubscribe();
+      appStateSubscription.remove();
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
+      if (profileChannel) {
+        supabase.removeChannel(profileChannel);
+      }
     };
   }, [load]);
 

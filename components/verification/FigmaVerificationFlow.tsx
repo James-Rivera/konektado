@@ -1,7 +1,7 @@
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRef, useState, type ComponentProps } from 'react';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import type React from 'react';
+import { useRef, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -405,12 +405,14 @@ function TopHeader({
 function StepDots({ current }: { current: number }) {
   return (
     <View style={styles.dots}>
-      {Array.from({ length: 4 }).map((_, index) => (
-        <View
-          key={index}
-          style={[styles.dot, index < current ? styles.dotActive : styles.dotInactive]}
-        />
-      ))}
+      <View style={styles.dotsTrack}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <View
+            key={index}
+            style={[styles.dot, index < current ? styles.dotActive : styles.dotInactive]}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -1056,7 +1058,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     flexDirection: 'row',
     height: 55,
-    paddingHorizontal: 24,
+    paddingHorizontal: 18,
     position: 'relative',
   },
   darkHeader: {
@@ -1066,8 +1068,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 32,
     justifyContent: 'center',
-    marginRight: 12,
-    width: 16,
+    marginRight: 8,
+    width: 32,
     zIndex: 2,
   },
   headerTitle: {
@@ -1081,12 +1083,18 @@ const styles = StyleSheet.create({
   },
   dots: {
     alignItems: 'center',
-    alignSelf: 'center',
+    bottom: 0,
+    left: 0,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    pointerEvents: 'none',
+  },
+  dotsTrack: {
     flexDirection: 'row',
     gap: 8,
-    left: '50%',
-    marginLeft: -72,
-    position: 'absolute',
+    alignSelf: 'center',
     width: 144,
   },
   dot: {
@@ -1116,6 +1124,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     marginTop: 10,
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
     width: '100%',
   },
   heroImage: {
@@ -1133,7 +1146,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     gap: 8,
     paddingHorizontal: 19,
-    paddingTop: 28,
+    paddingTop: 17,
   },
   sectionTitle: {
     color: color.text,
@@ -1156,14 +1169,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardStack: {
-    gap: 12,
+    gap: 10,
   },
   requirementCard: {
     alignItems: 'center',
     backgroundColor: color.background,
     borderColor: '#FFF0F0',
     borderRadius: 14,
-    borderWidth: 1,
     flexDirection: 'row',
     gap: 10,
     minHeight: 72,
@@ -1174,6 +1186,11 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0, 0, 0, 0.25)',
     borderBottomWidth: 1,
     borderColor: color.verificationCard,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 0,
+    elevation: 1,
   },
   cardCopy: {
     flex: 1,
@@ -1187,7 +1204,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   cardDescription: {
-    color: color.textSecondary,
+    color: 'rgba(60,60,67,0.6)',
     fontFamily: 'Satoshi-Regular',
     fontSize: 13,
     lineHeight: 18,
@@ -1320,6 +1337,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 36,
+    justifyContent: 'center',
+    width: '100%',
   },
   otpBox: {
     alignItems: 'center',
@@ -1328,7 +1347,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 54,
     justifyContent: 'center',
-    width: 48,
+    width: 47,
   },
   otpBoxActive: {
     borderColor: color.accentYellow,

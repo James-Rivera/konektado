@@ -85,7 +85,7 @@ Purpose: Own verification requests, file upload metadata, and current user's ver
 | Function | Input | Output | Behavior |
 | --- | --- | --- | --- |
 | `getMyVerificationStatus()` | none | `ServiceResult<VerificationSummary>` | Returns latest request and public verification state. |
-| `createVerificationRequest(input)` | `CreateVerificationRequestInput` | `ServiceResult<VerificationRequest>` | Creates pending request for current user. |
+| `createVerificationRequest(input)` | `CreateVerificationRequestInput` | `ServiceResult<VerificationRequest>` | Uploads selected files, creates a pending request for the current user, and links file metadata. |
 | `uploadVerificationFile(input)` | `VerificationFileInput` | `ServiceResult<VerificationFile>` | Uploads file to Storage and saves metadata. |
 | `listMyVerificationRequests()` | none | `ServiceResult<VerificationRequest[]>` | Lists user's request history. |
 | `cancelPendingRequest(id)` | `{ id: string }` | `ServiceResult<void>` | Cancels owned pending request. |
@@ -95,6 +95,7 @@ Rules:
 - ID front and ID back are required for barangay identity verification.
 - Uploaded documents are private.
 - Only admins can approve or reject requests.
+- Camera capture is allowed as a UI input source later, but the service contract should continue to receive normalized local file metadata/URIs and should not depend on a specific camera library.
 
 ## JobService
 
@@ -160,8 +161,9 @@ Purpose: Own barangay admin verification and moderation operations.
 
 | Function | Input | Output | Behavior |
 | --- | --- | --- | --- |
-| `listPendingVerificationRequests()` | optional filters | `ServiceResult<VerificationRequestDetail[]>` | Admin queue for pending requests. |
-| `reviewVerificationRequest(input)` | `{ requestId: string; decision: "approved" | "rejected"; note?: string }` | `ServiceResult<VerificationRequest>` | Approves/rejects and records reviewer metadata. |
+| `listPendingVerificationRequests()` | optional filters | `ServiceResult<VerificationRequestDetail[]>` | Backward-compatible pending-only admin queue with request fields, submitted note, public-safe profile snapshot, file metadata, reviewer note, and dates. |
+| `listVerificationRequests(input)` | `{ statuses?: VerificationStatus[]; limit?: number }` | `ServiceResult<VerificationRequestDetail[]>` | Admin dashboard queue for pending, reviewed, or all verification requests with only review-needed profile/file fields. |
+| `reviewVerificationRequest(input)` | `{ requestId: string; decision: "approved" | "rejected"; note?: string }` | `ServiceResult<VerificationRequestDetail>` | Approves/rejects and records reviewer metadata. Rejection requires `note`; approval also sets `profiles.barangay_verified_at` and `profiles.verified_at`. |
 | `listReports(filters)` | `ReportFilters` | `ServiceResult<Report[]>` | Lists moderation reports. |
 | `updateReportStatus(input)` | `{ reportId: string; status: ReportStatus; note?: string }` | `ServiceResult<Report>` | Updates report review state. |
 | `listUsers(filters)` | `AdminUserFilters` | `ServiceResult<AdminUserSummary[]>` | Searches user summaries for admin use. |
@@ -171,5 +173,9 @@ Rules:
 
 - Every function must verify the current user has `barangay_admin` role.
 - Admin writes should record `reviewer_id`, timestamps, and notes where applicable.
+- Admin verification review uses the current MVP `verifications` table and `verification_files.verification_id`; do not rename the tables in this slice.
+- Approval must return an error if either the `verifications` update or the profile verification timestamp update fails.
+- Admin request details may expose only review-needed profile fields and verification file metadata/URLs.
 - Admin service must not expose password or raw auth secrets.
+- Admin UI may preview image file URLs in app for faster review, but service responses should remain metadata-oriented and should not fetch raw file bytes.
 

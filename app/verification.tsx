@@ -99,6 +99,34 @@ export default function VerificationGateScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!pendingRequestId || step !== 'submitted') return;
+
+    let active = true;
+    const timer = setInterval(() => {
+      getMyVerificationPrefill().then((result) => {
+        if (!active || result.error || !result.data?.latestRequest) return;
+
+        const latest = result.data.latestRequest;
+        if (latest.id !== pendingRequestId) return;
+
+        if (latest.status === 'approved') {
+          setStep('success');
+        }
+
+        if (latest.status === 'rejected') {
+          setRejectedReason(latest.reviewerNote);
+          setStep('failure');
+        }
+      });
+    }, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [pendingRequestId, step]);
+
   const selectedFiles: SelectedVerificationFiles = useMemo(() => {
     return {
       certificate: form.files.find((file) => file.fileType === 'certification'),

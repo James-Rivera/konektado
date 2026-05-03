@@ -28,6 +28,11 @@ export type VerificationRequestDetail = {
   }[];
 };
 
+type ListVerificationRequestsInput = {
+  limit?: number;
+  statuses?: VerificationStatus[];
+};
+
 type VerificationRow = {
   id: string;
   user_id: string;
@@ -57,6 +62,8 @@ async function requireAdmin(): Promise<ServiceResult<void>> {
 }
 
 async function mapVerificationRows(rows: VerificationRow[]) {
+  if (!rows.length) return [];
+
   const profiles = await loadPublicProfiles(rows.map((row) => row.user_id));
   const { data: files } = await supabase
     .from('verification_files')
@@ -87,21 +94,36 @@ async function mapVerificationRows(rows: VerificationRow[]) {
   }));
 }
 
-export async function listPendingVerificationRequests(): Promise<
+export async function listVerificationRequests({
+  limit = 50,
+  statuses,
+}: ListVerificationRequestsInput = {}): Promise<
   ServiceResult<VerificationRequestDetail[]>
 > {
   const admin = await requireAdmin();
   if (admin.error) return admin;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('verifications')
     .select('id, user_id, status, notes, reviewer_id, reviewer_note, reviewed_at, created_at, updated_at')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (statuses?.length) {
+    query = query.in('status', statuses);
+  }
+
+  const { data, error } = await query;
 
   if (error) return { data: null, error: error.message };
 
   return { data: await mapVerificationRows((data as VerificationRow[] | null) ?? []), error: null };
+}
+
+export async function listPendingVerificationRequests(): Promise<
+  ServiceResult<VerificationRequestDetail[]>
+> {
+  return listVerificationRequests({ statuses: ['pending'] });
 }
 
 export async function reviewVerificationRequest({
@@ -116,6 +138,12 @@ export async function reviewVerificationRequest({
   const admin = await requireAdmin();
   if (admin.error) return admin;
 
+  const reviewerNote = note?.trim() || null;
+
+  if (decision === 'rejected' && !reviewerNote) {
+    return { data: null, error: 'Enter a reviewer note before rejecting this request.' };
+  }
+
   const { data: userData } = await supabase.auth.getUser();
   const reviewerId = userData.user?.id;
 
@@ -129,20 +157,29 @@ export async function reviewVerificationRequest({
     .update({
       status: decision,
       reviewer_id: reviewerId,
-      reviewer_note: note?.trim() || null,
+      reviewer_note: reviewerNote,
       reviewed_at: now,
     })
     .eq('id', requestId)
+    .eq('status', 'pending')
     .select('id, user_id, status, notes, reviewer_id, reviewer_note, reviewed_at, created_at, updated_at')
     .single<VerificationRow>();
 
-  if (error) return { data: null, error: error.message };
+  if (error) {
+    return { data: null, error: error.message || 'This request is no longer pending.' };
+  }
 
   if (decision === 'approved') {
-    await supabase
+    const { error: profileError } = await supabase
       .from('profiles')
       .update({ barangay_verified_at: now, verified_at: now })
-      .eq('id', data.user_id);
+      .eq('id', data.user_id)
+      .select('id')
+      .single();
+
+    if (profileError) {
+      return { data: null, error: profileError.message };
+    }
   }
 
   const [mapped] = await mapVerificationRows([data]);
