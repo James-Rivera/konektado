@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current prototype note: the repo already has `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `jobs`, and legacy `job_applications` migrations. This document is the source of truth for the next stable schema. Existing fields like `provider_profiles.service_type` can seed the first record in the `services` table when the service profile feature is expanded.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. Existing fields like `provider_profiles.service_type` can seed the first record in the future `services` table when the service profile feature is expanded.
 
 ## Common Types
 
@@ -95,6 +95,29 @@ Important constraints:
 - Only one active non-admin user role should be active at a time.
 - `barangay_admin` assignment must be admin-only or manual in Supabase.
 
+## user_preferences
+
+Purpose: Lightweight onboarding preferences used to personalize viewer-mode browsing before full barangay verification.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `user_id` | `uuid` | Primary key. References `profiles(id)` on delete cascade. |
+| `intent` | `text` | `client`, `provider`, or `both`. |
+| `offered_services` | `text[]` | Services a worker can offer. |
+| `needed_services` | `text[]` | Help a client may need nearby. |
+| `custom_offered_services` | `text[]` | Free-text offered services from onboarding. |
+| `custom_needed_services` | `text[]` | Free-text needed services from onboarding. |
+| `onboarding_completed_at` | `timestamptz` | Set when first onboarding is complete. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on change. |
+
+Important constraints:
+
+- One row per user.
+- Owner can select, insert, and update only their own preferences.
+- These preferences are first-party personalization data, not verification proof.
+- For provider and both-role users, `provider_profiles.service_type` is seeded from offered services until the future `services` table is fully built.
+
 ## services
 
 Purpose: Provider service profile entries shown in search and provider profiles.
@@ -159,6 +182,11 @@ Important constraints:
 ## verification_requests
 
 Purpose: Barangay verification workflow for residents/providers.
+
+Implementation note:
+
+- Current app code still writes to the older `verifications` table and links files through `verification_files.verification_id`.
+- A later cleanup should migrate that surface to the documented `verification_requests` naming and private file-path model when the admin review flow is built.
 
 | Field | Type | Notes |
 | --- | --- | --- |

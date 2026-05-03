@@ -1,0 +1,582 @@
+<!--
+  Konektado onboarding OTP templates:
+  Authentication -> Email Templates -> Magic Link
+  Authentication -> Email Templates -> Confirm sign up
+
+  The current app calls signInWithOtp() for email -> OTP -> create password
+  onboarding. Keep both templates aligned with this same {{ .Token }} body.
+  Supabase Auth OTP length must be configured to 6 digits.
+
+  Subject:
+  Your Konektado verification code
+
+  This template intentionally uses {{ .Token }} as six boxed digits because
+  the app verifies the OTP code, not a magic-link URL.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <title>Your Konektado verification code</title>
+    <style>
+      @media screen and (max-width: 480px) {
+        .email-shell {
+          width: 100% !important;
+        }
+
+        .email-padding {
+          padding-left: 28px !important;
+          padding-right: 28px !important;
+        }
+
+        .otp-cell {
+          padding-left: 4px !important;
+          padding-right: 4px !important;
+        }
+
+        .otp-box {
+          width: 44px !important;
+        }
+
+        .legal-copy {
+          width: 100% !important;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .logo-light {
+          display: none !important;
+        }
+
+        .logo-dark {
+          display: block !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background: #ffffff">
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        color: transparent;
+        line-height: 1px;
+        mso-hide: all;
+      "
+    >
+      Use this code to finish creating your Konektado account.
+    </div>
+
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="
+        background: #ffffff;
+        border-collapse: collapse;
+        font-family: Satoshi, Arial, Helvetica, sans-serif;
+      "
+    >
+      <tr>
+        <td
+          style="height: 8px; background: #f2e640; font-size: 0; line-height: 0"
+        >
+          &nbsp;
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <table
+            class="email-shell"
+            role="presentation"
+            width="680"
+            cellspacing="0"
+            cellpadding="0"
+            border="0"
+            style="
+              width: 680px;
+              max-width: 100%;
+              border-collapse: collapse;
+              background: #ffffff;
+            "
+          >
+            <tr>
+              <td class="email-padding" style="padding: 54px 48px 36px">
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td align="center" style="padding-bottom: 52px">
+                      <img
+                        class="logo-light"
+                        alt="Konektado"
+                        src="https://dudlohdeydcbsvgccexd.supabase.co/storage/v1/object/public/brand/konektado-logo.png"
+                        width="228"
+                        style="
+                          display: block;
+                          width: 228px;
+                          max-width: 100%;
+                          height: auto;
+                          border: 0;
+                        "
+                      />
+                      <img
+                        class="logo-dark"
+                        alt="Konektado"
+                        src="https://dudlohdeydcbsvgccexd.supabase.co/storage/v1/object/public/brand/konektado-logo-light.png"
+                        width="228"
+                        style="
+                          display: none;
+                          width: 228px;
+                          max-width: 100%;
+                          height: auto;
+                          border: 0;
+                        "
+                      />
+                      <div
+                        style="
+                          padding-top: 4px;
+                          font-size: 12px;
+                          line-height: 16px;
+                          color: #333333;
+                          font-weight: 400;
+                        "
+                      >
+                        Kapitbahay. Kabuhayan. Konektado.
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td>
+                      <h1
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 24px;
+                          line-height: 32px;
+                          font-weight: 800;
+                          color: #000000;
+                        "
+                      >
+                        Verify your email
+                      </h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top: 22px">
+                      <p
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 14px;
+                          line-height: 22px;
+                          color: #333333;
+                        "
+                      >
+                        Here is your One Time Password (OTP).<br />
+                        Use this code to finish creating your account. This
+                        helps keep work, hiring, and barangay verification
+                        secure.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding-top: 34px">
+                      <table
+                        role="presentation"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                        style="border-collapse: collapse"
+                      >
+                        <tr>
+                          <td class="otp-cell" style="padding: 0 8px">
+                            <div
+                              class="otp-box"
+                              style="
+                                width: 52px;
+                                height: 54px;
+                                border-radius: 6px;
+                                background: #eef5ff;
+                                color: #10241b;
+                                font-size: 24px;
+                                font-weight: 800;
+                                line-height: 54px;
+                                text-align: center;
+                              "
+                            >
+                              {{ slice .Token 0 1 }}
+                            </div>
+                          </td>
+                          <td class="otp-cell" style="padding: 0 8px">
+                            <div
+                              class="otp-box"
+                              style="
+                                width: 52px;
+                                height: 54px;
+                                border-radius: 6px;
+                                background: #eef5ff;
+                                color: #10241b;
+                                font-size: 24px;
+                                font-weight: 800;
+                                line-height: 54px;
+                                text-align: center;
+                              "
+                            >
+                              {{ slice .Token 1 2 }}
+                            </div>
+                          </td>
+                          <td class="otp-cell" style="padding: 0 8px">
+                            <div
+                              class="otp-box"
+                              style="
+                                width: 52px;
+                                height: 54px;
+                                border-radius: 6px;
+                                background: #eef5ff;
+                                color: #10241b;
+                                font-size: 24px;
+                                font-weight: 800;
+                                line-height: 54px;
+                                text-align: center;
+                              "
+                            >
+                              {{ slice .Token 2 3 }}
+                            </div>
+                          </td>
+                          <td class="otp-cell" style="padding: 0 8px">
+                            <div
+                              class="otp-box"
+                              style="
+                                width: 52px;
+                                height: 54px;
+                                border-radius: 6px;
+                                background: #eef5ff;
+                                color: #10241b;
+                                font-size: 24px;
+                                font-weight: 800;
+                                line-height: 54px;
+                                text-align: center;
+                              "
+                            >
+                              {{ slice .Token 3 4 }}
+                            </div>
+                          </td>
+                          <td class="otp-cell" style="padding: 0 8px">
+                            <div
+                              class="otp-box"
+                              style="
+                                width: 52px;
+                                height: 54px;
+                                border-radius: 6px;
+                                background: #eef5ff;
+                                color: #10241b;
+                                font-size: 24px;
+                                font-weight: 800;
+                                line-height: 54px;
+                                text-align: center;
+                              "
+                            >
+                              {{ slice .Token 4 5 }}
+                            </div>
+                          </td>
+                          <td class="otp-cell" style="padding: 0 8px">
+                            <div
+                              class="otp-box"
+                              style="
+                                width: 52px;
+                                height: 54px;
+                                border-radius: 6px;
+                                background: #eef5ff;
+                                color: #10241b;
+                                font-size: 24px;
+                                font-weight: 800;
+                                line-height: 54px;
+                                text-align: center;
+                              "
+                            >
+                              {{ slice .Token 5 6 }}
+                            </div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding-top: 34px">
+                      <p
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 14px;
+                          line-height: 22px;
+                          color: #333333;
+                        "
+                      >
+                        OTP will expire in
+                        <strong style="font-weight: 800">5 minutes</strong>.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding-top: 34px">
+                      <table
+                        role="presentation"
+                        width="100%"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                        style="
+                          border-collapse: separate;
+                          border-spacing: 0;
+                          background: #f5f5ef;
+                          border-radius: 12px;
+                        "
+                      >
+                        <tr>
+                          <td
+                            width="26"
+                            valign="top"
+                            style="padding: 18px 0 18px 18px"
+                          >
+                            <div
+                              style="
+                                width: 18px;
+                                height: 18px;
+                                border: 2px solid #0d99ff;
+                                border-radius: 999px;
+                                color: #0d99ff;
+                                font-size: 13px;
+                                line-height: 18px;
+                                text-align: center;
+                                font-weight: 800;
+                              "
+                            >
+                              i
+                            </div>
+                          </td>
+                          <td style="padding: 17px 20px 17px 12px">
+                            <p
+                              style="
+                                margin: 0;
+                                padding: 0;
+                                font-size: 14px;
+                                line-height: 21px;
+                                color: #46576c;
+                              "
+                            >
+                              If you did not request this code, you can safely
+                              ignore this email. Your account will not be
+                              created without the code.
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding-top: 34px">
+                      <p
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 14px;
+                          line-height: 22px;
+                          color: #333333;
+                        "
+                      >
+                        Best Regards,<br />
+                        <span style="color: #69a4ec">Konektado team.</span>
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding-top: 28px">
+                      <div
+                        style="
+                          height: 1px;
+                          background: #d9d9d9;
+                          line-height: 1px;
+                          font-size: 1px;
+                        "
+                      >
+                        &nbsp;
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding-top: 16px">
+                      <table
+                        role="presentation"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td style="padding: 0 6px">
+                            <a
+                              href="{{ .SiteURL }}"
+                              style="
+                                display: inline-block;
+                                text-decoration: none;
+                                border: 0;
+                              "
+                            >
+                              <img
+                                alt="Instagram"
+                                src="https://dudlohdeydcbsvgccexd.supabase.co/storage/v1/object/public/brand/instagram.png"
+                                width="30"
+                                height="30"
+                                style="
+                                  display: block;
+                                  border: 0;
+                                  width: 30px;
+                                  height: 30px;
+                                "
+                              />
+                            </a>
+                          </td>
+                          <td style="padding: 0 6px">
+                            <a
+                              href="{{ .SiteURL }}"
+                              style="
+                                display: inline-block;
+                                text-decoration: none;
+                                border: 0;
+                              "
+                            >
+                              <img
+                                alt="Facebook"
+                                src="https://dudlohdeydcbsvgccexd.supabase.co/storage/v1/object/public/brand/facebook.png"
+                                width="30"
+                                height="30"
+                                style="
+                                  display: block;
+                                  border: 0;
+                                  width: 30px;
+                                  height: 30px;
+                                "
+                              />
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding-top: 16px">
+                      <div
+                        style="
+                          height: 1px;
+                          background: #d9d9d9;
+                          line-height: 1px;
+                          font-size: 1px;
+                        "
+                      >
+                        &nbsp;
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding-top: 18px">
+                      <p
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 10px;
+                          line-height: 14px;
+                          color: #000000;
+                        "
+                      >
+                        &copy; 2026 KONEKTADO. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding-top: 28px">
+                      <p
+                        class="legal-copy"
+                        style="
+                          width: 490px;
+                          max-width: 100%;
+                          margin: 0;
+                          padding: 0;
+                          font-size: 9px;
+                          line-height: 14px;
+                          color: #000000;
+                          text-align: center;
+                        "
+                      >
+                        You are receiving this mail because you registered to
+                        join the Konektado platform. This also shows that you
+                        agree to our Terms of use and Privacy Policies.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding-top: 10px">
+                      <p
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 10px;
+                          line-height: 14px;
+                          color: #333333;
+                        "
+                      >
+                        <a
+                          href="{{ .SiteURL }}"
+                          style="color: #333333; text-decoration: underline"
+                          >Privacy policy</a
+                        >
+                        <span style="color: #999999"> &bull; </span>
+                        <a
+                          href="{{ .SiteURL }}"
+                          style="color: #333333; text-decoration: underline"
+                          >Terms of service</a
+                        >
+                        <span style="color: #999999"> &bull; </span>
+                        <a
+                          href="{{ .SiteURL }}"
+                          style="color: #333333; text-decoration: underline"
+                          >Help center</a
+                        >
+                        <span style="color: #999999"> &bull; </span>
+                        <a
+                          href="{{ .SiteURL }}"
+                          style="color: #333333; text-decoration: underline"
+                          >Unsubscribe</a
+                        >
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

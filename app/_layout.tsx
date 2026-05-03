@@ -1,12 +1,15 @@
 import {
-    DarkTheme,
-    DefaultTheme,
-    ThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
 } from "@react-navigation/native";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import "react-native-reanimated";
 
 import { AppSplashScreen } from "@/components/app-splash-screen";
@@ -38,6 +41,14 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    if (Platform.OS === "android") {
+      SystemUI.setBackgroundColorAsync("#000000").catch(() => {
+        // Non-critical; Android system UI support varies by shell/device.
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     if (loading) return;
 
     const activeGroup = segments[0];
@@ -59,8 +70,17 @@ export default function RootLayout() {
 
     const isOnboardingComplete =
       activeGroup === "(onboarding)" && segments[1] === "complete";
+    const isCompletingAuthRegistration =
+      authenticated &&
+      activeGroup === "(auth)" &&
+      segments[1] === "register" &&
+      (needsRole || needsProfile);
 
-    if (activeGroup !== targetGroup && !(targetGroup === "(tabs)" && isOnboardingComplete)) {
+    if (
+      activeGroup !== targetGroup &&
+      !(targetGroup === "(tabs)" && isOnboardingComplete) &&
+      !isCompletingAuthRegistration
+    ) {
       router.replace(targetPath);
     }
   }, [authenticated, loading, needsProfile, needsRole, router, segments]);
@@ -75,16 +95,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: "modal", title: "Modal" }}
-        />
-        <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="dark" />
+      <SafeAreaProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="modal"
+            options={{ presentation: "modal", title: "Modal" }}
+          />
+          <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack>
+        <StatusBar style="dark" />
+      </SafeAreaProvider>
     </ThemeProvider>
   );
 }

@@ -6,9 +6,9 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
 import {
+  FloatingOnboardingInput,
   OnboardingButton,
   OnboardingFormScaffold,
-  OnboardingTextInput,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 
@@ -34,8 +34,8 @@ export default function BasicsStep() {
   };
 
   const next = () => {
-    if (!localFirst.trim() || !localLast.trim()) {
-      Alert.alert('Add your name', 'First and last name are required.');
+    if (!localFirst.trim() || !localLast.trim() || !localBirthdate.trim()) {
+      Alert.alert('Add your details', 'First name, last name, and date of birth are required.');
       return;
     }
 
@@ -56,25 +56,27 @@ export default function BasicsStep() {
         helper="Make sure each detail matches official documents"
         onBack={() => router.back()}
         title="Enter your details">
-        <OnboardingTextInput
+        <FloatingOnboardingInput
           autoCapitalize="words"
+          label="First Name"
           onChangeText={setLocalFirst}
-          placeholder="First Name"
           textContentType="givenName"
           value={localFirst}
         />
-        <OnboardingTextInput
+        <FloatingOnboardingInput
           autoCapitalize="words"
+          label="Last Name"
           onChangeText={setLocalLast}
-          placeholder="Last Name"
           textContentType="familyName"
           value={localLast}
         />
 
-        <Pressable accessibilityRole="button" onPress={() => setShowDatePicker(true)} style={styles.dateInput}>
-          <Text style={[styles.dateText, !localBirthdate ? styles.placeholder : undefined]}>
-            {localBirthdate || 'Date of Birth'}
-          </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setShowDatePicker(true)}
+          style={[styles.dateInput, localBirthdate ? styles.dateInputActive : undefined]}>
+          <Text style={[styles.dateLabel, !localBirthdate ? styles.dateLabelHidden : undefined]}>Date of Birth</Text>
+          <Text style={[styles.dateText, !localBirthdate ? styles.placeholder : undefined]}>{localBirthdate || 'Date of Birth'}</Text>
           <MaterialIcons color={onboardingColors.placeholder} name="calendar-today" size={22} />
         </Pressable>
 
@@ -103,15 +105,32 @@ const styles = StyleSheet.create({
     height: 46,
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
+  },
+  dateInputActive: {
+    borderColor: '#FCC03B',
+  },
+  dateLabel: {
+    color: onboardingColors.placeholder,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 10,
+    left: 12,
+    lineHeight: 12,
+    position: 'absolute',
+    top: 8,
+  },
+  dateLabelHidden: {
+    opacity: 0,
   },
   dateText: {
     color: onboardingColors.text,
     fontFamily: 'Satoshi-Regular',
     fontSize: 16,
     lineHeight: 20,
+    paddingTop: 10,
   },
   placeholder: {
     color: onboardingColors.placeholder,
+    paddingTop: 0,
   },
 });

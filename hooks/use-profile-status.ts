@@ -2,37 +2,24 @@ import { useEffect, useState } from "react";
 
 import { supabase } from "@/utils/supabase";
 
-const CERT_RECOMMENDED_JOBS = new Set([
-  "Electrician",
-  "Plumber",
-  "Construction Worker",
-  "Mason",
-  "PC Repair",
-  "Carpenter",
-  "Appliance Repair",
-  "Welder",
-  "Mechanic",
-]);
-
-type ProviderProfileSnapshot = {
-  service_type: string | null;
-  has_certifications: boolean | null;
-};
-
-function parseServiceTypes(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 function isProviderRole(role: string | null | undefined): role is "provider" {
   return (role ?? "").toLowerCase() === "provider";
 }
 
 function isClientRole(role: string | null | undefined): role is "client" {
   return (role ?? "").toLowerCase() === "client";
+}
+
+function isOnboardingIntent(role: string | null | undefined) {
+  const normalized = (role ?? "").toLowerCase();
+  return normalized === "client" || normalized === "provider" || normalized === "both";
+}
+
+function activeRoleFromIntent(role: string | null | undefined): "client" | "provider" | null {
+  const normalized = (role ?? "").toLowerCase();
+  if (normalized === "provider") return "provider";
+  if (normalized === "client" || normalized === "both") return "client";
+  return null;
 }
 
 export type ProfileStatus = {
@@ -136,6 +123,18 @@ export function useProfileStatus(): ProfileStatus {
                 load();
               },
             )
+            .on(
+              "postgres_changes",
+              {
+                event: "*",
+                schema: "public",
+                table: "user_preferences",
+                filter: `user_id=eq.${userResult.user.id}`,
+              },
+              () => {
+                load();
+              },
+            )
             .subscribe();
         }
 
@@ -151,6 +150,12 @@ export function useProfileStatus(): ProfileStatus {
           .eq("user_id", userResult.user.id)
           .order("is_active", { ascending: false })
           .limit(1);
+
+        const { data: preferences } = await supabase
+          .from("user_preferences")
+          .select("intent, onboarding_completed_at")
+          .eq("user_id", userResult.user.id)
+          .maybeSingle();
 
         if (!active) return;
 
@@ -169,48 +174,22 @@ export function useProfileStatus(): ProfileStatus {
         const metadataRole = (userResult.user.user_metadata as any)?.role as string | null;
         const userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
         const candidateRoleSource =
-          profile?.active_role || profile?.role || userRolesRole || metadataRole;
-        const candidateRole = candidateRoleSource
-          ? String(candidateRoleSource).toLowerCase()
-          : null;
+          profile?.active_role || profile?.role || userRolesRole || activeRoleFromIntent(metadataRole);
+        const candidateRole = candidateRoleSource ? String(candidateRoleSource).toLowerCase() : null;
+        const intentSource = preferences?.intent || metadataRole || candidateRole;
         const needsRole = !candidateRole;
         const hasName = Boolean(
           profile?.full_name?.trim() ||
           (profile?.first_name?.trim() && profile?.last_name?.trim()),
         );
+        const hasCompletedTasteSetup = Boolean(preferences?.onboarding_completed_at);
 
-        let needsProfile = !hasName;
-        if (isClientRole(candidateRole)) {
-          needsProfile = !hasName;
-        } else if (isProviderRole(candidateRole)) {
-          const { data: providerProfile } = await supabase
-            .from("provider_profiles")
-            .select("service_type, has_certifications")
-            .eq("user_id", userResult.user.id)
-            .maybeSingle();
-
-          const providerSnapshot =
-            (providerProfile as ProviderProfileSnapshot | null) ?? null;
-          const hasServiceType = Boolean(providerSnapshot?.service_type?.trim());
-          const selectedServices = parseServiceTypes(providerSnapshot?.service_type);
-          const requiresCertificationDecision = selectedServices.some((service) =>
-            CERT_RECOMMENDED_JOBS.has(service),
-          );
-          const hasCertificationDecision =
-            providerSnapshot?.has_certifications !== null &&
-            providerSnapshot?.has_certifications !== undefined;
-
-          const providerComplete =
-            hasName &&
-            hasServiceType &&
-            (!requiresCertificationDecision || hasCertificationDecision);
-          needsProfile = !providerComplete;
-        }
+        const needsProfile = !hasName || !hasCompletedTasteSetup || !isOnboardingIntent(intentSource);
 
         const needsCertificationReview = false;
 
         // Heal missing active_role if we have any role source
-        if (!profile?.active_role && candidateRole) {
+        if (!profile?.active_role && (isClientRole(candidateRole) || isProviderRole(candidateRole))) {
           await supabase
             .from("profiles")
             .upsert({

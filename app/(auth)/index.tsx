@@ -40,8 +40,8 @@ const INTRO_SLIDES = [
     darkness: 0.2,
   },
   {
-    title: 'Find help or offer your skills.',
-    subtitle: 'Post jobs, apply for work, and connect with verified residents.',
+    title: 'Find help or offer services.',
+    subtitle: 'Browse verified jobs and workers, then verify to connect.',
     source: require('../../assets/images/onboarding-intro-3-figma.jpg'),
     darkness: 0.32,
   },

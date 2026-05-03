@@ -12,7 +12,7 @@ export const nearbyJobs: JobCardProps[] = [
     budget: 'PHP 700 budget',
     description:
       'Need someone nearby to check a kitchen sink leak and replace a small connector if needed.',
-    tags: ['Plumbing', 'Near you'],
+    tags: ['Plumbing', 'Verified poster', 'Near you'],
     urgent: true,
   },
   {
@@ -23,7 +23,7 @@ export const nearbyJobs: JobCardProps[] = [
     budget: 'Rate to discuss',
     description:
       'Small family home needs general cleaning before visitors arrive. Cleaning materials are available.',
-    tags: ['Cleaning', 'Weekend'],
+    tags: ['Cleaning', 'Verified poster', 'Weekend'],
   },
 ];
 
@@ -36,6 +36,7 @@ export const nearbyWorkers: WorkerCardProps[] = [
     rating: '4.9 rating',
     completedJobs: '18 jobs done',
     tags: ['Cleaning', 'Laundry'],
+    verified: true,
   },
   {
     name: 'Luis Dela Cruz',

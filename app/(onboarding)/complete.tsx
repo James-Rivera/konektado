@@ -45,7 +45,7 @@ export default function OnboardingCompleteScreen() {
 
         <View style={styles.footer}>
           <OnboardingButton
-            label="Start Using Konektado"
+            label="Start browsing Konektado"
             onPress={() => router.replace('/(tabs)')}
             variant="yellow"
           />

@@ -21,7 +21,7 @@ import {
   RoleChoiceStack,
   type RoleChoiceOption,
 } from '@/components/onboarding/FigmaOnboarding';
-import { saveUserRole, type AppRole } from '@/utils/save-role';
+import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 import { supabase } from '@/utils/supabase';
 
 type SessionUser = {
@@ -29,16 +29,17 @@ type SessionUser = {
   id: string;
 };
 
-const roleBackgrounds: Record<AppRole | 'default', ImageSourcePropType> = {
+const roleBackgrounds: Record<OnboardingIntent | 'default', ImageSourcePropType> = {
+  both: require('../../assets/images/onboarding-role.jpg'),
   client: require('../../assets/images/onboarding-role-client-wide.jpg'),
   default: require('../../assets/images/onboarding-role.jpg'),
   provider: require('../../assets/images/onboarding-role-work-wide.jpg'),
 };
 
-const roleChoices: RoleChoiceOption<AppRole>[] = [
+const roleChoices: RoleChoiceOption<OnboardingIntent>[] = [
   {
-    bullets: ['Find jobs near your barangay', 'Show your skills and get hired', 'Get paid directly'],
-    description: 'Show my skills to people in my barangay',
+    bullets: ['Find jobs near your barangay', 'Show your services and get hired', 'Browse before verification'],
+    description: 'Show my services to people in my barangay',
     icon: 'business-center',
     selectedDescription: 'Find jobs and earn in your barangay',
     title: 'I want to find work',
@@ -51,11 +52,19 @@ const roleChoices: RoleChoiceOption<AppRole>[] = [
     title: 'I want to hire someone',
     value: 'client',
   },
+  {
+    bullets: ['Offer services and hire help', 'Keep one account for both uses', 'Switch modes later in Profile'],
+    description: 'Find work and hire nearby workers',
+    icon: 'swap-horiz',
+    selectedDescription: 'Use one account for work and hiring',
+    title: 'Both',
+    value: 'both',
+  },
 ];
 
 export default function RoleScreen() {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<AppRole | null>(null);
+  const [selectedRole, setSelectedRole] = useState<OnboardingIntent | null>(null);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -76,7 +85,7 @@ export default function RoleScreen() {
     };
   }, []);
 
-  const selectRole = (role: AppRole) => {
+  const selectRole = (role: OnboardingIntent) => {
     if (selectedRole === role) return;
 
     LayoutAnimation.configureNext({
@@ -199,9 +208,9 @@ const styles = StyleSheet.create({
   },
   cards: {
     flex: 1,
-    gap: 42,
+    gap: 12,
     justifyContent: 'center',
-    paddingVertical: 26,
+    paddingVertical: 18,
   },
   footer: {
     gap: 4,

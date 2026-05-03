@@ -25,25 +25,21 @@ export default function LocationStep() {
       return;
     }
 
-    const isProvider = role === 'provider';
+    const needsTasteSetup = role === 'provider' || role === 'client' || role === 'both';
 
     updateDraft({
       barangay: barangay.trim(),
       city: city.trim(),
       streetAddress: street,
-      ...(isProvider
-        ? {}
-        : {
-            certificationDetails: '',
-            hasCertifications: null,
-            serviceType: '',
-            verificationFiles: [],
-            verificationNote: '',
-            wantsBarangayVerification: false,
-          }),
+      certificationDetails: '',
+      hasCertifications: null,
+      serviceType: '',
+      verificationFiles: [],
+      verificationNote: '',
+      wantsBarangayVerification: false,
     });
 
-    router.push(isProvider ? '/(onboarding)/job' : '/(onboarding)/review');
+    router.push(needsTasteSetup ? '/(onboarding)/job' : '/(onboarding)/review');
   };
 
   return (

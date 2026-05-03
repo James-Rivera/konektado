@@ -21,7 +21,7 @@ It connects:
 
 The goal is to:
 
-* Help residents showcase skills
+* Help residents showcase services
 * Help clients find trusted workers
 * Build trust through barangay verification
 
@@ -30,11 +30,11 @@ The goal is to:
 ## 🧱 Core Features (MVP First)
 
 1. Authentication (login/register with roles)
-2. User Profiles (skills, experience, credentials)
+2. User Profiles (services, experience, credentials)
 3. Search & Filtering (find services)
-4. Job Posting & Applications
+4. Job Posting & Message-Based Interest
 5. Verification System (admin approval)
-6. External Communication (Messenger/SMS)
+6. In-App Messages for coordination
 7. Ratings (optional later)
 
 ---
@@ -144,7 +144,7 @@ You should:
 ## 🚫 CONSTRAINTS
 
 * No built-in payments
-* External communication only
+* No SMS/mobile OTP requirement for MVP
 * Android-first
 * Must be simple and accessible
 

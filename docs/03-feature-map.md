@@ -15,11 +15,11 @@ Status labels:
 
 | Feature | Primary Screens | Main Data Tables | Priority | Status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Registration | `app/(auth)/register.tsx` | `auth.users`, `profiles` | P0 | Existing | Current prototype uses Supabase email/password; target flow prefers phone-first entry if feasible. |
+| Registration | `app/(auth)/register.tsx` | `auth.users`, `profiles` | P0 | Existing | MVP signup uses Supabase email OTP plus password creation. Phone-first/SMS auth is deferred until provider access and device testing are practical. |
 | Login/logout | `app/(auth)/login.tsx`, profile screen | `auth.users` | P0 | Existing | Session handled by Supabase. |
-| Role selection | `app/(auth)/role.tsx` | `profiles`, `user_roles` | P0 | Existing | Client/provider roles already started. |
-| Onboarding profile | `app/(onboarding)/*` | `profiles`, `provider_profiles`, `client_profiles` | P0 | Existing | Collect personal, location, and provider data. |
-| Unverified viewer mode | Main tabs, locked action prompts | `profiles`, `verification_requests` | P0 | Planned | Users can browse after lightweight onboarding but cannot interact until verified. |
+| Role selection | `app/(auth)/role.tsx` | `profiles`, `user_roles` | P0 | Existing | Client, provider, and both-role intent are supported. Both stores client and provider role rows. |
+| Onboarding profile | `app/(onboarding)/*` | `profiles`, `provider_profiles`, `client_profiles`, `user_preferences` | P0 | Existing | Collect personal details, location, and lightweight offered/needed service preferences. Certificates are not required before viewer entry. |
+| Unverified viewer mode | Main tabs, locked action prompts | `profiles`, `verification_requests`, `user_preferences` | P0 | Partial | Users can browse verified-origin content after lightweight onboarding but cannot interact until verified. |
 | Profile view/edit | `app/(tabs)/profile.tsx` | `profiles`, `provider_profiles` | P0 | Partial | Move direct queries into `ProfileService`. |
 | Service profile | Work Profile, offer service screen, profile edit | `services`, `provider_profiles` | P0 | Planned | UI label is Services. Current `provider_profiles.service_type` can seed the first service. |
 | Credential upload | `app/(onboarding)/certifications.tsx`, verification screen | `credentials`, `verification_files`, storage bucket | P0 | Partial | Document picker exists; storage integration should be finished. |

@@ -4,9 +4,9 @@
 
 | Area | Included in MVP | Notes |
 | --- | --- | --- |
-| Authentication | Email/password login, registration, logout, session handling. | Use Supabase Auth. |
+| Authentication | Email OTP signup, email/password login, logout, session handling. | Use Supabase Auth. |
 | Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Do not force all verification details before the user understands the app. |
-| Roles | Client, provider, and barangay admin. | A user can have one or more roles, but one active role is used in the app at a time. |
+| Roles | Client, provider, both, and barangay admin. | Both-role users receive client and provider role rows, but one active role is used in the app at a time. |
 | Profiles | Basic identity, address, contact, about, availability, and verification status. | Keep private identity fields protected. |
 | Service Profiles | Provider service categories, descriptions, experience, availability, and optional rate text. | Use "Services" in the UI; avoid abstract "skills" language for low-literacy users. |
 | Credentials | Upload records for IDs, certificates, or proof of experience. | Store files in Supabase Storage and metadata in PostgreSQL. |
@@ -57,8 +57,8 @@ The thesis demo should prove the core problem and workflow, not every possible f
 Highest demo priority:
 
 1. A resident can register and complete a profile.
-2. A new user can enter the app as an unverified viewer with limited access.
-3. A user can request barangay verification with mobile/contact confirmation, optional email, ID, services, and supporting details.
+2. A new user can choose find work, hire someone, or both, select lightweight service preferences, and enter the app as an unverified viewer with limited access.
+3. A user can request barangay verification with email/contact confirmation, optional phone number, ID, services, and supporting details.
 4. A barangay admin can approve or reject verification.
 5. A verified provider can create a service profile.
 6. A verified client can post a job.

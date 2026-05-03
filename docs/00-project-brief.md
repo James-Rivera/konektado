@@ -20,7 +20,7 @@ The app should:
 
 ## Onboarding Philosophy
 
-Konektado should let new users enter the app with as little friction as possible. The preferred entry model is phone-first: users start with a mobile number/OTP-style account flow, choose an intended role, and can understand the app before completing full barangay verification.
+Konektado should let new users enter the app with as little friction as possible. For the MVP, use Supabase email OTP for signup, then let the user create a password for normal email/password login. Custom SMTP is not required; Supabase's default email sender is acceptable for MVP/demo work, but the Supabase Confirm sign up and Magic Link email templates must show `{{ .Token }}` instead of only a link, and Supabase Auth OTP length must be configured to 6 digits. Phone-first or SMS OTP entry remains a future improvement when provider access and device testing are practical.
 
 Before barangay verification, a user is treated as an unverified viewer:
 
@@ -28,7 +28,15 @@ Before barangay verification, a user is treated as an unverified viewer:
 - They may understand available jobs, workers, and services.
 - They may not post jobs, create public service posts, message users, save marketplace items, or leave reviews.
 
-The heavier information requirements belong in the verification flow, not the first entry flow. Verification should collect or confirm the user's contact details, optional email, ID documents, services, credentials, selfie/photo for manual comparison, and other barangay-required information.
+During first onboarding, users choose whether they want to find work, hire someone, or do both. They then select lightweight service preferences:
+
+- Workers answer "What services can you offer?"
+- Clients answer "What help do you need nearby?"
+- Both-role users answer both.
+
+These choices personalize the first viewer feed. They are not certificates, proof, or barangay verification data.
+
+The heavier information requirements belong in the verification flow, not the first entry flow. Verification should collect or confirm the user's contact details, email, optional phone number, ID documents, services, credentials, selfie/photo for manual comparison, and other barangay-required information.
 
 ## Target Users
 
@@ -44,7 +52,7 @@ The MVP should focus on a working, demo-ready flow:
 
 - Authentication using Supabase Auth.
 - Lightweight onboarding with unverified viewer access.
-- Role selection for client and provider use cases.
+- Role selection for client, provider, and both-role use cases.
 - User profiles with resident identity and contact details.
 - Skill/service profiles for providers.
 - Credential upload metadata for proofs, certificates, or experience files.

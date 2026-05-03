@@ -6,7 +6,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ### Slice 1 – Auth + onboarding
 
-- Supabase email/password auth wired through `useSupabaseAuth` with session gating in `app/_layout.tsx`.
+- Supabase email OTP signup plus email/password login wired through session gating in `app/_layout.tsx`.
 - Role selection screen (`client` or `provider`) stored in `profiles.role`.
 - Profile setup flow that runs immediately after selecting a role and blocks entry to tabs until completed.
 
@@ -19,7 +19,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ### Upcoming slices (planned)
 
-1. Provider skills & barangay verification (certificate uploads, admin approval).
+1. Provider services & barangay verification (certificate uploads, admin approval).
 2. Role hierarchy tooling (barangay admin vs superadmin dashboards).
 3. Job marketplace (clients post tasks, providers apply).
 

@@ -10,6 +10,7 @@ The current repository is an Expo Router + React Native + TypeScript app backed 
 - Some direct Supabase queries inside screens.
 - A legacy `job_applications` flow.
 - Starter theme tokens that do not yet match the Figma design.
+- Email OTP signup plus password login is the accepted MVP path; SMS/mobile OTP is deferred.
 
 The current product/design direction is documented in `/docs` and in the Konektado Figma file. Development should now move toward:
 
@@ -19,6 +20,7 @@ The current product/design direction is documented in `/docs` and in the Konekta
 - Basic message-based job interest.
 - Work Profile and Hiring Profile in one account.
 - Verification-gated marketplace actions.
+- Email OTP signup and email/password login for MVP.
 
 ## Recommended First Coding Slice
 
@@ -99,4 +101,3 @@ Please:
 
 Do not build the full database flow yet. The goal is to make the app match the Figma shell and prepare clean components for the next slices.
 ```
-

@@ -5,13 +5,14 @@ import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
+  Easing,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
   type ImageResizeMode,
   type ImageSourcePropType,
@@ -20,8 +21,8 @@ import {
   type TextInputProps,
   type ViewStyle
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect, Stop, SvgXml } from 'react-native-svg';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import Svg, { Circle, Defs, LinearGradient, Rect, Stop, SvgXml } from 'react-native-svg';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -89,6 +90,7 @@ type GradientImageScreenProps = {
   backgroundResizeMode?: ImageResizeMode;
   backgroundTransitionDuration?: number;
   contentStyle?: StyleProp<ViewStyle>;
+  safeAreaEdges?: Edge[];
 };
 
 type BackgroundLayer = {
@@ -106,8 +108,8 @@ export function GradientImageScreen({
   backgroundResizeMode = 'cover',
   backgroundTransitionDuration = 420,
   contentStyle,
+  safeAreaEdges = ['top', 'bottom'],
 }: GradientImageScreenProps) {
-  const { width, height } = useWindowDimensions();
   const fade = useRef(new Animated.Value(1)).current;
   const [previousLayer, setPreviousLayer] = useState<BackgroundLayer | null>(null);
   const currentLayerRef = useRef<BackgroundLayer>({
@@ -164,9 +166,9 @@ export function GradientImageScreen({
   return (
     <View style={styles.imageScreen}>
       {previousLayer ? (
-        <OnboardingBackgroundLayer height={height} layer={previousLayer} opacity={previousOpacity} width={width} />
+        <OnboardingBackgroundLayer layer={previousLayer} opacity={previousOpacity} />
       ) : null}
-      <OnboardingBackgroundLayer height={height} layer={currentLayer} opacity={fade} width={width} />
+      <OnboardingBackgroundLayer layer={currentLayer} opacity={fade} />
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: `rgba(0, 0, 0, ${darkness})` }]} />
       <Svg height="100%" pointerEvents="none" style={StyleSheet.absoluteFill} width="100%">
         <Defs>
@@ -178,7 +180,7 @@ export function GradientImageScreen({
         </Defs>
         <Rect fill="url(#onboardingBlueOverlay)" height="100%" width="100%" />
       </Svg>
-      <SafeAreaView edges={['top', 'bottom']} style={[styles.imageSafeArea, contentStyle]}>
+      <SafeAreaView edges={safeAreaEdges} style={[styles.imageSafeArea, contentStyle]}>
         {children}
       </SafeAreaView>
     </View>
@@ -186,19 +188,17 @@ export function GradientImageScreen({
 }
 
 type OnboardingBackgroundLayerProps = {
-  height: number;
   layer: BackgroundLayer;
   opacity: Animated.AnimatedInterpolation<string | number> | Animated.Value;
-  width: number;
 };
 
-function OnboardingBackgroundLayer({ height, layer, opacity, width }: OnboardingBackgroundLayerProps) {
+function OnboardingBackgroundLayer({ layer, opacity }: OnboardingBackgroundLayerProps) {
   return (
-    <Animated.View pointerEvents="none" style={[styles.backgroundFrame, { height, opacity, width }]}>
+    <Animated.View pointerEvents="none" style={[styles.backgroundFrame, { opacity }]}>
       <Animated.Image
         resizeMode={layer.resizeMode}
         source={layer.source}
-        style={[styles.backgroundLayer, { height, width }, layer.imageStyle]}
+        style={[styles.backgroundLayer, layer.imageStyle]}
       />
     </Animated.View>
   );
@@ -369,6 +369,192 @@ export function OnboardingTextInput({ style, placeholderTextColor, ...props }: T
   );
 }
 
+type OnboardingLoadingOverlayProps = {
+  visible: boolean;
+};
+
+export function OnboardingLoadingOverlay({ visible }: OnboardingLoadingOverlayProps) {
+  const spin = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!visible) {
+      spin.stopAnimation();
+      spin.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.timing(spin, {
+        duration: 900,
+        easing: Easing.linear,
+        toValue: 1,
+        useNativeDriver: true,
+      })
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [spin, visible]);
+
+  if (!visible) return null;
+
+  const rotation = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Modal
+      animationType="fade"
+      navigationBarTranslucent
+      onRequestClose={() => undefined}
+      statusBarTranslucent
+      transparent
+      visible={visible}
+    >
+      <View
+        accessibilityRole="progressbar"
+        accessibilityViewIsModal
+        pointerEvents="auto"
+        style={styles.loadingOverlay}
+      >
+        <Animated.View style={[styles.loadingIndicator, { transform: [{ rotate: rotation }] }]}>
+          <Svg height={40} viewBox="0 0 40 40" width={40}>
+            <Circle cx={20} cy={20} fill="none" r={17} stroke="#FFFFFF" strokeWidth={4} />
+            <Circle
+              cx={20}
+              cy={20}
+              fill="none"
+              r={17}
+              stroke={onboardingColors.brandYellow}
+              strokeDasharray="28 108"
+              strokeLinecap="round"
+              strokeWidth={4}
+            />
+          </Svg>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+type FloatingOnboardingInputProps = TextInputProps & {
+  containerStyle?: StyleProp<ViewStyle>;
+  label: string;
+  trailingIcon?: MaterialIconName;
+  trailingIconLabel?: string;
+  onTrailingIconPress?: () => void;
+};
+
+export function FloatingOnboardingInput({
+  containerStyle,
+  label,
+  onBlur,
+  onFocus,
+  onTrailingIconPress,
+  placeholderTextColor,
+  style,
+  trailingIcon,
+  trailingIconLabel,
+  value,
+  ...props
+}: FloatingOnboardingInputProps) {
+  const [focused, setFocused] = useState(false);
+  const textValue = typeof value === 'string' ? value : '';
+  const floatsLabel = focused || textValue.length > 0;
+  const highlighted = focused || textValue.length > 0;
+
+  return (
+    <View style={[styles.floatingInputShell, highlighted ? styles.floatingInputShellActive : undefined, containerStyle]}>
+      <View style={styles.floatingInputContent}>
+        {floatsLabel ? <Text style={styles.floatingInputLabel}>{label}</Text> : null}
+        <TextInput
+          onBlur={(event) => {
+            setFocused(false);
+            onBlur?.(event);
+          }}
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          placeholder={floatsLabel ? undefined : label}
+          placeholderTextColor={placeholderTextColor ?? onboardingColors.placeholder}
+          style={[styles.floatingInput, floatsLabel ? styles.floatingInputWithLabel : undefined, style]}
+          value={value}
+          {...props}
+        />
+      </View>
+      {trailingIcon ? (
+        <Pressable
+          accessibilityLabel={trailingIconLabel}
+          accessibilityRole={onTrailingIconPress ? 'button' : undefined}
+          hitSlop={10}
+          onPress={onTrailingIconPress}
+          style={styles.floatingInputIcon}
+        >
+          <MaterialIcons color={onboardingColors.placeholder} name={trailingIcon} size={24} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+type OtpCodeInputProps = {
+  autoFocus?: boolean;
+  disabled?: boolean;
+  onChangeText: (value: string) => void;
+  value: string;
+};
+
+export function OtpCodeInput({ autoFocus = false, disabled = false, onChangeText, value }: OtpCodeInputProps) {
+  const inputRef = useRef<TextInput>(null);
+  const digits = value.split('');
+  const activeIndex = Math.min(value.length, 5);
+
+  return (
+    <Pressable accessibilityRole="button" disabled={disabled} onPress={() => inputRef.current?.focus()} style={styles.otpPressable}>
+      <TextInput
+        ref={inputRef}
+        autoFocus={autoFocus}
+        caretHidden
+        editable={!disabled}
+        keyboardType="number-pad"
+        maxLength={6}
+        onChangeText={(nextValue) => onChangeText(nextValue.replace(/\D/g, '').slice(0, 6))}
+        style={styles.otpHiddenInput}
+        textContentType="oneTimeCode"
+        value={value}
+      />
+      <View style={styles.otpRow}>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <View key={index} style={[styles.otpBox, index === activeIndex ? styles.otpBoxActive : undefined]}>
+            <Text style={styles.otpDigit}>{digits[index] ?? ''}</Text>
+          </View>
+        ))}
+      </View>
+    </Pressable>
+  );
+}
+
+type PasswordRequirementRowProps = {
+  checked: boolean;
+  children: ReactNode;
+};
+
+export function PasswordRequirementRow({ checked, children }: PasswordRequirementRowProps) {
+  return (
+    <View style={styles.passwordRequirementRow}>
+      <View style={[styles.passwordRequirementMark, checked ? styles.passwordRequirementMarkChecked : undefined]}>
+        {checked ? <MaterialIcons color={onboardingColors.brandYellow} name="check" size={11} /> : null}
+      </View>
+      <Text style={styles.passwordRequirementText}>{children}</Text>
+    </View>
+  );
+}
+
 type ReadonlyFieldProps = {
   label: string;
   value: string;
@@ -529,14 +715,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   backgroundFrame: {
-    left: 0,
-    position: 'absolute',
-    top: 0,
+    ...StyleSheet.absoluteFillObject,
   },
   backgroundLayer: {
-    left: 0,
-    position: 'absolute',
-    top: 0,
+    ...StyleSheet.absoluteFillObject,
+    height: '100%',
+    width: '100%',
   },
   imageSafeArea: {
     flex: 1,
@@ -605,7 +789,7 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   actionButtonText: {
-    fontFamily: 'Satoshi-Bold',
+    fontFamily: 'Satoshi-Black',
     fontSize: 16,
     lineHeight: 20,
     textAlign: 'center',
@@ -715,6 +899,123 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  loadingOverlay: {
+    alignItems: 'center',
+    backgroundColor: '#D9D9D9',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  loadingIndicator: {
+    height: 40,
+    width: 40,
+  },
+  floatingInputShell: {
+    alignItems: 'center',
+    backgroundColor: onboardingColors.surface,
+    borderColor: onboardingColors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    height: 46,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: '100%',
+  },
+  floatingInputShellActive: {
+    borderColor: '#FCC03B',
+  },
+  floatingInputContent: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  floatingInputLabel: {
+    color: onboardingColors.placeholder,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  floatingInput: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 16,
+    height: 30,
+    includeFontPadding: false,
+    lineHeight: 20,
+    margin: 0,
+    padding: 0,
+  },
+  floatingInputWithLabel: {
+    height: 20,
+  },
+  floatingInputIcon: {
+    alignItems: 'center',
+    height: 30,
+    justifyContent: 'center',
+    marginLeft: 10,
+    width: 30,
+  },
+  otpPressable: {
+    width: '100%',
+  },
+  otpHiddenInput: {
+    height: 1,
+    opacity: 0,
+    position: 'absolute',
+    width: 1,
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  otpBox: {
+    alignItems: 'center',
+    backgroundColor: onboardingColors.surface,
+    borderColor: '#D5D7DA',
+    borderRadius: 10,
+    borderWidth: 1,
+    flex: 1,
+    height: 54,
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  otpBoxActive: {
+    borderColor: '#FCC03B',
+  },
+  otpDigit: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Black',
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  passwordRequirementRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  passwordRequirementMark: {
+    alignItems: 'center',
+    borderColor: '#D5D7DA',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 16,
+    justifyContent: 'center',
+    width: 16,
+  },
+  passwordRequirementMarkChecked: {
+    backgroundColor: '#F5F5EF',
+    borderColor: onboardingColors.brandYellow,
+  },
+  passwordRequirementText: {
+    color: onboardingColors.text,
+    flex: 1,
+    fontFamily: 'Satoshi-Light',
+    fontSize: 11,
+    lineHeight: 20,
   },
   readonlyField: {
     alignItems: 'center',

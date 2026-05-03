@@ -5,7 +5,7 @@
 1. User opens Konektado.
 2. App checks Supabase session.
 3. If no session exists, show login/register screens.
-4. User enters a mobile number and verifies it with an OTP-style code, or logs in with an existing account.
+4. User registers by entering an email, verifying the email OTP code, and creating a password, or logs in with email/password.
 5. App creates or loads the user's `profiles` row.
 6. If no role exists, route to role selection.
 7. App collects only the minimum onboarding details needed to orient the user.
@@ -20,18 +20,20 @@ Failure states:
 
 ## Lightweight Onboarding / Viewer Entry Flow
 
-1. User enters a mobile number and verifies it, or logs in.
-2. User selects intended role: find work, hire someone, or both if supported later.
-3. App explains that barangay verification is required before interacting with other users.
-4. App lets the user enter the main tabs in viewer mode.
-5. Viewer can browse limited jobs, workers, service posts, and educational prompts.
-6. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
-7. When the viewer taps a locked action, app routes to verification.
+1. User registers with email OTP plus password, or logs in with email/password.
+2. User selects intended role: find work, hire someone, or both.
+3. App collects lightweight taste setup data: offered services for workers, needed services for clients, or both sets for both-role users.
+4. App explains that barangay verification is required before interacting with other users.
+5. App lets the user enter the main tabs in viewer mode.
+6. Viewer can browse verified jobs, verified workers, service posts, and educational prompts.
+7. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
+8. When the viewer taps a locked action, app routes to verification.
 
 Rules:
 
 - Do not overload first-time onboarding with all profile, ID, credential, and service details.
 - The first entry experience should help users understand Konektado quickly.
+- Service preference choices personalize browsing; they are not verification proof.
 - Viewer mode is read-only for user-to-user marketplace interactions.
 - Viewer mode still requires a lightweight authenticated account; it is not anonymous public browsing.
 
@@ -42,8 +44,8 @@ Rules:
 3. App shows the requirements before starting: valid ID, clear face photo/selfie, and good lighting.
 4. App shows a contact details step with onboarding/profile data prefilled.
 5. User confirms or edits first name and last name so they match the ID.
-6. User adds an email address if it is missing.
-7. App explains that email is used for verification updates, support, account recovery, and future login support if implemented.
+6. User confirms their email address and adds or confirms a phone/contact number if required by the barangay.
+7. App explains that email is used for login, verification updates, support, and account recovery.
 8. User selects ID type.
 9. User uploads or captures required ID front and ID back.
 10. User adds intended services, work categories, or client purpose as needed.
@@ -70,8 +72,9 @@ Contact details rules:
 - Do not make the user retype fields already captured during onboarding.
 - First name and last name should be prefilled but editable.
 - The name fields should clearly say they must match the uploaded ID.
-- Email can be required for verification if the project needs reliable follow-up, but it must include a short privacy explanation.
+- Email is required for MVP login and can be reused for verification follow-up, but the verification screen must include a short privacy explanation.
 - Email should not be displayed on public profiles, job cards, service cards, or worker cards.
+- SMS/mobile OTP is not required for MVP. Add it only when an SMS provider and Android/device testing path are available.
 
 ## Service Profile Creation Flow
 

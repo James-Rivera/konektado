@@ -40,7 +40,7 @@ export default function CertificationsStep() {
         footer={<OnboardingButton label="Next" onPress={next} />}
         helper="This is optional, but TESDA or related proof can help clients trust your work."
         onBack={() => router.back()}
-        title="Certified skills">
+        title="Certified services">
         <View style={styles.toggleRow}>
           <View style={styles.toggleCopy}>
             <Text style={styles.toggleTitle}>I have certifications</Text>

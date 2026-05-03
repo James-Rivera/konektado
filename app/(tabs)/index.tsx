@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
@@ -9,9 +9,60 @@ import { SearchBar } from '@/components/SearchBar';
 import { WorkerCard } from '@/components/WorkerCard';
 import { homeFilters, nearbyJobs, nearbyWorkers } from '@/constants/demo-data';
 import { color, space, typography } from '@/constants/theme';
+import { getMyUserPreferences } from '@/services/onboarding.service';
+import type { UserPreferences } from '@/types/onboarding.types';
+
+function scoreTags(tags: string[] | undefined, preferences: UserPreferences | null) {
+  if (!preferences || !tags?.length) return 0;
+
+  const preferenceTerms = [
+    ...preferences.neededServices,
+    ...preferences.offeredServices,
+    ...preferences.customNeededServices,
+    ...preferences.customOfferedServices,
+  ].map((value) => value.toLowerCase());
+
+  return tags.reduce((score, tag) => {
+    const normalizedTag = tag.toLowerCase();
+    return preferenceTerms.some(
+      (term) => normalizedTag.includes(term) || term.includes(normalizedTag),
+    )
+      ? score + 1
+      : score;
+  }, 0);
+}
 
 export default function HomeScreen() {
   const [selectedFilter, setSelectedFilter] = useState(homeFilters[0]);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    getMyUserPreferences().then((result) => {
+      if (!active || result.error) return;
+      setPreferences(result.data);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const sortedJobs = useMemo(
+    () =>
+      [...nearbyJobs].sort(
+        (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
+      ),
+    [preferences],
+  );
+  const sortedWorkers = useMemo(
+    () =>
+      [...nearbyWorkers].sort(
+        (left, right) => scoreTags(right.tags, preferences) - scoreTags(left.tags, preferences),
+      ),
+    [preferences],
+  );
 
   return (
     <View style={styles.screen}>
@@ -27,8 +78,8 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <NoticeBanner
           actionLabel="Start verification"
-          message="Browse now. Posting, messaging, saving, and reviews unlock after barangay approval."
-          title="Verification required for marketplace actions"
+          message="Browse verified jobs and workers. Verify to post, message, and get hired."
+          title="Viewer mode"
           variant="warning"
         />
 
@@ -45,14 +96,14 @@ export default function HomeScreen() {
 
         <SectionHeader title="Nearby jobs" action="See all" />
         <View style={styles.stack}>
-          {nearbyJobs.map((job) => (
+          {sortedJobs.map((job) => (
             <JobCard key={job.title} {...job} />
           ))}
         </View>
 
         <SectionHeader title="Workers near you" action="See all" />
         <View style={styles.stack}>
-          {nearbyWorkers.map((worker) => (
+          {sortedWorkers.map((worker) => (
             <WorkerCard key={worker.name} {...worker} />
           ))}
         </View>

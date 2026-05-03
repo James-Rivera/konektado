@@ -9,7 +9,7 @@ import {
   OnboardingTextInput,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
-import { supabase } from '@/utils/supabase';
+import { signInWithEmailPassword } from '@/services/auth.service';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,20 +18,14 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const onLogin = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Please enter email and password.');
-      return;
-    }
+    if (loading) return;
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const result = await signInWithEmailPassword({ email, password });
     setLoading(false);
 
-    if (error) {
-      Alert.alert('Sign in failed', error.message);
+    if (result.error) {
+      Alert.alert('Sign in failed', result.error);
     }
   };
 
@@ -51,6 +45,7 @@ export default function LoginScreen() {
         <View style={styles.form}>
           <OnboardingTextInput
             autoCapitalize="none"
+            autoComplete="email"
             keyboardType="email-address"
             onChangeText={setEmail}
             placeholder="Email"

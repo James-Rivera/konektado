@@ -51,11 +51,19 @@ Architecture rules:
 
 Onboarding and verification rules:
 - Keep initial onboarding lightweight so users can enter the app quickly.
+- First onboarding uses role intent plus taste setup: "What services can you offer?" for workers, "What help do you need nearby?" for clients, and both sections for both-role users.
+- Store taste setup in `user_preferences`; do not treat these preferences as certificates or barangay verification data.
 - Do not require all ID, services, and credential details before the user can view the app.
-- Prefer phone-first account entry if feasible, with optional email collected during verification.
+- Use Supabase email OTP signup plus password creation for the MVP; login is email/password.
+- Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing, but the Magic Link and Confirm sign up email templates must include `{{ .Token }}` for the app's email-code flow.
+- Supabase Auth OTP length must be configured to 6 digits. The app and email template intentionally accept/display exactly six digits.
+- In app code, onboarding email OTP codes must be handled through `services/auth.service.ts`. The MVP signup path is email -> OTP -> create password: call `signInWithOtp({ email, options: { shouldCreateUser: true, data } })`, resend by calling `signInWithOtp()` again, verify with `verifyOtp({ type: 'email' })`, then save the real password with `updateUser({ password })` after Supabase creates a session.
+- Do not add SMS OTP, mobile OTP, or an SMS gateway unless explicitly requested later.
+- Phone-first account entry remains a future option when provider access and device testing are available.
+- Current auth state as of 2026-05-03, Asia/Shanghai: root cause found and fixed. Supabase Auth was configured to generate 8-digit OTP codes while the app and email template displayed and accepted 6 digits. Supabase Auth OTP length is now set to 6 digits. The UI is guarded 6-digit auto-submit.
 - Before barangay verification, users are unverified viewers.
 - Unverified viewers may browse limited public content but may not post jobs, create public service posts, message users, save if verification-gated, or leave reviews.
-- The verification flow is where heavier requirements belong: mobile/contact confirmation, optional email, ID documents, services, credentials, selfie/photo for manual barangay comparison, and supporting details.
+- The verification flow is where heavier requirements belong: contact confirmation, email confirmation, optional phone number, ID documents, services, credentials, selfie/photo for manual barangay comparison, and supporting details.
 - Barangay verification is the trust gate for marketplace interaction.
 - The main app navigation is Home, Post, Messages, Profile.
 - One account can have both Work Profile and Hiring Profile.
