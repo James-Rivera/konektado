@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { Pill } from '@/components/Pill';
 import { SearchBar } from '@/components/SearchBar';
+import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyConversations } from '@/services/conversation.service';
@@ -61,10 +62,18 @@ export default function MessagesScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Inbox</Text>
-          <Pill label={loading ? 'Loading' : `${conversations.length} conversations`} />
+          <Pill label={loading ? 'Syncing' : `${conversations.length} conversations`} />
         </View>
 
         <View style={styles.stack}>
+          {loading ? (
+            <>
+              <MessageCardSkeleton />
+              <MessageCardSkeleton />
+              <MessageCardSkeleton />
+            </>
+          ) : null}
+
           {conversations.map((conversation) => {
             const other =
               conversation.clientId === profile?.id ? conversation.provider : conversation.client;
@@ -125,6 +134,26 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+}
+
+function MessageCardSkeleton() {
+  return (
+    <View style={styles.messageCard}>
+      <Skeleton height={44} width={44} borderRadius={radius.pill} />
+      <View style={styles.messageBody}>
+        <View style={styles.messageTop}>
+          <Skeleton height={14} width="58%" />
+          <Skeleton height={11} width={42} />
+        </View>
+        <Skeleton height={12} width="48%" />
+        <Skeleton height={14} width="92%" />
+        <Skeleton height={14} width="68%" />
+        <View style={styles.messageFooter}>
+          <Skeleton height={24} width={72} borderRadius={radius.pill} />
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function formatDate(value: string) {

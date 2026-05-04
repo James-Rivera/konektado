@@ -12,15 +12,20 @@ import { SearchResultHeader } from '@/components/search/SearchResultHeader';
 import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
 import { SearchWorkerResultCard } from '@/components/search/SearchWorkerResultCard';
 import {
+  filterSearchJobItems,
   filterSearchJobs,
   filterSearchWorkers,
   getWorkerResultsHeading,
   popularServices,
+  searchJobs as demoSearchJobs,
+  type SearchJobItem,
   type SearchMode,
 } from '@/constants/search-demo-data';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
+import { searchJobs as searchOpenJobs } from '@/services/job.service';
+import type { JobSummary } from '@/types/marketplace.types';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -42,12 +47,35 @@ export default function SearchScreen() {
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
   const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [realJobItems, setRealJobItems] = useState<SearchJobItem[]>([]);
 
   useEffect(() => {
     setMode(getInitialMode(filterParam));
   }, [filterParam]);
 
-  const jobs = useMemo(() => filterSearchJobs(query, selectedService), [query, selectedService]);
+  useEffect(() => {
+    let active = true;
+
+    searchOpenJobs().then((result) => {
+      if (!active) return;
+      if (result.error || !result.data) {
+        setRealJobItems([]);
+        return;
+      }
+
+      setRealJobItems(result.data.map(mapJobToSearchItem));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const jobs = useMemo(() => {
+    if (!realJobItems.length) return filterSearchJobs(query, selectedService);
+    const mergedJobs = [...realJobItems, ...demoSearchJobs];
+    return filterSearchJobItems(mergedJobs, query, selectedService);
+  }, [query, realJobItems, selectedService]);
   const workers = useMemo(
     () => filterSearchWorkers(query, selectedService),
     [query, selectedService],
@@ -153,6 +181,43 @@ export default function SearchScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+function mapJobToSearchItem(job: JobSummary): SearchJobItem {
+  const category = job.category || 'Job';
+  const budget = job.budgetAmount ? `Budget PHP ${job.budgetAmount.toLocaleString('en-PH')}` : 'Budget to coordinate';
+  const schedule = job.scheduleText || 'Schedule to coordinate';
+  const location = job.locationText || job.barangay || 'Barangay San Pedro';
+
+  return {
+    id: job.id,
+    postedAt: formatPostedAt(job.createdAt),
+    title: job.title,
+    subtitle: `${budget} - ${schedule}`,
+    description: job.description || 'No description provided yet.',
+    tags: Array.from(new Set([category, ...job.tags, 'Open job'].filter(Boolean))),
+    clientRatingText: 'Verified client',
+    jobsPostedText: 'Posted in Konektado',
+    location,
+    schedule,
+    clientName: job.client?.fullName || 'Konektado resident',
+    category,
+    matchReason: `Open ${category.toLowerCase()} job near ${location}.`,
+  };
+}
+
+function formatPostedAt(value: string) {
+  const created = new Date(value);
+  if (Number.isNaN(created.getTime())) return 'Recently posted';
+
+  const diffMs = Date.now() - created.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (diffMinutes < 60) return diffMinutes <= 1 ? 'Posted just now' : `Posted ${diffMinutes} min ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `Posted ${diffHours} hr ago`;
+
+  return created.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 const styles = StyleSheet.create({

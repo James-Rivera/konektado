@@ -86,7 +86,7 @@ export default function VerificationGateScreen() {
         setStep('success');
       }
 
-      if (prefill.latestRequest?.status === 'rejected') {
+      if (prefill.latestRequest?.status === 'rejected' || prefill.latestRequest?.status === 'needs_more_info') {
         setRejectedReason(prefill.latestRequest.reviewerNote);
         setStep('failure');
       }
@@ -114,7 +114,7 @@ export default function VerificationGateScreen() {
           setStep('success');
         }
 
-        if (latest.status === 'rejected') {
+        if (latest.status === 'rejected' || latest.status === 'needs_more_info') {
           setRejectedReason(latest.reviewerNote);
           setStep('failure');
         }

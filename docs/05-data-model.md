@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts.
 
 ## Common Types
 
@@ -245,10 +245,17 @@ Purpose: Client-posted work opportunities.
 | `title` | `text` | Required. |
 | `description` | `text` | Required for useful matching. |
 | `category` | `text` | Optional but recommended. |
+| `service_needed` | `text` | Specific service selected under the job category. Required by current app validation before preview/publish. |
+| `tags` | `text[]` | Optional short descriptors from the Post builder, maximum 4 in app UI. |
+| `photo_urls` | `text[]` | Optional job photos uploaded from the post builder. Public job cards/details may show the first image. |
 | `barangay` | `text` | Default `San Pedro`. |
 | `location_text` | `text` | Human-readable location. |
 | `budget_amount` | `numeric` | Optional. |
+| `workers_needed` | `integer` | Optional positive worker count. |
 | `schedule_text` | `text` | Optional. |
+| `allow_messages` | `boolean` | Default `true`; controls whether verified workers can message from the post surface. |
+| `auto_reply_enabled` | `boolean` | Default `false`; stored for the Figma option but no auto-reply behavior in the verified Post slice. |
+| `auto_close_enabled` | `boolean` | Default `false`; stored for the Figma option but no automatic close worker in the verified Post slice. |
 | `status` | `job_status` | Default `open`. |
 | `accepted_provider_id` | `uuid` | Nullable reference to provider profile. |
 | `created_at` | `timestamptz` | Default `now()`. |
@@ -266,6 +273,38 @@ Important constraints:
 - Only client owner can edit own open jobs.
 - New job-interest conversations allowed only when status is `open` or `reviewing`.
 - Budget is informational only; payment is outside the app.
+- Photos, renewal behavior, auto-reply sending, and auto-close scheduling are deferred beyond the verified Post slice.
+
+## job_drafts
+
+Purpose: Private job-post drafts. These let unverified users compose a post before barangay verification without making the post public.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
+| `title` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `description` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `category` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `service_needed` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `tags` | `text[]` | Optional, maximum 4 in app UI. |
+| `photo_urls` | `text[]` | Optional uploaded photo URLs from the job builder. |
+| `barangay` | `text` | Defaults to the user's barangay or `Barangay San Pedro`. |
+| `location_text` | `text` | Human-readable location. |
+| `budget_amount` | `numeric` | Optional. |
+| `workers_needed` | `integer` | Optional positive worker count. |
+| `schedule_text` | `text` | Optional. |
+| `allow_messages` | `boolean` | Draft copy of the listing option. |
+| `auto_reply_enabled` | `boolean` | Draft copy of the listing option. |
+| `auto_close_enabled` | `boolean` | Draft copy of the listing option. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on edit. |
+
+Important constraints:
+
+- Drafts are owner-private and never appear in Home, Search, Job Detail, provider browsing, conversations, or admin queues.
+- Both verified and unverified authenticated users can create, update, read, and delete only their own drafts.
+- Publishing a draft creates a real `jobs` row only after barangay verification passes.
 
 ## conversations
 

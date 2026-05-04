@@ -44,7 +44,13 @@ type SubmissionDetails = {
   submittedNote: string | null;
 };
 
-const reviewedStatuses: VerificationStatus[] = ['approved', 'rejected', 'cancelled', 'skipped'];
+const reviewedStatuses: VerificationStatus[] = [
+  'approved',
+  'needs_more_info',
+  'rejected',
+  'cancelled',
+  'skipped',
+];
 
 export default function AdminVerificationQueueScreen() {
   const router = useRouter();
@@ -102,11 +108,11 @@ export default function AdminVerificationQueueScreen() {
   const selectedRequest =
     requests.find((request) => request.id === selectedId) ?? visibleRequests[0] ?? null;
 
-  const review = async (requestId: string, decision: 'approved' | 'rejected') => {
+  const review = async (requestId: string, decision: 'approved' | 'rejected' | 'needs_more_info') => {
     const note = notes[requestId]?.trim() ?? '';
 
-    if (decision === 'rejected' && !note) {
-      Alert.alert('Reviewer note required', 'Add a clear correction reason before rejecting this request.');
+    if (decision !== 'approved' && !note) {
+      Alert.alert('Reviewer note required', 'Add a clear correction reason before saving this review.');
       return;
     }
 
@@ -392,7 +398,7 @@ function ReviewWorkspace({
   reviewing: boolean;
   onChangeNote: (value: string) => void;
   onOpenFile: (file: VerificationFilePreview) => void;
-  onReview: (requestId: string, decision: 'approved' | 'rejected') => void;
+  onReview: (requestId: string, decision: 'approved' | 'rejected' | 'needs_more_info') => void;
 }) {
   const details = parseSubmissionDetails(request.notes);
   const canReview = request.status === 'pending';
@@ -486,9 +492,17 @@ function ReviewWorkspace({
         <View style={styles.actions}>
           <PrimaryButton
             disabled={!canReview || reviewing || !note.trim()}
+            label="Needs more info"
+            onPress={() => onReview(request.id, 'needs_more_info')}
+            variant="outline"
+            compact
+          />
+          <PrimaryButton
+            disabled={!canReview || reviewing || !note.trim()}
             label="Reject"
             onPress={() => onReview(request.id, 'rejected')}
             variant="danger"
+            compact
           />
           <PrimaryButton
             disabled={!canReview || reviewing}
@@ -496,6 +510,7 @@ function ReviewWorkspace({
             label="Approve"
             loading={reviewing}
             onPress={() => onReview(request.id, 'approved')}
+            compact
           />
         </View>
       </View>
@@ -609,7 +624,7 @@ function IconText({
 
 function StatusPill({ status }: { status: VerificationStatus }) {
   const tone = getStatusTone(status);
-  return <Pill label={status} tone={tone} />;
+  return <Pill label={formatStatusLabel(status)} tone={tone} />;
 }
 
 function parseSubmissionDetails(notes: string | null): SubmissionDetails {
@@ -703,8 +718,14 @@ function getInitials(name: string) {
 function getStatusTone(status: VerificationStatus): ComponentProps<typeof Pill>['tone'] {
   if (status === 'approved') return 'success';
   if (status === 'pending') return 'warning';
+  if (status === 'needs_more_info') return 'warning';
   if (status === 'rejected') return 'danger';
   return 'neutral';
+}
+
+function formatStatusLabel(status: VerificationStatus) {
+  if (status === 'needs_more_info') return 'Needs more info';
+  return status.replace(/_/g, ' ');
 }
 
 function getToneColor(tone: 'danger' | 'primary' | 'success' | 'warning') {

@@ -1,4 +1,4 @@
-import { demoJobs, demoWorkers } from '@/constants/marketplace-demo-data';
+import { demoJobs, demoWorkers, type DemoJobSummary } from '@/constants/marketplace-demo-data';
 
 export const searchModeLabels = {
   jobs: 'Find Jobs',
@@ -12,7 +12,7 @@ export type PopularService = {
   label: string;
 };
 
-export type SearchJobItem = (typeof demoJobs)[number];
+export type SearchJobItem = DemoJobSummary;
 export type SearchWorkerItem = (typeof demoWorkers)[number];
 
 export const popularServices: PopularService[] = [
@@ -61,10 +61,18 @@ function includesAllTerms(haystack: string, terms: string[]) {
 }
 
 export function filterSearchJobs(query: string, selectedService?: string | null) {
-  const terms = getTerms(query, selectedService);
-  if (!terms.length) return searchJobs;
+  return filterSearchJobItems(searchJobs, query, selectedService);
+}
 
-  return searchJobs.filter((job) =>
+export function filterSearchJobItems(
+  sourceJobs: SearchJobItem[],
+  query: string,
+  selectedService?: string | null,
+) {
+  const terms = getTerms(query, selectedService);
+  if (!terms.length) return sourceJobs;
+
+  return sourceJobs.filter((job) =>
     includesAllTerms(
       [
         job.title,

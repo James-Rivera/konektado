@@ -42,21 +42,41 @@ export function HomeSearchBar({ onPress }: { onPress: () => void }) {
 }
 
 export function HomeSetupChecklist({
+  status,
+  note,
   onDismiss,
   onVerify,
   onAddServices,
   onAddPhoto,
 }: {
+  status: 'none' | 'pending' | 'rejected' | 'needs_more_info' | 'approved';
+  note: string | null;
   onDismiss: () => void;
   onVerify: () => void;
   onAddServices: () => void;
   onAddPhoto: () => void;
 }) {
+  const title =
+    status === 'pending'
+      ? 'Verification pending'
+      : status === 'rejected' || status === 'needs_more_info'
+        ? 'Verification needs updates'
+        : 'Finish your Konektado setup';
+
+  const body =
+    status === 'pending'
+      ? 'Your barangay verification has been submitted and is currently being reviewed.'
+      : status === 'rejected' || status === 'needs_more_info'
+        ? note ?? 'Your barangay verification was reviewed and needs updates before you can publish.'
+        : 'Verify your account to unlock posting, messaging, saving, and reviews.';
+
+  const primaryLabel = status === 'none' ? 'Verify yourself' : 'View status';
+
   return (
     <View style={styles.bannerBand}>
       <View style={styles.bannerCard}>
         <View style={styles.bannerHeader}>
-          <Text style={styles.bannerTitle}>Finish your Konektado setup</Text>
+          <Text style={styles.bannerTitle}>{title}</Text>
           <Pressable
             accessibilityLabel="Dismiss setup card"
             accessibilityRole="button"
@@ -65,11 +85,9 @@ export function HomeSetupChecklist({
             <Text style={styles.bannerDismissText}>×</Text>
           </Pressable>
         </View>
-        <Text style={styles.bannerBody}>
-          Verify your account to unlock posting, messaging, saving, and reviews.
-        </Text>
+        <Text style={styles.bannerBody}>{body}</Text>
         <View style={styles.bannerActions}>
-          <BannerPill label="Verify yourself" onPress={onVerify} selected />
+          <BannerPill label={primaryLabel} onPress={onVerify} selected />
           <BannerPill label="Add services" onPress={onAddServices} />
           <BannerPill label="Add photo" onPress={onAddPhoto} />
         </View>

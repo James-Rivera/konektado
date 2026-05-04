@@ -23,6 +23,7 @@ import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { getMyVerificationPrefill } from '@/services/verification.service';
 import type { UserPreferences } from '@/types/onboarding.types';
 
 function getDefaultFilter(preferences: UserPreferences | null): HomeFilter {
@@ -38,6 +39,10 @@ export default function HomeScreen() {
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
+  const [verificationStatus, setVerificationStatus] = useState<
+    'none' | 'pending' | 'rejected' | 'needs_more_info' | 'approved'
+  >('none');
+  const [verificationNote, setVerificationNote] = useState<string | null>(null);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
@@ -57,7 +62,39 @@ export default function HomeScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    getMyVerificationPrefill().then((result) => {
+      if (!active || result.error || !result.data) return;
+
+      const latest = result.data.latestRequest;
+      if (!latest) {
+        setVerificationStatus('none');
+        setVerificationNote(null);
+        return;
+      }
+
+      if (
+        latest.status === 'pending' ||
+        latest.status === 'approved' ||
+        latest.status === 'rejected' ||
+        latest.status === 'needs_more_info'
+      ) {
+        setVerificationStatus(latest.status);
+      } else {
+        setVerificationStatus('none');
+      }
+      setVerificationNote(latest.reviewerNote ?? null);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isVerified]);
+
   const feed = useMemo(() => getHomeFeed(selectedFilter), [selectedFilter]);
+  const showSetupBanner = !isVerified && verificationStatus !== 'approved' && !bannerDismissed;
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -145,8 +182,10 @@ export default function HomeScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}>
-          {!isVerified && !bannerDismissed ? (
+          {showSetupBanner ? (
             <HomeSetupChecklist
+              status={verificationStatus}
+              note={verificationNote}
               onAddPhoto={() => showPlaceholder('Add photo')}
               onAddServices={() => showPlaceholder('Add services')}
               onDismiss={() => setBannerDismissed(true)}
@@ -156,7 +195,7 @@ export default function HomeScreen() {
           <HomeSectionHeader onFilterPress={() => showPlaceholder('Filters')} />
           <View style={styles.feed}>
             {feed.map((feedItem) => (
-            <FeedCard
+              <FeedCard
                 key={feedItem.key}
                 feedItem={feedItem}
                 isVerified={isVerified}

@@ -1,10 +1,11 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import { findDemoJobById } from '@/constants/marketplace-demo-data';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -67,6 +68,60 @@ export default function JobDetailScreen() {
     Alert.alert(label, 'This will open from Job Details in a later slice.');
   };
 
+  if (loading && !job && !demoJob) {
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+        <View style={styles.screen}>
+          <View style={styles.header}>
+            <Skeleton height={28} width={28} borderRadius={14} />
+            <Skeleton height={20} width={112} />
+            <Skeleton height={28} width={28} borderRadius={14} />
+          </View>
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <View style={styles.section}>
+              <View style={styles.jobTitleRow}>
+                <Skeleton height={22} width="68%" />
+                <Skeleton height={14} width={52} />
+              </View>
+              <Skeleton height={12} width={92} style={{ marginTop: space.sm }} />
+              <View style={styles.metaStack}>
+                <Skeleton height={14} width="70%" />
+                <Skeleton height={14} width="56%" />
+                <Skeleton height={14} width="42%" />
+              </View>
+            </View>
+            <View style={styles.section}>
+              <Skeleton height={16} width={124} />
+              <View style={styles.statusRow}>
+                <Skeleton height={28} width={88} borderRadius={radius.pill} />
+                <Skeleton height={20} width={132} />
+              </View>
+            </View>
+            <View style={styles.section}>
+              <Skeleton height={16} width={116} />
+              <SkeletonText lines={4} lastLineWidth="64%" />
+            </View>
+            <View style={styles.section}>
+              <Skeleton height={16} width={76} />
+              <View style={styles.posterCard}>
+                <View style={styles.posterRow}>
+                  <View style={styles.posterInfo}>
+                    <SkeletonCircle size={44} />
+                    <View style={styles.posterCopy}>
+                      <Skeleton height={14} width="70%" />
+                      <Skeleton height={12} width="48%" />
+                    </View>
+                  </View>
+                  <Skeleton height={25} width={82} borderRadius={radius.pill} />
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!job && !demoJob) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -91,8 +146,8 @@ export default function JobDetailScreen() {
 
           <View style={styles.emptyWrap}>
             <EmptyState
-              title={loading ? 'Loading job' : 'Job not found'}
-              description={loading ? 'Loading current job details.' : 'This job is no longer available.'}
+              title="Job not found"
+              description="This job is no longer available."
               icon="search-off"
               actionLabel="Go back"
               onActionPress={() => router.back()}
@@ -108,8 +163,9 @@ export default function JobDetailScreen() {
   const postedAgo = `Posted ${postedAt}`;
 
   const jobStatus = demoJob ? 'open' : job?.status ?? 'open';
-  const workersNeeded = 2;
+  const workersNeeded = demoJob ? 2 : job?.workersNeeded ?? 1;
   const acceptedCount = demoJob ? 0 : job?.acceptedProviderId ? 1 : 0;
+  const jobImageUrl = demoJob?.imageUrl ?? job?.photoUrls?.[0] ?? null;
 
   const handleMessage = () => {
     if (!isVerified) {
@@ -204,6 +260,7 @@ export default function JobDetailScreen() {
                 <MetaRow icon="local-offer" text={formatBudget(job.budgetAmount)} tint="primary" />
               ) : null}
             </View>
+            {jobImageUrl ? <Image resizeMode="cover" source={{ uri: jobImageUrl }} style={styles.jobPhoto} /> : null}
           </View>
 
           <View style={styles.section}>
@@ -226,6 +283,13 @@ export default function JobDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>What you will do</Text>
             <Text style={styles.bodyText}>{demoJob?.description ?? job?.description ?? 'No description provided yet.'}</Text>
+            {!demoJob && job?.tags.length ? (
+              <View style={styles.tagRow}>
+                {job.tags.map((tag) => (
+                  <BadgePill key={tag} label={tag} />
+                ))}
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.section}>
@@ -422,6 +486,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     color: color.primary,
   },
+  jobPhoto: {
+    backgroundColor: color.cardTint,
+    borderRadius: radius.lg,
+    height: 188,
+    marginTop: space.md,
+    overflow: 'hidden',
+    width: '100%',
+  },
   statusRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -464,6 +536,12 @@ const styles = StyleSheet.create({
   bodyText: {
     ...typography.body,
     color: color.textMuted,
+    marginTop: space.md,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
     marginTop: space.md,
   },
   posterCard: {

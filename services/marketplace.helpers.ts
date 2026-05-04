@@ -1,8 +1,8 @@
 import type { ServiceResult } from '@/services/auth.service';
 import type {
-  JobSummary,
-  ProviderService,
-  PublicProfileSummary,
+    JobSummary,
+    ProviderService,
+    PublicProfileSummary,
 } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -27,14 +27,21 @@ export type JobRow = {
   title: string;
   description: string | null;
   category: string | null;
+  service_needed: string | null;
+  tags?: string[] | null;
+  photo_urls: string[] | null;
   barangay: string | null;
   location: string | null;
   location_text: string | null;
   budget: number | null;
   budget_amount: number | null;
+  workers_needed: number | null;
   schedule_text: string | null;
   status: JobSummary['status'];
   accepted_provider_id: string | null;
+  allow_messages: boolean | null;
+  auto_reply_enabled: boolean | null;
+  auto_close_enabled: boolean | null;
   created_at: string;
   updated_at: string;
   closed_at?: string | null;
@@ -156,12 +163,19 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     title: row.title,
     description: row.description,
     category: row.category,
+    serviceNeeded: row.service_needed ?? null,
+    tags: row.tags ?? [],
+    photoUrls: row.photo_urls ?? [],
     barangay: row.barangay,
     locationText: row.location_text ?? row.location,
     budgetAmount: row.budget_amount ?? row.budget,
+    workersNeeded: row.workers_needed ?? null,
     scheduleText: row.schedule_text,
     status: row.status,
     acceptedProviderId: row.accepted_provider_id,
+    allowMessages: row.allow_messages ?? true,
+    autoReplyEnabled: row.auto_reply_enabled ?? false,
+    autoCloseEnabled: row.auto_close_enabled ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     client: profiles.get(clientId) ?? null,

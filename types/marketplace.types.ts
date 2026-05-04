@@ -28,12 +28,19 @@ export type JobSummary = {
   title: string;
   description: string | null;
   category: string | null;
+  serviceNeeded: string | null;
+  tags: string[];
+  photoUrls: string[];
   barangay: string | null;
   locationText: string | null;
   budgetAmount: number | null;
+  workersNeeded: number | null;
   scheduleText: string | null;
   status: JobStatus;
   acceptedProviderId: string | null;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoCloseEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   client: PublicProfileSummary | null;
@@ -47,10 +54,55 @@ export type CreateJobInput = {
   title: string;
   description: string;
   category?: string | null;
+  serviceNeeded: string | null;
+  tags?: string[];
+  photoUrls?: string[];
   barangay?: string | null;
   locationText?: string | null;
   budgetAmount?: number | null;
+  workersNeeded?: number | null;
   scheduleText?: string | null;
+  allowMessages?: boolean;
+  autoReplyEnabled?: boolean;
+  autoCloseEnabled?: boolean;
+};
+
+export type JobDraftSummary = {
+  id: string;
+  userId: string;
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  serviceNeeded: string | null;
+  tags: string[];
+  photoUrls: string[];
+  barangay: string | null;
+  locationText: string | null;
+  budgetAmount: number | null;
+  workersNeeded: number | null;
+  scheduleText: string | null;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoCloseEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpsertJobDraftInput = {
+  title?: string | null;
+  description?: string | null;
+  category?: string | null;
+  serviceNeeded?: string | null;
+  tags?: string[];
+  photoUrls?: string[];
+  barangay?: string | null;
+  locationText?: string | null;
+  budgetAmount?: number | null;
+  workersNeeded?: number | null;
+  scheduleText?: string | null;
+  allowMessages?: boolean;
+  autoReplyEnabled?: boolean;
+  autoCloseEnabled?: boolean;
 };
 
 export type JobSearchFilters = {

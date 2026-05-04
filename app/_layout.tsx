@@ -85,8 +85,10 @@ export default function RootLayout() {
         "admin",
         "conversation",
         "create-job",
+        "create-job-preview",
         "create-service",
         "job",
+        "post",
         "verification",
         "worker",
       ].includes(String(activeGroup));
@@ -117,8 +119,11 @@ export default function RootLayout() {
           <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
           <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />
           <Stack.Screen name="create-job" options={{ headerShown: false }} />
+          <Stack.Screen name="create-job-preview" options={{ headerShown: false }} />
           <Stack.Screen name="create-service" options={{ headerShown: false }} />
           <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
+          <Stack.Screen name="post/active" options={{ headerShown: false }} />
+          <Stack.Screen name="post/renew" options={{ headerShown: false }} />
           <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
           <Stack.Screen name="verification" options={{ headerShown: false }} />
           <Stack.Screen

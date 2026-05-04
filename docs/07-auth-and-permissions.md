@@ -29,6 +29,7 @@ Required behavior:
 - Do not require SMS OTP, mobile OTP, or an SMS gateway for the MVP.
 - Phone-first authentication can be revisited later when provider access and Android/device testing are available.
 - Email is used for login, verification updates, support, and account recovery.
+- Barangay verification email updates are custom transactional emails sent from backend code, not Supabase Auth templates. Keep them separate from the OTP auth templates.
 - App stores sessions through Supabase's React Native auth storage.
 - Screens must use an auth/session hook or service, not direct auth logic in every screen.
 - App data must be protected with PostgreSQL Row Level Security.
@@ -66,6 +67,7 @@ Home default filter rules:
 Unverified viewers can:
 
 - Browse limited public jobs, workers, and service posts.
+- Create and edit private job drafts.
 - Read educational prompts about verification and safe marketplace use.
 - View their own profile and verification status.
 - Submit or resubmit a verification request.
@@ -73,7 +75,7 @@ Unverified viewers can:
 
 Unverified viewers cannot:
 
-- Post jobs.
+- Publish jobs.
 - Create public service profiles or service posts.
 - Message users.
 - Leave reviews.
@@ -111,6 +113,7 @@ These role permissions apply after the user's barangay verification is approved.
 | `credentials`           | Owner and admin can read. Public cannot read private files.                                                                                    | Provider owner only.                             | Provider owner can update metadata. Admin can update review status.                                | Owner can delete unused credentials. Admin can hide for moderation.          |
 | `verification_requests` | Owner and admin can read.                                                                                                                      | Owner can create own request.                    | Admin approves/rejects. Owner can cancel pending request.                                          | Avoid hard delete; use status.                                               |
 | `jobs`                  | Open jobs are readable by authenticated viewers. Owner can read own jobs. Admin can read for moderation.                                       | Verified client owner only.                      | Verified job owner can edit own open job. Admin can moderate.                                      | Prefer status `cancelled` or `closed`; hard delete owner/admin only if safe. |
+| `job_drafts`            | Owner can read own drafts only.                                                                                                                | Authenticated owner, verified or unverified.     | Owner can update own drafts.                                                                       | Owner can delete own drafts.                                                |
 | `conversations`         | Participants can read their own conversations. Job owner can read conversations tied to own jobs. Admin can read for moderation when reported. | Verified user only.                              | Participants can archive/decline where allowed. Job owner can mark hired.                          | Prefer status changes.                                                       |
 | `messages`              | Conversation participants only. Admin can read only for moderation/report workflows.                                                           | Verified sender only.                            | Avoid editing messages in MVP.                                                                     | Prefer archive/report over hard delete.                                      |
 | `reviews`               | Public can read approved public reviews.                                                                                                       | Verified job participants only after completion. | Reviewer can edit own review if allowed. Admin can hide/moderate reported reviews.                 | Avoid hard delete; admin moderation preferred.                               |

@@ -97,22 +97,30 @@ Rules:
 
 ## Job Posting Flow
 
-1. Client opens Post or Create Job screen.
-2. Client enters title, description, category, location, budget, and schedule text.
-3. App validates title, description, and location.
-4. `JobService.createJob` saves the job with status `open`.
-5. Job appears in Home, job search, post dashboard, and provider browsing.
-6. Client can edit the job while it is open.
-7. Client can close or cancel the job.
+1. Client opens Post.
+2. Client taps Create a post and chooses "I need help" from the Figma post-type sheet.
+3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, location, optional context tags, budget, workers needed, schedule text, and listing options.
+4. App validates Job Category, Service Needed, title, description, location, and numeric optional fields.
+5. App saves a private `job_drafts` row before showing Preview.
+6. App shows the Figma Preview screen with safety reminders.
+7. If the client is not barangay-verified and taps Publish, the app shows the Figma barangay verification gate with Start Verification and Keep Editing Draft actions.
+8. If the client is barangay-verified and taps Publish, `JobService.createJob` saves the job with status `open` and deletes the draft.
+9. Job appears in Home, job search, post dashboard, active posts, and provider browsing.
+10. Client can open the created job detail after publishing.
 
 Rules:
 
 - This is the next vertical implementation slice after verification completion.
-- Unverified users opening Post must still be routed to verification.
+- Unverified users can create and edit private drafts, but they cannot publish public jobs.
+- Unverified users are routed to verification only when they try to publish or choose Start Verification from the gate.
 - Approved users must be able to create a real job without relogging if profile refresh has received the approval state.
 - Payments and job agreements happen outside the app.
 - Jobs should be clear enough for providers to decide whether to message.
 - Closed or cancelled jobs should not accept new interested workers.
+- Service-post builder and preview designs are reference-only for the verified job posting slice.
+- Job photos can be selected, uploaded to storage, and shown in preview and job detail. Renewal rules, auto-reply behavior, ranking, hiring, reviews, and advanced search remain out of this slice.
+- Post UI should avoid Apply/Application wording; workers show interest through Messages.
+- Service Needed is structured data saved separately from category. Tags remain short context/condition descriptors, not service names.
 
 ## Job Interest and Messaging Flow
 

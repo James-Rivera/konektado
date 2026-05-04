@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import { supabase } from "@/utils/supabase";
@@ -35,49 +35,58 @@ export function useProfile() {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const { data: userResult, error: userError } =
-      await supabase.auth.getUser();
-
-    if (userError || !userResult.user) {
-      setProfile(null);
-      setLoading(false);
-      setError(userError?.message ?? "Not signed in");
-      return;
+    if (!hasLoadedOnceRef.current) {
+      setLoading(true);
     }
+    setError(null);
 
-    const { data, error: profileError } = await supabase
-      .from("profiles")
-      .select(
-        "id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at, barangay_verified_at",
-      )
-      .eq("id", userResult.user.id)
-      .maybeSingle();
+    try {
+      const { data: userResult, error: userError } =
+        await supabase.auth.getUser();
 
-    if (profileError) {
-      setProfile(null);
-      setError(profileError.message);
-    } else {
-      const base = data as ProfileRecord;
-      const { data: providerData } = await supabase
-        .from("provider_profiles")
-        .select("service_type, has_certifications, certification_status")
-        .eq("user_id", userResult.user.id)
+      if (userError || !userResult.user) {
+        setProfile(null);
+        setError(userError?.message ?? "Not signed in");
+        return;
+      }
+
+      const { data, error: profileError } = await supabase
+        .from("profiles")
+        .select(
+          "id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at, barangay_verified_at",
+        )
+        .eq("id", userResult.user.id)
         .maybeSingle();
 
-      const providerProfile =
-        (providerData as ProviderProfileRecord | null) ?? null;
-      setProfile({
-        ...base,
-        service_type: providerProfile?.service_type ?? null,
-        has_certifications: providerProfile?.has_certifications ?? null,
-        certification_status: providerProfile?.certification_status ?? null,
-      });
+      if (profileError) {
+        setProfile(null);
+        setError(profileError.message);
+      } else {
+        const base = data as ProfileRecord;
+        const { data: providerData } = await supabase
+          .from("provider_profiles")
+          .select("service_type, has_certifications, certification_status")
+          .eq("user_id", userResult.user.id)
+          .maybeSingle();
+
+        const providerProfile =
+          (providerData as ProviderProfileRecord | null) ?? null;
+        setProfile({
+          ...base,
+          service_type: providerProfile?.service_type ?? null,
+          has_certifications: providerProfile?.has_certifications ?? null,
+          certification_status: providerProfile?.certification_status ?? null,
+        });
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load profile");
+    } finally {
+      hasLoadedOnceRef.current = true;
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

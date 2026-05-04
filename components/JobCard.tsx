@@ -13,6 +13,7 @@ export type JobCardProps = {
   jobsPostedText: string;
   location: string;
   imageUrl?: string;
+  showSaveButton?: boolean;
   showActionRow?: boolean;
   onPress?: () => void;
   onViewJob?: () => void;
@@ -30,6 +31,7 @@ export function JobCard({
   jobsPostedText,
   location,
   imageUrl,
+  showSaveButton = true,
   showActionRow = false,
   onPress,
   onViewJob,
@@ -49,7 +51,7 @@ export function JobCard({
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
-          <IconButton icon="bookmark-border" label="Save job" onPress={onSave} />
+          {showSaveButton ? <IconButton icon="bookmark-border" label="Save job" onPress={onSave} /> : null}
         </View>
       </View>
 
@@ -249,18 +251,23 @@ const styles = StyleSheet.create({
   metaRow: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
+    rowGap: 6,
     minHeight: 18,
   },
   metaItem: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 4,
-    maxWidth: 136,
+    flexShrink: 1,
+    minWidth: 0,
   },
   metaText: {
     ...typography.caption,
     color: color.textSubtle,
+    flexShrink: 1,
+    minWidth: 0,
   },
   footerRow: {
     alignItems: 'center',

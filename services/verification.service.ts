@@ -9,6 +9,7 @@ import type {
   VerificationStatus,
   VerificationSummary,
 } from '@/types/verification.types';
+import { sendVerificationSubmittedEmail } from '@/services/verification-email.service';
 import { supabase } from '@/utils/supabase';
 
 const VERIFICATION_BUCKET = 'verification-files';
@@ -344,6 +345,11 @@ export async function createVerificationRequest(
   if (fileError) {
     return { data: null, error: fileError.message };
   }
+
+  void sendVerificationSubmittedEmail({
+    requestId: verification.id,
+    ctaUrl: 'konektado://verification',
+  });
 
   return {
     data: {

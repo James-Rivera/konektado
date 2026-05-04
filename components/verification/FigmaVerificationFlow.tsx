@@ -6,6 +6,7 @@ import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
+import { Skeleton } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
 import type { VerificationUpload } from '@/types/onboarding.types';
 import type { CreateVerificationRequestInput, VerificationIdType } from '@/types/verification.types';
@@ -527,9 +528,13 @@ function DetailsScreen({
       />
       <View style={styles.formBlock}>
         {loading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={color.verificationBlue} size="small" />
-            <Text style={styles.loadingText}>Loading your details...</Text>
+          <View style={styles.prefillSkeleton}>
+            <Skeleton height={14} width={88} />
+            <Skeleton height={46} width="100%" borderRadius={12} />
+            <Skeleton height={14} width={84} />
+            <Skeleton height={46} width="100%" borderRadius={12} />
+            <Skeleton height={14} width={112} />
+            <Skeleton height={46} width="100%" borderRadius={12} />
           </View>
         ) : (
           <>
@@ -1298,17 +1303,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  loadingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 16,
-  },
-  loadingText: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 18,
+  prefillSkeleton: {
+    gap: 12,
   },
   codeScreen: {
     paddingHorizontal: 18,

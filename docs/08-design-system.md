@@ -178,6 +178,96 @@ Rules:
 - Use concise copy.
 - Avoid long forms inside small modals.
 
+### Bottom Sheet
+
+Location: `components/BottomSheet.tsx`
+
+A reusable bottom sheet component with smooth, independent animations:
+- Backdrop fades in (500ms)
+- Sheet slides up from the bottom (700ms)
+- Both animations use cubic easing for natural feel
+
+Usage:
+
+- Multi-option selection (like "Choose post type")
+- Filters or quick actions
+- Secondary menus or modals
+
+Props:
+
+- `visible` (boolean): Show/hide the sheet
+- `onClose` (function): Callback when backdrop is tapped
+- `children` (ReactNode): Sheet content
+- `maxHeight` (string, optional): Max height percentage (default: '82%')
+
+Example:
+
+```tsx
+const [isOpen, setIsOpen] = useState(false);
+
+<BottomSheet visible={isOpen} onClose={() => setIsOpen(false)}>
+  <Text style={styles.title}>Choose an option</Text>
+  {/* Your sheet content */}
+</BottomSheet>
+```
+
+Rules:
+
+- Always include a close affordance (backdrop tap, close button, or clear action)
+- Keep content lightweight—avoid heavy forms or long scrolls
+- Safe area padding is handled automatically
+- Content should be self-contained within the sheet; screen below remains visible
+
+### Skeleton
+
+Location: `components/Skeleton.tsx`
+
+Animated placeholder components for loading states. More performant and better UX than spinners—no layout shift, better perceived performance.
+
+Components:
+
+**Skeleton**
+- Basic rectangular placeholder with pulse animation
+- Props: `height`, `width`, `borderRadius`, `animated`
+
+**SkeletonCircle**
+- Circular placeholder for avatars/icons
+- Props: `size`, `style`
+
+**SkeletonText**
+- Multiple stacked lines mimicking paragraph text
+- Props: `lines`, `gap`, `lineHeight`, `lastLineWidth`
+
+**SkeletonCard**
+- Full card placeholder with avatar, text lines, and metadata
+- Props: `style`
+
+Usage:
+
+```tsx
+// Simple placeholder
+<Skeleton height={16} width="80%" />
+
+// Avatar
+<SkeletonCircle size={44} />
+
+// Paragraph
+<SkeletonText lines={3} />
+
+// Complex layout
+<View>
+  <Skeleton height={44} width={44} borderRadius={22} />
+  <Skeleton height={14} width="70%" style={{ marginTop: 8 }} />
+</View>
+```
+
+Rules:
+
+- Always match the actual content layout—use skeleton shapes that mirror the real UI
+- Disable animation (`animated={false}`) for very fast loads (< 300ms)
+- Use for any async data loading: feeds, details, forms
+- Avoid overly complex skeletons; keep them lightweight
+
 ### Bottom Navigation
 
 Tabs:

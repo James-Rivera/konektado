@@ -5,6 +5,11 @@ import {
   mapProfile,
   type ProfileRow,
 } from '@/services/marketplace.helpers';
+import {
+  sendVerificationApprovedEmail,
+  sendVerificationNeedsInfoEmail,
+  sendVerificationRejectedEmail,
+} from '@/services/verification-email.service';
 import type { PublicProfileSummary } from '@/types/marketplace.types';
 import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
@@ -132,7 +137,7 @@ export async function reviewVerificationRequest({
   note,
 }: {
   requestId: string;
-  decision: 'approved' | 'rejected';
+  decision: 'approved' | 'rejected' | 'needs_more_info';
   note?: string;
 }): Promise<ServiceResult<VerificationRequestDetail>> {
   const admin = await requireAdmin();
@@ -140,8 +145,8 @@ export async function reviewVerificationRequest({
 
   const reviewerNote = note?.trim() || null;
 
-  if (decision === 'rejected' && !reviewerNote) {
-    return { data: null, error: 'Enter a reviewer note before rejecting this request.' };
+  if (decision !== 'approved' && !reviewerNote) {
+    return { data: null, error: 'Enter a reviewer note before saving this review.' };
   }
 
   const { data: userData } = await supabase.auth.getUser();
@@ -183,6 +188,24 @@ export async function reviewVerificationRequest({
   }
 
   const [mapped] = await mapVerificationRows([data]);
+
+  if (decision === 'approved') {
+    void sendVerificationApprovedEmail({
+      ctaUrl: 'konektado://verification',
+      requestId: data.id,
+    });
+  } else if (decision === 'needs_more_info') {
+    void sendVerificationNeedsInfoEmail({
+      ctaUrl: 'konektado://verification',
+      requestId: data.id,
+    });
+  } else {
+    void sendVerificationRejectedEmail({
+      ctaUrl: 'konektado://verification',
+      requestId: data.id,
+    });
+  }
+
   return { data: mapped, error: null };
 }
 

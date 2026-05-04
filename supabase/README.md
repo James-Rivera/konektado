@@ -28,6 +28,7 @@ The migrations create the current app baseline:
 - `verifications`
 - `verification_files`
 - `jobs`
+- `job_drafts`
 - `services`
 - `conversations`
 - `messages`
@@ -36,6 +37,25 @@ The migrations create the current app baseline:
 - Storage bucket `verification-files`
 
 The current onboarding flow writes to these tables immediately after the user creates a password and picks a role.
+The Post flow also uses `jobs.tags`, `jobs.workers_needed`, `jobs.allow_messages`, `jobs.auto_reply_enabled`, `jobs.auto_close_enabled`, and the private `job_drafts` table for draft persistence before publish.
+
+## Verification Emails
+
+The barangay verification workflow uses a custom Supabase Edge Function at `functions/verification-email/` to send transactional emails for:
+
+- verification submitted
+- verification approved
+- more information needed
+- verification rejected
+
+These emails are separate from the Supabase Auth OTP templates. Keep the OTP templates in `email-templates/` for login/signup codes, and keep the verification email HTML files in the edge function folder.
+
+The function can send through either:
+
+- a webhook relay configured in `VERIFICATION_EMAIL_WEBHOOK_URL`, or
+- SMTP credentials configured in `VERIFICATION_EMAIL_SMTP_HOST`, `VERIFICATION_EMAIL_SMTP_PORT`, `VERIFICATION_EMAIL_SMTP_USER`, `VERIFICATION_EMAIL_SMTP_PASS`, `VERIFICATION_EMAIL_FROM_EMAIL`, and `VERIFICATION_EMAIL_FROM_NAME`
+
+If your auth emails already use a provider relay, mirror the same provider settings here so verification updates stay on the same sender path.
 
 ## Demo Seed
 

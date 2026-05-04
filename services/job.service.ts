@@ -1,23 +1,23 @@
 import type { ServiceResult } from '@/services/auth.service';
 import {
-  compactText,
-  getCurrentUserId,
-  loadPublicProfiles,
-  mapJob,
-  type JobRow,
-  requireVerifiedUser,
+    compactText,
+    getCurrentUserId,
+    loadPublicProfiles,
+    mapJob,
+    requireVerifiedUser,
+    type JobRow,
 } from '@/services/marketplace.helpers';
 import type {
-  CreateJobInput,
-  JobDetail,
-  JobSearchFilters,
-  JobStatus,
-  JobSummary,
+    CreateJobInput,
+    JobDetail,
+    JobSearchFilters,
+    JobStatus,
+    JobSummary,
 } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, barangay, location, location_text, budget, budget_amount, schedule_text, status, accepted_provider_id, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, workers_needed, schedule_text, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 function formatSupabaseError(message: string) {
   if (message.toLowerCase().includes('row-level security')) {
@@ -35,6 +35,11 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
 
   const title = compactText(input.title);
   const description = compactText(input.description);
+  const category = compactText(input.category);
+  const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
+  const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
+  const workersNeeded = input.workersNeeded ?? null;
+  const serviceNeeded = compactText(input.serviceNeeded) || null;
 
   if (!title) {
     return { data: null, error: 'Enter a job title.' };
@@ -44,6 +49,18 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
     return { data: null, error: 'Describe the work so nearby workers know what to expect.' };
   }
 
+  if (!category) {
+    return { data: null, error: 'Choose a job category.' };
+  }
+
+  if (!serviceNeeded) {
+    return { data: null, error: 'Choose the service needed.' };
+  }
+
+  if (workersNeeded !== null && (!Number.isFinite(workersNeeded) || workersNeeded < 1)) {
+    return { data: null, error: 'Workers needed must be at least 1.' };
+  }
+
   const { data, error } = await supabase
     .from('jobs')
     .insert({
@@ -51,13 +68,20 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
       client_id: userId,
       title,
       description,
-      category: compactText(input.category) || null,
+      category,
+      service_needed: serviceNeeded,
+      tags,
+      photo_urls: photoUrls,
       barangay: compactText(input.barangay) || 'Barangay San Pedro',
       location: compactText(input.locationText) || null,
       location_text: compactText(input.locationText) || null,
       budget: input.budgetAmount ?? null,
       budget_amount: input.budgetAmount ?? null,
+      workers_needed: workersNeeded,
       schedule_text: compactText(input.scheduleText) || null,
+      allow_messages: input.allowMessages ?? true,
+      auto_reply_enabled: input.autoReplyEnabled ?? false,
+      auto_close_enabled: input.autoCloseEnabled ?? false,
       status: 'open',
     })
     .select(JOB_COLUMNS)
@@ -116,7 +140,7 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   const text = compactText(filters.text).toLowerCase();
   const rows = ((data as JobRow[] | null) ?? []).filter((row) => {
     if (!text) return true;
-    return [row.title, row.description, row.category, row.barangay, row.location_text, row.location]
+    return [row.title, row.description, row.category, row.service_needed, row.barangay, row.location_text, row.location]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });

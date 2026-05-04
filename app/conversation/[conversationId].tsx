@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Pill } from '@/components/Pill';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -109,7 +110,7 @@ export default function ConversationDetailScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.messages} showsVerticalScrollIndicator={false}>
-          {loading ? <Text style={styles.emptyText}>Loading conversation...</Text> : null}
+          {loading ? <ConversationSkeleton /> : null}
           {!loading && !conversation?.messages.length ? (
             <Text style={styles.emptyText}>No messages yet.</Text>
           ) : null}
@@ -148,6 +149,25 @@ export default function ConversationDetailScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function ConversationSkeleton() {
+  return (
+    <>
+      <View style={[styles.messageBubble, styles.theirMessage, styles.skeletonBubble]}>
+        <Skeleton height={14} width="85%" />
+        <Skeleton height={10} width={52} style={{ marginTop: space.sm }} />
+      </View>
+      <View style={[styles.messageBubble, styles.myMessage, styles.skeletonBubble]}>
+        <Skeleton height={14} width="75%" />
+        <Skeleton height={10} width={46} style={{ marginTop: space.sm }} />
+      </View>
+      <View style={[styles.messageBubble, styles.theirMessage, styles.skeletonBubble]}>
+        <Skeleton height={14} width="92%" />
+        <Skeleton height={10} width={52} style={{ marginTop: space.sm }} />
+      </View>
+    </>
   );
 }
 
@@ -232,6 +252,11 @@ const styles = StyleSheet.create({
   myMessageTime: {
     color: color.background,
     opacity: 0.72,
+  },
+  skeletonBubble: {
+    gap: space.xs,
+    minHeight: 68,
+    width: '76%',
   },
   hireBar: {
     backgroundColor: color.background,

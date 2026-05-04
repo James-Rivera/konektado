@@ -1,6 +1,12 @@
 import type { VerificationUpload } from '@/types/onboarding.types';
 
-export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'skipped';
+export type VerificationStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'needs_more_info'
+  | 'cancelled'
+  | 'skipped';
 export type VerificationIdType =
   | 'barangay_certificate'
   | 'national_id'
