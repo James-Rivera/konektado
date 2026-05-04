@@ -117,9 +117,16 @@ export type ProviderService = {
   category: string;
   title: string;
   description: string | null;
+  tags: string[];
+  photoUrls: string[];
   yearsExperience: number | null;
   availabilityText: string | null;
   rateText: string | null;
+  barangay: string | null;
+  locationText: string | null;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoPauseEnabled: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -135,9 +142,16 @@ export type CreateServiceInput = {
   category: string;
   title: string;
   description?: string | null;
+  tags?: string[];
+  photoUrls?: string[];
   yearsExperience?: number | null;
   availabilityText?: string | null;
   rateText?: string | null;
+  barangay?: string | null;
+  locationText?: string | null;
+  allowMessages?: boolean;
+  autoReplyEnabled?: boolean;
+  autoPauseEnabled?: boolean;
 };
 
 export type ConversationMessage = {

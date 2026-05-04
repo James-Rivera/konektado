@@ -55,7 +55,12 @@ The function can send through either:
 - a webhook relay configured in `VERIFICATION_EMAIL_WEBHOOK_URL`, or
 - SMTP credentials configured in `VERIFICATION_EMAIL_SMTP_HOST`, `VERIFICATION_EMAIL_SMTP_PORT`, `VERIFICATION_EMAIL_SMTP_USER`, `VERIFICATION_EMAIL_SMTP_PASS`, `VERIFICATION_EMAIL_FROM_EMAIL`, and `VERIFICATION_EMAIL_FROM_NAME`
 
-If your auth emails already use a provider relay, mirror the same provider settings here so verification updates stay on the same sender path.
+Preferred setup now that the project owns `konektado.app`:
+
+- use a domain-backed transactional relay/API path for verification emails
+- keep SMTP only as fallback or temporary local unblock
+
+Supabase Auth OTP emails remain separate from this edge-function workflow. If you want a unified sender identity, align both systems on the same `konektado.app` branding/domain, but do not merge the implementation paths.
 
 See [docs/13-verification-email-setup.md](../docs/13-verification-email-setup.md) for deploy and test steps.
 

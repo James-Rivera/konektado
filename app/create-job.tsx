@@ -16,7 +16,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
+import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { Skeleton } from '@/components/Skeleton';
 import {
   getContextTagsForCategory,
@@ -88,7 +90,7 @@ function validateDraft(draft: JobDraft) {
   if (!draft.description.trim()) {
     errors.description = 'Describe what needs to be done.';
   }
-  if (!draft.locationText.trim()) errors.locationText = 'Confirm the job location.';
+  if (!draft.locationText.trim()) errors.locationText = 'Choose a barangay.';
 
   const budget = parsePositiveNumber(draft.budget);
   if (Number.isNaN(budget)) errors.budget = 'Enter a valid budget or leave it blank.';
@@ -156,7 +158,6 @@ export default function CreateJobScreen() {
   const { profile, loading } = useProfile();
   const profileId = profile?.id ?? null;
   const profileBarangay = profile?.barangay ?? null;
-  const profileCity = profile?.city ?? null;
   const displayName = getDisplayName(profile);
   const [errors, setErrors] = useState<JobDraftErrors>({});
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
@@ -165,6 +166,7 @@ export default function CreateJobScreen() {
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
+  const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
   const [photoFolderId] = useState(() => `draft-${Date.now()}`);
   const [draft, setDraft] = useState<JobDraft>({
     title: '',
@@ -219,13 +221,12 @@ export default function CreateJobScreen() {
     if (!profileId) return;
 
     const barangay = profileBarangay || 'Barangay San Pedro';
-    const locationText = [profileBarangay, profileCity].filter(Boolean).join(', ') || barangay;
     setDraft((current) => ({
       ...current,
       barangay: current.barangay || barangay,
-      locationText: current.locationText || locationText,
+      locationText: current.locationText || barangay,
     }));
-  }, [profileId, profileBarangay, profileCity]);
+  }, [profileId, profileBarangay]);
 
   const selectedTagsText = useMemo(() => draft.tags.join(', '), [draft.tags]);
   const tagOptions = useMemo(() => getContextTagsForCategory(draft.category), [draft.category]);
@@ -566,27 +567,30 @@ export default function CreateJobScreen() {
           <View style={styles.sectionBand}>
             <View style={styles.rowBetween}>
               <View style={styles.flex}>
-                <Text style={styles.sectionTitle}>Location</Text>
+                <Text style={styles.sectionTitle}>Barangay</Text>
                 <Text style={styles.smallHelper}>Only your barangay will be shown publicly.</Text>
               </View>
-              <Pressable accessibilityRole="button" onPress={() => setErrors((current) => ({ ...current, locationText: undefined }))}>
-                <Text style={styles.editLink}>Edit</Text>
-              </Pressable>
             </View>
-            <FormInput
-              error={errors.locationText}
-              onChangeText={(value) => updateDraft('locationText', value)}
-              placeholder="Barangay / city / nearby landmark"
-              value={draft.locationText}
-            />
-            <View style={styles.mapPlaceholder}>
-              <Image
-                accessibilityLabel="Barangay San Pedro map preview"
-                resizeMode="cover"
-                source={require('../assets/images/job-map-santo-tomas.png')}
-                style={styles.mapImage}
-              />
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setBarangayPickerVisible(true)}
+              style={({ pressed }) => [
+                styles.selectBox,
+                errors.locationText && styles.selectBoxError,
+                pressed && styles.pressed,
+              ]}>
+              <Text
+                style={[
+                  styles.selectText,
+                  !draft.locationText && styles.placeholderText,
+                ]}
+                numberOfLines={1}>
+                {draft.locationText || 'Choose barangay'}
+              </Text>
+              <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+            </Pressable>
+            <FieldError message={errors.locationText} />
+            <LocationMapPreview />
           </View>
 
           <View style={styles.sectionBand}>
@@ -635,6 +639,22 @@ export default function CreateJobScreen() {
         selectedValue={draft.serviceNeeded}
         title="Service needed"
         visible={servicePickerVisible}
+      />
+      <BarangayPickerSheet
+        description="Only your barangay is shown publicly."
+        onClose={() => setBarangayPickerVisible(false)}
+        onSelect={(value) =>
+          setDraft((current) => ({
+            ...current,
+            barangay: value,
+            locationText: value,
+          }))
+        }
+        options={['Barangay San Pedro']}
+        searchPlaceholder="Search barangay"
+        selectedValue={draft.locationText}
+        title="Choose barangay"
+        visible={barangayPickerVisible}
       />
     </SafeAreaView>
   );
@@ -1022,6 +1042,9 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: space.md,
   },
+  selectBoxError: {
+    borderColor: color.danger,
+  },
   selectBoxDisabled: {
     backgroundColor: '#F8FAFC',
     borderColor: color.border,
@@ -1131,10 +1154,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     minHeight: 154,
-  },
-  mapImage: {
-    height: 154,
-    width: '100%',
   },
   toggleRow: {
     alignItems: 'center',

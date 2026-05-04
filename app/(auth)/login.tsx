@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
-  AuthShell,
-  OnboardingButton,
-  OnboardingTextInput,
-  onboardingColors,
+    AuthShell,
+    OnboardingButton,
+    OnboardingTextInput,
+    onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 import { signInWithEmailPassword } from '@/services/auth.service';
 
@@ -15,6 +15,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const onLogin = async () => {
@@ -52,13 +53,25 @@ export default function LoginScreen() {
             textContentType="emailAddress"
             value={email}
           />
-          <OnboardingTextInput
-            onChangeText={setPassword}
-            placeholder="Password"
-            secureTextEntry
-            textContentType="password"
-            value={password}
-          />
+          <View style={styles.passwordField}>
+            <OnboardingTextInput
+              onChangeText={setPassword}
+              placeholder="Password"
+              secureTextEntry={!passwordVisible}
+              style={styles.passwordInput}
+              textContentType="password"
+              value={password}
+            />
+            <Pressable
+              accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => setPasswordVisible((visible) => !visible)}
+              style={styles.passwordToggle}
+            >
+              <Text style={styles.passwordToggleText}>{passwordVisible ? 'Hide' : 'Show'}</Text>
+            </Pressable>
+          </View>
           <Pressable
             accessibilityRole="button"
             onPress={() => Alert.alert('Password reset', 'Password reset is not configured yet.')}
@@ -76,6 +89,26 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   form: {
     gap: 10,
+  },
+  passwordField: {
+    position: 'relative',
+  },
+  passwordInput: {
+    paddingRight: 68,
+  },
+  passwordToggle: {
+    alignItems: 'center',
+    height: 46,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 12,
+    top: 0,
+  },
+  passwordToggleText: {
+    color: '#3A90F8',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 20,
   },
   forgotLink: {
     alignSelf: 'flex-start',

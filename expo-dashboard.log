@@ -1,9 +1,0 @@
-
-> mvp@1.0.0 start
-> expo start --host lan
-
-env: load .env
-env: export EXPO_PUBLIC_SUPABASE_KEY EXPO_PUBLIC_SUPABASE_URL
-Starting project at C:\konektado
-› Port 8081 is being used by another process
-› Skipping dev server

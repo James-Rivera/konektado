@@ -53,9 +53,16 @@ export type ServiceRow = {
   category: string;
   title: string;
   description: string | null;
+  tags?: string[] | null;
+  photo_urls?: string[] | null;
   years_experience: number | null;
   availability_text: string | null;
   rate_text: string | null;
+  barangay?: string | null;
+  location_text?: string | null;
+  allow_messages?: boolean | null;
+  auto_reply_enabled?: boolean | null;
+  auto_pause_enabled?: boolean | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -189,9 +196,16 @@ export function mapService(row: ServiceRow): ProviderService {
     category: row.category,
     title: row.title,
     description: row.description,
+    tags: row.tags ?? [],
+    photoUrls: row.photo_urls ?? [],
     yearsExperience: row.years_experience,
     availabilityText: row.availability_text,
     rateText: row.rate_text,
+    barangay: row.barangay ?? null,
+    locationText: row.location_text ?? row.barangay ?? null,
+    allowMessages: row.allow_messages ?? true,
+    autoReplyEnabled: row.auto_reply_enabled ?? false,
+    autoPauseEnabled: row.auto_pause_enabled ?? false,
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

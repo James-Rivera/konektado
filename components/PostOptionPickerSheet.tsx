@@ -95,32 +95,36 @@ export function PostOptionPickerSheet({
 
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>All categories</Text>
-        <MaterialIcons color={color.text} name="keyboard-arrow-up" size={22} />
       </View>
+      <Text style={styles.listHint}>Scroll to see more services.</Text>
 
-      <ScrollView
-        contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        {filteredOptions.map((option, index) => {
-          const active = option === selectedValue;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              key={option}
-              onPress={() => selectOption(option)}
-              style={({ pressed }) => [
-                styles.optionRow,
-                index === 0 && styles.optionRowTop,
-                pressed && styles.pressed,
-              ]}>
-              <Text style={[styles.optionText, active && styles.optionTextActive]}>{option}</Text>
-            </Pressable>
-          );
-        })}
-        {!filteredOptions.length ? <Text style={styles.emptyText}>No matches found.</Text> : null}
-      </ScrollView>
+      <View style={styles.listShell}>
+        <ScrollView
+          style={styles.listScroll}
+          contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator>
+          {filteredOptions.map((option, index) => {
+            const active = option === selectedValue;
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                key={option}
+                onPress={() => selectOption(option)}
+                style={({ pressed }) => [
+                  styles.optionRow,
+                  index === 0 && styles.optionRowTop,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.optionText, active && styles.optionTextActive]}>{option}</Text>
+              </Pressable>
+            );
+          })}
+          {!filteredOptions.length ? <Text style={styles.emptyText}>No matches found.</Text> : null}
+        </ScrollView>
+        <View pointerEvents="none" style={styles.listFade} />
+      </View>
     </BottomSheet>
   );
 }
@@ -198,12 +202,29 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
   },
   listHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    minHeight: 22,
+  },
+  listHint: {
+    ...typography.caption,
+    color: color.textMuted,
+    marginTop: -10,
+  },
+  listShell: {
+    position: 'relative',
+  },
+  listScroll: {
+    maxHeight: 170,
   },
   listContent: {
-    paddingBottom: space.xl,
+    paddingBottom: space.xl + 18,
+  },
+  listFade: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    bottom: 0,
+    height: 28,
+    left: 0,
+    position: 'absolute',
+    right: 0,
   },
   optionRow: {
     borderBottomColor: '#F6F6FB',

@@ -15,7 +15,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const SERVICE_COLUMNS =
-  'id, provider_id, category, title, description, years_experience, availability_text, rate_text, is_active, created_at, updated_at';
+  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 
 export async function createService(
   input: CreateServiceInput,
@@ -25,6 +25,7 @@ export async function createService(
 
   const category = compactText(input.category);
   const title = compactText(input.title);
+  const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
 
   if (!category || !title) {
     return { data: null, error: 'Enter a service category and title.' };
@@ -37,9 +38,16 @@ export async function createService(
       category,
       title,
       description: compactText(input.description) || null,
+      tags,
+      photo_urls: input.photoUrls ?? [],
       years_experience: input.yearsExperience ?? null,
       availability_text: compactText(input.availabilityText) || null,
       rate_text: compactText(input.rateText) || null,
+      barangay: compactText(input.barangay) || null,
+      location_text: compactText(input.locationText) || compactText(input.barangay) || null,
+      allow_messages: input.allowMessages ?? true,
+      auto_reply_enabled: input.autoReplyEnabled ?? false,
+      auto_pause_enabled: input.autoPauseEnabled ?? false,
       is_active: true,
     })
     .select(SERVICE_COLUMNS)
@@ -90,7 +98,7 @@ export async function searchServices(filters: { text?: string } = {}): Promise<
   const text = compactText(filters.text).toLowerCase();
   const rows = ((data as ServiceRow[] | null) ?? []).filter((row) => {
     if (!text) return true;
-    return [row.title, row.description, row.category, row.availability_text, row.rate_text]
+    return [row.title, row.description, row.category, row.availability_text, row.rate_text, ...(row.tags ?? [])]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });

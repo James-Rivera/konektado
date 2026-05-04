@@ -31,11 +31,367 @@ type RequestBody = {
   template?: VerificationEmailTemplateName | null;
 };
 
+const EMAIL_LAYOUT_TEMPLATE = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{Subject}}</title>
+    <style>
+      @media screen and (max-width: 480px) {
+        .email-shell {
+          width: 100% !important;
+        }
+
+        .email-padding {
+          padding-left: 28px !important;
+          padding-right: 28px !important;
+        }
+
+        .body-title {
+          font-size: 22px !important;
+          line-height: 30px !important;
+        }
+
+        .button {
+          width: 100% !important;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .logo-light {
+          display: none !important;
+        }
+
+        .logo-dark {
+          display: block !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background: #ffffff">
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        color: transparent;
+        line-height: 1px;
+        mso-hide: all;
+      "
+    >
+      {{Preheader}}
+    </div>
+
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="background: #ffffff; border-collapse: collapse; font-family: Satoshi, Arial, Helvetica, sans-serif"
+    >
+      <tr>
+        <td style="height: 8px; background: #f2e640; font-size: 0; line-height: 0">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center">
+          <table
+            class="email-shell"
+            role="presentation"
+            width="680"
+            cellspacing="0"
+            cellpadding="0"
+            border="0"
+            style="width: 680px; max-width: 100%; border-collapse: collapse; background: #ffffff"
+          >
+            <tr>
+              <td class="email-padding" style="padding: 54px 48px 40px">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td align="center" style="padding-bottom: 42px">
+                      <img
+                        class="logo-light"
+                        alt="Konektado"
+                        src="https://dudlohdeydcbsvgccexd.supabase.co/storage/v1/object/public/brand/konektado-logo.png"
+                        width="228"
+                        style="display: block; width: 228px; max-width: 100%; height: auto; border: 0"
+                      />
+                      <img
+                        class="logo-dark"
+                        alt="Konektado"
+                        src="https://dudlohdeydcbsvgccexd.supabase.co/storage/v1/object/public/brand/konektado-logo-light.png"
+                        width="228"
+                        style="display: none; width: 228px; max-width: 100%; height: auto; border: 0"
+                      />
+                      <div
+                        style="
+                          padding-top: 4px;
+                          font-size: 12px;
+                          line-height: 16px;
+                          color: #333333;
+                          font-weight: 400;
+                        "
+                      >
+                        Kapitbahay. Kabuhayan. Konektado.
+                      </div>
+                    </td>
+                  </tr>
+
+                  {{Content}}
+
+                  <tr>
+                    <td style="padding-top: 32px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse">
+                        <tr>
+                          <td align="center">
+                            <a
+                              class="button"
+                              href="{{CTA URL}}"
+                              style="
+                                display: inline-block;
+                                min-width: 212px;
+                                padding: 14px 24px;
+                                background: #0d99ff;
+                                border-radius: 6px;
+                                color: #ffffff;
+                                font-size: 14px;
+                                line-height: 20px;
+                                font-weight: 700;
+                                text-decoration: none;
+                                text-align: center;
+                              "
+                            >
+                              {{CTA Label}}
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding-top: 28px">
+                      <p
+                        style="
+                          margin: 0;
+                          padding: 0;
+                          font-size: 12px;
+                          line-height: 19px;
+                          color: #54606a;
+                        "
+                      >
+                        {{Footer}}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+const CONTENT_TEMPLATES: Record<VerificationEmailTemplateName, string> = {
+  verification_approved: `<tr>
+  <td>
+    <h1
+      class="body-title"
+      style="margin: 0; padding: 0; font-size: 24px; line-height: 32px; font-weight: 800; color: #000000"
+    >
+      Barangay verification approved
+    </h1>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      Hi {{Name}}, your verification for {{Barangay}} was approved on {{Approved Date}}.
+    </p>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="border-collapse: collapse; background: #eef5ff; border: 1px solid #d9e2ec; border-left: 4px solid #3b82f6; border-radius: 10px"
+    >
+      <tr>
+        <td style="padding: 16px 18px">
+          <div style="font-size: 11px; line-height: 14px; letter-spacing: 0.06em; color: #54606a; font-weight: 700; text-transform: uppercase">
+            Status
+          </div>
+          <div style="padding-top: 4px; font-size: 16px; line-height: 22px; font-weight: 800; color: #10241b">
+            {{Status}}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 20px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      You can now post, message, save, and review from a verified account.
+    </p>
+  </td>
+</tr>`,
+  verification_needs_more_info: `<tr>
+  <td>
+    <h1
+      class="body-title"
+      style="margin: 0; padding: 0; font-size: 24px; line-height: 32px; font-weight: 800; color: #000000"
+    >
+      More information needed
+    </h1>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      Hi {{Name}}, the barangay review team needs a little more information for your verification request in {{Barangay}}.
+    </p>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="border-collapse: collapse; background: #fff7ed; border: 1px solid #fed7aa; border-left: 4px solid #f59e0b; border-radius: 10px"
+    >
+      <tr>
+        <td style="padding: 16px 18px">
+          <div style="font-size: 11px; line-height: 14px; letter-spacing: 0.06em; color: #7c2d12; font-weight: 700; text-transform: uppercase">
+            Admin reason
+          </div>
+          <div style="padding-top: 4px; font-size: 14px; line-height: 22px; font-weight: 600; color: #333333">
+            {{Admin Reason}}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 20px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      Review the request and add the details the barangay asked for. Your uploaded documents stay private.
+    </p>
+  </td>
+</tr>`,
+  verification_rejected: `<tr>
+  <td>
+    <h1
+      class="body-title"
+      style="margin: 0; padding: 0; font-size: 24px; line-height: 32px; font-weight: 800; color: #000000"
+    >
+      Barangay verification could not be approved
+    </h1>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      Hi {{Name}}, after review, your verification request for {{Barangay}} could not be approved.
+    </p>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="border-collapse: collapse; background: #fff1f2; border: 1px solid #fecdd3; border-left: 4px solid #ef4444; border-radius: 10px"
+    >
+      <tr>
+        <td style="padding: 16px 18px">
+          <div style="font-size: 11px; line-height: 14px; letter-spacing: 0.06em; color: #9f1239; font-weight: 700; text-transform: uppercase">
+            Admin reason
+          </div>
+          <div style="padding-top: 4px; font-size: 14px; line-height: 22px; font-weight: 600; color: #333333">
+            {{Admin Reason}}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 20px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      You can review the reason, update your details, and submit another request when you're ready. Uploaded documents remain private.
+    </p>
+  </td>
+</tr>`,
+  verification_submitted: `<tr>
+  <td>
+    <h1
+      class="body-title"
+      style="margin: 0; padding: 0; font-size: 24px; line-height: 32px; font-weight: 800; color: #000000"
+    >
+      Barangay verification submitted
+    </h1>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      Hi {{Name}}, we received your verification request for {{Barangay}} on {{Submitted Date}}.
+    </p>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 22px">
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="border-collapse: collapse; background: #f8fafc; border: 1px solid #d9e2ec; border-left: 4px solid #f2e640; border-radius: 10px"
+    >
+      <tr>
+        <td style="padding: 16px 18px">
+          <div style="font-size: 11px; line-height: 14px; letter-spacing: 0.06em; color: #54606a; font-weight: 700; text-transform: uppercase">
+            Status
+          </div>
+          <div style="padding-top: 4px; font-size: 16px; line-height: 22px; font-weight: 800; color: #10241b">
+            {{Status}}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td style="padding-top: 20px">
+    <p style="margin: 0; padding: 0; font-size: 14px; line-height: 22px; color: #333333">
+      Your documents stay private while the barangay reviews your request. We will update you as soon as the review is complete.
+    </p>
+  </td>
+</tr>`,
+};
+
 const TEMPLATE_META: Record<
   VerificationEmailTemplateName,
   {
     ctaLabel: string;
-    contentFile: string;
     subject: string;
     preheader: string;
     statusLabel: string;
@@ -43,28 +399,24 @@ const TEMPLATE_META: Record<
 > = {
   verification_approved: {
     ctaLabel: 'View status',
-    contentFile: 'verification-approved-content.html',
     subject: 'Barangay verification approved',
     preheader: 'Your barangay verification has been approved.',
     statusLabel: 'Approved',
   },
   verification_needs_more_info: {
     ctaLabel: 'Review details',
-    contentFile: 'verification-needs-more-info-content.html',
     subject: 'More information needed',
     preheader: 'Your barangay verification needs a few more details.',
     statusLabel: 'More information needed',
   },
   verification_rejected: {
     ctaLabel: 'Review details',
-    contentFile: 'verification-rejected-content.html',
     subject: 'Barangay verification could not be approved',
     preheader: 'Your barangay verification was reviewed and could not be approved.',
     statusLabel: 'Could not be approved',
   },
   verification_submitted: {
     ctaLabel: 'View status',
-    contentFile: 'verification-submitted-content.html',
     subject: 'Barangay verification submitted',
     preheader: 'We received your barangay verification request.',
     statusLabel: 'Submitted',
@@ -148,10 +500,6 @@ function renderTemplate(layout: string, content: string, values: Record<string, 
     },
     { rawTokens: new Set(['Content']) },
   );
-}
-
-async function loadTemplate(fileName: string) {
-  return Deno.readTextFile(new URL(`./templates/${fileName}`, import.meta.url));
 }
 
 async function sendEmail({
@@ -295,8 +643,8 @@ async function sendVerificationTemplate(
   ctaUrl = DEFAULT_CTA_URL,
 ) {
   const meta = TEMPLATE_META[template];
-  const layout = await loadTemplate('layout.html');
-  const content = await loadTemplate(meta.contentFile);
+  const layout = EMAIL_LAYOUT_TEMPLATE;
+  const content = CONTENT_TEMPLATES[template];
   const context = await loadVerificationContext(requestId);
 
   const html = renderTemplate(layout, content, buildEmailValues(template, context, ctaUrl));
