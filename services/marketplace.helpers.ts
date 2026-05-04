@@ -1,8 +1,11 @@
 import type { ServiceResult } from '@/services/auth.service';
+import type { JobCardProps } from '@/components/JobCard';
+import type { WorkerCardProps } from '@/components/WorkerCard';
 import type {
     JobSummary,
     ProviderService,
     PublicProfileSummary,
+    ServiceSearchResult,
 } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -209,5 +212,103 @@ export function mapService(row: ServiceRow): ProviderService {
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+export function getMarketplaceLocation({
+  locationText,
+  barangay,
+}: {
+  locationText?: string | null;
+  barangay?: string | null;
+}) {
+  return compactText(locationText) || compactText(barangay) || 'Barangay San Pedro';
+}
+
+export function formatRelativeMarketplaceDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Posted recently';
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) return 'Posted just now';
+  if (diffMinutes < 60) return `Posted ${diffMinutes} min ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `Posted ${diffHours} hr ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `Posted ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+
+  return `Posted ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+export function formatJobSubtitle(job: JobSummary) {
+  const budget = job.budgetAmount
+    ? `Budget PHP ${job.budgetAmount.toLocaleString('en-PH')}`
+    : 'Budget to coordinate';
+  const schedule = compactText(job.scheduleText) || 'Schedule to coordinate';
+
+  return `${budget} · ${schedule}`;
+}
+
+export function formatServiceRatingText(service: ServiceSearchResult) {
+  if (service.averageRating && service.reviewCount > 0) {
+    return `${service.averageRating.toFixed(1)} rating`;
+  }
+
+  return 'New worker';
+}
+
+export function formatServiceJobsDoneText(service: ServiceSearchResult, completedJobsCount = 0) {
+  if (completedJobsCount > 0) {
+    return `${completedJobsCount} job${completedJobsCount === 1 ? '' : 's'} done`;
+  }
+
+  if (service.reviewCount > 0) {
+    return `${service.reviewCount} review${service.reviewCount === 1 ? '' : 's'}`;
+  }
+
+  return 'Jobs done pending';
+}
+
+export function adaptJobToCardProps(job: JobSummary): JobCardProps {
+  const category = compactText(job.category) || 'Job';
+  const serviceNeeded = compactText(job.serviceNeeded);
+
+  return {
+    postedAt: formatRelativeMarketplaceDate(job.createdAt),
+    title: job.title,
+    subtitle: formatJobSubtitle(job),
+    description: job.description || 'No description provided yet.',
+    tags: Array.from(new Set([category, serviceNeeded, ...job.tags].filter(Boolean))),
+    clientRatingText: job.client?.barangayVerifiedAt || job.client?.verifiedAt ? 'Verified client' : 'Client',
+    jobsPostedText: 'Posted in Konektado',
+    location: getMarketplaceLocation(job),
+    imageUrl: job.photoUrls[0],
+    showActionRow: false,
+  };
+}
+
+export function adaptServiceToCardProps(
+  service: ServiceSearchResult,
+): WorkerCardProps {
+  const providerName = compactText(service.provider?.fullName) || 'Konektado resident';
+  const category = compactText(service.category) || 'Service';
+  const availability = compactText(service.availabilityText);
+
+  return {
+    name: providerName,
+    statusLine: availability
+      ? `${availability} near your barangay`
+      : 'Available near your barangay',
+    rateLine: compactText(service.rateText) || 'Rate to coordinate',
+    headline: service.description || service.title,
+    tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
+    ratingText: formatServiceRatingText(service),
+    jobsDoneText: formatServiceJobsDoneText(service, service.completedJobsCount),
+    location: getMarketplaceLocation(service),
+    imageUrl: service.photoUrls[0],
   };
 }

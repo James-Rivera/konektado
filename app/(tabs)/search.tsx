@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,21 +12,27 @@ import { SearchJobResultCard } from '@/components/search/SearchJobResultCard';
 import { SearchResultHeader } from '@/components/search/SearchResultHeader';
 import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
 import { SearchWorkerResultCard } from '@/components/search/SearchWorkerResultCard';
+import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
 import {
-  filterSearchJobItems,
-  filterSearchJobs,
-  filterSearchWorkers,
   getWorkerResultsHeading,
   popularServices,
-  searchJobs as demoSearchJobs,
   type SearchJobItem,
+  type SearchWorkerItem,
   type SearchMode,
 } from '@/constants/search-demo-data';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
+import {
+  formatJobSubtitle,
+  formatRelativeMarketplaceDate,
+  formatServiceJobsDoneText,
+  formatServiceRatingText,
+  getMarketplaceLocation,
+} from '@/services/marketplace.helpers';
 import { searchJobs as searchOpenJobs } from '@/services/job.service';
-import type { JobSummary } from '@/types/marketplace.types';
+import { searchServices } from '@/services/service-profile.service';
+import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -39,6 +46,7 @@ function getInitialMode(filterParam: string | undefined): SearchMode {
 
 export default function SearchScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const topInset = useSafeTopInset();
   const { profile } = useProfile();
   const params = useLocalSearchParams<{ filter?: string | string[] }>();
@@ -47,7 +55,9 @@ export default function SearchScreen() {
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
   const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [realJobItems, setRealJobItems] = useState<SearchJobItem[]>([]);
+  const [jobs, setJobs] = useState<SearchJobItem[]>([]);
+  const [workers, setWorkers] = useState<SearchWorkerItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setMode(getInitialMode(filterParam));
@@ -56,30 +66,30 @@ export default function SearchScreen() {
   useEffect(() => {
     let active = true;
 
-    searchOpenJobs().then((result) => {
-      if (!active) return;
-      if (result.error || !result.data) {
-        setRealJobItems([]);
-        return;
-      }
+    if (!isFocused) {
+      return () => {
+        active = false;
+      };
+    }
 
-      setRealJobItems(result.data.map(mapJobToSearchItem));
-    });
+    setLoading(true);
+
+    const text = Array.from(new Set([query.trim(), selectedService?.trim()].filter(Boolean))).join(' ');
+
+    Promise.all([searchOpenJobs({ text }), searchServices({ text })]).then(
+      ([jobsResult, servicesResult]) => {
+        if (!active) return;
+
+        setJobs((jobsResult.data ?? []).map(mapJobToSearchItem));
+        setWorkers((servicesResult.data ?? []).map(mapServiceToSearchItem));
+        setLoading(false);
+      },
+    );
 
     return () => {
       active = false;
     };
-  }, []);
-
-  const jobs = useMemo(() => {
-    if (!realJobItems.length) return filterSearchJobs(query, selectedService);
-    const mergedJobs = [...realJobItems, ...demoSearchJobs];
-    return filterSearchJobItems(mergedJobs, query, selectedService);
-  }, [query, realJobItems, selectedService]);
-  const workers = useMemo(
-    () => filterSearchWorkers(query, selectedService),
-    [query, selectedService],
-  );
+  }, [isFocused, query, selectedService]);
 
   const resultHeading =
     mode === 'jobs' ? 'Jobs near you' : getWorkerResultsHeading(query, selectedService);
@@ -133,7 +143,19 @@ export default function SearchScreen() {
           <SearchResultHeader title={resultHeading} onFilterPress={() => showPlaceholder('Filters')} />
 
           <View style={styles.resultsWrap}>
-            {mode === 'jobs'
+            {loading ? (
+              mode === 'jobs' ? (
+                <>
+                  <SearchJobResultSkeleton />
+                  <SearchJobResultSkeleton />
+                </>
+              ) : (
+                <>
+                  <SearchWorkerResultSkeleton />
+                  <SearchWorkerResultSkeleton />
+                </>
+              )
+            ) : mode === 'jobs'
               ? jobs.map((job) => (
                   <SearchJobResultCard
                     job={job}
@@ -156,7 +178,7 @@ export default function SearchScreen() {
                   />
                 ))}
 
-            {(mode === 'jobs' ? jobs.length : workers.length) ? null : (
+            {(mode === 'jobs' ? jobs.length : workers.length) ? null : loading ? null : (
               <View style={styles.emptyCard}>
                 <EmptyState
                   actionLabel="Clear search"
@@ -185,39 +207,105 @@ export default function SearchScreen() {
 
 function mapJobToSearchItem(job: JobSummary): SearchJobItem {
   const category = job.category || 'Job';
-  const budget = job.budgetAmount ? `Budget PHP ${job.budgetAmount.toLocaleString('en-PH')}` : 'Budget to coordinate';
-  const schedule = job.scheduleText || 'Schedule to coordinate';
-  const location = job.locationText || job.barangay || 'Barangay San Pedro';
+  const location = getMarketplaceLocation(job);
 
   return {
     id: job.id,
-    postedAt: formatPostedAt(job.createdAt),
+    postedAt: formatRelativeMarketplaceDate(job.createdAt),
     title: job.title,
-    subtitle: `${budget} - ${schedule}`,
+    subtitle: formatJobSubtitle(job),
     description: job.description || 'No description provided yet.',
     tags: Array.from(new Set([category, ...job.tags, 'Open job'].filter(Boolean))),
     clientRatingText: 'Verified client',
     jobsPostedText: 'Posted in Konektado',
     location,
-    schedule,
-    clientName: job.client?.fullName || 'Konektado resident',
-    category,
     matchReason: `Open ${category.toLowerCase()} job near ${location}.`,
   };
 }
 
-function formatPostedAt(value: string) {
-  const created = new Date(value);
-  if (Number.isNaN(created.getTime())) return 'Recently posted';
+function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem {
+  const category = service.category || 'Service';
+  const location = getMarketplaceLocation(service);
 
-  const diffMs = Date.now() - created.getTime();
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-  if (diffMinutes < 60) return diffMinutes <= 1 ? 'Posted just now' : `Posted ${diffMinutes} min ago`;
+  return {
+    id: service.id,
+    name: service.provider?.fullName || 'Konektado resident',
+    statusLine: service.availabilityText
+      ? `${service.availabilityText} near your barangay`
+      : 'Available near your barangay',
+    rateLine: service.rateText || 'Rate to coordinate',
+    headline: service.description || service.title,
+    tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
+    ratingText: formatServiceRatingText(service),
+    jobsDoneText: formatServiceJobsDoneText(service, service.completedJobsCount),
+    location,
+    matchReason: `Offers ${category.toLowerCase()} help near ${location}.`,
+  };
+}
 
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `Posted ${diffHours} hr ago`;
+function SearchJobResultSkeleton() {
+  return (
+    <View style={styles.skeletonCard}>
+      <Skeleton height={12} width="24%" />
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonCopy}>
+          <Skeleton height={16} width="72%" />
+          <Skeleton height={12} width="58%" />
+        </View>
+        <View style={styles.skeletonIconRow}>
+          <Skeleton height={20} width={20} borderRadius={10} />
+          <Skeleton height={20} width={20} borderRadius={10} />
+        </View>
+      </View>
+      <View style={styles.skeletonMetaRow}>
+        <Skeleton height={12} width={72} />
+        <Skeleton height={12} width={80} />
+        <Skeleton height={12} width={96} />
+      </View>
+      <Skeleton height={14} width="92%" />
+      <Skeleton height={12} width="74%" />
+      <View style={styles.skeletonTagRow}>
+        <Skeleton height={27} width={70} borderRadius={13} />
+        <Skeleton height={27} width={84} borderRadius={13} />
+        <Skeleton height={27} width={62} borderRadius={13} />
+      </View>
+      <Skeleton height={34} width="100%" borderRadius={999} />
+    </View>
+  );
+}
 
-  return created.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function SearchWorkerResultSkeleton() {
+  return (
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.workerSkeletonIdentity}>
+          <SkeletonCircle size={44} />
+          <View style={styles.skeletonCopy}>
+            <Skeleton height={16} width="56%" />
+            <Skeleton height={12} width="76%" />
+          </View>
+        </View>
+        <View style={styles.skeletonIconRow}>
+          <Skeleton height={20} width={20} borderRadius={10} />
+          <Skeleton height={20} width={20} borderRadius={10} />
+        </View>
+      </View>
+      <View style={styles.skeletonMetaRow}>
+        <Skeleton height={12} width={72} />
+        <Skeleton height={12} width={82} />
+        <Skeleton height={12} width={94} />
+      </View>
+      <Skeleton height={12} width="46%" />
+      <Skeleton height={16} width="88%" />
+      <Skeleton height={12} width="70%" />
+      <View style={styles.skeletonTagRow}>
+        <Skeleton height={27} width={76} borderRadius={13} />
+        <Skeleton height={27} width={90} borderRadius={13} />
+        <Skeleton height={27} width={68} borderRadius={13} />
+      </View>
+      <Skeleton height={34} width="100%" borderRadius={999} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -242,6 +330,41 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
+  },
+  skeletonCard: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+    padding: 16,
+  },
+  skeletonHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  workerSkeletonIdentity: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  skeletonCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  skeletonIconRow: {
+    flexDirection: 'row',
+    gap: 9,
+  },
+  skeletonMetaRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  skeletonTagRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
   emptyCard: {
     backgroundColor: color.background,

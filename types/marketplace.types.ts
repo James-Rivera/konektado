@@ -136,6 +136,11 @@ export type ServiceSearchResult = ProviderService & {
   provider: PublicProfileSummary | null;
   averageRating: number | null;
   reviewCount: number;
+  completedJobsCount: number;
+};
+
+export type ServiceDetail = ServiceSearchResult & {
+  providerServices: ProviderService[];
 };
 
 export type CreateServiceInput = {

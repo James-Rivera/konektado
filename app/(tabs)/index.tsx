@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,18 +14,26 @@ import {
 } from '@/components/home/HomeDashboardUI';
 import { JobCard } from '@/components/JobCard';
 import { WorkerCard } from '@/components/WorkerCard';
-import {
-    getHomeFeed,
-    homeFilters,
-    type HomeFeedItem,
-    type HomeFilter,
-} from '@/constants/demo-data';
+import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
+import { homeFilters, type HomeFilter } from '@/constants/demo-data';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
+import {
+  adaptJobToCardProps,
+  adaptServiceToCardProps,
+} from '@/services/marketplace.helpers';
+import { searchJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { searchServices } from '@/services/service-profile.service';
 import { getMyVerificationPrefill } from '@/services/verification.service';
 import type { UserPreferences } from '@/types/onboarding.types';
+import type { JobCardProps } from '@/components/JobCard';
+import type { WorkerCardProps } from '@/components/WorkerCard';
+
+type HomeFeedItem =
+  | { key: string; type: 'worker'; itemId: string; cardProps: WorkerCardProps; createdAt: string }
+  | { key: string; type: 'job'; itemId: string; cardProps: JobCardProps; createdAt: string };
 
 function getDefaultFilter(preferences: UserPreferences | null): HomeFilter {
   if (preferences?.intent === 'provider') return 'Jobs';
@@ -34,9 +43,12 @@ function getDefaultFilter(preferences: UserPreferences | null): HomeFilter {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { profile } = useProfile();
   const topInset = useSafeTopInset();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
+  const [feed, setFeed] = useState<HomeFeedItem[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState<
@@ -93,8 +105,59 @@ export default function HomeScreen() {
     };
   }, [isVerified]);
 
-  const feed = useMemo(() => getHomeFeed(selectedFilter), [selectedFilter]);
   const showSetupBanner = !isVerified && verificationStatus !== 'approved' && !bannerDismissed;
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isFocused) {
+      return () => {
+        active = false;
+      };
+    }
+
+    setFeedLoading(true);
+
+    Promise.all([searchJobs(), searchServices()]).then(([jobsResult, servicesResult]) => {
+      if (!active) return;
+
+      const jobs =
+        jobsResult.data?.map((job) => ({
+          key: `job-${job.id}`,
+          type: 'job' as const,
+          itemId: job.id,
+          cardProps: adaptJobToCardProps(job),
+          createdAt: job.createdAt,
+        })) ?? [];
+
+      const workers =
+        servicesResult.data?.map((service) => ({
+          key: `service-${service.id}`,
+          type: 'worker' as const,
+          itemId: service.id,
+          cardProps: adaptServiceToCardProps(service),
+          createdAt: service.createdAt,
+        })) ?? [];
+
+      const byNewest = [...jobs, ...workers].sort(
+        (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+      );
+
+      if (selectedFilter === 'Jobs') {
+        setFeed(jobs);
+      } else if (selectedFilter === 'Workers') {
+        setFeed(workers);
+      } else {
+        setFeed(byNewest);
+      }
+
+      setFeedLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isFocused, selectedFilter]);
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -206,7 +269,28 @@ export default function HomeScreen() {
               />
             ))}
           </View>
-          {!feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
+          {feedLoading ? (
+            <View style={styles.skeletonFeed}>
+              {selectedFilter === 'Workers' ? (
+                <>
+                  <WorkerCardSkeleton />
+                  <WorkerCardSkeleton />
+                </>
+              ) : selectedFilter === 'Jobs' ? (
+                <>
+                  <JobCardSkeleton />
+                  <JobCardSkeleton />
+                </>
+              ) : (
+                <>
+                  <WorkerCardSkeleton />
+                  <JobCardSkeleton />
+                  <JobCardSkeleton />
+                </>
+              )}
+            </View>
+          ) : null}
+          {!feedLoading && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -229,45 +313,79 @@ function FeedCard({
   workerVariant: 'default' | 'match';
 }) {
   if (feedItem.type === 'worker') {
-    const worker = feedItem.item;
-
     return (
       <WorkerCard
-        headline={worker.headline}
-        imageUrl={worker.imageUrl}
-        jobsDoneText={worker.jobsDoneText}
-        location={worker.location}
-        name={worker.name}
-        rateLine={worker.rateLine}
-        ratingText={worker.ratingText}
-        statusLine={worker.statusLine}
-        tags={worker.tags}
-        onPress={() => onOpenWorker(worker.id, workerVariant)}
+        {...feedItem.cardProps}
+        onPress={() => onOpenWorker(feedItem.itemId, workerVariant)}
         onSave={isVerified ? undefined : onOpenVerification}
-        onViewProfile={() => onOpenWorker(worker.id, workerVariant)}
+        onViewProfile={() => onOpenWorker(feedItem.itemId, workerVariant)}
       />
     );
   }
 
-  const job = feedItem.item;
-
   return (
     <JobCard
-      clientRatingText={job.clientRatingText}
-      description={job.description}
-      imageUrl={job.imageUrl}
-      jobsPostedText={job.jobsPostedText}
-      location={job.location}
-      postedAt={job.postedAt}
-      showActionRow={job.showActionRow}
-      subtitle={job.subtitle}
-      tags={job.tags}
-      title={job.title}
+      {...feedItem.cardProps}
       onMessage={isVerified ? undefined : onOpenVerification}
-      onPress={() => onOpenJob(job.id)}
+      onPress={() => onOpenJob(feedItem.itemId)}
       onSave={isVerified ? undefined : onOpenVerification}
-      onViewJob={() => onOpenJob(job.id)}
+      onViewJob={() => onOpenJob(feedItem.itemId)}
     />
+  );
+}
+
+function WorkerCardSkeleton() {
+  return (
+    <View style={styles.skeletonCard}>
+      <View style={styles.workerSkeletonHeader}>
+        <View style={styles.workerSkeletonIdentity}>
+          <SkeletonCircle size={44} />
+          <View style={styles.workerSkeletonCopy}>
+            <Skeleton height={16} width="58%" />
+            <Skeleton height={12} width="76%" />
+          </View>
+        </View>
+        <Skeleton height={28} width={28} borderRadius={14} />
+      </View>
+      <Skeleton height={12} width="46%" />
+      <Skeleton height={18} width="88%" />
+      <View style={styles.skeletonTagRow}>
+        <Skeleton height={27} width={76} borderRadius={13} />
+        <Skeleton height={27} width={84} borderRadius={13} />
+        <Skeleton height={27} width={68} borderRadius={13} />
+      </View>
+      <View style={styles.skeletonMetaRow}>
+        <Skeleton height={12} width={76} />
+        <Skeleton height={12} width={84} />
+        <Skeleton height={12} width={96} />
+      </View>
+    </View>
+  );
+}
+
+function JobCardSkeleton() {
+  return (
+    <View style={styles.skeletonCard}>
+      <Skeleton height={12} width="22%" />
+      <View style={styles.jobSkeletonHeader}>
+        <View style={styles.jobSkeletonCopy}>
+          <Skeleton height={16} width="72%" />
+          <Skeleton height={12} width="66%" />
+        </View>
+        <Skeleton height={28} width={28} borderRadius={14} />
+      </View>
+      <Skeleton height={18} width="92%" />
+      <View style={styles.skeletonTagRow}>
+        <Skeleton height={27} width={72} borderRadius={13} />
+        <Skeleton height={27} width={90} borderRadius={13} />
+        <Skeleton height={27} width={78} borderRadius={13} />
+      </View>
+      <View style={styles.skeletonMetaRow}>
+        <Skeleton height={12} width={78} />
+        <Skeleton height={12} width={88} />
+        <Skeleton height={12} width={102} />
+      </View>
+    </View>
   );
 }
 
@@ -294,6 +412,46 @@ const styles = StyleSheet.create({
   feed: {
     backgroundColor: color.screenBackground,
     gap: 2,
+  },
+  skeletonFeed: {
+    gap: 2,
+  },
+  skeletonCard: {
+    backgroundColor: color.background,
+    gap: 18,
+    padding: 16,
+  },
+  workerSkeletonHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  workerSkeletonIdentity: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  workerSkeletonCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  jobSkeletonHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  jobSkeletonCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  skeletonTagRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  skeletonMetaRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   emptyText: {
     ...typography.body,

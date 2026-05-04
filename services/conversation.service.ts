@@ -24,7 +24,7 @@ const CONVERSATION_COLUMNS =
   'id, job_id, service_id, client_id, provider_id, started_by, status, hired_at, created_at, updated_at';
 const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, created_at';
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, barangay, location, location_text, budget, budget_amount, workers_needed, schedule_text, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, workers_needed, schedule_text, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 const SERVICE_COLUMNS =
   'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 

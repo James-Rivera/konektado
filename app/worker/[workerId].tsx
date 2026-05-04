@@ -1,28 +1,28 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import {
-  findDemoWorkerDetailById,
-  type DemoWorkHistoryItem,
-  type DemoWorkerDetailVariant,
-} from '@/constants/marketplace-demo-data';
+import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { getMarketplaceLocation } from '@/services/marketplace.helpers';
+import { getServiceDetail } from '@/services/service-profile.service';
+import type { ProviderService, ServiceDetail } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
+type DetailVariant = 'default' | 'match';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
   return value;
 }
 
-function getVariant(value: string | string[] | undefined): DemoWorkerDetailVariant {
-  const variant = getParamValue(value);
-  return variant === 'match' ? 'match' : 'default';
+function getVariant(value: string | string[] | undefined): DetailVariant {
+  return getParamValue(value) === 'match' ? 'match' : 'default';
 }
 
 export default function WorkerDetailScreen() {
@@ -32,12 +32,40 @@ export default function WorkerDetailScreen() {
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
   const params = useLocalSearchParams<{
-    workerId?: string | string[];
+    workerId?: string | string[]; // service id for the public worker/service card
     variant?: string | string[];
   }>();
-  const workerId = getParamValue(params.workerId);
+  const serviceId = getParamValue(params.workerId);
   const variant = getVariant(params.variant);
-  const worker = workerId ? findDemoWorkerDetailById(workerId) : null;
+  const [detail, setDetail] = useState<ServiceDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!serviceId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    getServiceDetail(serviceId).then((result) => {
+      if (!active) return;
+
+      if (result.error) {
+        Alert.alert('Worker profile', result.error);
+      } else {
+        setDetail(result.data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [serviceId]);
 
   const showPlaceholder = (label: string) => {
     Alert.alert(label, 'This will open from Worker Profile in a later slice.');
@@ -52,7 +80,34 @@ export default function WorkerDetailScreen() {
     showPlaceholder(label);
   };
 
-  if (!worker) {
+  const serviceMetrics = useMemo(() => {
+    if (!detail) return [];
+
+    return [
+      { label: 'Availability', value: detail.availabilityText || 'Schedule to coordinate' },
+      {
+        label: 'Experience',
+        value: detail.yearsExperience ? `${detail.yearsExperience} years` : 'Experience to coordinate',
+      },
+      {
+        label: 'Reviews',
+        value:
+          detail.reviewCount > 0 && detail.averageRating
+            ? `${detail.averageRating.toFixed(1)} from ${detail.reviewCount}`
+            : 'Reviews coming soon',
+      },
+      {
+        label: 'Jobs completed',
+        value: detail.completedJobsCount ? String(detail.completedJobsCount) : '0',
+      },
+    ];
+  }, [detail]);
+
+  if (loading) {
+    return <WorkerDetailSkeleton />;
+  }
+
+  if (!detail) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
         <View style={styles.screen}>
@@ -71,6 +126,17 @@ export default function WorkerDetailScreen() {
     );
   }
 
+  const providerName = detail.provider?.fullName || 'Konektado resident';
+  const verificationText =
+    detail.provider?.barangayVerifiedAt || detail.provider?.verifiedAt
+      ? 'Verified resident'
+      : 'Konektado resident';
+  const location = getMarketplaceLocation(detail);
+  const serviceTags = Array.from(new Set([detail.category, ...detail.tags].filter(Boolean)));
+  const serviceLabels = Array.from(
+    new Set(detail.providerServices.map((service) => service.category || service.title).filter(Boolean)),
+  );
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
@@ -84,14 +150,17 @@ export default function WorkerDetailScreen() {
           showsVerticalScrollIndicator={false}
           style={styles.scroll}>
           <WorkerProfileHero
-            location={worker.location}
-            name={worker.name}
-            verificationText={worker.verificationText}
+            location={location}
+            name={providerName}
+            verificationText={verificationText}
           />
 
-          {variant === 'match' && worker.matchSummary ? (
+          {variant === 'match' ? (
             <SectionBand style={styles.matchSection}>
-              <MatchNoticeCard body={worker.matchSummary.body} title={worker.matchSummary.title} />
+              <MatchNoticeCard
+                body={`Matches your search for ${detail.category.toLowerCase()} help near ${location}.`}
+                title="Why this worker fits"
+              />
             </SectionBand>
           ) : null}
 
@@ -99,57 +168,62 @@ export default function WorkerDetailScreen() {
             <Text style={styles.sectionTitle}>Services and rate</Text>
             <View style={styles.serviceRateRow}>
               <View style={styles.servicesWrap}>
-                {worker.services.map((service) => (
-                  <View key={service} style={styles.servicePill}>
-                    <Text style={styles.servicePillText}>{service}</Text>
+                {serviceLabels.map((serviceLabel) => (
+                  <View key={serviceLabel} style={styles.servicePill}>
+                    <Text style={styles.servicePillText}>{serviceLabel}</Text>
                   </View>
                 ))}
               </View>
               <View style={styles.ratePill}>
                 <MaterialIcons color={color.primary} name="payments" size={16} />
-                <Text style={styles.ratePillText}>{worker.rateLine}</Text>
+                <Text style={styles.ratePillText}>{detail.rateText || 'Rate to coordinate'}</Text>
               </View>
             </View>
           </SectionBand>
 
           <SectionBand style={styles.detailsSection}>
             <Text style={styles.sectionTitle}>Worker details</Text>
-            <WorkerMetricGrid metrics={worker.metrics} />
+            <WorkerMetricGrid metrics={serviceMetrics} />
+          </SectionBand>
+
+          <SectionBand style={styles.aboutSection}>
+            <Text style={styles.sectionTitle}>About this service</Text>
+            <Text style={styles.bodyText}>{detail.description || detail.title}</Text>
+            <View style={styles.tagRow}>
+              {serviceTags.map((tag) => (
+                <View key={tag} style={styles.tagPill}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
           </SectionBand>
 
           <SectionBand style={styles.historySection}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Work History</Text>
-              {variant === 'default' ? (
-                <Pressable
-                  accessibilityLabel="Work history options"
-                  accessibilityRole="button"
-                  onPress={() => showPlaceholder('Work History options')}
-                  style={({ pressed }) => [styles.utilityButton, pressed && styles.pressed]}>
-                  <MaterialIcons color={color.textSubtle} name="tune" size={18} />
-                </Pressable>
-              ) : null}
+            <Text style={styles.sectionTitle}>Reviews</Text>
+            <View style={styles.reviewCard}>
+              <Text style={styles.reviewTitle}>
+                {detail.reviewCount > 0 && detail.averageRating
+                  ? `${detail.averageRating.toFixed(1)} average from ${detail.reviewCount} review${detail.reviewCount === 1 ? '' : 's'}`
+                  : 'Reviews will show here after completed jobs'}
+              </Text>
+              <Text style={styles.reviewBody}>
+                Full public review history stays minimal in this MVP slice, but the real provider and service record are now live.
+              </Text>
             </View>
-
-            {worker.workHistory.length ? (
-              <View style={styles.historyList}>
-                {worker.workHistory.map((item) => (
-                  <WorkHistoryCard
-                    item={item}
-                    key={item.id}
-                    onView={() => showPlaceholder('Work History')}
-                  />
-                ))}
-              </View>
-            ) : (
-              <View style={styles.emptyHistoryCard}>
-                <Text style={styles.emptyHistoryTitle}>No work history yet</Text>
-                <Text style={styles.emptyHistoryBody}>
-                  Completed jobs will appear here after this worker finishes marketplace work.
-                </Text>
-              </View>
-            )}
           </SectionBand>
+
+          {detail.providerServices.length > 1 ? (
+            <SectionBand style={styles.historySection}>
+              <Text style={styles.sectionTitle}>More services from this worker</Text>
+              <View style={styles.serviceList}>
+                {detail.providerServices
+                  .filter((service) => service.id !== detail.id)
+                  .map((service) => (
+                    <ServicePreviewCard key={service.id} service={service} />
+                  ))}
+              </View>
+            </SectionBand>
+          ) : null}
         </ScrollView>
 
         <DetailActionRow
@@ -157,6 +231,40 @@ export default function WorkerDetailScreen() {
           onMessage={() => handleLockedAction('Message')}
           onSave={() => handleLockedAction('Save')}
         />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function WorkerDetailSkeleton() {
+  return (
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Skeleton height={24} width={24} borderRadius={12} />
+          <Skeleton height={20} width={120} />
+          <Skeleton height={24} width={24} borderRadius={12} />
+        </View>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <SectionBand style={styles.workerInfoSection}>
+            <View style={styles.heroRow}>
+              <SkeletonCircle size={44} />
+              <View style={styles.heroCopy}>
+                <Skeleton height={16} width="60%" />
+                <Skeleton height={12} width="46%" />
+              </View>
+              <Skeleton height={28} width={110} borderRadius={radius.pill} />
+            </View>
+          </SectionBand>
+          <SectionBand style={styles.skillsSection}>
+            <Skeleton height={16} width={120} />
+            <SkeletonText lines={3} />
+          </SectionBand>
+          <SectionBand style={styles.detailsSection}>
+            <Skeleton height={16} width={110} />
+            <SkeletonText lines={4} />
+          </SectionBand>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -205,7 +313,7 @@ function WorkerProfileHero({
           <Text style={styles.heroName}>{name}</Text>
           <View style={styles.heroLocationRow}>
             <MaterialIcons color={color.primary} name="location-on" size={14} />
-            <Text style={styles.heroLocationText}>{location} (2km)</Text>
+            <Text style={styles.heroLocationText}>{location}</Text>
           </View>
         </View>
 
@@ -215,26 +323,19 @@ function WorkerProfileHero({
   );
 }
 
-function MatchNoticeCard({ title: _title, body }: { title: string; body: string }) {
+function MatchNoticeCard({ title, body }: { title: string; body: string }) {
   return (
     <View style={styles.matchCard}>
-      <Text style={styles.matchTitle}>Good match</Text>
+      <Text style={styles.matchTitle}>{title}</Text>
       <Text style={styles.matchBody}>{body}</Text>
     </View>
   );
 }
 
-function WorkerMetricGrid({ metrics: _metrics }: { metrics: { label: string; value: string }[] }) {
-  const mappedMetrics = [
-    { label: 'Location', value: 'Sto. Tomas' },
-    { label: 'Jobs completed', value: '3' },
-    { label: 'Availability', value: 'Before 3:00 PM' },
-    { label: 'Hours worked', value: '12 hrs' },
-  ];
-
+function WorkerMetricGrid({ metrics }: { metrics: { label: string; value: string }[] }) {
   return (
     <View style={styles.metricGrid}>
-      {mappedMetrics.map((metric) => (
+      {metrics.map((metric) => (
         <View key={metric.label} style={styles.metricCell}>
           <Text style={styles.metricLabel}>{metric.label}</Text>
           <Text style={styles.metricValue}>{metric.value}</Text>
@@ -244,65 +345,14 @@ function WorkerMetricGrid({ metrics: _metrics }: { metrics: { label: string; val
   );
 }
 
-function WorkHistoryCard({
-  item,
-  onView,
-}: {
-  item: DemoWorkHistoryItem;
-  onView: () => void;
-}) {
+function ServicePreviewCard({ service }: { service: ProviderService }) {
   return (
-    <View style={styles.historyCard}>
-      <View style={styles.historyTopRow}>
-        <View style={styles.historyCopy}>
-          <Text style={styles.historyTitle}>{item.title}</Text>
-          <View style={styles.historyRatingRow}>
-            <MaterialIcons color={color.brandYellow} name="star" size={14} />
-            <Text style={styles.historyRatingText}>4.50</Text>
-            <View style={styles.historyDot} />
-            <Text style={styles.historyTagText}>Konektado job</Text>
-          </View>
-        </View>
-        <Text style={styles.historyDate}>Today</Text>
-      </View>
-
-      <Text style={styles.historyBody}>{item.description}</Text>
-      <Text style={styles.workedForLabel}>Worked for</Text>
-
-      <View style={styles.posterCard}>
-        <View style={styles.historyPoster}>
-          <View style={styles.posterTopRow}>
-            <View style={styles.posterIdentity}>
-              <View style={styles.historyPosterAvatar}>
-                <Text style={styles.historyPosterAvatarText}>{getInitials(item.posterName)}</Text>
-              </View>
-              <View style={styles.historyPosterCopy}>
-                <Text style={styles.historyPosterName}>{item.posterName}</Text>
-                <Text style={styles.historyPosterMeta}>Verified resident</Text>
-              </View>
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={onView}
-              style={({ pressed }) => [styles.viewButton, pressed && styles.pressed]}>
-              <Text style={styles.viewButtonText}>View</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.posterBottomRow}>
-            <View style={styles.posterLocationRow}>
-              <MaterialIcons color={color.primary} name="location-on" size={14} />
-              <Text style={styles.posterLocationText}>Brgy San Pedro</Text>
-            </View>
-            <Text style={styles.historyEarnings}>Earned  500</Text>
-          </View>
-        </View>
-
-        <View style={styles.historyPhotoBox}>
-          <View style={styles.historyPhotoCircle} />
-          <Text style={styles.historyPhotoText}>Work reference photo</Text>
-        </View>
+    <View style={styles.servicePreviewCard}>
+      <Text style={styles.servicePreviewTitle}>{service.title}</Text>
+      <Text style={styles.servicePreviewBody}>{service.description || service.category}</Text>
+      <View style={styles.servicePreviewMeta}>
+        <BadgePill icon="construction" label={service.category} />
+        <BadgePill icon="location-on" label={getMarketplaceLocation(service)} />
       </View>
     </View>
   );
@@ -431,6 +481,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
   },
+  aboutSection: {
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
   historySection: {
     gap: 10,
     paddingHorizontal: 20,
@@ -463,9 +518,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 2,
     bottom: 0,
+    height: 10,
     position: 'absolute',
     right: 0,
-    height: 10,
     width: 10,
   },
   heroCopy: {
@@ -485,21 +540,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   heroLocationText: {
-    fontFamily: 'Satoshi-Regular',
     color: color.textSubtle,
+    fontFamily: 'Satoshi-Regular',
     fontSize: 12,
     lineHeight: 18,
   },
   badgePill: {
     alignItems: 'center',
-    backgroundColor: color.successSoft,
-    borderColor: color.success,
-    borderWidth: 1,
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
     borderRadius: radius.pill,
+    borderWidth: 1,
     flexDirection: 'row',
     flexShrink: 1,
     gap: 6,
-    height: 28,
+    minHeight: 28,
     paddingHorizontal: 10,
   },
   badgePillSuccess: {
@@ -544,6 +599,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
   },
+  bodyText: {
+    ...typography.body,
+    color: color.textMuted,
+  },
   serviceRateRow: {
     gap: 12,
     marginTop: 12,
@@ -559,9 +618,8 @@ const styles = StyleSheet.create({
     borderColor: color.primary,
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: 32,
+    minHeight: 32,
     justifyContent: 'center',
-    minWidth: 81,
     paddingHorizontal: 12,
   },
   servicePillText: {
@@ -578,7 +636,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    height: 32,
+    gap: 6,
+    minHeight: 32,
     paddingHorizontal: 12,
   },
   ratePillText: {
@@ -595,8 +654,8 @@ const styles = StyleSheet.create({
     rowGap: 12,
   },
   metricCell: {
-    flexGrow: 1,
     flexBasis: '48%',
+    flexGrow: 1,
     minWidth: 132,
   },
   metricLabel: {
@@ -611,226 +670,68 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  sectionHeaderRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  utilityButton: {
-    alignItems: 'center',
-    height: 18,
-    justifyContent: 'center',
-    width: 18,
-  },
-  historyList: {
-    gap: 10,
-  },
-  historyCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 8,
-    padding: 16,
-    width: '100%',
-  },
-  historyTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  historyCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  historyTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  historyRatingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  historyRatingText: {
-    color: color.primary,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyDot: {
-    backgroundColor: '#D9D9D9',
-    borderRadius: 3,
-    height: 6,
-    marginHorizontal: 2,
-    width: 6,
-  },
-  historyTagText: {
-    color: color.primary,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyDate: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyBody: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  workedForLabel: {
-    color: color.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 20,
-  },
-  posterCard: {
-    borderColor: color.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  posterTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    width: '100%',
-  },
-  posterIdentity: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-    minWidth: 0,
-  },
-  posterBottomRow: {
-    alignItems: 'center',
+  tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 4,
   },
-  posterLocationRow: {
+  tagPill: {
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  posterLocationText: {
-    color: color.textSubtle,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyPhotoBox: {
-    alignItems: 'center',
-    backgroundColor: '#DCEBFF',
-    borderColor: color.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 14,
+    backgroundColor: color.primarySoft,
+    borderRadius: 13,
+    minHeight: 27,
     justifyContent: 'center',
-    marginTop: 14,
-    minHeight: 129,
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    width: '100%',
+    paddingHorizontal: 14,
   },
-  historyPhotoCircle: {
-    borderColor: color.primary,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    height: 36,
-    width: 36,
-  },
-  historyPhotoText: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyPoster: {
-    gap: 4,
-  },
-  historyPosterAvatar: {
-    alignItems: 'center',
-    backgroundColor: color.surfaceAlt,
-    borderRadius: radius.pill,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  historyPosterAvatarText: {
-    color: color.text,
+  tagText: {
+    color: '#42474C',
     fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyPosterCopy: {
-    flex: 1,
-    gap: 1,
-    minWidth: 0,
-  },
-  historyPosterName: {
-    color: '#050505',
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  historyPosterMeta: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
     fontSize: 10,
-    lineHeight: 17,
+    lineHeight: 14,
   },
-  historyEarnings: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  viewButton: {
-    alignItems: 'center',
-    backgroundColor: color.verificationBlue,
-    borderRadius: 24,
-    height: 25,
-    justifyContent: 'center',
-    width: 65,
-  },
-  viewButtonText: {
-    color: color.white,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 11,
-    lineHeight: 20,
-  },
-  emptyHistoryCard: {
+  reviewCard: {
     backgroundColor: color.background,
     borderColor: color.border,
     borderRadius: 16,
     borderWidth: 1,
     gap: 6,
     padding: 14,
-    width: '100%',
   },
-  emptyHistoryTitle: {
+  reviewTitle: {
     color: color.text,
     fontFamily: 'Satoshi-Bold',
     fontSize: 14,
     lineHeight: 20,
   },
-  emptyHistoryBody: {
+  reviewBody: {
     ...typography.body,
     color: color.textMuted,
+  },
+  serviceList: {
+    gap: 10,
+  },
+  servicePreviewCard: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    padding: 16,
+  },
+  servicePreviewTitle: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  servicePreviewBody: {
+    ...typography.body,
+    color: color.textMuted,
+  },
+  servicePreviewMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   actionRow: {
     backgroundColor: color.background,
@@ -860,8 +761,8 @@ const styles = StyleSheet.create({
   saveButton: {
     alignItems: 'center',
     backgroundColor: color.background,
-    borderRadius: radius.pill,
     borderColor: color.border,
+    borderRadius: radius.pill,
     borderWidth: 1,
     flex: 1,
     flexDirection: 'row',
