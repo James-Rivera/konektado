@@ -8,7 +8,7 @@
  *
  * Required env:
  *   SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY
+ *   SUPABASE_ANON_KEY (or EXPO_PUBLIC_SUPABASE_KEY)
  *
  * Optional env:
  *   VERIFICATION_EMAIL_BASE_URL   (defaults to SUPABASE_URL)
@@ -25,12 +25,21 @@ if (!template || !requestId) {
   process.exit(1);
 }
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+loadEnvFile('.env.local');
+loadEnvFile('.env');
+
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  process.env.VERIFICATION_EMAIL_SUPABASE_URL;
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.EXPO_PUBLIC_SUPABASE_KEY;
 const baseUrl = process.env.VERIFICATION_EMAIL_BASE_URL || supabaseUrl;
 
-if (!supabaseUrl || !serviceRoleKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing SUPABASE_URL or Supabase JWT key.');
   process.exit(1);
 }
 
@@ -58,8 +67,8 @@ async function main() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      apikey: supabaseKey,
     },
     body: JSON.stringify({
       ctaUrl,
@@ -74,7 +83,46 @@ async function main() {
   console.log(text);
 
   if (!response.ok) {
-    process.exit(1);
+    if (response.status === 404) {
+      console.error(
+        'The verification-email function is not deployed at this Supabase project URL. Deploy it first, or point VERIFICATION_EMAIL_BASE_URL to a local Supabase function server.',
+      );
+    }
+
+    process.exitCode = 1;
+  }
+}
+
+function loadEnvFile(fileName) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const filePath = path.join(process.cwd(), fileName);
+
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex <= 0) continue;
+
+    const key = trimmed.slice(0, equalsIndex).trim();
+    if (process.env[key]) continue;
+
+    let value = trimmed.slice(equalsIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
   }
 }
 

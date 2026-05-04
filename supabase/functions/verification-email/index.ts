@@ -82,8 +82,8 @@ const SMTP_PASS = Deno.env.get('VERIFICATION_EMAIL_SMTP_PASS') ?? Deno.env.get('
 const SMTP_FROM_EMAIL = Deno.env.get('VERIFICATION_EMAIL_FROM_EMAIL') ?? Deno.env.get('EMAIL_FROM_EMAIL');
 const SMTP_FROM_NAME = Deno.env.get('VERIFICATION_EMAIL_FROM_NAME') ?? Deno.env.get('EMAIL_FROM_NAME') ?? 'Konektado';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const supabaseUrl = Deno.env.get('PROJECT_URL');
+const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY');
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.warn('Verification email function missing Supabase env vars.');

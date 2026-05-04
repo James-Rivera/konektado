@@ -57,6 +57,13 @@ The function can send through either:
 
 If your auth emails already use a provider relay, mirror the same provider settings here so verification updates stay on the same sender path.
 
+See [docs/13-verification-email-setup.md](../docs/13-verification-email-setup.md) for deploy and test steps.
+
+Current troubleshooting notes:
+
+- `404 Requested function was not found` means the function is not deployed for the target project.
+- `401 UNAUTHORIZED_INVALID_JWT_FORMAT` means the test request used the wrong Supabase JWT. Use `SUPABASE_SERVICE_ROLE_KEY` for the test script when calling the deployed edge function.
+
 ## Demo Seed
 
 `seed.sql` creates fixed demo accounts and marketplace data for MVP testing. It is idempotent for the fixed demo UUIDs and emails, so it can be rerun to restore the scenario.
