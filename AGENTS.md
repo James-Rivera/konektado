@@ -6,7 +6,7 @@ Use this file as the first stop for any AI or agent working in this repository.
 
 - Read `/docs` before changing code.
 - Treat `/docs` as the product, architecture, permissions, and design source of truth.
-- Treat the established Konektado Figma file as the visual source of truth: `https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado`.
+- Treat the established Konektado Figma file as the visual source of truth: `http://127.0.0.1:3845/mcp`.
 - Before implementing or changing a user-facing screen/component, check the Konektado Figma design for the matching screen or component.
 - If the exact screen exists in Figma, follow it closely.
 - If the exact screen does not exist, derive the UI from nearby Konektado Figma patterns instead of inventing a separate style.

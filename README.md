@@ -1,130 +1,264 @@
 # Konektado
 
-Konektado is a barangay-level mobile app for connecting local hiring and local work services.
+Konektado is a barangay-verified mobile marketplace for local jobs and services in Barangay San Pedro. It helps residents find trusted nearby service providers, post simple jobs, coordinate through messages, and gives barangay admins a focused verification review workflow.
 
-Stack:
+The MVP is built with Expo, React Native, TypeScript, Expo Router, and Supabase Auth/PostgreSQL/Storage.
 
-- Expo Router + React Native + TypeScript
-- Supabase Auth, Postgres, and Storage
+## Table of Contents
 
-This repository is currently in MVP build mode. The UI is largely aligned to the Konektado Figma, with core authentication, onboarding, verification, and admin verification review already wired.
+- [Product Scope](#product-scope)
+- [Current Status](#current-status)
+- [Tech Stack](#tech-stack)
+- [Repository Structure](#repository-structure)
+- [Prerequisites](#prerequisites)
+- [Environment Variables](#environment-variables)
+- [Local Development](#local-development)
+- [Supabase Setup](#supabase-setup)
+- [Quality Checks](#quality-checks)
+- [Architecture Rules](#architecture-rules)
+- [Design Source of Truth](#design-source-of-truth)
+- [Security Notes](#security-notes)
+- [Documentation](#documentation)
 
-## Current App State
+## Product Scope
 
-### Implemented and working
+Konektado is focused on a thesis/demo-ready MVP:
 
-- Auth flow
-  - Email OTP signup + password creation.
-  - Email/password login.
-  - Session-based routing guards.
-- Role and onboarding flow
-  - Role intent supports client, provider, and both.
-  - Multi-step onboarding under app/(onboarding).
-  - Onboarding completion tracked through user_preferences and profile basics.
-- Home dashboard foundation
-  - Figma-style Home structure (top header, search, setup banner, filter pills, feed section).
-  - Intent-based default feed filter (Jobs, Workers, or For you).
-- Verification flow (resident side)
-  - Multi-step verification request UI in app/verification.tsx and components/verification/FigmaVerificationFlow.tsx.
-  - Prefill account details.
-  - ID type selection, document upload placeholders, face-photo placeholder, review, submit, pending/success/failure states.
-  - Writes verification request data and files to Supabase-backed tables/storage.
-- Verification flow (admin side)
-  - Admin verification dashboard in app/admin/verifications.tsx.
-  - Queue listing and detail review.
-  - Approve/reject actions with reviewer notes.
-  - Profile verification status updates after admin action.
-- Core marketplace foundations
-  - Home and search surfaces are available.
-  - Browse-only job and worker detail routes are available.
-  - Message/Save/Post actions remain verification-gated for unverified users.
+- Email OTP signup, password creation, email/password login, and session routing.
+- Lightweight onboarding for client, provider, or both-role users.
+- Unverified viewer mode so users can browse before barangay approval.
+- Barangay verification request flow with file uploads and admin review.
+- Home marketplace feed for jobs and workers.
+- Job posting and browsing.
+- Message-based job interest and coordination.
+- Mark Hired workflow.
+- Reviews and basic moderation foundations.
+- Admin verification dashboard.
 
-### Partially implemented (active MVP work)
+Out of scope for the MVP:
 
-- Post flow is still being finalized as a complete verified path.
-- Home/search feed quality and ranking are not final.
-- Messaging is connected at a basic level but not feature-complete.
-- Profile management is functional but still needs service-layer and UX polish.
+- In-app payments, payroll, escrow, and contract signing.
+- AI matching.
+- National ID, municipal, provincial, or national government integrations.
+- SMS OTP.
+- Advanced chat features such as calls, attachments, read receipts, group chat, and push notifications.
 
-### Not complete yet (known gaps)
+## Current Status
 
-- Full real-time messaging feature set (attachments, read receipts, push notifications, group chat).
-- Saved items persistence polish.
-- Full moderation/reporting beyond verification review.
-- Advanced search/filter ranking.
-- In-app payments (out of MVP scope).
+Implemented or connected:
 
-## Product Rules Used in This Repo
+- Supabase Auth email OTP signup plus password creation.
+- Email/password login and session guards.
+- Role intent and onboarding completion through `user_preferences`.
+- Figma-aligned Home feed foundation.
+- Browse-only job and worker detail routes.
+- Verification request flow with Supabase Storage uploads.
+- Admin verification queue with approve/reject actions.
+- Real services/jobs foundations and basic messaging/hiring workflows.
+- Verification gates for posting, messaging, saving where enabled, and reviews.
 
-- Main tabs: Home, Post, Messages, Profile.
-- One account can have both Work Profile and Hiring Profile.
-- Use Services in UI wording, not Skills.
-- Do not use Apply/Application as the main flow. Use Messages and Mark Hired.
-- Verification gates posting, messaging, saving (if enabled), and reviews.
+Known MVP limitations:
 
-For detailed scope and decisions, read docs in order:
+- Some marketplace surfaces still use demo/static data or lightweight ranking.
+- Verified-origin database filtering is still being hardened.
+- Search, saved items, reviews, and profile management need more polish.
+- Camera capture for verification files is not yet the baseline path; upload picker support is the current MVP path.
 
-- docs/00-project-brief.md
-- docs/01-product-scope.md
-- docs/03-feature-map.md
-- docs/04-user-flows.md
-- docs/07-auth-and-permissions.md
-- docs/08-design-system.md
-- docs/09-development-rules.md
-- docs/10-ai-instructions.md
-- docs/11-decision-log.md
-- docs/12-coding-kickoff.md
+## Tech Stack
 
-## Current Route Overview
+- Expo 55
+- React 19
+- React Native 0.83
+- TypeScript
+- Expo Router
+- Supabase Auth
+- Supabase PostgreSQL
+- Supabase Storage
+- Supabase Edge Functions
+- ESLint through Expo
 
-- Auth: app/(auth)/index.tsx, app/(auth)/login.tsx, app/(auth)/register.tsx, app/(auth)/role.tsx
-- Onboarding: app/(onboarding)/\*
-- Main tabs: app/(tabs)/\*
-- Verification: app/verification.tsx
-- Admin verification review: app/admin/verifications.tsx
-- Detail screens: app/job/[jobId].tsx, app/worker/[workerId].tsx, app/conversation/[conversationId].tsx
+## Repository Structure
 
-## Run Locally
+```text
+app/                  Expo Router screens and navigation
+components/           Reusable UI and flow components
+constants/            Theme tokens, app constants, demo data
+docs/                 Product, architecture, permissions, and design source of truth
+hooks/                Reusable React hooks
+scripts/              Local utility scripts
+services/             Backend/service-layer functions
+sql/                  SQL references and notes
+supabase/             Supabase config, migrations, functions, email templates
+types/                Shared TypeScript types
+utils/                Low-level utilities such as the Supabase client
+```
 
-1. Install dependencies:
+## Prerequisites
+
+- Node.js compatible with Expo 55.
+- npm.
+- Expo Go or an Android/iOS simulator.
+- A Supabase project for Auth, PostgreSQL, Storage, and Edge Functions.
+- Supabase CLI when working with migrations or functions.
+
+## Environment Variables
+
+Create a local `.env` file for development. Do not commit it.
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
+EXPO_PUBLIC_SUPABASE_KEY=your_supabase_anon_or_publishable_key
+```
+
+Only `EXPO_PUBLIC_*` values are available to the Expo client. Never place service-role keys, database passwords, SMTP passwords, Resend keys, or other backend secrets in Expo public variables.
+
+The verification email test script can also read:
+
+```bash
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+VERIFICATION_EMAIL_BASE_URL=your_supabase_or_local_function_base_url
+```
+
+These values are for local/backend testing only and must stay out of client code.
+
+## Local Development
+
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-2. Set up environment variables (Supabase URL and anon key) in your local Expo env setup.
-
-3. Run the app:
+Start Expo manually:
 
 ```bash
-npx expo start
+npm start
 ```
 
-Note:
+Platform shortcuts:
 
-- Do not auto-start Expo from agent scripts. Start it manually when testing.
+```bash
+npm run android
+npm run ios
+npm run web
+```
 
-## Database and Migrations
+Agents should not start Expo automatically. Run the dev server manually when you are ready to test the app.
 
-- Schema and migration scripts are under sql and supabase/migrations.
-- Current project-aligned SQL references include:
-  - sql/20260329_app_schema.sql
-  - sql/20260329_profile_details.sql
-  - sql/20260329_role_profile_split.sql
-  - sql/20260329_strict_cert_status_decoupling.sql
+## Supabase Setup
 
-If setting up a fresh backend, apply the migration set and verify RLS policies for profiles, onboarding, verification requests, and verification files.
+Supabase assets live under `supabase/`.
 
-## Recommended Next Priorities
+Important locations:
 
-1. Finalize verified Post flow end-to-end (creation and visibility in browse paths).
-2. Complete verification capture polish where needed for production reliability.
-3. Strengthen messaging and hire flow (Messages and Mark Hired path).
-4. Add review flow polish.
-5. Improve search/feed quality and saved-item persistence.
+- `supabase/migrations/` - current migration set.
+- `supabase/functions/verification-email/` - barangay verification email Edge Function.
+- `supabase/email-templates/` - Auth email OTP template references.
+- `supabase/README.md` - backend-specific setup notes.
+
+Auth requirements:
+
+- Signup uses Supabase email OTP through `signInWithOtp`.
+- The app expects a 6-digit code.
+- Supabase Auth OTP length must be configured to 6 digits.
+- Magic Link and Confirm sign up templates must include `{{ .Token }}`.
+- SMS OTP is intentionally not required for the MVP.
+
+Verification email requirements:
+
+- Barangay verification status emails are separate from Supabase Auth emails.
+- Production transport should prefer Resend on the verified `konektado.app` sender domain.
+- See `docs/13-verification-email-setup.md` for Edge Function environment variables and testing.
+
+## Quality Checks
+
+Run lint before marking work complete:
+
+```bash
+npm run lint
+```
+
+Run TypeScript checks when changing routes, services, hooks, types, database-facing code, or shared data structures:
+
+```bash
+npx tsc --noEmit
+```
+
+Test the verification email function when changing email templates or transport:
+
+```bash
+npm run test:verification-email -- verification_submitted <requestId>
+```
+
+Manual smoke paths for MVP work:
+
+- Register -> verify email OTP -> create password -> onboarding -> Home.
+- Unverified user browses jobs/workers but is routed to verification for locked actions.
+- Resident submits verification request.
+- Admin approves or rejects a verification request.
+- Verified client posts a job.
+- Verified provider opens a job and starts a message.
+- Client marks a worker as hired.
+
+## Architecture Rules
+
+Keep implementation aligned with the documented architecture:
+
+- Screens in `app/` should stay thin.
+- Backend calls belong in `services/`.
+- Reusable UI belongs in `components/`.
+- Shared types belong in `types/`.
+- Reusable hooks belong in `hooks/`.
+- Supabase-specific details should be isolated behind services or utilities where practical.
+- Do not put database queries directly inside reusable UI components.
+- Do not add broad dependencies for small utilities.
+- Keep Row Level Security strict for all app tables.
+
+Product rules that should not regress:
+
+- Main tabs are Home, Post, Messages, and Profile.
+- One account can have both Work Profile and Hiring Profile.
+- Use "Services" in user-facing copy, not "Skills".
+- Do not make Apply/Application the primary flow. Use Messages and Mark Hired.
+- Verification gates marketplace interactions.
+- No in-app payments.
 
 ## Design Source of Truth
 
-- Figma source: https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado
+Figma is the visual source of truth for user-facing screens:
 
-Implement user-facing screens from Figma-first patterns, then adapt to existing project components and service-layer rules.
+https://www.figma.com/design/v6jPKumENGxoQlWbwSFfo5/Konektado
+
+Before implementing or changing a screen/component, inspect the matching Figma node when available. If the exact screen is missing, derive the UI from nearby Konektado patterns and keep the implementation responsive instead of copying fixed frame dimensions.
+
+Konektado uses Satoshi as the app font family. Do not introduce another font family unless the design system changes.
+
+## Security Notes
+
+- Do not commit `.env`, `.env.local`, or local secret files.
+- Keep service-role keys and provider secrets out of frontend code.
+- Public Expo variables must contain only client-safe values.
+- Do not expose private verification files, admin notes, raw auth metadata, or restricted profile data in public UI.
+- Use Supabase RLS and service-layer checks for permission-sensitive actions.
+- Prefer status changes over hard deletes for business records.
+
+## Documentation
+
+The `/docs` directory is the source of truth for product, architecture, permissions, and implementation decisions. Start with:
+
+- `docs/00-project-brief.md`
+- `docs/01-product-scope.md`
+- `docs/03-feature-map.md`
+- `docs/04-user-flows.md`
+- `docs/05-data-model.md`
+- `docs/06-api-contracts.md`
+- `docs/07-auth-and-permissions.md`
+- `docs/08-design-system.md`
+- `docs/09-development-rules.md`
+- `docs/10-ai-instructions.md`
+- `docs/11-decision-log.md`
+- `docs/12-coding-kickoff.md`
+- `docs/13-verification-email-setup.md`
+
+Update `/docs` when product scope, auth/onboarding behavior, permissions, data model, architecture, or major UI direction changes. This README should remain the production entry point; the deeper docs should carry detailed product and engineering decisions.
