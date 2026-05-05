@@ -4,7 +4,7 @@
  * Test harness for the verification email edge function.
  *
  * Usage:
- *   node scripts/test-verification-email.js <template> <requestId> [ctaUrl]
+ *   node scripts/test-verification-email.js <template> <requestId> [ctaUrl] [idempotencyKey]
  *
  * Required env:
  *   SUPABASE_URL
@@ -17,10 +17,12 @@
 const template = process.argv[2];
 const requestId = process.argv[3];
 const ctaUrl = process.argv[4] || 'konektado://verification';
+const idempotencyKey =
+  process.argv[5] || `verification-email:test:${template}:${requestId}:${Date.now()}`;
 
 if (!template || !requestId) {
   console.error(
-    'Usage: node scripts/test-verification-email.js <verification_submitted|verification_approved|verification_needs_more_info|verification_rejected> <requestId> [ctaUrl]',
+    'Usage: node scripts/test-verification-email.js <verification_submitted|verification_approved|verification_needs_more_info|verification_rejected> <requestId> [ctaUrl] [idempotencyKey]',
   );
   process.exit(1);
 }
@@ -72,6 +74,7 @@ async function main() {
     },
     body: JSON.stringify({
       ctaUrl,
+      idempotencyKey,
       requestId,
       template,
     }),
