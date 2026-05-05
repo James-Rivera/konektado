@@ -107,10 +107,10 @@ export default function PostScreen() {
       <View style={styles.screen}>
         <View style={[styles.subHeader, { paddingTop: topInset + space.sm }]}>
           <View style={styles.subHeaderTitle}>
-            <View style={{ width: 24, height: 24 }} />
+            <View style={styles.headerIcon} />
             <Skeleton height={20} width={140} />
           </View>
-          <View style={{ width: 24, height: 24 }} />
+          <View style={styles.headerIcon} />
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <PostDashboardSkeleton />
@@ -127,12 +127,20 @@ export default function PostScreen() {
             accessibilityLabel="Go back"
             accessibilityRole="button"
             onPress={() => router.back()}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+            style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
             <MaterialIcons color={color.text} name="chevron-left" size={28} />
           </Pressable>
-          <Text style={styles.pageTitle}>Create a post</Text>
+          <Text numberOfLines={1} style={styles.pageTitle}>
+            Create a post
+          </Text>
         </View>
-        <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+        <Pressable
+          accessibilityLabel="Post options"
+          accessibilityRole="button"
+          onPress={() => Alert.alert('Post options', 'More post actions are not connected yet.')}
+          style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
+          <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -531,23 +539,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    minHeight: 55,
-    paddingHorizontal: space['2xl'],
+    minHeight: 56,
+    paddingBottom: space.sm,
+    paddingHorizontal: space.lg,
   },
   subHeaderTitle: {
     alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
-    gap: space.md,
+    gap: space.sm,
+    minWidth: 0,
   },
-  backButton: {
+  headerIcon: {
     alignItems: 'center',
-    height: 24,
+    height: 40,
     justifyContent: 'center',
-    width: 24,
+    width: 40,
   },
   pageTitle: {
     ...typography.sectionTitle,
     color: color.text,
+    flex: 1,
   },
   content: {
     backgroundColor: color.background,

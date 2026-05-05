@@ -71,7 +71,7 @@ Onboarding and verification rules:
 - Unverified viewers may browse limited public content but may not post jobs, create public service posts, message users, save if verification-gated, or leave reviews.
 - The verification flow is where heavier requirements belong: contact confirmation, email confirmation, optional phone number, ID documents, services, credentials, selfie/photo for manual barangay comparison, and supporting details.
 - Barangay verification is the trust gate for marketplace interaction.
-- The main app navigation is Home, Post, Messages, Profile.
+- The main app navigation is Home, Search, Post, Messages, Profile.
 - One account can have both Work Profile and Hiring Profile.
 - Use Services in UI, not Skills, unless referring to internal database/history.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.

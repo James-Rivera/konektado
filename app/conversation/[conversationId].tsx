@@ -1,11 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { ComponentProps, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -16,34 +15,19 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { Skeleton } from '@/components/Skeleton';
+import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
-  archiveConversation,
   getConversation,
   markWorkerHired,
-  reportConversation,
   sendMessage,
 } from '@/services/conversation.service';
 import { getMarketplaceLocation } from '@/services/marketplace.helpers';
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
 
-type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
-
 const JOB_PROMPTS = ['Where is the exact location?', 'What should I bring?', 'Send me your location'];
 const SERVICE_PROMPTS = ['Are you available?', 'Can we discuss the schedule?', 'How much is your rate?'];
-const REPORT_REASONS = [
-  'Fake Profile / Impersonation',
-  'Spam / Unwanted Messages',
-  'Scam / Fraudulent Activity',
-  'Inappropriate Content',
-  'Harassment / Bullying',
-  'Job Listing Violation',
-  'Off-platform Transaction Request',
-  'Other Violations',
-];
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -53,32 +37,62 @@ function getParamValue(value: string | string[] | undefined) {
 export default function ConversationDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const params = useLocalSearchParams<{ conversationId?: string | string[] }>();
   const conversationId = getParamValue(params.conversationId);
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
+  const [conversationReady, setConversationReady] = useState(false);
+  const [conversationError, setConversationError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [detailsVisible, setDetailsVisible] = useState(false);
-  const [reportVisible, setReportVisible] = useState(false);
-  const [leaveVisible, setLeaveVisible] = useState(false);
+  const [contextExpanded, setContextExpanded] = useState(false);
+  const [visibleTimestampId, setVisibleTimestampId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const load = () => {
     if (!conversationId) return;
 
+    setConversationReady(false);
+    setConversationError(null);
+
     getConversation(conversationId).then((result) => {
       if (result.error) {
+        setConversationError(result.error);
         Alert.alert('Conversation', result.error);
       } else {
         setConversation(result.data);
       }
 
       setLoading(false);
+      setConversationReady(true);
     });
   };
 
   useEffect(load, [conversationId]);
+
+  const scrollToBottom = useCallback((animated = true) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated });
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated });
+      }, 80);
+    });
+  }, []);
+
+  const messageCount = conversation?.messages.length ?? 0;
+
+  useEffect(() => {
+    const eventName = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const keyboardSub = Keyboard.addListener(eventName, () => scrollToBottom());
+
+    return () => keyboardSub.remove();
+  }, [scrollToBottom]);
+
+  useEffect(() => {
+    if (loading || profileLoading || !conversation) return;
+    scrollToBottom(false);
+  }, [conversation, loading, messageCount, profileLoading, scrollToBottom]);
 
   const other =
     conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
@@ -118,33 +132,6 @@ export default function ConversationDetailScreen() {
     setConversation(result.data);
   };
 
-  const onArchive = async () => {
-    if (!conversationId) return;
-
-    const result = await archiveConversation({ conversationId });
-    if (result.error) {
-      Alert.alert('Delete chat', result.error);
-      return;
-    }
-
-    setLeaveVisible(false);
-    router.back();
-  };
-
-  const onReport = async (reason: string) => {
-    if (!conversationId) return;
-
-    const result = await reportConversation({ conversationId });
-    if (result.error) {
-      Alert.alert('Report user', result.error);
-      return;
-    }
-
-    setConversation(result.data);
-    setReportVisible(false);
-    Alert.alert('Report submitted', `Thanks for the report. Reason: ${reason}`);
-  };
-
   const openPost = () => {
     if (conversation?.jobId) {
       router.push({ pathname: '/job/[jobId]', params: { jobId: conversation.jobId } });
@@ -156,10 +143,20 @@ export default function ConversationDetailScreen() {
     }
   };
 
+  const isScreenLoading = profileLoading || !conversationReady;
+
+  if (isScreenLoading) {
+    return <ConversationScreenSkeleton />;
+  }
+
+  if (!conversation) {
+    return <ConversationUnavailableScreen message={conversationError ?? 'Conversation not found.'} onBack={() => router.back()} />;
+  }
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.screen}>
         <View style={styles.header}>
           <Pressable accessibilityLabel="Go back" onPress={() => router.back()} style={styles.headerIcon}>
@@ -179,41 +176,53 @@ export default function ConversationDetailScreen() {
           </View>
           <Pressable
             accessibilityLabel="Conversation details"
-            onPress={() => setDetailsVisible(true)}
+            onPress={() => {
+              if (!conversationId) return;
+              router.push({
+                pathname: '/conversation/[conversationId]/details',
+                params: { conversationId },
+              });
+            }}
             style={styles.headerIcon}>
             <MaterialIcons color={color.verificationBlue} name="more-vert" size={22} />
           </Pressable>
         </View>
 
+        {conversation ? (
+          <ConversationContextCard
+            canMarkHired={canMarkHired}
+            conversation={conversation}
+            expanded={contextExpanded}
+            onMarkHired={onMarkHired}
+            onOpenPost={openPost}
+            onOpenProfile={() => {
+              if (conversation.serviceId) {
+                router.push({
+                  pathname: '/worker/[workerId]',
+                  params: { workerId: conversation.serviceId },
+                });
+                return;
+              }
+              Alert.alert('Profile', 'Public client profiles are not a separate route yet.');
+            }}
+            onToggleExpanded={() => {
+              setContextExpanded((value) => !value);
+              scrollToBottom(false);
+            }}
+          />
+        ) : null}
+
         <ScrollView
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          ref={scrollRef}
           contentContainerStyle={[styles.messages, { paddingBottom: 18 + Math.max(insets.bottom, 10) }]}
           showsVerticalScrollIndicator={false}>
-          {loading ? <ConversationSkeleton /> : null}
-
-          {conversation ? (
-            <ConversationContextCard
-              canMarkHired={canMarkHired}
-              conversation={conversation}
-              onMarkHired={onMarkHired}
-              onOpenPost={openPost}
-              onOpenProfile={() => {
-                if (conversation.serviceId) {
-                  router.push({
-                    pathname: '/worker/[workerId]',
-                    params: { workerId: conversation.serviceId },
-                  });
-                  return;
-                }
-                Alert.alert('Profile', 'Public client profiles are not a separate route yet.');
-              }}
-            />
-          ) : null}
-
           {conversation ? (
             <Text style={styles.threadStatus}>{getThreadStatusText(conversation, profile?.id)}</Text>
           ) : null}
 
-          {!loading && !conversation?.messages.length ? (
+          {conversation && !conversation.messages.length ? (
             <View style={styles.emptyThread}>
               <MaterialIcons color={color.textSubtle} name="speaker-notes-off" size={24} />
               <View>
@@ -223,13 +232,24 @@ export default function ConversationDetailScreen() {
             </View>
           ) : null}
 
-          {conversation?.messages.map((message) => (
-            <MessageBubble
-              currentUserId={profile?.id}
-              key={message.id}
-              message={message}
-            />
-          ))}
+          {conversation?.messages.map((message, index, messages) => {
+            const previousMessage = messages[index - 1];
+            const nextMessage = messages[index + 1];
+
+            return (
+              <MessageBubble
+                currentUserId={profile?.id}
+                key={message.id}
+                message={message}
+                nextMessage={nextMessage}
+                onToggleTime={() =>
+                  setVisibleTimestampId((current) => (current === message.id ? null : message.id))
+                }
+                previousMessage={previousMessage}
+                showTime={visibleTimestampId === message.id}
+              />
+            );
+          })}
         </ScrollView>
 
         <View style={styles.composerWrap}>
@@ -257,6 +277,7 @@ export default function ConversationDetailScreen() {
             <TextInput
               multiline
               onChangeText={setBody}
+              onFocus={() => scrollToBottom()}
               placeholder="Type a message..."
               placeholderTextColor={color.textSubtle}
               style={styles.input}
@@ -271,30 +292,95 @@ export default function ConversationDetailScreen() {
             </Pressable>
           </View>
         </View>
-
-        <ConversationDetailsModal
-          canMarkHired={canMarkHired}
-          conversation={conversation}
-          onClose={() => setDetailsVisible(false)}
-          onLeave={() => setLeaveVisible(true)}
-          onMarkHired={onMarkHired}
-          onOpenPost={openPost}
-          onReport={() => setReportVisible(true)}
-          visible={detailsVisible}
-        />
-
-        <ReportSheet
-          onClose={() => setReportVisible(false)}
-          onReport={onReport}
-          visible={reportVisible}
-        />
-
-        <LeaveChatDialog
-          onCancel={() => setLeaveVisible(false)}
-          onLeave={onArchive}
-          visible={leaveVisible}
-        />
       </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function ConversationScreenSkeleton() {
+  return (
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Skeleton height={36} width={36} borderRadius={18} />
+          <View style={styles.loadingHeaderAvatarWrap}>
+            <Skeleton height={40} width={40} borderRadius={20} />
+            <Skeleton height={10} width={10} borderRadius={5} style={styles.loadingOnlineDot} />
+          </View>
+          <View style={styles.headerCopy}>
+            <Skeleton height={16} width="64%" />
+            <Skeleton height={12} width="42%" />
+          </View>
+          <Skeleton height={36} width={36} borderRadius={18} />
+        </View>
+
+        <View style={styles.contextBlock}>
+          <View style={styles.contextHeader}>
+            <Skeleton height={22} width={22} borderRadius={6} />
+            <View style={styles.contextCopy}>
+              <Skeleton height={13} width="66%" />
+              <Skeleton height={11} width="86%" />
+            </View>
+            <Skeleton height={22} width={22} borderRadius={11} />
+          </View>
+        </View>
+
+        <View style={styles.loadingThread}>
+          <Skeleton height={12} width={104} style={styles.loadingThreadStatus} />
+
+          <View style={styles.loadingMessageRowSeparated}>
+            <View style={styles.avatarSlot} />
+            <View style={styles.loadingMessageStack}>
+              <Skeleton height={38} width="72%" borderRadius={18} style={styles.loadingBubbleTheirTop} />
+              <Skeleton height={34} width="58%" borderRadius={18} style={styles.loadingBubbleTheirBottom} />
+            </View>
+          </View>
+
+          <View style={styles.loadingMessageRow}>
+            <SkeletonCircle size={27} />
+            <View style={styles.loadingMessageStack}>
+              <Skeleton height={42} width="64%" borderRadius={18} />
+            </View>
+          </View>
+
+          <View style={styles.loadingMessageRowMineSeparated}>
+            <View style={styles.loadingMessageStackMine}>
+              <Skeleton height={38} width="68%" borderRadius={18} style={styles.loadingBubbleMineTop} />
+              <Skeleton height={50} width="76%" borderRadius={18} style={styles.loadingBubbleMineBottom} />
+            </View>
+          </View>
+
+          <View style={styles.loadingMessageRowSeparated}>
+            <View style={styles.avatarSlot} />
+            <View style={styles.loadingMessageStack}>
+              <Skeleton height={34} width="46%" borderRadius={18} />
+            </View>
+          </View>
+
+          <View style={styles.loadingMessageRowMine}>
+            <View style={styles.loadingMessageStackMine}>
+              <Skeleton height={36} width="42%" borderRadius={18} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.composerWrap}>
+          <View style={styles.loadingPromptRow}>
+            <Skeleton height={32} width={152} borderRadius={16} />
+            <Skeleton height={32} width={184} borderRadius={16} />
+            <Skeleton height={32} width={132} borderRadius={16} />
+            <Skeleton height={24} width={24} borderRadius={12} />
+          </View>
+          <View style={styles.loadingComposerRow}>
+            <View style={styles.attachmentRow}>
+              <Skeleton height={22} width={22} borderRadius={6} />
+              <Skeleton height={22} width={22} borderRadius={6} />
+            </View>
+            <Skeleton height={42} width="100%" borderRadius={20} style={styles.loadingComposerInput} />
+            <Skeleton height={24} width={24} borderRadius={12} />
+          </View>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -302,32 +388,43 @@ export default function ConversationDetailScreen() {
 function ConversationContextCard({
   canMarkHired,
   conversation,
+  expanded,
   onMarkHired,
   onOpenPost,
   onOpenProfile,
+  onToggleExpanded,
 }: {
   canMarkHired: boolean;
   conversation: ConversationDetail;
+  expanded: boolean;
   onMarkHired: () => void;
   onOpenPost: () => void;
   onOpenProfile: () => void;
+  onToggleExpanded: () => void;
 }) {
   const context = getContextSummary(conversation);
 
   return (
     <View style={styles.contextBlock}>
-      <View style={styles.contextHeader}>
-        <MaterialIcons color={color.verificationBlue} name="business-center" size={16} />
+      <Pressable accessibilityRole="button" onPress={onToggleExpanded} style={styles.contextHeader}>
+        <MaterialIcons color={color.verificationBlue} name="business-center" size={17} />
         <View style={styles.contextCopy}>
-          <Text style={styles.contextTitle}>{context.title}</Text>
-          <Text style={styles.contextMeta}>{context.meta}</Text>
+          <Text numberOfLines={1} style={styles.contextTitle}>{context.title}</Text>
+          <Text numberOfLines={1} style={styles.contextMeta}>{context.meta}</Text>
         </View>
-      </View>
-      <View style={styles.contextActions}>
-        <SmallActionButton label={conversation.jobId ? 'View Job' : 'View Service'} onPress={onOpenPost} />
-        <SmallActionButton label={conversation.jobId ? 'View Client' : 'View Profile'} onPress={onOpenProfile} />
-        {canMarkHired ? <SmallActionButton label="Mark Hired" onPress={onMarkHired} /> : null}
-      </View>
+        <MaterialIcons
+          color={color.textSubtle}
+          name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+          size={22}
+        />
+      </Pressable>
+      {expanded ? (
+        <View style={styles.contextActions}>
+          <SmallActionButton label={conversation.jobId ? 'View Job' : 'View Service'} onPress={onOpenPost} />
+          <SmallActionButton label={conversation.jobId ? 'View Client' : 'View Profile'} onPress={onOpenProfile} />
+          {canMarkHired ? <SmallActionButton label="Mark Hired" onPress={onMarkHired} /> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -343,244 +440,81 @@ function SmallActionButton({ label, onPress }: { label: string; onPress: () => v
 function MessageBubble({
   currentUserId,
   message,
+  nextMessage,
+  onToggleTime,
+  previousMessage,
+  showTime,
 }: {
   currentUserId?: string;
   message: ConversationMessage;
+  nextMessage?: ConversationMessage;
+  onToggleTime: () => void;
+  previousMessage?: ConversationMessage;
+  showTime: boolean;
 }) {
   const mine = message.senderId === currentUserId;
+  const previousSameSender = previousMessage?.senderId === message.senderId;
+  const nextSameSender = nextMessage?.senderId === message.senderId;
+  const showAvatar = !mine && !nextSameSender;
+
   return (
-    <View style={[styles.messageLine, mine && styles.messageLineMine]}>
-      {!mine ? <View style={styles.bubbleAvatar}><Text style={styles.bubbleAvatarText}>K</Text></View> : null}
-      <View style={[styles.messageStack, mine && styles.messageStackMine]}>
-        <View style={[styles.messageBubble, mine ? styles.myMessage : styles.theirMessage]}>
-          <Text style={[styles.messageText, mine && styles.myMessageText]}>{message.body}</Text>
+    <View
+      style={[
+        styles.messageLine,
+        previousSameSender ? styles.messageLineGrouped : styles.messageLineSeparated,
+        mine && styles.messageLineMine,
+      ]}>
+      {!mine ? (
+        <View style={styles.avatarSlot}>
+          {showAvatar ? <View style={styles.bubbleAvatar}><Text style={styles.bubbleAvatarText}>K</Text></View> : null}
         </View>
-        <Text style={[styles.messageTime, mine && styles.myMessageTime]}>
-          {formatTime(message.createdAt)}
-        </Text>
+      ) : null}
+      <View style={[styles.messageStack, mine && styles.messageStackMine]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onToggleTime}
+          style={[
+            styles.messageBubble,
+            previousSameSender && (mine ? styles.myMessageGroupedTop : styles.theirMessageGroupedTop),
+            nextSameSender && (mine ? styles.myMessageGroupedBottom : styles.theirMessageGroupedBottom),
+            mine ? styles.myMessage : styles.theirMessage,
+          ]}>
+          <Text style={[styles.messageText, mine && styles.myMessageText]}>{message.body}</Text>
+        </Pressable>
+        {showTime ? (
+          <Text style={[styles.messageTime, mine && styles.myMessageTime]}>
+            {formatTime(message.createdAt)}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
 }
 
-function ConversationDetailsModal({
-  canMarkHired,
-  conversation,
-  onClose,
-  onLeave,
-  onMarkHired,
-  onOpenPost,
-  onReport,
-  visible,
+function ConversationUnavailableScreen({
+  message,
+  onBack,
 }: {
-  canMarkHired: boolean;
-  conversation: ConversationDetail | null;
-  onClose: () => void;
-  onLeave: () => void;
-  onMarkHired: () => void;
-  onOpenPost: () => void;
-  onReport: () => void;
-  visible: boolean;
+  message: string;
+  onBack: () => void;
 }) {
-  const context = conversation ? getContextSummary(conversation) : null;
-
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
-      <SafeAreaView edges={['top', 'bottom']} style={styles.detailsSafeArea}>
-        <View style={styles.detailsHeader}>
-          <Pressable onPress={onClose} style={styles.headerIcon}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Pressable accessibilityLabel="Go back" onPress={onBack} style={styles.headerIcon}>
             <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
           </Pressable>
-          <Text style={styles.detailsHeaderTitle}>Details</Text>
+          <Text style={styles.headerTitle}>Conversation</Text>
           <View style={styles.headerIcon} />
         </View>
-
-        <ScrollView contentContainerStyle={styles.detailsContent} showsVerticalScrollIndicator={false}>
-          {context ? (
-            <View style={styles.detailsHero}>
-              <View style={styles.detailsAvatar}>
-                <Text style={styles.detailsAvatarText}>{getInitials(context.title)}</Text>
-                <View style={styles.detailsDot} />
-              </View>
-              <Text style={styles.detailsTitle}>{context.title}</Text>
-              <Text style={styles.detailsSubtitle}>{context.subtitle}</Text>
-              <View style={styles.detailsHeroActions}>
-                <IconAction label={conversation?.jobId ? 'View Post' : 'View Service'} icon="article" onPress={onOpenPost} />
-                <IconAction
-                  label="View Profile"
-                  icon="person"
-                  onPress={() => Alert.alert('Profile', 'Public profile route can be added in a later slice.')}
-                />
-              </View>
-            </View>
-          ) : null}
-
-          {conversation ? (
-            <View style={styles.detailsCard}>
-              <Text style={styles.detailsSectionTitle}>{conversation.jobId ? 'Job Details' : 'Service Details'}</Text>
-              <View style={styles.detailsGrid}>
-                {getDetailMetrics(conversation).map((metric) => (
-                  <View key={metric.label} style={styles.detailsMetric}>
-                    <Text style={styles.detailsMetricLabel}>{metric.label}</Text>
-                    <Text style={styles.detailsMetricValue}>{metric.value}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          <ActionList title="Actions">
-            {canMarkHired ? (
-              <ActionRow icon="check-circle" label="Mark worker hired" onPress={onMarkHired} />
-            ) : null}
-            <ActionRow disabled icon="rate-review" label="Leave review" onPress={() => {}} />
-            <ActionRow icon="search" label="Search a conversation" onPress={() => Alert.alert('Search', 'Use the Messages search field from the inbox.')} />
-          </ActionList>
-
-          <ActionList title="Privacy and support">
-            <ActionRow
-              description="Give feedback and report conversation"
-              icon="report"
-              label="Report"
-              onPress={onReport}
-            />
-            <ActionRow danger icon="logout" label="Delete chat" onPress={onLeave} />
-          </ActionList>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-function IconAction({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: MaterialIconName;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.iconAction, pressed && styles.pressed]}>
-      <MaterialIcons color={color.textMuted} name={icon} size={24} />
-      <Text style={styles.iconActionText}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function ActionList({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <View style={styles.actionListWrap}>
-      <Text style={styles.actionListTitle}>{title}</Text>
-      <View style={styles.actionList}>{children}</View>
-    </View>
-  );
-}
-
-function ActionRow({
-  danger,
-  description,
-  disabled,
-  icon,
-  label,
-  onPress,
-}: {
-  danger?: boolean;
-  description?: string;
-  disabled?: boolean;
-  icon: MaterialIconName;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionRow,
-        pressed && styles.pressed,
-        disabled && styles.actionRowDisabled,
-      ]}>
-      <MaterialIcons color={danger ? color.danger : color.text} name={icon} size={22} />
-      <View style={styles.actionRowCopy}>
-        <Text style={[styles.actionRowLabel, danger && styles.actionRowDanger]}>{label}</Text>
-        {description ? <Text style={styles.actionRowDescription}>{description}</Text> : null}
-      </View>
-    </Pressable>
-  );
-}
-
-function ReportSheet({
-  onClose,
-  onReport,
-  visible,
-}: {
-  onClose: () => void;
-  onReport: (reason: string) => void;
-  visible: boolean;
-}) {
-  return (
-    <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.sheetBackdrop}>
-        <Pressable onPress={onClose} style={StyleSheet.absoluteFill} />
-        <View style={styles.reportSheet}>
-          <Text style={styles.reportTitle}>Report user</Text>
-          <Text style={styles.reportBody}>
-            We will not let the person know who reported them. If someone is in immediate danger,
-            call local emergency services. Do not wait.
-          </Text>
-          {REPORT_REASONS.map((reason) => (
-            <Pressable key={reason} onPress={() => onReport(reason)} style={styles.reportReason}>
-              <Text style={styles.reportReasonText}>{reason}</Text>
-              <MaterialIcons color={color.verificationBlue} name="chevron-right" size={24} />
-            </Pressable>
-          ))}
+        <View style={styles.unavailableState}>
+          <MaterialIcons color={color.textSubtle} name="chat-bubble-outline" size={40} />
+          <Text style={styles.unavailableTitle}>Conversation unavailable</Text>
+          <Text style={styles.unavailableBody}>{message}</Text>
         </View>
       </View>
-    </Modal>
-  );
-}
-
-function LeaveChatDialog({
-  onCancel,
-  onLeave,
-  visible,
-}: {
-  onCancel: () => void;
-  onLeave: () => void;
-  visible: boolean;
-}) {
-  return (
-    <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
-      <View style={styles.dialogBackdrop}>
-        <View style={styles.dialogCard}>
-          <Text style={styles.dialogTitle}>Delete chat?</Text>
-          <Text style={styles.dialogBody}>This removes the conversation from your active inbox.</Text>
-          <PrimaryButton label="Delete" onPress={onLeave} />
-          <Pressable onPress={onCancel} style={styles.dialogCancel}>
-            <Text style={styles.dialogCancelText}>Cancel</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function ConversationSkeleton() {
-  return (
-    <>
-      <View style={styles.contextBlock}>
-        <Skeleton height={14} width="52%" />
-        <Skeleton height={12} width="74%" />
-        <View style={styles.contextActions}>
-          <Skeleton height={28} width="48%" borderRadius={8} />
-          <Skeleton height={28} width="48%" borderRadius={8} />
-        </View>
-      </View>
-      <Skeleton height={32} width="70%" borderRadius={12} />
-      <Skeleton height={48} width="68%" borderRadius={12} style={{ alignSelf: 'flex-end' }} />
-    </>
+    </SafeAreaView>
   );
 }
 
@@ -609,28 +543,6 @@ function getContextSummary(conversation: ConversationDetail) {
   };
 }
 
-function getDetailMetrics(conversation: ConversationDetail) {
-  if (conversation.job) {
-    return [
-      { label: 'Budget', value: conversation.job.budgetAmount ? `PHP ${conversation.job.budgetAmount}` : 'To coordinate' },
-      { label: 'Location', value: getMarketplaceLocation(conversation.job) },
-      { label: 'Schedule', value: conversation.job.scheduleText ?? 'Not yet agreed' },
-      { label: 'Job Status', value: formatStatus(conversation.status) },
-    ];
-  }
-
-  if (conversation.service) {
-    return [
-      { label: 'Rate', value: conversation.service.rateText ?? 'To coordinate' },
-      { label: 'Location', value: getMarketplaceLocation(conversation.service) },
-      { label: 'Availability', value: conversation.service.availabilityText ?? 'To coordinate' },
-      { label: 'Status', value: formatStatus(conversation.status) },
-    ];
-  }
-
-  return [{ label: 'Status', value: formatStatus(conversation.status) }];
-}
-
 function getParticipantSubtitle(conversation: ConversationDetail | null, currentUserId?: string) {
   if (!conversation) return 'Loading conversation';
   if (conversation.jobId) return conversation.clientId === currentUserId ? 'Interested worker' : 'Posted this job';
@@ -653,13 +565,6 @@ function getInitials(name: string) {
     .join('');
 }
 
-function formatStatus(value: string) {
-  return value
-    .split('_')
-    .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -678,25 +583,27 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     backgroundColor: color.background,
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
     flexDirection: 'row',
-    gap: 12,
-    minHeight: 70,
-    paddingHorizontal: 19,
-    paddingVertical: 13,
+    gap: 10,
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   headerIcon: {
     alignItems: 'center',
-    height: 24,
+    height: 36,
     justifyContent: 'center',
-    width: 24,
+    width: 36,
   },
   headerAvatar: {
     alignItems: 'center',
     backgroundColor: color.surfaceAlt,
-    borderRadius: 22,
-    height: 44,
+    borderRadius: 18,
+    height: 36,
     justifyContent: 'center',
-    width: 44,
+    width: 36,
   },
   headerAvatarText: {
     color: color.text,
@@ -707,13 +614,13 @@ const styles = StyleSheet.create({
   onlineDot: {
     backgroundColor: color.brandYellow,
     borderColor: color.background,
-    borderRadius: 5,
+    borderRadius: 4,
     borderWidth: 1,
     bottom: 1,
-    height: 10,
+    height: 8,
     position: 'absolute',
     right: 1,
-    width: 10,
+    width: 8,
   },
   headerCopy: {
     flex: 1,
@@ -732,21 +639,85 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   messages: {
-    gap: 9,
-    paddingHorizontal: 17,
-    paddingTop: 0,
+    paddingHorizontal: 12,
+    paddingTop: 8,
   },
-  contextBlock: {
-    backgroundColor: color.cardTint,
-    gap: 10,
-    marginHorizontal: -17,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  loadingHeaderAvatarWrap: {
+    height: 40,
+    width: 40,
   },
-  contextHeader: {
+  loadingOnlineDot: {
+    borderColor: color.background,
+    borderWidth: 2,
+    bottom: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  loadingThread: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  loadingThreadStatus: {
+    alignSelf: 'center',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  loadingMessageRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 10,
+    gap: 6,
+    marginTop: 2,
+  },
+  loadingMessageRowSeparated: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 9,
+  },
+  loadingMessageRowMine: {
+    alignItems: 'flex-end',
+    marginTop: 2,
+  },
+  loadingMessageRowMineSeparated: {
+    alignItems: 'flex-end',
+    marginTop: 9,
+  },
+  loadingMessageStack: {
+    alignItems: 'flex-start',
+    flex: 1,
+    gap: 2,
+    maxWidth: '76%',
+  },
+  loadingMessageStackMine: {
+    alignItems: 'flex-end',
+    gap: 2,
+    maxWidth: '76%',
+    width: '100%',
+  },
+  loadingBubbleTheirTop: {
+    borderBottomLeftRadius: 6,
+  },
+  loadingBubbleTheirBottom: {
+    borderTopLeftRadius: 6,
+  },
+  loadingBubbleMineTop: {
+    borderBottomRightRadius: 6,
+  },
+  loadingBubbleMineBottom: {
+    borderTopRightRadius: 6,
+  },
+  contextBlock: {
+    backgroundColor: color.background,
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  contextHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   contextCopy: {
     flex: 1,
@@ -755,34 +726,34 @@ const styles = StyleSheet.create({
   contextTitle: {
     color: color.text,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 10,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
   },
   contextMeta: {
-    color: color.text,
+    color: color.textMuted,
     fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 15,
   },
   contextActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 15,
+    gap: 8,
   },
   smallAction: {
     alignItems: 'center',
-    backgroundColor: color.background,
+    backgroundColor: color.surfaceAlt,
     borderRadius: 8,
     flex: 1,
-    minHeight: 28,
+    minHeight: 30,
     minWidth: 100,
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   smallActionText: {
     color: color.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 11,
     lineHeight: 18,
   },
   threadStatus: {
@@ -818,8 +789,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
+  messageLineGrouped: {
+    marginTop: 2,
+  },
+  messageLineSeparated: {
+    marginTop: 9,
+  },
   messageLineMine: {
     justifyContent: 'flex-end',
+  },
+  avatarSlot: {
+    width: 27,
   },
   bubbleAvatar: {
     alignItems: 'center',
@@ -837,27 +817,39 @@ const styles = StyleSheet.create({
   },
   messageStack: {
     alignItems: 'flex-start',
-    maxWidth: '78%',
+    maxWidth: '76%',
   },
   messageStackMine: {
     alignItems: 'flex-end',
   },
   messageBubble: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  myMessageGroupedTop: {
+    borderTopRightRadius: 6,
+  },
+  myMessageGroupedBottom: {
+    borderBottomRightRadius: 6,
+  },
+  theirMessageGroupedTop: {
+    borderTopLeftRadius: 6,
+  },
+  theirMessageGroupedBottom: {
+    borderBottomLeftRadius: 6,
   },
   myMessage: {
     backgroundColor: color.verificationBlue,
   },
   theirMessage: {
-    backgroundColor: '#FBFBFB',
+    backgroundColor: color.surfaceAlt,
   },
   messageText: {
     color: color.text,
     fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   myMessageText: {
     color: color.background,
@@ -867,28 +859,44 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Regular',
     fontSize: 10,
     lineHeight: 14,
-    marginTop: 2,
+    marginTop: 3,
   },
   myMessageTime: {
     color: color.textSubtle,
   },
   composerWrap: {
     backgroundColor: color.background,
+    borderTopColor: color.border,
+    borderTopWidth: 1,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+  },
+  loadingPromptRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 2,
+  },
+  loadingComposerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
     gap: 10,
-    paddingHorizontal: 21,
-    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  loadingComposerInput: {
+    flex: 1,
   },
   promptRow: {
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   promptPill: {
     alignItems: 'center',
-    backgroundColor: '#F2F2F2',
-    borderRadius: 12,
+    backgroundColor: color.surfaceAlt,
+    borderRadius: 14,
     justifyContent: 'center',
-    minHeight: 26,
-    paddingHorizontal: 12,
+    minHeight: 32,
+    paddingHorizontal: 14,
   },
   promptText: {
     color: color.text,
@@ -900,282 +908,59 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexDirection: 'row',
     gap: 10,
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
   attachmentRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 4,
-    height: 38,
+    gap: 6,
+    height: 42,
   },
   input: {
-    backgroundColor: '#F2F2F2',
-    borderRadius: 14,
+    backgroundColor: color.surfaceAlt,
+    borderRadius: 20,
     color: color.text,
     flex: 1,
     fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     maxHeight: 110,
-    minHeight: 37,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: 42,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
   },
   sendButton: {
     alignItems: 'center',
-    height: 38,
+    height: 42,
     justifyContent: 'center',
-    width: 26,
-  },
-  detailsSafeArea: {
-    backgroundColor: color.background,
-    flex: 1,
-  },
-  detailsHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 50,
-    paddingHorizontal: 19,
-  },
-  detailsHeaderTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  detailsContent: {
-    gap: 17,
-    paddingHorizontal: 21,
-    paddingBottom: 40,
-  },
-  detailsHero: {
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 84,
-    paddingVertical: 8,
-  },
-  detailsAvatar: {
-    alignItems: 'center',
-    backgroundColor: color.surfaceAlt,
-    borderRadius: 28,
-    height: 55,
-    justifyContent: 'center',
-    width: 55,
-  },
-  detailsAvatarText: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  detailsDot: {
-    backgroundColor: color.border,
-    borderRadius: 7,
-    bottom: 0,
-    height: 13,
-    position: 'absolute',
-    right: 0,
-    width: 13,
-  },
-  detailsTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 18,
-    lineHeight: 23,
-    textAlign: 'center',
-  },
-  detailsSubtitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
-    lineHeight: 13,
-    textAlign: 'center',
-  },
-  detailsHeroActions: {
-    flexDirection: 'row',
-    gap: 11,
-    marginTop: 8,
-  },
-  iconAction: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  iconActionText: {
-    color: color.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
-    lineHeight: 18,
-  },
-  detailsCard: {
-    backgroundColor: '#F2F2F2',
-    borderRadius: 14,
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-  },
-  detailsSectionTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  detailsGrid: {
-    columnGap: 4,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    rowGap: 12,
-  },
-  detailsMetric: {
-    flexBasis: '48%',
-    flexGrow: 1,
-  },
-  detailsMetricLabel: {
-    color: color.primary,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  detailsMetricValue: {
-    color: color.primary,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  actionListWrap: {
-    gap: 8,
-  },
-  actionListTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  actionList: {
-    backgroundColor: '#F2F2F2',
-    borderRadius: 8,
-    gap: 5,
-    padding: 4,
-  },
-  actionRow: {
-    alignItems: 'center',
-    backgroundColor: '#EAEAEA',
-    borderRadius: 8,
-    flexDirection: 'row',
-    gap: 10,
-    minHeight: 40,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  actionRowDisabled: {
-    opacity: 0.41,
-  },
-  actionRowCopy: {
-    flex: 1,
-    gap: 3,
-  },
-  actionRowLabel: {
-    color: color.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  actionRowDanger: {
-    color: color.danger,
-  },
-  actionRowDescription: {
-    color: color.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
-    lineHeight: 13,
-  },
-  sheetBackdrop: {
-    backgroundColor: 'rgba(58,58,58,0.5)',
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  reportSheet: {
-    backgroundColor: color.cardTint,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: 10,
-    minHeight: '88%',
-    padding: 24,
-  },
-  reportTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  reportBody: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 12,
-  },
-  reportReason: {
-    alignItems: 'center',
-    borderBottomColor: '#C0C0C0',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 36,
-    paddingVertical: 6,
-  },
-  reportReasonText: {
-    color: color.text,
-    flex: 1,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  dialogBackdrop: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(58,58,58,0.35)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 27,
-  },
-  dialogCard: {
-    backgroundColor: color.background,
-    borderRadius: 16,
-    gap: 12,
-    padding: 24,
-    width: '100%',
-  },
-  dialogTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  dialogBody: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-  dialogCancel: {
-    alignItems: 'center',
-    backgroundColor: color.cardTint,
-    borderRadius: 8,
-    minHeight: 38,
-    justifyContent: 'center',
-  },
-  dialogCancelText: {
-    color: color.text,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 13,
-    lineHeight: 18,
+    width: 34,
   },
   pressed: {
     opacity: 0.72,
   },
   disabled: {
     opacity: 0.55,
+  },
+  unavailableState: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 64,
+  },
+  unavailableTitle: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  unavailableBody: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
 });

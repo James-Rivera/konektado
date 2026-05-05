@@ -5,7 +5,6 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import { HomeTopHeader } from '@/components/home/HomeDashboardUI';
 import { PopularServicesSection } from '@/components/search/PopularServicesSection';
 import { SearchHeaderRow } from '@/components/search/SearchHeaderRow';
 import { SearchJobResultCard } from '@/components/search/SearchJobResultCard';
@@ -20,7 +19,7 @@ import {
   type SearchWorkerItem,
   type SearchMode,
 } from '@/constants/search-demo-data';
-import { color, space, typography } from '@/constants/theme';
+import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
@@ -120,22 +119,14 @@ export default function SearchScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[4]}>
-          <HomeTopHeader onNotifications={() => showPlaceholder('Notifications')} topInset={topInset} />
-          <SearchHeaderRow
-            onBack={() => {
-              if (router.canGoBack()) {
-                router.back();
-                return;
-              }
-
-              router.replace('/(tabs)');
-            }}
-            onChangeText={setQuery}
-            value={query}
-          />
-          <View style={styles.segmentBand}>
-            <SearchSegmentedControl mode={mode} onChange={handleModeChange} />
+          stickyHeaderIndices={[2]}>
+          <View style={[styles.searchModule, { paddingTop: topInset + 12 }]}>
+            <SearchHeaderRow
+              flush
+              onChangeText={setQuery}
+              value={query}
+            />
+            <SearchSegmentedControl flush mode={mode} onChange={handleModeChange} />
           </View>
           <PopularServicesSection
             onPressService={handleChipPress}
@@ -232,9 +223,7 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
   return {
     id: service.id,
     name: service.provider?.fullName || 'Konektado resident',
-    statusLine: service.availabilityText
-      ? `${service.availabilityText} near your barangay`
-      : 'Available near your barangay',
+    statusLine: formatWorkerAvailability(service.availabilityText),
     rateLine: service.rateText || 'Rate to coordinate',
     headline: service.description || service.title,
     tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
@@ -243,6 +232,29 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
     location,
     matchReason: `Offers ${category.toLowerCase()} help near ${location}.`,
   };
+}
+
+function formatWorkerAvailability(value: string | null) {
+  const source = value?.trim();
+  if (!source) return 'Available near you';
+
+  const shortened = source
+    .replace(/\s+near your barangay\b/i, '')
+    .replace(/\bSaturday\b/gi, 'Sat')
+    .replace(/\bSunday\b/gi, 'Sun')
+    .replace(/\bMonday\b/gi, 'Mon')
+    .replace(/\bTuesday\b/gi, 'Tue')
+    .replace(/\bWednesday\b/gi, 'Wed')
+    .replace(/\bThursday\b/gi, 'Thu')
+    .replace(/\bFriday\b/gi, 'Fri')
+    .replace(/:00\s*(AM|PM)\b/gi, ' $1')
+    .replace(/\s+and\s+/gi, ' - ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const withPrefix = /^available\b/i.test(shortened) ? shortened : `Available ${shortened.charAt(0).toLowerCase()}${shortened.slice(1)}`;
+
+  return withPrefix.length <= 40 ? withPrefix : shortened.length <= 40 ? shortened : `${shortened.slice(0, 37).trim()}...`;
 }
 
 function SearchJobResultSkeleton() {
@@ -312,26 +324,28 @@ function SearchWorkerResultSkeleton() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   safeArea: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   content: {
-    paddingBottom: space['3xl'],
+    paddingBottom: 112,
   },
-  segmentBand: {
+  searchModule: {
     backgroundColor: color.background,
+    gap: 10,
+    paddingBottom: 12,
     paddingHorizontal: 20,
-    paddingVertical: 8,
   },
   resultsWrap: {
     backgroundColor: color.background,
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 15,
-    paddingVertical: 12,
+    paddingBottom: 28,
+    paddingTop: 12,
   },
   skeletonCard: {
     backgroundColor: color.background,

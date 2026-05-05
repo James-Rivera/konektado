@@ -30,7 +30,7 @@ const FILTERS: { label: string; value: InboxFilter }[] = [
 
 export default function MessagesScreen() {
   const router = useRouter();
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [query, setQuery] = useState('');
@@ -98,10 +98,19 @@ export default function MessagesScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.content, !isVerified && styles.lockedContent]}
+        contentContainerStyle={[
+          styles.content,
+          !profileLoading && !isVerified && styles.lockedContent,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {!isVerified ? (
+        {profileLoading ? (
+          <View style={styles.listStack}>
+            <MessageRowSkeleton />
+            <MessageRowSkeleton />
+            <MessageRowSkeleton />
+          </View>
+        ) : !isVerified ? (
           <LockedMessagesCard onVerify={() => router.push('/verification')} />
         ) : (
           <>

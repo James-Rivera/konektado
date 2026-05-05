@@ -17,6 +17,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+        }}
+      />
+      <Tabs.Screen
         name="post"
         options={{
           title: 'Post',
@@ -32,13 +38,6 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          href: null,
-          title: 'Search',
         }}
       />
     </Tabs>

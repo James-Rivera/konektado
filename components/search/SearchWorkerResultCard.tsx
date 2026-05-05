@@ -13,6 +13,8 @@ export function SearchWorkerResultCard({
   onOpenWorker: () => void;
   onSave: () => void;
 }) {
+  const showLocationInline = canShowLocationInline(worker.ratingText, worker.jobsDoneText, worker.location);
+
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -22,8 +24,12 @@ export function SearchWorkerResultCard({
             <View style={styles.statusDot} />
           </View>
           <View style={styles.identityCopy}>
-            <Text style={styles.name}>{worker.name}</Text>
-            <Text style={styles.statusLine}>{worker.statusLine}</Text>
+            <Text numberOfLines={1} style={styles.name}>
+              {worker.name}
+            </Text>
+            <Text numberOfLines={1} style={styles.statusLine}>
+              {worker.statusLine}
+            </Text>
           </View>
         </View>
 
@@ -33,14 +39,20 @@ export function SearchWorkerResultCard({
         </View>
       </View>
 
-      <View style={styles.metaRow}>
-        <MetaItem icon="star-border" text={worker.ratingText} tint="yellow" />
-        <MetaItem icon="check-circle" text={worker.jobsDoneText} />
-        <MetaItem icon="location-on" text={worker.location} />
+      <Text style={styles.headline}>{worker.headline}</Text>
+      <Text style={styles.rateLine}>{worker.rateLine}</Text>
+
+      <View style={styles.metaBlock}>
+        <View style={[styles.metaRow, showLocationInline && styles.metaRowInline]}>
+          <MetaItem compact={showLocationInline} icon="star-border" text={worker.ratingText} tint="yellow" />
+          <MetaItem compact={showLocationInline} icon="check-circle" text={worker.jobsDoneText} />
+          {showLocationInline ? (
+            <MetaItem compact icon="location-on" text={worker.location} variant="location" />
+          ) : null}
+        </View>
+        {showLocationInline ? null : <MetaItem fullWidth icon="location-on" text={worker.location} />}
       </View>
 
-      <Text style={styles.rateLine}>{worker.rateLine}</Text>
-      <Text style={styles.headline}>{worker.headline}</Text>
       <Text style={styles.matchReason}>{worker.matchReason}</Text>
 
       <View style={styles.tagRow}>
@@ -70,20 +82,36 @@ export function SearchWorkerResultCard({
 function MetaItem({
   icon,
   text,
+  compact = false,
+  fullWidth = false,
   tint = 'default',
+  variant = 'default',
 }: {
   icon: keyof typeof MaterialIcons.glyphMap;
   text: string;
+  compact?: boolean;
+  fullWidth?: boolean;
   tint?: 'default' | 'yellow';
+  variant?: 'default' | 'location';
 }) {
   return (
-    <View style={styles.metaItem}>
+    <View
+      style={[
+        styles.metaItem,
+        compact && styles.metaItemCompact,
+        variant === 'location' && styles.metaItemLocation,
+        fullWidth && styles.metaItemFull,
+      ]}>
       <MaterialIcons color={tint === 'yellow' ? color.brandYellow : color.textMuted} name={icon} size={16} />
       <Text numberOfLines={1} style={styles.metaText}>
         {text}
       </Text>
     </View>
   );
+}
+
+function canShowLocationInline(firstMeta: string, secondMeta: string, location: string) {
+  return firstMeta.length + secondMeta.length + location.length <= 36;
 }
 
 function IconButton({
@@ -170,13 +198,13 @@ const styles = StyleSheet.create({
   name: {
     color: color.text,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 20,
   },
   statusLine: {
     color: color.textMuted,
     fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
+    fontSize: 12,
     lineHeight: 18,
   },
   iconRow: {
@@ -190,20 +218,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 18,
   },
+  metaBlock: {
+    gap: 5,
+  },
   metaRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
+    rowGap: 5,
+  },
+  metaRowInline: {
+    flexWrap: 'nowrap',
   },
   metaItem: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexShrink: 1,
     gap: 4,
-    maxWidth: 118,
+    maxWidth: '48%',
+    minWidth: 0,
+  },
+  metaItemCompact: {
+    maxWidth: '31%',
+  },
+  metaItemLocation: {
+    flex: 1,
+    maxWidth: '38%',
+  },
+  metaItemFull: {
+    maxWidth: '100%',
+    width: '100%',
   },
   metaText: {
     ...typography.caption,
     color: color.textMuted,
+    flexShrink: 1,
+    minWidth: 0,
   },
   rateLine: {
     ...typography.caption,
@@ -211,8 +262,8 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 15,
     lineHeight: 20,
   },
   matchReason: {

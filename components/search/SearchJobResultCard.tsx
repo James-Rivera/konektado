@@ -13,6 +13,8 @@ export function SearchJobResultCard({
   onOpenJob: () => void;
   onSave: () => void;
 }) {
+  const showLocationInline = canShowLocationInline(job.clientRatingText, job.jobsPostedText, job.location);
+
   return (
     <View style={styles.card}>
       <View style={styles.topBlock}>
@@ -29,10 +31,20 @@ export function SearchJobResultCard({
         </View>
       </View>
 
-      <View style={styles.metaRow}>
-        <MetaItem icon="star-border" text={job.clientRatingText} tint="yellow" />
-        <MetaItem icon="work" text={job.jobsPostedText} />
-        <MetaItem icon="location-on" text={job.location} />
+      <View style={styles.metaBlock}>
+        <View style={[styles.metaRow, showLocationInline && styles.metaRowInline]}>
+          <MetaItem
+            compact={showLocationInline}
+            icon="star-border"
+            text={job.clientRatingText}
+            tint="yellow"
+          />
+          <MetaItem compact={showLocationInline} icon="work" text={job.jobsPostedText} />
+          {showLocationInline ? (
+            <MetaItem compact icon="location-on" text={job.location} variant="location" />
+          ) : null}
+        </View>
+        {showLocationInline ? null : <MetaItem fullWidth icon="location-on" text={job.location} />}
       </View>
 
       <View style={styles.bodyBlock}>
@@ -62,20 +74,36 @@ export function SearchJobResultCard({
 function MetaItem({
   icon,
   text,
+  compact = false,
+  fullWidth = false,
   tint = 'default',
+  variant = 'default',
 }: {
   icon: keyof typeof MaterialIcons.glyphMap;
   text: string;
+  compact?: boolean;
+  fullWidth?: boolean;
   tint?: 'default' | 'yellow';
+  variant?: 'default' | 'location';
 }) {
   return (
-    <View style={styles.metaItem}>
+    <View
+      style={[
+        styles.metaItem,
+        compact && styles.metaItemCompact,
+        variant === 'location' && styles.metaItemLocation,
+        fullWidth && styles.metaItemFull,
+      ]}>
       <MaterialIcons color={tint === 'yellow' ? color.brandYellow : color.textMuted} name={icon} size={16} />
       <Text numberOfLines={1} style={styles.metaText}>
         {text}
       </Text>
     </View>
   );
+}
+
+function canShowLocationInline(firstMeta: string, secondMeta: string, location: string) {
+  return firstMeta.length + secondMeta.length + location.length <= 36;
 }
 
 function IconButton({
@@ -147,20 +175,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 18,
   },
+  metaBlock: {
+    gap: 5,
+  },
   metaRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
+    rowGap: 5,
+  },
+  metaRowInline: {
+    flexWrap: 'nowrap',
   },
   metaItem: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexShrink: 1,
     gap: 4,
-    maxWidth: 118,
+    maxWidth: '48%',
+    minWidth: 0,
+  },
+  metaItemCompact: {
+    maxWidth: '31%',
+  },
+  metaItemLocation: {
+    flex: 1,
+    maxWidth: '38%',
+  },
+  metaItemFull: {
+    maxWidth: '100%',
+    width: '100%',
   },
   metaText: {
     ...typography.caption,
     color: color.textMuted,
+    flexShrink: 1,
+    minWidth: 0,
   },
   bodyBlock: {
     gap: 8,

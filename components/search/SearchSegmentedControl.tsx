@@ -8,12 +8,14 @@ const modes = Object.keys(searchModeLabels) as SearchMode[];
 export function SearchSegmentedControl({
   mode,
   onChange,
+  flush = false,
 }: {
   mode: SearchMode;
   onChange: (mode: SearchMode) => void;
+  flush?: boolean;
 }) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, flush && styles.containerFlush]}>
       {modes.map((item) => {
         const selected = item === mode;
 
@@ -47,6 +49,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 20,
     padding: 4,
+  },
+  containerFlush: {
+    marginHorizontal: 0,
   },
   segment: {
     alignItems: 'center',

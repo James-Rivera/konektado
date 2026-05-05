@@ -17,12 +17,14 @@ Recently completed work:
   - `both` or missing -> For you
 - Dashboard/Home has been rebuilt closer to Figma:
   - Konektado wordmark and notification button in the top header.
-  - Search bar.
-  - Verification/setup banner for unverified users.
   - For you, Jobs, Workers filters.
+  - Verification/setup banner for unverified users.
   - Latest in your barangay feed section.
   - Mixed worker/job cards.
-  - View Profile, View Job, Message, and Save actions.
+- Search is now a main bottom-navigation tab between Home and Post:
+  - Search owns the prominent "Search nearby jobs or workers" input.
+  - Home keeps feed filter pills instead of a large persistent search bar.
+  - Search uses specialized job and worker result cards.
 - `KonektadoWordmark` is now shared from `components/KonektadoWordmark.tsx` and reused by onboarding/auth/dashboard.
 - Feed cards were updated to match the Figma card direction:
 - `components/WorkerCard.tsx`
@@ -77,6 +79,7 @@ Current limitations to preserve in docs and implementation:
 ## Current Important Files
 
 - `app/(tabs)/index.tsx` - Dashboard/Home screen and current feed wiring.
+- `app/(tabs)/search.tsx` - Main Search tab for job/service discovery.
 - `components/JobCard.tsx` - Figma-style job feed card.
 - `components/WorkerCard.tsx` - Figma-style worker feed card.
 - `components/KonektadoWordmark.tsx` - shared Konektado logo.
@@ -150,7 +153,7 @@ Please inspect the repository and read AGENTS.md and /docs first. Treat /docs as
 Current context:
 - Stack: Expo Router, React Native, TypeScript, Supabase.
 - Konektado is a barangay-level job and service matching mobile app.
-- Main tabs are Home, Post, Messages, Profile.
+- Main tabs are Home, Search, Post, Messages, Profile.
 - One account can have both Work Profile and Hiring Profile.
 - Use Services in UI, not Skills.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.

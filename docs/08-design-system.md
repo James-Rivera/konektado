@@ -24,9 +24,11 @@ Current Figma direction observed from the dashboard:
 - Blue primary actions used sparingly.
 - Green verification badge only where trust state is central, not repeated on every feed card.
 - Rounded pill filters and action buttons.
-- Bottom navigation with Home, Post, Messages, and Profile.
-- Search bar for "Search nearby jobs or workers".
+- Bottom navigation with Home, Search, Post, Messages, and Profile.
+- Search as a main destination for "Search nearby jobs or workers".
+- The Konektado wordmark/header belongs on Home only. Other bottom tabs use clear screen-specific titles where they improve orientation; Search uses the search field and mode control as its header module.
 - Feed sections for jobs and workers.
+- Home feed uses one unified card shell for mixed job and service posts.
 - Post dashboard for creating and managing job/service posts.
 - Messages screens for job/service coordination.
 - Profile with Work Profile and Hiring Profile tabs.
@@ -288,6 +290,7 @@ Rules:
 Tabs:
 
 - Home
+- Search
 - Post
 - Messages
 - Profile
@@ -295,6 +298,13 @@ Tabs:
 MVP note:
 
 - Messages is part of the current MVP direction. Keep it simple: inbox, job/service context, text messages, quick prompts, and safety/report actions.
+
+Header rule:
+
+- Home uses the Konektado brand header because it is the landing/community feed.
+- Messages, Post, and Profile should use task-specific screen titles instead of repeating the brand wordmark. This keeps bottom-tab destinations easier to identify and scales better as each tab gains its own tools and actions.
+- Search is the exception: because the active bottom tab and search input already communicate the screen purpose, the Search tab should start with a safe-area-aware search module instead of a large repeated title.
+- Notification access can appear on screens where it is contextually useful, but it should not force the Home brand header onto secondary tabs.
 
 ### Messages
 
@@ -307,11 +317,15 @@ Rules:
 - Use lightweight list rows for inbox conversations instead of heavy cards.
 - Inbox filters are All, Jobs, Services, and Unread.
 - Keep job and service context visible at the top of a conversation so users know what the chat is about.
+- Keep the job/service context compact by default so messages remain the primary focus. It should sit with the fixed chat header, not inside the scrollable message thread. It may expand for quick actions, but it should not read like a large job card above every chat.
+- Group consecutive message bubbles from the same sender tightly. Hide per-message timestamps by default and reveal the sent time when the user taps a bubble.
 - Use quick-reply chips for common coordination questions.
+- Conversation Details should be a full page, not a modal layered over chat. It must own the full white viewport, hide the chat composer, and use a normal app-bar plus scrollable page content.
+- Chat composers must stay visible above the keyboard. The message list should resize and scroll to the latest message when the keyboard opens.
 - Keep MVP messaging text-only. Attachment icons may appear as non-primary visual affordances, but image/file sending is deferred.
 - Use conversation status for simple MVP safety actions: reported conversations are marked reported, and deleted chats are archived rather than hard-deleted.
 
-### Search Bar
+### Search
 
 Usage:
 
@@ -322,7 +336,11 @@ Usage:
 Rules:
 
 - Keep search input prominent.
+- On the Search tab, start with the search input rather than a large "Search" title. Use top safe-area padding plus about 12-16px so the input feels intentional, not cramped.
+- Align the search input and Find Jobs / Find Workers segmented control to the same parent width so they read as one search module.
 - Pair with filter controls for category, location, and verification status.
+- Search belongs in the bottom navigation as its own intentional discovery destination.
+- Home can use feed filter pills, but should not duplicate Search with a large persistent search bar.
 
 ### Job Card
 
@@ -344,6 +362,7 @@ Rules:
 - Use title-first layout, like a marketplace listing.
 - Use schedule language such as "Starts 3:00 PM" instead of worker availability language.
 - Public job cards do not need a repeated verified badge if interaction is already verification-gated.
+- In Home, use the unified feed card instead of this specialized job card so For you, Jobs, and Workers keep the same visual rhythm. Search and job-focused result lists may continue using this richer job-first card.
 
 ### Profile Card
 
@@ -364,6 +383,25 @@ Rules:
 - Worker cards are person-first.
 - Use "Services" for what a worker offers.
 - Use muted pills in Home/feed; reserve blue for active filters and primary actions.
+- In Home, use the unified feed card instead of this specialized worker card so service posts sit cleanly beside job posts. Search and worker-focused result lists may continue using this richer person-first card.
+
+### Home Feed Card
+
+Usage:
+
+- Mixed For you feed.
+- Home Jobs filter.
+- Home Workers filter.
+
+Rules:
+
+- Use one shared card layout for job posts and service posts in Home.
+- Always show avatar/name, the Konektado yellow online dot when presence is active, a short post-type label, relative time, a compact rate/budget line, post copy, tags, and trust/location metadata in the same positions.
+- Home feed cards should feel like community posts, not CTA-heavy listing cards. The whole card opens the relevant detail screen; do not show a full-width "View Job" or "View Profile" button in Home.
+- Use plain labels and post copy such as "Posted a job", "Posted a service", "Looking for cleaning", "Need help with laundry", and "I offer plumbing repair".
+- Keep the type distinction in labels, metadata, copy, and destination rather than using separate card structures.
+- Job posts open job detail; service posts open worker/service profile.
+- Search can use specialized job and worker result cards because the user is already in a focused browsing mode.
 
 ### Verification Badge
 
@@ -430,7 +468,7 @@ Required content:
 - Explain pending/rejected verification in simple terms.
 - Avoid technical database/auth error messages in UI.
 - Make forms forgiving and show what is missing.
-- Use familiar labels: Home, Post, Messages, Profile.
+- Use familiar labels: Home, Search, Post, Messages, Profile.
 - Avoid overwhelming filters; show the most useful filters first.
 - Make verification badges visually clear and consistent.
 

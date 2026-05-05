@@ -118,6 +118,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
           <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />
+          <Stack.Screen name="conversation/[conversationId]/details" options={{ headerShown: false }} />
           <Stack.Screen name="create-job" options={{ headerShown: false }} />
           <Stack.Screen name="create-job-preview" options={{ headerShown: false }} />
           <Stack.Screen name="create-service" options={{ headerShown: false }} />

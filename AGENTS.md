@@ -29,7 +29,7 @@ Use this file as the first stop for any AI or agent working in this repository.
 - Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo work, but the Confirm sign up and Magic Link email templates must include `{{ .Token }}` for the app's email-code flow.
 - Do not require SMS OTP, mobile OTP, or an SMS gateway for the MVP unless explicitly requested later.
 - Phone-first auth can remain a future improvement when hardware/provider access is available.
-- Main mobile navigation is Home, Post, Messages, Profile.
+- Main mobile navigation is Home, Search, Post, Messages, Profile.
 - One account can have both Work Profile and Hiring Profile.
 - Use Services in the UI, not Skills.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.

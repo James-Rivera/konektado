@@ -6,26 +6,32 @@ import { color, space, typography } from '@/constants/theme';
 export function SearchHeaderRow({
   value,
   onChangeText,
+  autoFocus = false,
+  flush = false,
   onBack,
 }: {
   value: string;
   onChangeText: (value: string) => void;
-  onBack: () => void;
+  autoFocus?: boolean;
+  flush?: boolean;
+  onBack?: () => void;
 }) {
   return (
-    <View style={styles.container}>
-      <Pressable
-        accessibilityLabel="Go back"
-        accessibilityRole="button"
-        onPress={onBack}
-        style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-        <MaterialIcons color={color.text} name="arrow-back" size={22} />
-      </Pressable>
+    <View style={[styles.container, flush && styles.containerFlush]}>
+      {onBack ? (
+        <Pressable
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.text} name="arrow-back" size={22} />
+        </Pressable>
+      ) : null}
       <View style={styles.searchBar}>
         <TextInput
           autoCapitalize="none"
           autoCorrect={false}
-          autoFocus
+          autoFocus={autoFocus}
           onChangeText={onChangeText}
           placeholder="Search nearby jobs or workers"
           placeholderTextColor={color.textSubtle}
@@ -48,6 +54,10 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  containerFlush: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   backButton: {
     alignItems: 'center',

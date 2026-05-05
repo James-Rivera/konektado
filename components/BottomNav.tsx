@@ -13,6 +13,7 @@ const TAB_META: Record<
   { label: string; activeIcon: MaterialIconName; inactiveIcon: MaterialIconName }
 > = {
   index: { label: 'Home', activeIcon: 'home', inactiveIcon: 'home' },
+  search: { label: 'Search', activeIcon: 'search', inactiveIcon: 'search' },
   post: { label: 'Post', activeIcon: 'add-box', inactiveIcon: 'add-box' },
   messages: {
     label: 'Messages',
@@ -79,28 +80,29 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     borderTopWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    justifyContent: 'space-around',
+    paddingHorizontal: 8,
     paddingTop: 10,
   },
   tab: {
     alignItems: 'center',
+    flex: 1,
     gap: 6,
     justifyContent: 'center',
     minHeight: 60,
-    width: 60,
+    minWidth: 0,
   },
   label: {
     fontSize: 11,
     lineHeight: 14,
     textAlign: 'center',
-    width: 60,
+    width: '100%',
   },
   labelActive: {
-    fontFamily: 'Satoshi-Regular',
+    fontFamily: 'Satoshi-Bold',
   },
   labelInactive: {
-    fontFamily: 'Satoshi-Bold',
+    fontFamily: 'Satoshi-Regular',
   },
   pressed: {
     opacity: 0.7,
