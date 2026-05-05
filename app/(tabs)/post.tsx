@@ -4,10 +4,10 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
 import { listMyServices } from '@/services/service-profile.service';
@@ -15,6 +15,7 @@ import type { JobDraftSummary, JobSummary, ProviderService } from '@/types/marke
 
 export default function PostScreen() {
   const router = useRouter();
+  const topInset = useSafeTopInset();
   const { profile, loading: profileLoading } = useProfile();
   const profileId = profile?.id ?? null;
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
@@ -104,8 +105,7 @@ export default function PostScreen() {
   if (!hasLoadedOnce && (profileLoading || loading)) {
     return (
       <View style={styles.screen}>
-        <TopLogoHeader />
-        <View style={styles.subHeader}>
+        <View style={[styles.subHeader, { paddingTop: topInset + space.sm }]}>
           <View style={styles.subHeaderTitle}>
             <View style={{ width: 24, height: 24 }} />
             <Skeleton height={20} width={140} />
@@ -121,8 +121,7 @@ export default function PostScreen() {
 
   return (
     <View style={styles.screen}>
-      <TopLogoHeader />
-      <View style={styles.subHeader}>
+      <View style={[styles.subHeader, { paddingTop: topInset + space.sm }]}>
         <View style={styles.subHeaderTitle}>
           <Pressable
             accessibilityLabel="Go back"
@@ -251,15 +250,6 @@ export default function PostScreen() {
         onCreateService={handleCreateService}
         visible={sheetOpen}
       />
-    </View>
-  );
-}
-
-function TopLogoHeader() {
-  return (
-    <View style={styles.logoHeader}>
-      <KonektadoWordmark size="small" />
-      <MaterialIcons color={color.verificationBlue} name="notifications" size={24} />
     </View>
   );
 }
@@ -534,20 +524,11 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     flex: 1,
   },
-  logoHeader: {
+  subHeader: {
     alignItems: 'center',
     backgroundColor: color.background,
     borderBottomColor: color.border,
     borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 86,
-    paddingHorizontal: space['2xl'],
-    paddingTop: space['2xl'],
-  },
-  subHeader: {
-    alignItems: 'center',
-    backgroundColor: color.background,
     flexDirection: 'row',
     justifyContent: 'space-between',
     minHeight: 55,

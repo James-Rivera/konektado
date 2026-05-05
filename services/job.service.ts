@@ -19,12 +19,103 @@ import { supabase } from '@/utils/supabase';
 const JOB_COLUMNS =
   'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, workers_needed, schedule_text, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
+type ClientStats = {
+  averageRating: number | null;
+  reviewCount: number;
+  jobsPostedCount: number;
+};
+
 function formatSupabaseError(message: string) {
   if (message.toLowerCase().includes('row-level security')) {
     return 'Complete barangay verification before posting or changing jobs.';
   }
 
   return message;
+}
+
+async function loadClientStats(clientIds: string[]) {
+  const ids = Array.from(new Set(clientIds.filter(Boolean)));
+  const stats = new Map<string, ClientStats>();
+
+  for (const id of ids) {
+    stats.set(id, {
+      averageRating: null,
+      reviewCount: 0,
+      jobsPostedCount: 0,
+    });
+  }
+
+  if (!ids.length) {
+    return stats;
+  }
+
+  const [{ data: reviews }, { data: ownedJobs }, { data: clientJobs }] = await Promise.all([
+    supabase.from('reviews').select('reviewee_id, rating').in('reviewee_id', ids),
+    supabase.from('jobs').select('id, owner_id, client_id').in('owner_id', ids),
+    supabase.from('jobs').select('id, owner_id, client_id').in('client_id', ids),
+  ]);
+
+  const reviewRows = ((reviews as { reviewee_id: string; rating: number }[] | null) ?? []).filter(
+    (row) => ids.includes(row.reviewee_id),
+  );
+
+  for (const id of ids) {
+    const clientReviews = reviewRows.filter((row) => row.reviewee_id === id);
+    const reviewCount = clientReviews.length;
+    const averageRating = reviewCount
+      ? clientReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
+      : null;
+
+    stats.set(id, {
+      ...(stats.get(id) ?? { jobsPostedCount: 0 }),
+      averageRating,
+      reviewCount,
+    });
+  }
+
+  const jobsByClient = new Map<string, Set<string>>();
+  const jobRows = [
+    ...((ownedJobs as { id: string; owner_id: string; client_id: string | null }[] | null) ?? []),
+    ...((clientJobs as { id: string; owner_id: string; client_id: string | null }[] | null) ?? []),
+  ];
+
+  for (const row of jobRows) {
+    const matchingClientIds = [row.owner_id, row.client_id].filter(
+      (value): value is string => Boolean(value && ids.includes(value)),
+    );
+
+    for (const clientId of matchingClientIds) {
+      const current = jobsByClient.get(clientId) ?? new Set<string>();
+      current.add(row.id);
+      jobsByClient.set(clientId, current);
+    }
+  }
+
+  for (const [id, jobs] of jobsByClient) {
+    const current = stats.get(id) ?? {
+      averageRating: null,
+      reviewCount: 0,
+      jobsPostedCount: 0,
+    };
+
+    stats.set(id, {
+      ...current,
+      jobsPostedCount: jobs.size,
+    });
+  }
+
+  return stats;
+}
+
+function applyClientStats(job: JobSummary, stats: Map<string, ClientStats>): JobSummary {
+  const clientStats = stats.get(job.clientId);
+
+  return {
+    ...job,
+    clientAverageRating: clientStats?.averageRating ?? null,
+    clientReviewCount: clientStats?.reviewCount ?? 0,
+    clientJobsPostedCount: clientStats?.jobsPostedCount ?? 0,
+  };
 }
 
 export async function createJob(input: CreateJobInput): Promise<ServiceResult<JobSummary>> {
@@ -113,7 +204,9 @@ export async function listMyJobs(): Promise<ServiceResult<JobSummary[]>> {
 
   const rows = (data as JobRow[] | null) ?? [];
   const profiles = await loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id));
-  return { data: rows.map((row) => mapJob(row, profiles)), error: null };
+  const jobs = rows.map((row) => mapJob(row, profiles));
+  const stats = await loadClientStats(jobs.map((job) => job.clientId));
+  return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
 }
 
 export async function searchJobs(filters: JobSearchFilters = {}): Promise<ServiceResult<JobSummary[]>> {
@@ -145,8 +238,10 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
       .some((value) => String(value).toLowerCase().includes(text));
   });
   const profiles = await loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id));
+  const jobs = rows.map((row) => mapJob(row, profiles));
+  const stats = await loadClientStats(jobs.map((job) => job.clientId));
 
-  return { data: rows.map((row) => mapJob(row, profiles)), error: null };
+  return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
 }
 
 export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDetail>> {
@@ -165,9 +260,12 @@ export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDeta
   }
 
   const profiles = await loadPublicProfiles([data.client_id ?? data.owner_id]);
+  const job = mapJob(data, profiles);
+  const stats = await loadClientStats([job.clientId]);
+
   return {
     data: {
-      ...mapJob(data, profiles),
+      ...applyClientStats(job, stats),
       closedAt: data.closed_at ?? null,
     },
     error: null,

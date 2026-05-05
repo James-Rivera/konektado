@@ -32,13 +32,121 @@ import type { JobCardProps } from '@/components/JobCard';
 import type { WorkerCardProps } from '@/components/WorkerCard';
 
 type HomeFeedItem =
-  | { key: string; type: 'worker'; itemId: string; cardProps: WorkerCardProps; createdAt: string }
-  | { key: string; type: 'job'; itemId: string; cardProps: JobCardProps; createdAt: string };
+  | {
+      key: string;
+      type: 'worker';
+      itemId: string;
+      cardProps: WorkerCardProps;
+      createdAt: string;
+      scoreText: string;
+    }
+  | {
+      key: string;
+      type: 'job';
+      itemId: string;
+      cardProps: JobCardProps;
+      createdAt: string;
+      scoreText: string;
+    };
 
 function getDefaultFilter(preferences: UserPreferences | null): HomeFilter {
   if (preferences?.intent === 'provider') return 'Jobs';
   if (preferences?.intent === 'client') return 'Workers';
   return 'For you';
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function getPreferenceTerms(preferences: UserPreferences | null) {
+  if (!preferences) return [];
+
+  return Array.from(
+    new Set(
+      [
+        ...preferences.offeredServices,
+        ...preferences.customOfferedServices,
+        ...preferences.neededServices,
+        ...preferences.customNeededServices,
+      ]
+        .map(normalizeSearchText)
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getFreshnessScore(createdAt: string) {
+  const createdTime = new Date(createdAt).getTime();
+  if (Number.isNaN(createdTime)) return 0;
+
+  const ageHours = Math.max(0, (Date.now() - createdTime) / 3600000);
+  return Math.max(0, 3 - Math.min(3, ageHours / 24));
+}
+
+function scoreFeedItem(item: HomeFeedItem, preferences: UserPreferences | null) {
+  const terms = getPreferenceTerms(preferences);
+  const haystack = normalizeSearchText(item.scoreText);
+  const intentBoost =
+    preferences?.intent === 'provider'
+      ? item.type === 'job'
+        ? 4
+        : 1
+      : preferences?.intent === 'client'
+        ? item.type === 'worker'
+          ? 4
+          : 1
+        : 2;
+
+  const matchScore = terms.reduce((score, term) => {
+    if (haystack.includes(term)) return score + 8;
+
+    const words = term.split(' ').filter((word) => word.length >= 4);
+    return score + words.filter((word) => haystack.includes(word)).length * 3;
+  }, 0);
+
+  const localScore = haystack.includes('barangay san pedro') || haystack.includes('near your barangay') ? 2 : 0;
+
+  return intentBoost + matchScore + localScore + getFreshnessScore(item.createdAt);
+}
+
+function sortByFeedScore(items: HomeFeedItem[], preferences: UserPreferences | null) {
+  return [...items].sort((left, right) => {
+    const scoreDiff = scoreFeedItem(right, preferences) - scoreFeedItem(left, preferences);
+    if (scoreDiff !== 0) return scoreDiff;
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
+}
+
+function getOptionalScore(item: HomeFeedItem | undefined, preferences: UserPreferences | null) {
+  return item ? scoreFeedItem(item, preferences) : Number.NEGATIVE_INFINITY;
+}
+
+function buildForYouFeed(
+  jobs: HomeFeedItem[],
+  workers: HomeFeedItem[],
+  preferences: UserPreferences | null,
+) {
+  const jobQueue = sortByFeedScore(jobs, preferences);
+  const workerQueue = sortByFeedScore(workers, preferences);
+  const mixed: HomeFeedItem[] = [];
+  let nextType: HomeFeedItem['type'] =
+    getOptionalScore(workerQueue[0], preferences) > getOptionalScore(jobQueue[0], preferences)
+      ? 'worker'
+      : 'job';
+
+  while (jobQueue.length || workerQueue.length) {
+    const preferredQueue = nextType === 'job' ? jobQueue : workerQueue;
+    const fallbackQueue = nextType === 'job' ? workerQueue : jobQueue;
+    const nextItem = preferredQueue.shift() ?? fallbackQueue.shift();
+
+    if (!nextItem) break;
+
+    mixed.push(nextItem);
+    nextType = nextItem.type === 'job' ? 'worker' : 'job';
+  }
+
+  return mixed;
 }
 
 export default function HomeScreen() {
@@ -47,6 +155,7 @@ export default function HomeScreen() {
   const { profile } = useProfile();
   const topInset = useSafeTopInset();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [feed, setFeed] = useState<HomeFeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -66,6 +175,7 @@ export default function HomeScreen() {
 
     getMyUserPreferences().then((result) => {
       if (!active || result.error) return;
+      setPreferences(result.data);
       setSelectedFilter(getDefaultFilter(result.data));
     });
 
@@ -128,6 +238,18 @@ export default function HomeScreen() {
           itemId: job.id,
           cardProps: adaptJobToCardProps(job),
           createdAt: job.createdAt,
+          scoreText: [
+            job.title,
+            job.description,
+            job.category,
+            job.serviceNeeded,
+            job.scheduleText,
+            job.locationText,
+            job.barangay,
+            ...job.tags,
+          ]
+            .filter(Boolean)
+            .join(' '),
         })) ?? [];
 
       const workers =
@@ -137,18 +259,27 @@ export default function HomeScreen() {
           itemId: service.id,
           cardProps: adaptServiceToCardProps(service),
           createdAt: service.createdAt,
+          scoreText: [
+            service.title,
+            service.description,
+            service.category,
+            service.availabilityText,
+            service.rateText,
+            service.locationText,
+            service.barangay,
+            service.provider?.availability,
+            ...service.tags,
+          ]
+            .filter(Boolean)
+            .join(' '),
         })) ?? [];
 
-      const byNewest = [...jobs, ...workers].sort(
-        (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-      );
-
       if (selectedFilter === 'Jobs') {
-        setFeed(jobs);
+        setFeed(sortByFeedScore(jobs, preferences));
       } else if (selectedFilter === 'Workers') {
-        setFeed(workers);
+        setFeed(sortByFeedScore(workers, preferences));
       } else {
-        setFeed(byNewest);
+        setFeed(buildForYouFeed(jobs, workers, preferences));
       }
 
       setFeedLoading(false);
@@ -157,7 +288,7 @@ export default function HomeScreen() {
     return () => {
       active = false;
     };
-  }, [isFocused, selectedFilter]);
+  }, [isFocused, preferences, selectedFilter]);
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;

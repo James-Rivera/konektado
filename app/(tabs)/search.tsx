@@ -25,6 +25,8 @@ import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
   formatJobSubtitle,
+  formatClientJobsPostedText,
+  formatClientRatingText,
   formatRelativeMarketplaceDate,
   formatServiceJobsDoneText,
   formatServiceRatingText,
@@ -216,8 +218,8 @@ function mapJobToSearchItem(job: JobSummary): SearchJobItem {
     subtitle: formatJobSubtitle(job),
     description: job.description || 'No description provided yet.',
     tags: Array.from(new Set([category, ...job.tags, 'Open job'].filter(Boolean))),
-    clientRatingText: 'Verified client',
-    jobsPostedText: 'Posted in Konektado',
+    clientRatingText: formatClientRatingText(job),
+    jobsPostedText: formatClientJobsPostedText(job),
     location,
     matchReason: `Open ${category.toLowerCase()} job near ${location}.`,
   };

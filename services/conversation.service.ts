@@ -10,6 +10,7 @@ import {
   type JobRow,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
+import { getServiceDetail } from '@/services/service-profile.service';
 import type {
   ConversationDetail,
   ConversationMessage,
@@ -130,7 +131,10 @@ async function mapConversationRows(
   }));
 }
 
-export async function listMyConversations(): Promise<ServiceResult<ConversationSummary[]>> {
+export async function listMyConversations(filters: {
+  kind?: 'all' | 'jobs' | 'services' | 'unread';
+  includeArchived?: boolean;
+} = {}): Promise<ServiceResult<ConversationSummary[]>> {
   const user = await getCurrentUserId();
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
@@ -145,7 +149,28 @@ export async function listMyConversations(): Promise<ServiceResult<ConversationS
     return { data: null, error: error.message };
   }
 
-  return { data: await mapConversationRows((data as ConversationRow[] | null) ?? []), error: null };
+  let conversations = await mapConversationRows((data as ConversationRow[] | null) ?? []);
+
+  if (!filters.includeArchived) {
+    conversations = conversations.filter((conversation) => conversation.status !== 'archived');
+  }
+
+  if (filters.kind === 'jobs') {
+    conversations = conversations.filter((conversation) => Boolean(conversation.jobId));
+  }
+
+  if (filters.kind === 'services') {
+    conversations = conversations.filter((conversation) => Boolean(conversation.serviceId));
+  }
+
+  if (filters.kind === 'unread') {
+    conversations = conversations.filter(
+      (conversation) =>
+        Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== user.data,
+    );
+  }
+
+  return { data: conversations, error: null };
 }
 
 export async function getConversation(conversationId: string): Promise<ServiceResult<ConversationDetail>> {
@@ -216,6 +241,68 @@ export async function startJobConversation({
         job_id: jobId,
         client_id: job.data.clientId,
         provider_id: user.data,
+        started_by: user.data,
+        status: 'active',
+      })
+      .select(CONVERSATION_COLUMNS)
+      .single<ConversationRow>();
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    conversationId = data.id;
+  }
+
+  if (compactText(message)) {
+    const sent = await sendMessage({ conversationId, body: message ?? '' });
+    if (sent.error) return { data: null, error: sent.error };
+  }
+
+  return getConversation(conversationId);
+}
+
+export async function startServiceConversation({
+  serviceId,
+  message,
+}: {
+  serviceId: string;
+  message?: string;
+}): Promise<ServiceResult<ConversationDetail>> {
+  const user = await requireVerifiedUser();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const service = await getServiceDetail(serviceId);
+  if (service.error || !service.data) {
+    return { data: null, error: service.error ?? 'Service not found.' };
+  }
+
+  if (service.data.providerId === user.data) {
+    return { data: null, error: 'You cannot message yourself about your own service.' };
+  }
+
+  if (!service.data.isActive || !service.data.allowMessages) {
+    return { data: null, error: 'This service is not accepting messages right now.' };
+  }
+
+  const { data: existing } = await supabase
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS)
+    .eq('service_id', serviceId)
+    .eq('client_id', user.data)
+    .eq('provider_id', service.data.providerId)
+    .maybeSingle<ConversationRow>();
+
+  let conversationId = existing?.id ?? null;
+
+  if (!conversationId) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        service_id: serviceId,
+        client_id: user.data,
+        provider_id: service.data.providerId,
         started_by: user.data,
         status: 'active',
       })
@@ -310,4 +397,42 @@ export async function markWorkerHired({
   }
 
   return getConversation(conversationId);
+}
+
+export async function updateConversationStatus({
+  conversationId,
+  status,
+}: {
+  conversationId: string;
+  status: Extract<ConversationStatus, 'active' | 'declined' | 'archived' | 'reported'>;
+}): Promise<ServiceResult<ConversationDetail>> {
+  const user = await requireVerifiedUser();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const conversation = await getConversation(conversationId);
+  if (conversation.error || !conversation.data) {
+    return { data: null, error: conversation.error ?? 'Conversation not found.' };
+  }
+
+  if (![conversation.data.clientId, conversation.data.providerId].includes(user.data)) {
+    return { data: null, error: 'Only conversation participants can update this chat.' };
+  }
+
+  const { error } = await supabase
+    .from('conversations')
+    .update({ status })
+    .eq('id', conversationId);
+
+  if (error) return { data: null, error: error.message };
+
+  return getConversation(conversationId);
+}
+
+export function archiveConversation(input: { conversationId: string }) {
+  return updateConversationStatus({ ...input, status: 'archived' });
+}
+
+export function reportConversation(input: { conversationId: string }) {
+  return updateConversationStatus({ ...input, status: 'reported' });
 }

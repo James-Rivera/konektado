@@ -170,12 +170,12 @@ export default function CreateServicePreviewScreen() {
             <WorkerCard
               headline={draft.title}
               imageUrl={draft.photoUrls?.[0]}
-              jobsDoneText="Jobs done pending"
+              jobsDoneText="Jobs after publish"
               location={draft.locationText || profile?.barangay || 'Barangay San Pedro'}
               name={getDisplayName(profile)}
               onPress={() => {}}
               onSave={() => {}}
-              ratingText="New listing"
+              ratingText="Preview listing"
               rateLine={getRateLine(draft)}
               statusLine={getStatusLine(draft)}
               tags={[draft.category, ...draft.tags].filter(Boolean).slice(0, 4)}

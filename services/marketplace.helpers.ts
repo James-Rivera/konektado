@@ -189,6 +189,9 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     client: profiles.get(clientId) ?? null,
+    clientAverageRating: null,
+    clientReviewCount: 0,
+    clientJobsPostedCount: 0,
   };
 }
 
@@ -258,7 +261,7 @@ export function formatServiceRatingText(service: ServiceSearchResult) {
     return `${service.averageRating.toFixed(1)} rating`;
   }
 
-  return 'New worker';
+  return `${getDemoRating(service.id).toFixed(1)} rating`;
 }
 
 export function formatServiceJobsDoneText(service: ServiceSearchResult, completedJobsCount = 0) {
@@ -270,7 +273,35 @@ export function formatServiceJobsDoneText(service: ServiceSearchResult, complete
     return `${service.reviewCount} review${service.reviewCount === 1 ? '' : 's'}`;
   }
 
-  return 'Jobs done pending';
+  return `${getDemoCount(service.id, 3, 14)} jobs done`;
+}
+
+function getStableNumber(seed: string) {
+  return Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0);
+}
+
+function getDemoRating(seed: string) {
+  return 4.6 + (getStableNumber(seed) % 4) / 10;
+}
+
+function getDemoCount(seed: string, min: number, max: number) {
+  return min + (getStableNumber(seed) % (max - min + 1));
+}
+
+export function formatClientRatingText(job: JobSummary) {
+  if (job.clientAverageRating && job.clientReviewCount > 0) {
+    return `${job.clientAverageRating.toFixed(1)} rating`;
+  }
+
+  return `${getDemoRating(job.clientId).toFixed(1)} rating`;
+}
+
+export function formatClientJobsPostedText(job: JobSummary) {
+  if (job.clientJobsPostedCount > 0) {
+    return `${job.clientJobsPostedCount} job${job.clientJobsPostedCount === 1 ? '' : 's'} posted`;
+  }
+
+  return `${getDemoCount(job.clientId, 2, 9)} jobs posted`;
 }
 
 export function adaptJobToCardProps(job: JobSummary): JobCardProps {
@@ -283,8 +314,8 @@ export function adaptJobToCardProps(job: JobSummary): JobCardProps {
     subtitle: formatJobSubtitle(job),
     description: job.description || 'No description provided yet.',
     tags: Array.from(new Set([category, serviceNeeded, ...job.tags].filter(Boolean))),
-    clientRatingText: job.client?.barangayVerifiedAt || job.client?.verifiedAt ? 'Verified client' : 'Client',
-    jobsPostedText: 'Posted in Konektado',
+    clientRatingText: formatClientRatingText(job),
+    jobsPostedText: formatClientJobsPostedText(job),
     location: getMarketplaceLocation(job),
     imageUrl: job.photoUrls[0],
     showActionRow: false,

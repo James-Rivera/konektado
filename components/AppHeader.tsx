@@ -13,6 +13,7 @@ type AppHeaderProps = {
   eyebrow?: string;
   actionIcon?: MaterialIconName;
   actionLabel?: string;
+  actionTone?: 'default' | 'notification';
   onActionPress?: () => void;
   children?: ReactNode;
 };
@@ -23,6 +24,7 @@ export function AppHeader({
   eyebrow,
   actionIcon,
   actionLabel,
+  actionTone = 'default',
   onActionPress,
   children,
 }: AppHeaderProps) {
@@ -41,8 +43,15 @@ export function AppHeader({
             accessibilityLabel={actionLabel}
             accessibilityRole="button"
             onPress={onActionPress}
-            style={styles.iconButton}>
-            <MaterialIcons color={color.text} name={actionIcon} size={22} />
+            style={[
+              styles.iconButton,
+              actionTone === 'notification' && styles.notificationButton,
+            ]}>
+            <MaterialIcons
+              color={actionTone === 'notification' ? color.verificationBlue : color.text}
+              name={actionIcon}
+              size={actionTone === 'notification' ? 24 : 22}
+            />
           </Pressable>
         ) : null}
       </View>
@@ -89,5 +98,8 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 44,
+  },
+  notificationButton: {
+    backgroundColor: 'transparent',
   },
 });

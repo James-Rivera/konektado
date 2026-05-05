@@ -44,6 +44,9 @@ export type JobSummary = {
   createdAt: string;
   updatedAt: string;
   client: PublicProfileSummary | null;
+  clientAverageRating: number | null;
+  clientReviewCount: number;
+  clientJobsPostedCount: number;
 };
 
 export type JobDetail = JobSummary & {

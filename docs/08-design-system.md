@@ -163,6 +163,21 @@ Rules:
 - Cards should not contain unnecessary nested cards.
 - Feed cards can use borders/dividers instead of heavy shadows.
 
+### Detail Info Grid
+
+Usage:
+
+- Short informational detail sections such as worker details and job summary.
+
+Rules:
+
+- Use a lightweight two-column text layout for simple values.
+- Labels use the accent blue and Satoshi Bold.
+- Values use muted gray and Satoshi Regular.
+- Do not wrap tiny facts in separate cards unless the content has enough weight to justify a card.
+- Keep dedicated image/photo sections separate from text summary sections.
+- Keep tags in their own compact metadata section when they would visually interrupt a description or about section.
+
 ### Modal
 
 Usage:
@@ -281,6 +296,21 @@ MVP note:
 
 - Messages is part of the current MVP direction. Keep it simple: inbox, job/service context, text messages, quick prompts, and safety/report actions.
 
+### Messages
+
+Usage:
+
+- Inbox, message requests, job/service conversation threads, and conversation support actions.
+
+Rules:
+
+- Use lightweight list rows for inbox conversations instead of heavy cards.
+- Inbox filters are All, Jobs, Services, and Unread.
+- Keep job and service context visible at the top of a conversation so users know what the chat is about.
+- Use quick-reply chips for common coordination questions.
+- Keep MVP messaging text-only. Attachment icons may appear as non-primary visual affordances, but image/file sending is deferred.
+- Use conversation status for simple MVP safety actions: reported conversations are marked reported, and deleted chats are archived rather than hard-deleted.
+
 ### Search Bar
 
 Usage:
@@ -346,9 +376,9 @@ States:
 
 Rules:
 
-- Public cards should only show positive verified badge or no badge.
+- Normal public marketplace cards and detail identity cards should not repeat verification badges by default because posting, messaging, saving, and reviews are already verification-gated.
 - Pending/rejected status should be shown mainly to the owner/admin.
-- Since Konektado gates posting and messaging through verification, avoid putting the verified badge on every feed/search card unless the screen specifically needs a trust reminder.
+- Use public verification labels only when the screen specifically explains trust or access rules. Prefer rating, review count, jobs done, jobs posted, availability, and location on normal marketplace surfaces.
 
 ### Profile Tabs
 

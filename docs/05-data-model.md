@@ -333,6 +333,7 @@ Relationships:
 Important constraints:
 
 - Unique active `(job_id, provider_id)` when `job_id` is present.
+- Unique `(service_id, client_id, provider_id)` when `service_id` is present.
 - Provider cannot start interest on their own job.
 - Only job owner/client can mark a worker hired for that job.
 - Both participants can archive their own view if per-user conversation state is later added.

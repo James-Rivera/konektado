@@ -45,17 +45,25 @@ export function JobCard({
       onPress={onPress ?? onViewJob}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.topBlock}>
-        <Text style={styles.postedAt}>{postedAt}</Text>
+        <Text numberOfLines={1} style={styles.postedAt}>
+          {postedAt}
+        </Text>
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
+            <Text numberOfLines={2} style={styles.title}>
+              {title}
+            </Text>
+            <Text numberOfLines={1} style={styles.subtitle}>
+              {subtitle}
+            </Text>
           </View>
           {showSaveButton ? <IconButton icon="bookmark-border" label="Save job" onPress={onSave} /> : null}
         </View>
       </View>
 
-      <Text style={styles.description}>{description}</Text>
+      <Text numberOfLines={3} style={styles.description}>
+        {description}
+      </Text>
 
       {imageUrl ? (
         <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photo} />
@@ -176,11 +184,11 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   topBlock: {
-    gap: 2,
+    gap: 4,
   },
   postedAt: {
-    ...typography.tiny,
-    color: color.text,
+    ...typography.caption,
+    color: color.textSubtle,
   },
   headerRow: {
     alignItems: 'center',
@@ -193,10 +201,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.bodyMedium,
     color: color.text,
+    fontFamily: 'Satoshi-Bold',
   },
   subtitle: {
     ...typography.caption,
@@ -209,9 +216,7 @@ const styles = StyleSheet.create({
     width: 34,
   },
   description: {
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.body,
     color: color.text,
   },
   photo: {

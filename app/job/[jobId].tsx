@@ -10,6 +10,11 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startJobConversation } from '@/services/conversation.service';
 import { getJobDetail } from '@/services/job.service';
+import {
+  formatClientJobsPostedText,
+  formatClientRatingText,
+  getMarketplaceLocation,
+} from '@/services/marketplace.helpers';
 import type { JobDetail } from '@/types/marketplace.types';
 
 function getParamValue(value: string | string[] | undefined) {
@@ -85,7 +90,7 @@ export default function JobDetailScreen() {
             </View>
             <View style={styles.section}>
               <Skeleton height={16} width={124} />
-              <View style={styles.statusRow}>
+              <View style={styles.detailGrid}>
                 <Skeleton height={28} width={88} borderRadius={radius.pill} />
                 <Skeleton height={20} width={132} />
               </View>
@@ -159,6 +164,14 @@ export default function JobDetailScreen() {
   const workersNeeded = job.workersNeeded ?? 1;
   const acceptedCount = job.acceptedProviderId ? 1 : 0;
   const jobImageUrl = job.photoUrls?.[0] ?? null;
+  const location = getMarketplaceLocation(job);
+  const jobTags = Array.from(
+    new Set(
+      [job.category, job.serviceNeeded, ...job.tags].filter(
+        (tag): tag is string => Boolean(tag),
+      ),
+    ),
+  );
 
   const handleMessage = () => {
     if (!isVerified) {
@@ -194,15 +207,6 @@ export default function JobDetailScreen() {
     showComingSoon('Save');
   };
 
-  const handleConnect = () => {
-    if (!isVerified) {
-      showVerificationPrompt();
-      return;
-    }
-
-    showComingSoon('Connect');
-  };
-
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
@@ -231,14 +235,14 @@ export default function JobDetailScreen() {
           <View style={styles.section}>
             <View style={styles.jobTitleRow}>
               <Text style={styles.jobTitle}>{jobTitle}</Text>
-              <Text style={styles.jobDate}>{postedAt}</Text>
+              <StatusPill status={jobStatus} />
             </View>
             <Text style={styles.postedAgo}>{postedAgo}</Text>
 
             <View style={styles.metaStack}>
               <MetaRow
                 icon="location-on"
-                text={job.locationText ?? job.barangay ?? 'Nearby'}
+                text={location}
               />
               <MetaRow
                 icon="schedule"
@@ -248,37 +252,42 @@ export default function JobDetailScreen() {
                 <MetaRow icon="local-offer" text={formatBudget(job.budgetAmount)} tint="primary" />
               ) : null}
             </View>
-            {jobImageUrl ? <Image resizeMode="cover" source={{ uri: jobImageUrl }} style={styles.jobPhoto} /> : null}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Status of the Job</Text>
-            <View style={styles.statusRow}>
-              <View style={styles.statusPill}>
-                <MaterialIcons color={color.warning} name="hourglass-empty" size={14} />
-                <Text style={styles.statusPillText}>{jobStatus}</Text>
-              </View>
-
-              <View style={styles.statusInline}>
-                <MaterialIcons color={color.primary} name="groups" size={16} />
-                <Text style={styles.statusInlineText}>{workersNeeded} Workers Needed</Text>
-              </View>
-
-              <Text style={styles.acceptedText}>{acceptedCount} Accepted</Text>
-            </View>
+            <Text style={styles.sectionTitle}>Job summary</Text>
+            <DetailGrid
+              items={[
+                { label: 'Status', value: formatStatus(jobStatus) },
+                { label: 'Workers needed', value: String(workersNeeded) },
+                { label: 'Accepted', value: String(acceptedCount) },
+                { label: 'Service', value: job.serviceNeeded || job.category || 'Service to coordinate' },
+              ]}
+            />
           </View>
+
+          {jobImageUrl ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Photos</Text>
+              <Image resizeMode="cover" source={{ uri: jobImageUrl }} style={styles.detailPhoto} />
+            </View>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>What you will do</Text>
             <Text style={styles.bodyText}>{job.description ?? 'No description provided yet.'}</Text>
-            {job.tags.length ? (
+          </View>
+
+          {jobTags.length ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Job tags</Text>
               <View style={styles.tagRow}>
-                {job.tags.map((tag) => (
+                {jobTags.map((tag) => (
                   <BadgePill key={tag} label={tag} />
                 ))}
               </View>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>What to bring</Text>
@@ -294,42 +303,19 @@ export default function JobDetailScreen() {
                 <View style={styles.posterInfo}>
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{(job.client?.fullName ?? 'R').slice(0, 1).toUpperCase()}</Text>
-                    <View style={styles.avatarBadge} />
                   </View>
                   <View style={styles.posterCopy}>
                     <Text style={styles.posterName}>{job.client?.fullName ?? 'Konektado resident'}</Text>
-                    <Text style={styles.posterMeta}>
-                      {job.client?.barangayVerifiedAt || job.client?.verifiedAt
-                        ? 'Verified resident'
-                        : 'Konektado resident'}
-                    </Text>
+                    <Text style={styles.posterMeta}>{job.client?.barangay ?? location}</Text>
                   </View>
                 </View>
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleConnect}
-                  style={({ pressed }) => [styles.connectButton, pressed && styles.pressed]}>
-                  <Text style={styles.connectText}>Connect</Text>
-                </Pressable>
               </View>
 
-              <ScrollView
-                horizontal
-                contentContainerStyle={styles.posterBadges}
-                showsHorizontalScrollIndicator={false}>
-                <View style={styles.verifiedBadge}>
-                  <MaterialIcons color={color.success} name="check-circle" size={14} />
-                  <Text style={styles.verifiedText}>Verified</Text>
-                </View>
-                <BadgePill label="4.8 Reviews" />
-                <BadgePill label="Usually replies" />
-                <BadgePill label="2 Jobs Posted" />
-                {job.category ? <BadgePill label={job.category} /> : null}
-                <View style={styles.badgeChevron}>
-                  <MaterialIcons color={color.textSubtle} name="chevron-right" size={20} />
-                </View>
-              </ScrollView>
+              <View style={styles.trustGrid}>
+                <TrustMetric icon="star-border" label={formatClientRatingText(job)} tint="yellow" />
+                <TrustMetric icon="work" label={formatClientJobsPostedText(job)} />
+                <TrustMetric icon="location-on" label={job.client?.barangay ?? location} />
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -366,6 +352,13 @@ function formatDate(value: string) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatStatus(status: JobDetail['status']) {
+  return status
+    .split('_')
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
 function MetaRow({
   icon,
   text,
@@ -391,6 +384,46 @@ function BadgePill({ label }: { label: string }) {
   return (
     <View style={styles.badgePill}>
       <Text style={styles.badgeText}>{label}</Text>
+    </View>
+  );
+}
+
+function StatusPill({ status }: { status: JobDetail['status'] }) {
+  return (
+    <View style={styles.statusPill}>
+      <Text style={styles.statusPillText}>{formatStatus(status)}</Text>
+    </View>
+  );
+}
+
+function DetailGrid({ items }: { items: { label: string; value: string }[] }) {
+  return (
+    <View style={styles.detailGrid}>
+      {items.map((item) => (
+        <View key={item.label} style={styles.detailGridItem}>
+          <Text style={styles.detailGridLabel}>{item.label}</Text>
+          <Text style={styles.detailGridValue}>{item.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function TrustMetric({
+  icon,
+  label,
+  tint = 'default',
+}: {
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  label: string;
+  tint?: 'default' | 'yellow';
+}) {
+  return (
+    <View style={styles.trustMetric}>
+      <MaterialIcons color={tint === 'yellow' ? color.brandYellow : color.textSubtle} name={icon} size={16} />
+      <Text numberOfLines={1} style={styles.trustText}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -449,9 +482,20 @@ const styles = StyleSheet.create({
     color: color.text,
     flex: 1,
   },
-  jobDate: {
-    ...typography.captionMedium,
-    color: color.textSubtle,
+  statusPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 24,
+    paddingHorizontal: space.md,
+  },
+  statusPillText: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 11,
+    lineHeight: 16,
   },
   postedAgo: {
     ...typography.caption,
@@ -475,52 +519,43 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     color: color.primary,
   },
-  jobPhoto: {
+  detailPhoto: {
     backgroundColor: color.cardTint,
     borderRadius: radius.lg,
-    height: 188,
+    height: 210,
     marginTop: space.md,
-    overflow: 'hidden',
     width: '100%',
   },
-  statusRow: {
-    alignItems: 'center',
+  detailGrid: {
+    columnGap: space.xs,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: space.lg,
-    marginTop: space.md,
+    marginTop: space.sm,
+    rowGap: space.md,
   },
-  statusPill: {
-    alignItems: 'center',
-    backgroundColor: color.warningSoft,
-    borderColor: color.warning,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: space.xs,
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs,
+  detailGridItem: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    gap: space['2xs'],
+    minWidth: 132,
   },
-  statusPillText: {
-    ...typography.caption,
-    color: color.warning,
-  },
-  statusInline: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: space.xs,
-  },
-  statusInlineText: {
-    ...typography.caption,
-    color: color.textSubtle,
-  },
-  acceptedText: {
-    ...typography.captionMedium,
+  detailGridLabel: {
     color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  detailGridValue: {
+    color: color.textSubtle,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
   },
   sectionTitle: {
-    ...typography.bodyMedium,
     color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 18,
   },
   bodyText: {
     ...typography.body,
@@ -531,7 +566,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.sm,
-    marginTop: space.md,
+    marginTop: space.sm,
   },
   posterCard: {
     backgroundColor: color.background,
@@ -566,17 +601,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: color.text,
   },
-  avatarBadge: {
-    backgroundColor: color.success,
-    borderColor: color.background,
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    bottom: 1,
-    height: 10,
-    position: 'absolute',
-    right: 1,
-    width: 10,
-  },
   posterCopy: {
     flex: 1,
     gap: space['2xs'],
@@ -589,41 +613,23 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: color.textMuted,
   },
-  connectButton: {
-    alignItems: 'center',
-    backgroundColor: color.primary,
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-    minHeight: 25,
-    paddingHorizontal: space.md,
-  },
-  connectText: {
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 11,
-    lineHeight: 16,
-    color: color.white,
-  },
-  posterBadges: {
-    alignItems: 'center',
+  trustGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: space.sm,
-    paddingTop: space.md,
+    marginTop: space.md,
   },
-  verifiedBadge: {
+  trustMetric: {
     alignItems: 'center',
-    backgroundColor: color.successSoft,
-    borderColor: color.success,
-    borderRadius: radius.pill,
-    borderWidth: 1,
     flexDirection: 'row',
     gap: space.xs,
-    height: 21,
-    paddingHorizontal: space.sm,
+    maxWidth: '100%',
+    minWidth: 104,
   },
-  verifiedText: {
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 10,
-    lineHeight: 14,
-    color: color.text,
+  trustText: {
+    ...typography.caption,
+    color: color.textSubtle,
+    flexShrink: 1,
   },
   badgePill: {
     alignItems: 'center',
@@ -640,12 +646,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
     color: color.primary,
-  },
-  badgeChevron: {
-    alignItems: 'center',
-    height: 24,
-    justifyContent: 'center',
-    paddingLeft: space.xs,
   },
   actionBar: {
     backgroundColor: color.background,

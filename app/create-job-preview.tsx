@@ -224,10 +224,10 @@ export default function CreateJobPreviewScreen() {
 
           <View style={styles.previewFrame}>
             <JobCard
-              clientRatingText="Verified client"
+              clientRatingText="Preview listing"
               description={draft.description}
               imageUrl={draft.photoUrls[0]}
-              jobsPostedText={workersNeeded ? `${workersNeeded} workers needed` : 'Workers to coordinate'}
+              jobsPostedText={workersNeeded ? `${workersNeeded} worker${workersNeeded === 1 ? '' : 's'} needed` : 'Workers to coordinate'}
               location={draft.barangay || 'Barangay San Pedro'}
               postedAt="Posted just now"
               showSaveButton={false}

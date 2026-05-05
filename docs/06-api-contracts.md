@@ -122,20 +122,22 @@ Purpose: Own message-based job interest and basic chat.
 
 | Function | Input | Output | Behavior |
 | --- | --- | --- | --- |
-| `listMyConversations(filters)` | optional filters | `ServiceResult<ConversationSummary[]>` | Lists inbox rows for Messages tab. |
+| `listMyConversations(filters)` | `{ kind?: "all" | "jobs" | "services" | "unread"; includeArchived?: boolean }` | `ServiceResult<ConversationSummary[]>` | Lists inbox rows for Messages tab and hides archived conversations by default. |
 | `getConversation(id)` | `{ id: string }` | `ServiceResult<ConversationDetail>` | Gets job/service context and messages. |
 | `startJobConversation(input)` | `{ jobId: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a job conversation to show interest. |
-| `startServiceConversation(input)` | `{ providerId: string; serviceId?: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a service request conversation. |
+| `startServiceConversation(input)` | `{ serviceId: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a service request conversation for the current client and service provider. |
 | `sendMessage(input)` | `{ conversationId: string; body: string }` | `ServiceResult<Message>` | Sends a text message. |
 | `markWorkerHired(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Client marks the provider hired for the job. |
 | `declineConversation(input)` | `{ conversationId: string; reason?: string }` | `ServiceResult<ConversationDetail>` | Declines a request/interest without deleting history. |
-| `archiveConversation(input)` | `{ conversationId: string }` | `ServiceResult<void>` | Removes conversation from current user's active list if supported. |
+| `archiveConversation(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Marks the conversation archived for the MVP. Per-user archive state can be added later. |
+| `reportConversation(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Marks the conversation reported for MVP moderation visibility. |
 
 Rules:
 
 - Only verified users can start or send messages.
 - A provider cannot start a job conversation on their own job.
 - One active job conversation per provider per job.
+- One service conversation per client, provider, and service.
 - "Mark hired" is client-only for jobs owned by that client.
 - Keep MVP messaging text-only.
 

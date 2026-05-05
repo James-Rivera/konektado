@@ -49,13 +49,19 @@ export function WorkerCard({
               <Text numberOfLines={1} style={styles.name}>
                 {name}
               </Text>
-              <Text style={styles.statusLine}>{statusLine}</Text>
+              <Text numberOfLines={1} style={styles.statusLine}>
+                {statusLine}
+              </Text>
             </View>
           </View>
           <IconButton icon="bookmark-border" label="Save worker" onPress={onSave} />
         </View>
-        <Text style={styles.rateLine}>{rateLine}</Text>
-        <Text style={styles.headline}>{headline}</Text>
+        <Text numberOfLines={1} style={styles.rateLine}>
+          {rateLine}
+        </Text>
+        <Text numberOfLines={3} style={styles.headline}>
+          {headline}
+        </Text>
       </View>
 
       {imageUrl ? <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photo} /> : null}
@@ -184,9 +190,8 @@ const styles = StyleSheet.create({
   },
   name: {
     color: color.text,
+    ...typography.bodyMedium,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 15,
-    lineHeight: 20,
   },
   statusLine: {
     ...typography.caption,
@@ -204,9 +209,7 @@ const styles = StyleSheet.create({
   },
   headline: {
     color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 20,
+    ...typography.bodyMedium,
   },
   photo: {
     borderColor: color.border,
