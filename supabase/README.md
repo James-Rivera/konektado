@@ -48,16 +48,24 @@ The barangay verification workflow uses a custom Supabase Edge Function at `func
 - more information needed
 - verification rejected
 
-These emails are separate from the Supabase Auth OTP templates. Keep the OTP templates in `email-templates/` for login/signup codes, and keep the verification email HTML files in the edge function folder.
+These emails are separate from the Supabase Auth OTP templates. Keep the OTP templates in `email-templates/` for login/signup codes. The deployed verification function renders inline HTML from `functions/verification-email/index.ts`, with matching reference files kept in `functions/verification-email/templates/`.
+
+The current verification email HTML in `functions/verification-email/` matches the four Konektado Figma status email designs:
+
+- verification submitted
+- verification approved
+- more information needed
+- verification rejected
 
 The function can send through either:
 
+- Resend configured in `VERIFICATION_EMAIL_RESEND_API_KEY` and `VERIFICATION_EMAIL_FROM_EMAIL` / `VERIFICATION_EMAIL_FROM_NAME`, or
 - a webhook relay configured in `VERIFICATION_EMAIL_WEBHOOK_URL`, or
 - SMTP credentials configured in `VERIFICATION_EMAIL_SMTP_HOST`, `VERIFICATION_EMAIL_SMTP_PORT`, `VERIFICATION_EMAIL_SMTP_USER`, `VERIFICATION_EMAIL_SMTP_PASS`, `VERIFICATION_EMAIL_FROM_EMAIL`, and `VERIFICATION_EMAIL_FROM_NAME`
 
 Preferred setup now that the project owns `konektado.app`:
 
-- use a domain-backed transactional relay/API path for verification emails
+- use Resend directly on the verified `konektado.app` sender domain
 - keep SMTP only as fallback or temporary local unblock
 
 Supabase Auth OTP emails remain separate from this edge-function workflow. If you want a unified sender identity, align both systems on the same `konektado.app` branding/domain, but do not merge the implementation paths.

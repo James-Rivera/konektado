@@ -7,19 +7,23 @@ These emails are **not** Supabase Auth emails. Keep the OTP signup templates sep
 ## What This Uses
 
 - Supabase Edge Function: `supabase/functions/verification-email/`
-- HTML templates:
-  - `verification-submitted-content.html`
-  - `verification-approved-content.html`
-  - `verification-needs-more-info-content.html`
-  - `verification-rejected-content.html`
+- Inline HTML templates in `supabase/functions/verification-email/index.ts`
+- Matching reference HTML files in `supabase/functions/verification-email/templates/`
 - Local test script: `npm run test:verification-email`
+
+The current email HTML matches these four Konektado Figma verification-status designs:
+
+- `532:3589` verification submitted
+- `607:2364` verification approved
+- `607:2417` more information needed
+- `607:2471` verification rejected
 
 ## Recommended Production Transport
 
 Current preferred path:
 
-- Use a domain-backed transactional provider on `konektado.app`.
-- Prefer a relay/API-style send path for custom verification emails.
+- Use Resend on the verified `konektado.app` sender domain.
+- Send the custom verification emails directly through the Resend Email API.
 - Keep SMTP only as a local unblock path or fallback.
 
 Reasoning:
@@ -31,10 +35,11 @@ Reasoning:
 
 ## Function Behavior
 
-The function loads the verification row and profile row for a given `requestId`, renders the correct email template, and sends it through either:
+The function loads the verification row and profile row for a given `requestId`, renders the correct email template, and sends it through:
 
-- a webhook relay, or
-- SMTP
+- Resend API when `VERIFICATION_EMAIL_RESEND_API_KEY` is set
+- a webhook relay when `VERIFICATION_EMAIL_WEBHOOK_URL` is set
+- SMTP as a fallback
 
 The function supports these templates:
 
@@ -53,21 +58,47 @@ Supported placeholder values:
 - `{{Status}}`
 - `{{Admin Reason}}`
 - `{{CTA URL}}`
+- `{{CTA Label}}`
+- `{{Info Note Section}}`
+- `{{Privacy URL}}`
+- `{{Terms URL}}`
+- `{{Help URL}}`
+- `{{Unsubscribe URL}}`
+- `{{Instagram URL}}`
+- `{{Facebook URL}}`
+
+Testing support:
+
+- The function accepts an optional request-body `idempotencyKey`.
+- Production callers can omit it and keep the default stable key: `verification-email:<template>:<requestId>`.
+- `npm run test:verification-email` generates a unique test key automatically so repeated template tests do not hit Resend's 24-hour idempotency conflict.
 
 ## Environment Variables
 
 Set these in the Supabase Edge Function environment:
+
+### Resend mode
+
+- `VERIFICATION_EMAIL_RESEND_API_KEY`
+- `VERIFICATION_EMAIL_FROM_EMAIL`
+- `VERIFICATION_EMAIL_FROM_NAME`
+
+Optional fallback compatibility:
+
+- `RESEND_API_KEY`
+
+Recommended now that the project owns `konektado.app`:
+
+- Set `VERIFICATION_EMAIL_FROM_EMAIL` to the verified `konektado.app` sender address you want residents to see.
+- Use the same branded sender identity you want residents to see for verification updates.
+- Keep verification email transport separate from Supabase Auth template configuration, even if both use the same sending domain.
 
 ### Relay mode
 
 - `VERIFICATION_EMAIL_WEBHOOK_URL`
 - `VERIFICATION_EMAIL_WEBHOOK_SECRET` if your relay expects a shared secret
 
-Recommended now that the project owns `konektado.app`:
-
-- Point `VERIFICATION_EMAIL_WEBHOOK_URL` at a small relay that sends through your transactional provider for `konektado.app`.
-- Use the same branded sender identity you want residents to see for verification updates.
-- Keep verification email transport separate from Supabase Auth template configuration, even if both use the same sending domain.
+Use this only if you are temporarily routing through a custom relay service rather than Resend directly.
 
 ### SMTP mode
 
@@ -84,7 +115,7 @@ Optional:
 
 If your project already uses a provider relay for auth emails, mirror the same transport settings here so verification updates use the same sender path.
 
-If the project has both relay and SMTP configured, prefer relay for deployed environments and reserve SMTP for fallback/testing.
+If the project has both Resend and SMTP configured, prefer Resend for deployed environments and reserve SMTP for fallback/testing.
 
 ## Local Testing
 
@@ -100,6 +131,8 @@ Example:
 $env:VERIFICATION_EMAIL_BASE_URL = "http://127.0.0.1:54321"
 npx supabase functions serve verification-email
 npm run test:verification-email -- verification_submitted <requestId>
+
+npm run test:verification-email -- verification_submitted 561523e5-af3e-4cca-9a32-036e6599d793
 ```
 
 ## Deployed Testing
@@ -126,7 +159,7 @@ The script reads:
 
 - Uploaded IDs and documents are never attached to these emails.
 - The edge function lives in backend code, not Supabase Auth email templates.
-- `konektado.app` is the sending-domain baseline for branded transactional verification emails. Treat SMTP mailbox credentials as temporary infrastructure, not the long-term production path.
+- `konektado.app` is the sending-domain baseline for branded transactional verification emails. Treat SMTP mailbox credentials as temporary infrastructure, not the long-term production path. Resend is the preferred production transport for this workflow.
 - The deployed function should not depend on reading HTML template files from the edge runtime filesystem. If you see an error like `path not found: .../templates/layout.html`, deploy the latest `verification-email` function version from this repo.
 - A `404 Requested function was not found` response means the function has not been deployed at the target Supabase project yet.
 - A `401 UNAUTHORIZED_INVALID_JWT_FORMAT` response means the request was signed with the wrong Supabase key. The test runner should use `SUPABASE_SERVICE_ROLE_KEY` first, then fall back to anon/public keys only for non-authenticated local checks.
