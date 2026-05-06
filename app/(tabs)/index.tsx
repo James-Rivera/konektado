@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -53,6 +53,8 @@ type HomeFeedItem =
       createdAt: string;
       scoreText: string;
     };
+
+const HOME_FEED_LIMIT = 30;
 
 function getDefaultFilter(preferences: UserPreferences | null): HomeFilter {
   if (preferences?.intent === 'provider') return 'Jobs';
@@ -120,11 +122,18 @@ function scoreFeedItem(
 
 function sortByFeedScore(items: HomeFeedItem[], preferences: UserPreferences | null) {
   const terms = getPreferenceTerms(preferences);
-  return [...items].sort((left, right) => {
-    const scoreDiff = scoreFeedItem(right, preferences, terms) - scoreFeedItem(left, preferences, terms);
-    if (scoreDiff !== 0) return scoreDiff;
-    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
-  });
+  return items
+    .map((item) => ({
+      item,
+      score: scoreFeedItem(item, preferences, terms),
+      createdTime: new Date(item.createdAt).getTime(),
+    }))
+    .sort((left, right) => {
+      const scoreDiff = right.score - left.score;
+      if (scoreDiff !== 0) return scoreDiff;
+      return right.createdTime - left.createdTime;
+    })
+    .map(({ item }) => item);
 }
 
 function getOptionalScore(item: HomeFeedItem | undefined, preferences: UserPreferences | null) {
@@ -313,7 +322,10 @@ export default function HomeScreen() {
 
     setFeedLoading(true);
 
-    Promise.all([searchJobs(), searchServices()]).then(([jobsResult, servicesResult]) => {
+    Promise.all([
+      searchJobs({ limit: HOME_FEED_LIMIT }),
+      searchServices({ limit: HOME_FEED_LIMIT }),
+    ]).then(([jobsResult, servicesResult]) => {
       if (!active) return;
 
       const jobs =
@@ -369,17 +381,18 @@ export default function HomeScreen() {
     };
   }, [feedLoaded, isFocused]);
 
-  const feed = useMemo(() => {
-    if (selectedFilter === 'Jobs') {
-      return sortByFeedScore(feedSources.jobs, preferences);
-    }
+  const feedVariants = useMemo(() => {
+    const jobs = sortByFeedScore(feedSources.jobs, preferences);
+    const workers = sortByFeedScore(feedSources.workers, preferences);
 
-    if (selectedFilter === 'Workers') {
-      return sortByFeedScore(feedSources.workers, preferences);
-    }
+    return {
+      Jobs: jobs,
+      Workers: workers,
+      'For you': buildForYouFeed(jobs, workers, preferences),
+    };
+  }, [feedSources, preferences]);
 
-    return buildForYouFeed(feedSources.jobs, feedSources.workers, preferences);
-  }, [feedSources, preferences, selectedFilter]);
+  const feed = feedVariants[selectedFilter];
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -435,6 +448,67 @@ export default function HomeScreen() {
     Alert.alert(label, 'This part of Home will be connected in a later slice.');
   }, []);
 
+  const keyExtractor = useCallback((item: HomeFeedItem) => item.key, []);
+
+  const renderFeedItem = useCallback(
+    ({ item }: { item: HomeFeedItem }) => (
+      <FeedCard
+        feedItem={item}
+        isVerified={isVerified}
+        onOpenJob={openJob}
+        onOpenVerification={openVerification}
+        onOpenWorker={openWorker}
+        verificationKnown={verificationKnown}
+        workerVariant={selectedFilter === 'Workers' ? 'default' : 'match'}
+      />
+    ),
+    [isVerified, openJob, openVerification, openWorker, selectedFilter, verificationKnown],
+  );
+
+  const renderListHeader = useCallback(
+    () => (
+      <>
+        {!verificationKnown ? (
+          <VerificationBannerSkeleton />
+        ) : showSetupBanner ? (
+          <HomeSetupChecklist
+            status={verificationStatus}
+            note={verificationNote}
+            onAddPhoto={() => showPlaceholder('Add photo')}
+            onAddServices={() => showPlaceholder('Add services')}
+            onDismiss={() => setBannerDismissed(true)}
+            onVerify={openVerification}
+          />
+        ) : null}
+        <HomeSectionHeader onFilterPress={() => showPlaceholder('Filters')} />
+      </>
+    ),
+    [
+      openVerification,
+      showPlaceholder,
+      showSetupBanner,
+      verificationKnown,
+      verificationNote,
+      verificationStatus,
+    ],
+  );
+
+  const renderListFooter = useCallback(
+    () => (
+      <>
+        {feedLoading ? (
+          <View style={styles.skeletonFeed}>
+            <HomeFeedCardSkeleton />
+            <HomeFeedCardSkeleton />
+            {selectedFilter === 'For you' ? <HomeFeedCardSkeleton /> : null}
+          </View>
+        ) : null}
+        {!feedLoading && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
+      </>
+    ),
+    [feed.length, feedLoading, selectedFilter],
+  );
+
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={[]} style={styles.safeArea}>
@@ -454,50 +528,25 @@ export default function HomeScreen() {
           </HomeFilterTabs>
         </Animated.View>
 
-        <ScrollView
+        <FlatList
           contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}
+          data={feed}
+          ItemSeparatorComponent={FeedSeparator}
+          keyExtractor={keyExtractor}
+          ListFooterComponent={renderListFooter}
+          ListHeaderComponent={renderListHeader}
           onScroll={handleScroll}
+          renderItem={renderFeedItem}
           scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}>
-          {!verificationKnown ? (
-            <VerificationBannerSkeleton />
-          ) : showSetupBanner ? (
-            <HomeSetupChecklist
-              status={verificationStatus}
-              note={verificationNote}
-              onAddPhoto={() => showPlaceholder('Add photo')}
-              onAddServices={() => showPlaceholder('Add services')}
-              onDismiss={() => setBannerDismissed(true)}
-              onVerify={openVerification}
-            />
-          ) : null}
-          <HomeSectionHeader onFilterPress={() => showPlaceholder('Filters')} />
-          <View style={styles.feed}>
-            {feed.map((feedItem) => (
-              <FeedCard
-                key={feedItem.key}
-                feedItem={feedItem}
-                isVerified={isVerified}
-                verificationKnown={verificationKnown}
-                onOpenJob={openJob}
-                onOpenWorker={openWorker}
-                onOpenVerification={openVerification}
-                workerVariant={selectedFilter === 'Workers' ? 'default' : 'match'}
-              />
-            ))}
-          </View>
-          {feedLoading ? (
-            <View style={styles.skeletonFeed}>
-              <HomeFeedCardSkeleton />
-              <HomeFeedCardSkeleton />
-              {selectedFilter === 'For you' ? <HomeFeedCardSkeleton /> : null}
-            </View>
-          ) : null}
-          {!feedLoading && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
-        </ScrollView>
+          showsVerticalScrollIndicator={false}
+        />
       </SafeAreaView>
     </View>
   );
+}
+
+function FeedSeparator() {
+  return <View style={styles.feedSeparator} />;
 }
 
 const FeedCard = memo(function FeedCard({
@@ -569,6 +618,7 @@ function HomeFeedCardSkeleton() {
       <Skeleton height={12} width="54%" />
       <Skeleton height={18} width="88%" />
       <Skeleton height={38} width="94%" />
+      <Skeleton height={222} width="100%" borderRadius={16} />
       <View style={styles.skeletonTagRow}>
         <Skeleton height={27} width={76} borderRadius={13} />
         <Skeleton height={27} width={84} borderRadius={13} />
@@ -606,6 +656,10 @@ const styles = StyleSheet.create({
   feed: {
     backgroundColor: color.screenBackground,
     gap: 2,
+  },
+  feedSeparator: {
+    backgroundColor: color.screenBackground,
+    height: 2,
   },
   skeletonFeed: {
     gap: 2,

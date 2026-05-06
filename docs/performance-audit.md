@@ -451,11 +451,18 @@ Likely index candidates based on current code, to verify before adding:
 
 ## Implementation Checklist
 
+## Implementation Status
+
+- Current phase: Phase 3 — List virtualization and layout-matched skeletons
+- Status: Implemented, pending manual device testing
+
 - [x] Create audit report
 - [x] Fix P0 messaging freshness, optimistic-send race, and preview-cache issues
 - [ ] Fix P1 issues
 - [ ] Review P2 issues
 - [x] Run typecheck/lint for Phase 1 messaging changes
+- [x] Run typecheck/lint for Phase 2 Search/Home changes
+- [x] Run typecheck/lint for Phase 3 list virtualization and skeleton changes
 - [ ] Manually test messaging
 - [ ] Manually test conversation previews
 - [ ] Manually test tab switching
@@ -468,6 +475,79 @@ Likely index candidates based on current code, to verify before adding:
 - Conversation preview cache can now upsert a full conversation summary, not only update an existing conversation by latest message.
 - Optimistic sends no longer emit failed/pending messages into confirmed preview state. Failed sends stay marked in the open thread and can be retried.
 - The routine full-conversation refetch after send was removed. Realtime or the returned insert row reconciles the thread instead.
+
+## Phase 2 Search and Home Implementation Notes
+
+Implemented changes:
+
+- Search text input now debounces network searches before calling Supabase.
+- Search now fetches only the active mode: Jobs mode calls `searchJobs`, Workers mode calls `searchServices`.
+- Search keeps previous results visible while the active mode refreshes. Broad result-list skeletons are used only for the initial load of a mode.
+- Search shows a lightweight "Updating results..." indicator during stale-while-revalidate refreshes.
+- Job and service search calls now accept a bounded `limit`, with Search using 30 rows and Home using 30 rows per source.
+- Job search moved obvious scalar text filtering into Supabase `ilike` filters for title, description, category, service needed, barangay, and location fields, while preserving client-side tag filtering on returned rows.
+- Service search moved obvious scalar text filtering into Supabase `ilike` filters for title, description, category, availability, rate, barangay, and location fields, while preserving client-side tag filtering on returned rows.
+- Home feed now precomputes Jobs, Workers, and For you feed variants when source data or preferences change. Switching Home filters no longer reruns the main scoring/sorting work.
+- Home feed scoring now decorates items with computed scores before sorting, avoiding repeated score recalculation inside the sort comparator.
+
+Validation results:
+
+- `npm.cmd run lint` passed.
+- `npx.cmd tsc --noEmit` passed.
+- No Expo/manual device test was run during this implementation pass.
+
+Manual testing checklist:
+
+- Type slowly and quickly in Search; confirm network refresh waits briefly and old results remain visible while updating.
+- Switch Search between Find Jobs and Find Workers; confirm only the active mode refreshes and the inactive mode keeps its cached results until opened.
+- Select and clear popular service chips; confirm results update after debounce without full-list skeleton replacement when prior results exist.
+- Switch Home between For you, Jobs, and Workers; confirm tab switching feels instant and visual design/spacing is unchanged.
+- Test long Home and Search result lists; confirm scrolling, bottom padding, empty states, and save/message verification gating still behave correctly.
+
+Deferred items:
+
+- Home and Search still used `ScrollView` at the end of Phase 2; this was resolved in Phase 3 with virtualized `FlatList` rendering.
+- Advanced database indexes and query-plan verification remain recommendations only.
+- Profile polling cleanup remains outside this phase.
+- Pagination UI and infinite loading were not added; this phase only applies bounded initial query limits.
+
+## Phase 3 List Virtualization and Skeleton Implementation Notes
+
+Implemented changes:
+
+- Home feed now renders through `FlatList` instead of mapping every feed item inside a `ScrollView`.
+- Home keeps the existing animated top header, verification/setup banner, section header, feed cards, empty state, and bottom content padding.
+- Home uses a stable `keyExtractor`, memoized `renderItem`, `ListHeaderComponent`, `ListFooterComponent`, and an item separator matching the previous 2px feed gap.
+- Home initial feed skeletons now reserve the same 222px photo area used by photo-capable `HomeFeedCard` records to reduce layout shift when image cards load.
+- Search results now render through `FlatList` instead of mapping every result inside a `ScrollView`.
+- Search keeps the search module, popular service chips, sticky result header, existing empty state, verification helper text, and stale-while-refresh behavior.
+- Search uses stable row keys and memoized row/header renderers for result rows, skeleton rows, refresh text, empty state, and helper text.
+- Search job and worker skeletons were kept visually close to their final specialized card layouts, including header/icons, metadata rows, chips, and CTA area.
+- Messages inbox and Conversation thread rendering were inspected but left unchanged in this pass because they carry more realtime, grouping, keyboard, and auto-scroll regression risk.
+
+Validation results:
+
+- `npm.cmd run lint` passed.
+- `npx.cmd tsc --noEmit` passed.
+- No Expo/manual device test was run during this implementation pass.
+
+Manual testing checklist:
+
+- Home initial loading skeleton matches final card layout closely, including photo-capable cards.
+- Home For you / Jobs / Workers switching still feels immediate.
+- Home long feed scrolls smoothly.
+- Search initial loading skeleton matches final result layout closely.
+- Search refresh keeps old results visible and shows only the small updating indicator.
+- Search Jobs/Workers mode switching preserves layout and empty states.
+- Bottom nav does not cover the last item.
+- Small-screen layout still works on 360x800, 390x844, and 430x932.
+
+Deferred items:
+
+- Messages inbox virtualization remains deferred until it can be tested with message request grouping, cached previews, realtime inserts, and search/filter combinations.
+- Conversation thread virtualization remains deferred because `ScrollView` currently owns keyboard resize behavior, scroll-to-bottom behavior, grouped bubble spacing, optimistic sends, and retry state.
+- Infinite pagination remains out of scope for this phase.
+- Skeleton animation sharing remains deferred; this pass only improves layout matching.
 
 ## Skeleton Strategy Improvement
 

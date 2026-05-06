@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -48,6 +48,27 @@ function getInitialMode(filterParam: string | undefined): SearchMode {
   return 'jobs';
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => clearTimeout(timeoutId);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
+
+type SearchListRow =
+  | { key: 'result-header'; type: 'resultHeader' }
+  | { key: 'refresh'; type: 'refresh' }
+  | { key: string; type: 'jobSkeleton' }
+  | { key: string; type: 'workerSkeleton' }
+  | { key: string; type: 'job'; job: SearchJobItem }
+  | { key: string; type: 'worker'; worker: SearchWorkerItem }
+  | { key: 'empty'; type: 'empty' }
+  | { key: 'helper'; type: 'helper' };
+
 export default function SearchScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -62,7 +83,20 @@ export default function SearchScreen() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [jobs, setJobs] = useState<SearchJobItem[]>([]);
   const [workers, setWorkers] = useState<SearchWorkerItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedModes, setLoadedModes] = useState<Record<SearchMode, boolean>>({
+    jobs: false,
+    workers: false,
+  });
+  const [refreshingModes, setRefreshingModes] = useState<Record<SearchMode, boolean>>({
+    jobs: false,
+    workers: false,
+  });
+  const searchRequestRef = useRef(0);
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const searchText = useMemo(
+    () => Array.from(new Set([debouncedQuery.trim(), selectedService?.trim()].filter(Boolean))).join(' '),
+    [debouncedQuery, selectedService],
+  );
 
   useEffect(() => {
     setMode(getInitialMode(filterParam));
@@ -70,6 +104,8 @@ export default function SearchScreen() {
 
   useEffect(() => {
     let active = true;
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
 
     if (!isFocused) {
       return () => {
@@ -77,126 +113,241 @@ export default function SearchScreen() {
       };
     }
 
-    setLoading(true);
+    setRefreshingModes((current) => ({ ...current, [mode]: true }));
 
-    const text = Array.from(new Set([query.trim(), selectedService?.trim()].filter(Boolean))).join(' ');
+    const searchPromise =
+      mode === 'jobs'
+        ? searchOpenJobs({ text: searchText, limit: 30 }).then((result) => {
+            if (!active || requestId !== searchRequestRef.current) return;
 
-    Promise.all([searchOpenJobs({ text }), searchServices({ text })]).then(
-      ([jobsResult, servicesResult]) => {
-        if (!active) return;
+            if (result.data) {
+              setJobs(result.data.map(mapJobToSearchItem));
+            }
+          })
+        : searchServices({ text: searchText, limit: 30 }).then((result) => {
+            if (!active || requestId !== searchRequestRef.current) return;
 
-        setJobs((jobsResult.data ?? []).map(mapJobToSearchItem));
-        setWorkers((servicesResult.data ?? []).map(mapServiceToSearchItem));
-        setLoading(false);
-      },
-    );
+            if (result.data) {
+              setWorkers(result.data.map(mapServiceToSearchItem));
+            }
+          });
+
+    searchPromise
+      .catch(() => undefined)
+      .finally(() => {
+        if (!active || requestId !== searchRequestRef.current) return;
+        setLoadedModes((current) => ({ ...current, [mode]: true }));
+        setRefreshingModes((current) => ({ ...current, [mode]: false }));
+      });
 
     return () => {
       active = false;
     };
-  }, [isFocused, query, selectedService]);
+  }, [isFocused, mode, searchText]);
 
   const resultHeading =
     mode === 'jobs' ? 'Jobs near you' : getWorkerResultsHeading(query, selectedService);
+  const activeResultCount = mode === 'jobs' ? jobs.length : workers.length;
+  const activeModeLoaded = loadedModes[mode];
+  const activeModeRefreshing = refreshingModes[mode];
+  const showInitialSkeleton = activeModeRefreshing && !activeModeLoaded && activeResultCount === 0;
+  const showRefreshIndicator = activeModeRefreshing && activeModeLoaded && activeResultCount > 0;
 
-  const showVerification = () => {
+  const showVerification = useCallback(() => {
     router.push('/verification');
-  };
+  }, [router]);
 
-  const showPlaceholder = (label: string) => {
+  const showPlaceholder = useCallback((label: string) => {
     Alert.alert(label, 'This part of Search will be connected in a later slice.');
-  };
+  }, []);
 
-  const handleModeChange = (nextMode: SearchMode) => {
+  const handleModeChange = useCallback((nextMode: SearchMode) => {
     setMode(nextMode);
-  };
+  }, []);
 
-  const handleChipPress = (serviceLabel: string) => {
+  const handleChipPress = useCallback((serviceLabel: string) => {
     const nextSelected = selectedService === serviceLabel ? null : serviceLabel;
     setSelectedService(nextSelected);
     setQuery(nextSelected ?? '');
-  };
+  }, [selectedService]);
+
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    setSelectedService(null);
+  }, []);
+
+  const openJob = useCallback((jobId: string) => {
+    router.push({ pathname: '/job/[jobId]', params: { jobId } });
+  }, [router]);
+
+  const openWorker = useCallback((workerId: string) => {
+    router.push({
+      pathname: '/worker/[workerId]',
+      params: { workerId, variant: 'match' },
+    });
+  }, [router]);
+
+  const listRows = useMemo<SearchListRow[]>(() => {
+    const rows: SearchListRow[] = [{ key: 'result-header', type: 'resultHeader' }];
+
+    if (showRefreshIndicator) {
+      rows.push({ key: 'refresh', type: 'refresh' });
+    }
+
+    if (showInitialSkeleton) {
+      rows.push(
+        { key: `${mode}-skeleton-1`, type: mode === 'jobs' ? 'jobSkeleton' : 'workerSkeleton' },
+        { key: `${mode}-skeleton-2`, type: mode === 'jobs' ? 'jobSkeleton' : 'workerSkeleton' },
+      );
+    } else if (mode === 'jobs') {
+      rows.push(...jobs.map((job) => ({ key: `job-${job.id}`, type: 'job' as const, job })));
+    } else {
+      rows.push(...workers.map((worker) => ({ key: `worker-${worker.id}`, type: 'worker' as const, worker })));
+    }
+
+    if (!activeResultCount && !showInitialSkeleton && !activeModeRefreshing) {
+      rows.push({ key: 'empty', type: 'empty' });
+    }
+
+    if (verificationKnown && !isVerified) {
+      rows.push({ key: 'helper', type: 'helper' });
+    }
+
+    return rows;
+  }, [
+    activeModeRefreshing,
+    activeResultCount,
+    isVerified,
+    jobs,
+    mode,
+    showInitialSkeleton,
+    showRefreshIndicator,
+    verificationKnown,
+    workers,
+  ]);
+
+  const keyExtractor = useCallback((item: SearchListRow) => item.key, []);
+
+  const renderListHeader = useCallback(
+    () => (
+      <>
+        <View style={[styles.searchModule, { paddingTop: topInset + 12 }]}>
+          <SearchHeaderRow flush onChangeText={setQuery} value={query} />
+          <SearchSegmentedControl flush mode={mode} onChange={handleModeChange} />
+        </View>
+        <PopularServicesSection
+          onPressService={handleChipPress}
+          selectedService={selectedService}
+          services={popularServices}
+        />
+      </>
+    ),
+    [handleChipPress, handleModeChange, mode, query, selectedService, topInset],
+  );
+
+  const renderSearchRow = useCallback(
+    ({ index, item }: { index: number; item: SearchListRow }) => {
+      if (item.type === 'resultHeader') {
+        return <SearchResultHeader title={resultHeading} onFilterPress={() => showPlaceholder('Filters')} />;
+      }
+
+      const rowStyle = [styles.resultRow, index === 1 && styles.firstResultRow];
+
+      if (item.type === 'refresh') {
+        return (
+          <View style={rowStyle}>
+            <Text style={styles.refreshText}>Updating results...</Text>
+          </View>
+        );
+      }
+
+      if (item.type === 'jobSkeleton') {
+        return (
+          <View style={rowStyle}>
+            <SearchJobResultSkeleton />
+          </View>
+        );
+      }
+
+      if (item.type === 'workerSkeleton') {
+        return (
+          <View style={rowStyle}>
+            <SearchWorkerResultSkeleton />
+          </View>
+        );
+      }
+
+      if (item.type === 'job') {
+        return (
+          <View style={rowStyle}>
+            <SearchJobResultCard
+              job={item.job}
+              onOpenJob={() => openJob(item.job.id)}
+              onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
+            />
+          </View>
+        );
+      }
+
+      if (item.type === 'worker') {
+        return (
+          <View style={rowStyle}>
+            <SearchWorkerResultCard
+              onOpenWorker={() => openWorker(item.worker.id)}
+              onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
+              worker={item.worker}
+            />
+          </View>
+        );
+      }
+
+      if (item.type === 'empty') {
+        return (
+          <View style={[rowStyle, styles.emptyCard]}>
+            <EmptyState
+              actionLabel="Clear search"
+              description="Try a different service or remove the current search terms."
+              icon="search-off"
+              onActionPress={clearSearch}
+              title="No matching results yet"
+            />
+          </View>
+        );
+      }
+
+      return (
+        <View style={rowStyle}>
+          <Text style={styles.helperText}>
+            Save and message actions stay locked until your barangay verification is approved.
+          </Text>
+        </View>
+      );
+    },
+    [
+      clearSearch,
+      isVerified,
+      openJob,
+      openWorker,
+      resultHeading,
+      showPlaceholder,
+      showVerification,
+      verificationKnown,
+    ],
+  );
 
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={[]} style={styles.safeArea}>
-        <ScrollView
+        <FlatList
           contentContainerStyle={styles.content}
+          data={listRows}
+          keyExtractor={keyExtractor}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={renderListHeader}
+          renderItem={renderSearchRow}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[2]}>
-          <View style={[styles.searchModule, { paddingTop: topInset + 12 }]}>
-            <SearchHeaderRow
-              flush
-              onChangeText={setQuery}
-              value={query}
-            />
-            <SearchSegmentedControl flush mode={mode} onChange={handleModeChange} />
-          </View>
-          <PopularServicesSection
-            onPressService={handleChipPress}
-            selectedService={selectedService}
-            services={popularServices}
-          />
-          <SearchResultHeader title={resultHeading} onFilterPress={() => showPlaceholder('Filters')} />
-
-          <View style={styles.resultsWrap}>
-            {loading ? (
-              mode === 'jobs' ? (
-                <>
-                  <SearchJobResultSkeleton />
-                  <SearchJobResultSkeleton />
-                </>
-              ) : (
-                <>
-                  <SearchWorkerResultSkeleton />
-                  <SearchWorkerResultSkeleton />
-                </>
-              )
-            ) : mode === 'jobs'
-              ? jobs.map((job) => (
-                  <SearchJobResultCard
-                    job={job}
-                    key={job.id}
-                    onOpenJob={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
-                    onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
-                  />
-                ))
-                : workers.map((worker) => (
-                  <SearchWorkerResultCard
-                    key={worker.id}
-                    onOpenWorker={() =>
-                      router.push({
-                        pathname: '/worker/[workerId]',
-                        params: { workerId: worker.id, variant: 'match' },
-                      })
-                    }
-                    onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
-                    worker={worker}
-                  />
-                ))}
-
-            {(mode === 'jobs' ? jobs.length : workers.length) ? null : loading ? null : (
-              <View style={styles.emptyCard}>
-                <EmptyState
-                  actionLabel="Clear search"
-                  description="Try a different service or remove the current search terms."
-                  icon="search-off"
-                  onActionPress={() => {
-                    setQuery('');
-                    setSelectedService(null);
-                  }}
-                  title="No matching results yet"
-                />
-              </View>
-            )}
-
-            {verificationKnown && !isVerified ? (
-              <Text style={styles.helperText}>
-                Save and message actions stay locked until your barangay verification is approved.
-              </Text>
-            ) : null}
-          </View>
-        </ScrollView>
+          stickyHeaderIndices={[1]}
+        />
       </SafeAreaView>
     </View>
   );
@@ -318,13 +469,13 @@ function SearchWorkerResultSkeleton() {
           <Skeleton height={20} width={20} borderRadius={10} />
         </View>
       </View>
+      <Skeleton height={16} width="88%" />
+      <Skeleton height={12} width="46%" />
       <View style={styles.skeletonMetaRow}>
         <Skeleton height={12} width={72} />
         <Skeleton height={12} width={82} />
         <Skeleton height={12} width={94} />
       </View>
-      <Skeleton height={12} width="46%" />
-      <Skeleton height={16} width="88%" />
       <Skeleton height={12} width="70%" />
       <View style={styles.skeletonTagRow}>
         <Skeleton height={27} width={76} borderRadius={13} />
@@ -354,11 +505,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingHorizontal: 20,
   },
-  resultsWrap: {
+  resultRow: {
     backgroundColor: color.background,
-    gap: 12,
+    marginBottom: 12,
     paddingHorizontal: 15,
-    paddingBottom: 28,
+  },
+  firstResultRow: {
     paddingTop: 12,
   },
   skeletonCard: {
@@ -406,6 +558,11 @@ const styles = StyleSheet.create({
   helperText: {
     ...typography.caption,
     color: color.textMuted,
+    paddingHorizontal: 4,
+  },
+  refreshText: {
+    ...typography.caption,
+    color: color.textSubtle,
     paddingHorizontal: 4,
   },
 });

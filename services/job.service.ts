@@ -210,6 +210,8 @@ export async function listMyJobs(): Promise<ServiceResult<JobSummary[]>> {
 }
 
 export async function searchJobs(filters: JobSearchFilters = {}): Promise<ServiceResult<JobSummary[]>> {
+  const text = compactText(filters.text).toLowerCase();
+  const limit = normalizeLimit(filters.limit);
   let query = supabase
     .from('jobs')
     .select(JOB_COLUMNS)
@@ -224,16 +226,32 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
     query = query.ilike('barangay', `%${filters.barangay}%`);
   }
 
+  if (text) {
+    const escapedText = escapePostgrestFilterValue(text);
+    query = query.or(
+      [
+        `title.ilike.%${escapedText}%`,
+        `description.ilike.%${escapedText}%`,
+        `category.ilike.%${escapedText}%`,
+        `service_needed.ilike.%${escapedText}%`,
+        `barangay.ilike.%${escapedText}%`,
+        `location_text.ilike.%${escapedText}%`,
+        `location.ilike.%${escapedText}%`,
+      ].join(','),
+    );
+  }
+
+  query = query.limit(limit);
+
   const { data, error } = await query;
 
   if (error) {
     return { data: null, error: error.message };
   }
 
-  const text = compactText(filters.text).toLowerCase();
   const rows = ((data as JobRow[] | null) ?? []).filter((row) => {
     if (!text) return true;
-    return [row.title, row.description, row.category, row.service_needed, row.barangay, row.location_text, row.location]
+    return [row.title, row.description, row.category, row.service_needed, row.barangay, row.location_text, row.location, ...(row.tags ?? [])]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
@@ -242,6 +260,15 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   const stats = await loadClientStats(jobs.map((job) => job.clientId));
 
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
+}
+
+function normalizeLimit(value: number | undefined) {
+  if (!value || !Number.isFinite(value)) return 40;
+  return Math.max(1, Math.min(80, Math.floor(value)));
+}
+
+function escapePostgrestFilterValue(value: string) {
+  return value.replace(/[,%]/g, '\\$&');
 }
 
 export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDetail>> {

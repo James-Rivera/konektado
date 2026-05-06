@@ -162,20 +162,40 @@ export async function listMyServices(): Promise<ServiceResult<ProviderService[]>
   return { data: ((data as ServiceRow[] | null) ?? []).map(mapService), error: null };
 }
 
-export async function searchServices(filters: { text?: string } = {}): Promise<
+export async function searchServices(filters: { text?: string; limit?: number } = {}): Promise<
   ServiceResult<ServiceSearchResult[]>
 > {
-  const { data, error } = await supabase
+  const text = compactText(filters.text).toLowerCase();
+  const limit = normalizeLimit(filters.limit);
+  let query = supabase
     .from('services')
     .select(SERVICE_COLUMNS)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
+  if (text) {
+    const escapedText = escapePostgrestFilterValue(text);
+    query = query.or(
+      [
+        `title.ilike.%${escapedText}%`,
+        `description.ilike.%${escapedText}%`,
+        `category.ilike.%${escapedText}%`,
+        `availability_text.ilike.%${escapedText}%`,
+        `rate_text.ilike.%${escapedText}%`,
+        `barangay.ilike.%${escapedText}%`,
+        `location_text.ilike.%${escapedText}%`,
+      ].join(','),
+    );
+  }
+
+  query = query.limit(limit);
+
+  const { data, error } = await query;
+
   if (error) {
     return { data: null, error: error.message };
   }
 
-  const text = compactText(filters.text).toLowerCase();
   const rows = ((data as ServiceRow[] | null) ?? []).filter((row) => {
     if (!text) return true;
     return [
@@ -198,6 +218,15 @@ export async function searchServices(filters: { text?: string } = {}): Promise<
     data: rows.map((row) => mapServiceSearchResult(row, profiles, stats)),
     error: null,
   };
+}
+
+function normalizeLimit(value: number | undefined) {
+  if (!value || !Number.isFinite(value)) return 40;
+  return Math.max(1, Math.min(80, Math.floor(value)));
+}
+
+function escapePostgrestFilterValue(value: string) {
+  return value.replace(/[,%]/g, '\\$&');
 }
 
 export async function getServiceDetail(serviceId: string): Promise<ServiceResult<ServiceDetail>> {

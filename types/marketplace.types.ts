@@ -112,6 +112,7 @@ export type JobSearchFilters = {
   text?: string;
   category?: string;
   barangay?: string;
+  limit?: number;
 };
 
 export type ProviderService = {
