@@ -361,6 +361,7 @@ Finding: Loading flags are broad in places where stale content plus small refres
 - Expected improvement: Incoming messages appear without leaving the screen; previews update immediately and correctly.
 - Risk: Medium.
 - How to test manually: Open two seeded verified users on separate devices/sessions, send messages both ways while staying on the chat and inbox screens, test failed/offline send, and test rapid quick-prompt sends.
+- Phase 1 status: Implemented app-side Supabase Realtime subscriptions for current conversation threads and focused inbox previews. Message reconciliation is idempotent by message id and optimistic local replacement.
 
 ### 2. Remove routine full refetch after send
 
@@ -369,6 +370,7 @@ Finding: Loading flags are broad in places where stale content plus small refres
 - Expected improvement: Faster perceived send behavior and less flicker.
 - Risk: Medium.
 - How to test manually: Send several messages quickly, use quick prompts, background/foreground the app, and confirm message order and inbox preview stay correct.
+- Phase 1 status: Implemented. Sends keep local optimistic messages, replace the matching `local-*` message with the confirmed Supabase row, and no longer routinely refetch the full conversation after every send.
 
 ### 3. Fix start-conversation preview/cache behavior
 
@@ -377,6 +379,7 @@ Finding: Loading flags are broad in places where stale content plus small refres
 - Expected improvement: Messages tab feels current after starting a conversation from detail screens.
 - Risk: Low to medium.
 - How to test manually: Start a new job conversation, go back to Messages, and confirm the latest preview appears without waiting for a focus refetch.
+- Phase 1 status: Implemented. Job Detail and Worker Profile emit the returned conversation detail into the preview cache before navigating to the thread.
 
 ### 4. Add marketplace query limits and server-side filtering
 
@@ -441,7 +444,7 @@ Likely index candidates based on current code, to verify before adding:
 
 - Actual device timings were not measured. This audit is code-trace based.
 - Supabase row counts and query plans were not available, so index recommendations are based on query patterns and need `EXPLAIN` verification.
-- Supabase Realtime project/table publication settings were not verified from the remote dashboard.
+- Supabase Realtime publication is now expected to include `public.messages` and `public.conversations` through migration `supabase/migrations/20260506110000_enable_messaging_realtime.sql`; remote dashboard settings were not manually inspected from this audit.
 - No Expo manual test was run during this audit.
 - Figma was not inspected because this task did not implement or redesign UI.
 - The current working tree already had many modified/untracked files before this audit. Those changes were treated as existing work and were not reverted.
@@ -449,11 +452,48 @@ Likely index candidates based on current code, to verify before adding:
 ## Implementation Checklist
 
 - [x] Create audit report
-- [ ] Fix P0 issues
+- [x] Fix P0 messaging freshness, optimistic-send race, and preview-cache issues
 - [ ] Fix P1 issues
 - [ ] Review P2 issues
-- [ ] Run typecheck/lint
+- [x] Run typecheck/lint for Phase 1 messaging changes
 - [ ] Manually test messaging
 - [ ] Manually test conversation previews
 - [ ] Manually test tab switching
-- [ ] Update this report after implementation
+- [x] Update this report after implementation
+
+## Phase 1 Messaging Implementation Notes
+
+- Conversation Detail now subscribes to `public.messages` inserts scoped to the current `conversation_id` and to `public.conversations` updates scoped to the current conversation id.
+- Messages tab now subscribes while focused to `public.messages` inserts and `public.conversations` updates, then hydrates the affected conversation summary through the service layer.
+- Conversation preview cache can now upsert a full conversation summary, not only update an existing conversation by latest message.
+- Optimistic sends no longer emit failed/pending messages into confirmed preview state. Failed sends stay marked in the open thread and can be retried.
+- The routine full-conversation refetch after send was removed. Realtime or the returned insert row reconciles the thread instead.
+
+## Skeleton Strategy Improvement
+
+Audit all skeleton/loading states and convert them to layout-matched skeletons where practical.
+
+The preferred skeleton pattern is to reuse the real UI component structure and replace content fields with skeleton placeholders while data is loading.
+
+Do not create separate skeleton layouts that approximate the UI manually unless necessary.
+
+Goal:
+- The skeleton should occupy the same space as the final UI.
+- The skeleton should preserve the same spacing, card structure, image area, chip rows, metadata rows, and CTA area.
+- Loading should not cause layout shift when real data arrives.
+- If the final component has variants, the skeleton should support the same variants.
+
+Examples:
+- If `HomeFeedCard` can show an image, the skeleton should reserve the same image area when the expected item has an image.
+- If `SearchWorkerResultCard` shows rating, location, availability, and service chips, the skeleton should show placeholders in those exact positions.
+- If `Worker Profile` has header, match card, services/rate, details, and bottom CTA, the loading version should preserve that same layout.
+- If `Job Details` has title, client info, budget, schedule, description, requirements, and CTA, the skeleton should preserve that same layout.
+
+Recommended implementation pattern:
+- Prefer `<Component isLoading />` over separate `<ComponentSkeleton />` when this keeps the layout more accurate.
+- Use shared small primitives like `<SkeletonText />`, `<SkeletonAvatar />`, `<SkeletonChip />`, and `<SkeletonImage />`.
+- Keep the same parent layout, spacing, border radius, and section dividers.
+- Avoid full-screen skeleton replacement when stale existing data is available.
+- Use skeleton only for initial loading. For refreshes, keep existing UI visible and show a small refresh/loading indicator.
+
+Also document which skeletons should remain separate if the real component cannot safely render without data.

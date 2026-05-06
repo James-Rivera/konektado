@@ -89,7 +89,7 @@ type ConversationInboxRow = {
   last_message_created_at: string | null;
 };
 
-function mapMessage(row: MessageRow): ConversationMessage {
+export function mapMessage(row: MessageRow): ConversationMessage {
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -97,6 +97,22 @@ function mapMessage(row: MessageRow): ConversationMessage {
     body: row.body,
     createdAt: row.created_at,
   };
+}
+
+export function mapRealtimeMessage(row: unknown): ConversationMessage | null {
+  if (!row || typeof row !== 'object') return null;
+  const value = row as Partial<MessageRow>;
+  if (
+    typeof value.id !== 'string' ||
+    typeof value.conversation_id !== 'string' ||
+    typeof value.sender_id !== 'string' ||
+    typeof value.body !== 'string' ||
+    typeof value.created_at !== 'string'
+  ) {
+    return null;
+  }
+
+  return mapMessage(value as MessageRow);
 }
 
 function mapInboxProfile(
@@ -384,6 +400,20 @@ export async function getConversation(conversationId: string): Promise<ServiceRe
     },
     error: null,
   };
+}
+
+export async function getConversationSummary(conversationId: string): Promise<ServiceResult<ConversationSummary>> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS)
+    .eq('id', conversationId)
+    .maybeSingle<ConversationRow>();
+
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: 'Conversation not found.' };
+
+  const [summary] = await mapConversationRows([data]);
+  return { data: summary, error: null };
 }
 
 export async function startJobConversation({

@@ -17,8 +17,13 @@ import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { listMyConversations } from '@/services/conversation.service';
 import {
+  getConversationSummary,
+  listMyConversations,
+  mapRealtimeMessage,
+} from '@/services/conversation.service';
+import {
+  type ConversationPreviewEvent,
   getConversationPreviewCache,
   setConversationPreviewCache,
   subscribeConversationPreviewUpdates,
@@ -26,6 +31,7 @@ import {
 } from '@/services/conversation-preview-events';
 import { isPresenceActive } from '@/services/marketplace.helpers';
 import type { ConversationSummary } from '@/types/marketplace.types';
+import { supabase } from '@/utils/supabase';
 
 type InboxFilter = 'all' | 'jobs' | 'services' | 'unread';
 
@@ -47,7 +53,12 @@ export default function MessagesScreen() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(!hasCachedConversations);
   const hasLoadedOnceRef = useRef(hasCachedConversations);
+  const conversationsRef = useRef(conversations);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   useFocusEffect(
     useCallback(() => {
@@ -89,25 +100,65 @@ export default function MessagesScreen() {
 
   useEffect(
     () =>
-      subscribeConversationPreviewUpdates(({ conversationId, message }) => {
-        updateConversationPreviewCache({ conversationId, message });
+      subscribeConversationPreviewUpdates((event) => {
+        const nextCache = updateConversationPreviewCache(event);
         setConversations((current) => {
-          let found = false;
-          const updated = current.map((conversation) => {
-            if (conversation.id !== conversationId) return conversation;
-            found = true;
-            return {
-              ...conversation,
-              lastMessage: message,
-              updatedAt: message.createdAt,
-            };
-          });
-
-          if (!found) return current;
-          return sortConversationsByUpdatedAt(updated);
+          if (nextCache) return nextCache;
+          return reconcilePreviewEvent(current, event);
         });
       }),
     [],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!profileId || !isVerified) return undefined;
+
+      let active = true;
+      const hydrateConversation = (nextConversationId: string) => {
+        getConversationSummary(nextConversationId).then((result) => {
+          if (!active || !result.data) return;
+          setConversationPreviewCache(
+            upsertConversation(conversationsRef.current, result.data),
+            profileId,
+          );
+          setConversations((current) => upsertConversation(current, result.data));
+        });
+      };
+
+      const channel = supabase
+        .channel(`messages-preview-${profileId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+          },
+          (payload) => {
+            const message = mapRealtimeMessage(payload.new);
+            if (message) hydrateConversation(message.conversationId);
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'conversations',
+          },
+          (payload) => {
+            const conversationIdFromPayload = getRealtimeConversationId(payload.new);
+            if (conversationIdFromPayload) hydrateConversation(conversationIdFromPayload);
+          },
+        )
+        .subscribe();
+
+      return () => {
+        active = false;
+        supabase.removeChannel(channel);
+      };
+    }, [isVerified, profileId]),
   );
 
   const showInboxSkeleton = loading && !conversations.length;
@@ -395,6 +446,80 @@ function sortConversationsByUpdatedAt(conversations: ConversationSummary[]) {
   return [...conversations].sort(
     (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
   );
+}
+
+function reconcilePreviewEvent(
+  conversations: ConversationSummary[],
+  event: ConversationPreviewEvent,
+) {
+  if (event.conversation) {
+    return upsertConversation(conversations, event.conversation);
+  }
+
+  if (!event.message) return conversations;
+
+  let found = false;
+  const updated = conversations.map((conversation) => {
+    if (conversation.id !== event.conversationId) return conversation;
+    found = true;
+    return {
+      ...conversation,
+      lastMessage: event.message ?? conversation.lastMessage,
+      updatedAt: event.message?.createdAt ?? conversation.updatedAt,
+    };
+  });
+
+  return found ? sortConversationsByUpdatedAt(updated) : conversations;
+}
+
+function upsertConversation(
+  conversations: ConversationSummary[],
+  incoming: ConversationSummary,
+) {
+  let found = false;
+  const updated = conversations.map((conversation) => {
+    if (conversation.id !== incoming.id) return conversation;
+    found = true;
+    return mergeConversation(conversation, incoming);
+  });
+
+  if (!found) updated.push(incoming);
+  return sortConversationsByUpdatedAt(updated);
+}
+
+function mergeConversation(
+  current: ConversationSummary,
+  incoming: ConversationSummary,
+) {
+  const currentLastTime = current.lastMessage?.createdAt
+    ? new Date(current.lastMessage.createdAt).getTime()
+    : 0;
+  const incomingLastTime = incoming.lastMessage?.createdAt
+    ? new Date(incoming.lastMessage.createdAt).getTime()
+    : 0;
+  const lastMessage =
+    incomingLastTime >= currentLastTime
+      ? incoming.lastMessage
+      : current.lastMessage;
+
+  return {
+    ...current,
+    ...incoming,
+    lastMessage,
+    updatedAt: latestTimestamp(current.updatedAt, incoming.updatedAt, lastMessage?.createdAt),
+  };
+}
+
+function getRealtimeConversationId(row: unknown) {
+  if (!row || typeof row !== 'object') return null;
+  const value = row as { id?: unknown };
+  return typeof value.id === 'string' ? value.id : null;
+}
+
+function latestTimestamp(...values: (string | null | undefined)[]) {
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? new Date().toISOString();
 }
 
 const styles = StyleSheet.create({

@@ -9,6 +9,7 @@ import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startJobConversation } from '@/services/conversation.service';
+import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { getJobDetail } from '@/services/job.service';
 import {
   formatClientJobsPostedText,
@@ -190,6 +191,12 @@ export default function JobDetailScreen() {
         Alert.alert('Message', result.error ?? 'Could not open the conversation.');
         return;
       }
+
+      emitConversationPreviewUpdate({
+        conversationId: result.data.id,
+        conversation: result.data,
+        userId: profile?.id,
+      });
 
       router.push({
         pathname: '/conversation/[conversationId]',

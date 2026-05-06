@@ -21,6 +21,8 @@ import { color, radius } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
   getConversation,
+  getConversationSummary,
+  mapRealtimeMessage,
   markWorkerHired,
   sendMessage,
 } from '@/services/conversation.service';
@@ -32,6 +34,7 @@ import {
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
+import { supabase } from '@/utils/supabase';
 
 const JOB_PROMPTS = ['Where is the exact location?', 'What should I bring?', 'Send me your location'];
 const SERVICE_PROMPTS = ['Are you available?', 'Can we discuss the schedule?', 'How much is your rate?'];
@@ -61,10 +64,13 @@ export default function ConversationDetailScreen() {
   const [contextExpanded, setContextExpanded] = useState(false);
   const [visibleTimestampId, setVisibleTimestampId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const loadRequestRef = useRef(0);
 
   const load = useCallback((options: { showSkeleton?: boolean } = {}) => {
     if (!conversationId) return;
 
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     const showSkeleton = options.showSkeleton ?? true;
     if (showSkeleton) {
       setConversationReady(false);
@@ -73,6 +79,8 @@ export default function ConversationDetailScreen() {
     setConversationError(null);
 
     getConversation(conversationId).then((result) => {
+      if (requestId !== loadRequestRef.current) return;
+
       if (result.error) {
         setConversationError(result.error);
         Alert.alert('Conversation', result.error);
@@ -88,6 +96,53 @@ export default function ConversationDetailScreen() {
   useEffect(() => {
     load({ showSkeleton: true });
   }, [load]);
+
+  useEffect(() => {
+    if (!conversationId) return undefined;
+
+    const channel = supabase
+      .channel(`conversation-thread-${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const message = mapRealtimeMessage(payload.new);
+          if (!message) return;
+          setConversation((current) => reconcileConversationMessage(current, message));
+          emitConversationPreviewUpdate({ conversationId, message, userId: profile?.id });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'conversations',
+          filter: `id=eq.${conversationId}`,
+        },
+        () => {
+          getConversationSummary(conversationId).then((result) => {
+            if (!result.data) return;
+            setConversation((current) => current ? { ...current, ...result.data } : current);
+            emitConversationPreviewUpdate({
+              conversationId,
+              conversation: result.data,
+              userId: profile?.id,
+            });
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, profile?.id]);
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -140,7 +195,7 @@ export default function ConversationDetailScreen() {
 
     setSendError(null);
     const tempMessage: ThreadMessage = {
-      id: retryMessageId ?? `local-${Date.now()}`,
+      id: retryMessageId ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       conversationId,
       senderId: profile?.id ?? '',
       body: messageBody,
@@ -164,7 +219,6 @@ export default function ConversationDetailScreen() {
     }
 
     if (!overrideBody) setBody('');
-    emitConversationPreviewUpdate({ conversationId, message: tempMessage });
     scrollToBottom();
 
     const result = await sendMessage({ conversationId, body: messageBody });
@@ -172,14 +226,12 @@ export default function ConversationDetailScreen() {
     if (result.error) {
       setSendError(result.error);
       replaceMessage(tempMessage.id, { ...tempMessage, localStatus: 'failed' });
-      emitConversationPreviewUpdate({ conversationId, message: tempMessage });
       return;
     }
 
     if (result.data) {
-      replaceMessage(tempMessage.id, result.data);
-      emitConversationPreviewUpdate({ conversationId, message: result.data });
-      load({ showSkeleton: false });
+      setConversation((current) => reconcileConversationMessage(current, result.data, tempMessage.id));
+      emitConversationPreviewUpdate({ conversationId, message: result.data, userId: profile?.id });
     }
   };
 
@@ -364,6 +416,81 @@ export default function ConversationDetailScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+function reconcileConversationMessage(
+  conversation: ConversationDetail | null,
+  incoming: ConversationMessage,
+  replaceMessageId?: string,
+) {
+  if (!conversation) return conversation;
+
+  const messages = [...(conversation.messages as ThreadMessage[])];
+  const exactIndex = messages.findIndex((message) => message.id === incoming.id);
+
+  if (exactIndex >= 0) {
+    messages[exactIndex] = { ...messages[exactIndex], ...incoming, localStatus: undefined };
+  } else {
+    const replacementIndex = replaceMessageId
+      ? messages.findIndex((message) => message.id === replaceMessageId)
+      : findMatchingOptimisticMessage(messages, incoming);
+
+    if (replacementIndex >= 0) {
+      messages[replacementIndex] = incoming;
+    } else {
+      messages.push(incoming);
+    }
+  }
+
+  const sortedMessages = sortMessagesByCreatedAt(messages);
+
+  return {
+    ...conversation,
+    lastMessage: getLatestConfirmedMessage(sortedMessages) ?? conversation.lastMessage,
+    messages: sortedMessages,
+    updatedAt: latestTimestamp(conversation.updatedAt, incoming.createdAt),
+  };
+}
+
+function findMatchingOptimisticMessage(messages: ThreadMessage[], incoming: ConversationMessage) {
+  let bestIndex = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  const incomingTime = new Date(incoming.createdAt).getTime();
+
+  messages.forEach((message, index) => {
+    if (
+      !message.id.startsWith('local-') ||
+      message.localStatus !== 'sending' ||
+      message.senderId !== incoming.senderId ||
+      message.body !== incoming.body
+    ) {
+      return;
+    }
+
+    const distance = Math.abs(new Date(message.createdAt).getTime() - incomingTime);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
+function sortMessagesByCreatedAt(messages: ThreadMessage[]) {
+  return [...messages].sort((left, right) => {
+    const timeDiff = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function getLatestConfirmedMessage(messages: ThreadMessage[]) {
+  return [...messages].reverse().find((message) => !message.localStatus) ?? null;
+}
+
+function latestTimestamp(left: string, right: string) {
+  return new Date(right).getTime() > new Date(left).getTime() ? right : left;
 }
 
 function ConversationScreenSkeleton() {

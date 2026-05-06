@@ -2,7 +2,9 @@ import type { ConversationMessage, ConversationSummary } from '@/types/marketpla
 
 export type ConversationPreviewEvent = {
   conversationId: string;
-  message: ConversationMessage;
+  conversation?: ConversationSummary;
+  message?: ConversationMessage;
+  userId?: string | null;
 };
 
 type ConversationPreviewListener = (event: ConversationPreviewEvent) => void;
@@ -12,6 +14,7 @@ let cachedConversations: ConversationSummary[] | null = null;
 let cachedUserId: string | null = null;
 
 export function emitConversationPreviewUpdate(event: ConversationPreviewEvent) {
+  if (event.userId) cachedUserId = event.userId;
   cachedConversations = reconcilePreview(cachedConversations, event);
   listeners.forEach((listener) => listener(event));
 }
@@ -24,7 +27,8 @@ export function subscribeConversationPreviewUpdates(listener: ConversationPrevie
 }
 
 export function getConversationPreviewCache(userId?: string | null) {
-  if (userId && cachedUserId && cachedUserId !== userId) return null;
+  if (!userId) return null;
+  if (cachedUserId !== userId) return null;
   return cachedConversations;
 }
 
@@ -42,12 +46,16 @@ function reconcilePreview(
   conversations: ConversationSummary[] | null,
   event: ConversationPreviewEvent,
 ) {
-  if (!conversations) return conversations;
+  if (!conversations) return event.conversation ? [event.conversation] : conversations;
 
   let found = false;
   const updated = conversations.map((conversation) => {
     if (conversation.id !== event.conversationId) return conversation;
     found = true;
+    if (event.conversation) {
+      return mergeConversationPreview(conversation, event.conversation);
+    }
+    if (!event.message) return conversation;
     return {
       ...conversation,
       lastMessage: event.message,
@@ -55,11 +63,44 @@ function reconcilePreview(
     };
   });
 
-  return found ? sortConversationsByUpdatedAt(updated) : conversations;
+  if (!found && event.conversation) {
+    updated.push(event.conversation);
+  }
+
+  return found || event.conversation ? sortConversationsByUpdatedAt(updated) : conversations;
+}
+
+function mergeConversationPreview(
+  current: ConversationSummary,
+  incoming: ConversationSummary,
+) {
+  const currentLastTime = current.lastMessage?.createdAt
+    ? new Date(current.lastMessage.createdAt).getTime()
+    : 0;
+  const incomingLastTime = incoming.lastMessage?.createdAt
+    ? new Date(incoming.lastMessage.createdAt).getTime()
+    : 0;
+  const lastMessage =
+    incomingLastTime >= currentLastTime
+      ? incoming.lastMessage
+      : current.lastMessage;
+
+  return {
+    ...current,
+    ...incoming,
+    lastMessage,
+    updatedAt: latestTimestamp(current.updatedAt, incoming.updatedAt, lastMessage?.createdAt),
+  };
 }
 
 function sortConversationsByUpdatedAt(conversations: ConversationSummary[]) {
   return [...conversations].sort(
     (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
   );
+}
+
+function latestTimestamp(...values: (string | null | undefined)[]) {
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? new Date().toISOString();
 }

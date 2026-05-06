@@ -10,6 +10,7 @@ import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startServiceConversation } from '@/services/conversation.service';
+import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
   formatServiceJobsDoneText,
   formatServiceRatingText,
@@ -105,6 +106,12 @@ export default function WorkerDetailScreen() {
         Alert.alert('Message', result.error ?? 'Could not open the conversation.');
         return;
       }
+
+      emitConversationPreviewUpdate({
+        conversationId: result.data.id,
+        conversation: result.data,
+        userId: profile?.id,
+      });
 
       router.push({
         pathname: '/conversation/[conversationId]',
