@@ -152,7 +152,7 @@ function buildForYouFeed(
 export default function HomeScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const topInset = useSafeTopInset();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
@@ -165,6 +165,7 @@ export default function HomeScreen() {
   >('none');
   const [verificationNote, setVerificationNote] = useState<string | null>(null);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const verificationKnown = !profileLoading;
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
   const headerVisibleRef = useRef(true);
@@ -215,7 +216,7 @@ export default function HomeScreen() {
     };
   }, [isVerified]);
 
-  const showSetupBanner = !isVerified && verificationStatus !== 'approved' && !bannerDismissed;
+  const showSetupBanner = verificationKnown && !isVerified && verificationStatus !== 'approved' && !bannerDismissed;
 
   useEffect(() => {
     let active = true;
@@ -376,7 +377,9 @@ export default function HomeScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}>
-          {showSetupBanner ? (
+          {!verificationKnown ? (
+            <VerificationBannerSkeleton />
+          ) : showSetupBanner ? (
             <HomeSetupChecklist
               status={verificationStatus}
               note={verificationNote}
@@ -393,6 +396,7 @@ export default function HomeScreen() {
                 key={feedItem.key}
                 feedItem={feedItem}
                 isVerified={isVerified}
+                verificationKnown={verificationKnown}
                 onOpenJob={openJob}
                 onOpenWorker={openWorker}
                 onOpenVerification={openVerification}
@@ -431,6 +435,7 @@ export default function HomeScreen() {
 function FeedCard({
   feedItem,
   isVerified,
+  verificationKnown,
   onOpenJob,
   onOpenWorker,
   onOpenVerification,
@@ -438,6 +443,7 @@ function FeedCard({
 }: {
   feedItem: HomeFeedItem;
   isVerified: boolean;
+  verificationKnown: boolean;
   onOpenJob: (jobId: string) => void;
   onOpenWorker: (workerId: string, variant: 'default' | 'match') => void;
   onOpenVerification: () => void;
@@ -448,7 +454,7 @@ function FeedCard({
       <WorkerCard
         {...feedItem.cardProps}
         onPress={() => onOpenWorker(feedItem.itemId, workerVariant)}
-        onSave={isVerified ? undefined : onOpenVerification}
+        onSave={!verificationKnown || isVerified ? undefined : onOpenVerification}
         onViewProfile={() => onOpenWorker(feedItem.itemId, workerVariant)}
       />
     );
@@ -457,11 +463,26 @@ function FeedCard({
   return (
     <JobCard
       {...feedItem.cardProps}
-      onMessage={isVerified ? undefined : onOpenVerification}
+      onMessage={!verificationKnown || isVerified ? undefined : onOpenVerification}
       onPress={() => onOpenJob(feedItem.itemId)}
-      onSave={isVerified ? undefined : onOpenVerification}
+      onSave={!verificationKnown || isVerified ? undefined : onOpenVerification}
       onViewJob={() => onOpenJob(feedItem.itemId)}
     />
+  );
+}
+
+function VerificationBannerSkeleton() {
+  return (
+    <View style={styles.bannerSkeleton}>
+      <View style={styles.bannerSkeletonHeader}>
+        <Skeleton height={24} width={24} borderRadius={12} />
+        <View style={styles.bannerSkeletonCopy}>
+          <Skeleton height={15} width="64%" />
+          <Skeleton height={12} width="92%" />
+        </View>
+      </View>
+      <Skeleton height={34} width="100%" borderRadius={17} />
+    </View>
   );
 }
 
@@ -546,6 +567,24 @@ const styles = StyleSheet.create({
   },
   skeletonFeed: {
     gap: 2,
+  },
+  bannerSkeleton: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
+    margin: 18,
+    padding: 16,
+  },
+  bannerSkeletonHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  bannerSkeletonCopy: {
+    flex: 1,
+    gap: 8,
   },
   skeletonCard: {
     backgroundColor: color.background,
