@@ -294,15 +294,24 @@ export default function SearchScreen() {
   }, [appliedFilters.workType, browseGroup]);
 
   const collapsedBrowseServices = useMemo(() => {
-    const primaryGroup = browseGroupsForWorkType[0] ?? orderedGroups[0] ?? 'Home & Local Help';
-    return getServicesForDiscoveryGroupAndWorkType(
-      primaryGroup,
-      appliedFilters.workType,
+    const previewGroup =
+      selectedService
+        ? getDiscoveryGroupForService(selectedService) ?? browseGroup
+        : browseGroupsForWorkType.includes(browseGroup)
+          ? browseGroup
+          : browseGroupsForWorkType[0] ?? orderedGroups[0] ?? 'Home & Local Help';
+
+    return prioritizeSelectedService(
+      getServicesForDiscoveryGroupAndWorkType(
+        previewGroup,
+        appliedFilters.workType,
+      ),
+      selectedService,
     ).map((service) => ({
       key: service,
       label: getDisplayLabelForMvpService(service),
     }));
-  }, [appliedFilters.workType, browseGroupsForWorkType, orderedGroups]);
+  }, [appliedFilters.workType, browseGroup, browseGroupsForWorkType, orderedGroups, selectedService]);
 
   const groupOptions = useMemo(
     () =>
@@ -725,6 +734,14 @@ function getStructuredServiceFilterValues(filters: SearchDiscoveryFilters) {
   }
 
   return getServicesForDiscoveryGroupAndWorkType(filters.serviceGroup, filters.workType);
+}
+
+function prioritizeSelectedService(
+  services: MvpServiceOption[],
+  selectedService: MvpServiceOption | null,
+) {
+  if (!selectedService || !services.includes(selectedService)) return services;
+  return [selectedService, ...services.filter((service) => service !== selectedService)];
 }
 
 function getServicesForAllGroups() {

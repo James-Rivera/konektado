@@ -53,6 +53,20 @@ export function PopularServicesSection({
           contentContainerStyle={styles.chipRowSingleLine}
           horizontal
           showsHorizontalScrollIndicator={false}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: true }}
+            onPress={() => onPressGroup(selectedGroup)}
+            style={({ pressed }) => [
+              styles.groupChip,
+              styles.groupChipSelected,
+              pressed && styles.pressed,
+            ]}>
+            <Text style={[styles.groupChipText, styles.groupChipTextSelected]}>
+              {groups.find((group) => group.key === selectedGroup)?.label ?? selectedGroup}
+            </Text>
+          </Pressable>
+
           {collapsedServices.map((service) => {
             const selected = selectedService === service.key;
 
