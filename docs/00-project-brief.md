@@ -2,18 +2,18 @@
 
 ## App Summary
 
-Konektado is a barangay-verified job matching and service access mobile app for Barangay San Pedro residents. It helps local residents create trusted service profiles, helps clients find nearby service providers or post jobs, and gives barangay admins a basic workflow for user verification and moderation.
+Konektado is a barangay-verified service and micro-gig marketplace for Barangay San Pedro residents. It helps local residents safely discover, offer, and coordinate selected home, digital, and technical support services within their community, while giving barangay admins a basic workflow for user verification and moderation.
 
 The MVP is an Expo + React Native + TypeScript mobile app backed by Supabase Auth, PostgreSQL, and Supabase Storage.
 
 ## Main Purpose
 
-Konektado exists to make local hiring safer and easier inside the barangay.
+Konektado exists to make barangay-based service discovery and hiring safer and easier.
 
 The app should:
 
-- Help residents show their services, availability, credentials, and contact details.
-- Help clients find verified local service providers.
+- Help residents show selected services, availability, credentials, and contact details.
+- Help clients find verified local service providers and micro-gig helpers.
 - Help clients post simple jobs that workers can view and respond to through messaging.
 - Help barangay admins verify resident identities and review platform activity.
 - Keep trust visible through barangay verification, ratings, and clear profile information.
@@ -71,7 +71,7 @@ The MVP should focus on a working, demo-ready flow:
 - Lightweight onboarding with unverified viewer access.
 - Role selection for client, provider, and both-role use cases.
 - User profiles with resident identity and contact details.
-- Skill/service profiles for providers.
+- Service profiles for providers.
 - Credential upload metadata for proofs, certificates, or experience files.
 - Barangay verification request workflow.
 - Job posting by clients.
@@ -94,8 +94,21 @@ The MVP must not include:
 - Full chat system unless timeline allows it.
 - Automated background checks.
 - Multi-barangay rollout.
+- Professional skill certification or licensed-work verification.
+- Gaming services, account sharing, academic cheating, or legal/medical/financial advice.
+- File-delivery, revision, or online freelancing workflows beyond basic messaging.
 
-Payments, agreements, scheduling details, and final negotiation happen outside the app.
+Payments, agreements, scheduling details, final negotiation, file exchange, and output approval happen outside the app. Barangay verification confirms resident identity and platform eligibility; it does not certify professional competence.
+
+## Controlled MVP Service Taxonomy
+
+The taxonomy-only MVP supports selected services under three controlled groups:
+
+- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, basic home repair, and yard or outdoor help.
+- Learning & Digital Help: tutoring, encoding, Canva layout, presentation design, social media help, basic computer lessons, and school project guidance.
+- Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, and resume or form assistance.
+
+High-risk or hard-to-moderate services are excluded from the MVP, including gaming services, licensed electrical work, appliance repair involving wiring, legal/medical/financial advice, academic cheating, account selling or sharing, and government document falsification.
 
 ## Current Product Direction
 

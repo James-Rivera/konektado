@@ -10,6 +10,7 @@ import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { PresenceDot } from '@/components/PresenceDot';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { getServiceTagsForCategory, POPULAR_SERVICE_POST_OPTIONS, SERVICE_POST_OPTIONS } from '@/constants/service-post-options';
+import { getCategoryForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { isPresenceActive } from '@/services/marketplace.helpers';
@@ -37,6 +38,7 @@ export default function CreateServiceScreen() {
   const [locationBarangay, setLocationBarangay] = useState('Barangay San Pedro');
   const locationText = locationBarangay;
   const tagOptions = getServiceTagsForCategory(category);
+  const serviceGroup = getCategoryForMvpService(category);
 
   useEffect(() => {
     if (profile?.barangay) {
@@ -85,6 +87,7 @@ export default function CreateServiceScreen() {
           availability,
           category,
           description,
+          serviceGroup,
           tags,
           locationText,
           photoUrls,
@@ -139,6 +142,7 @@ export default function CreateServiceScreen() {
               <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
             </Pressable>
             <Text style={styles.helperText}>One service per post. You can create another post for a different service.</Text>
+            {serviceGroup ? <Text style={styles.helperText}>Category: {serviceGroup}</Text> : null}
           </View>
 
           <View style={styles.fieldGroup}>

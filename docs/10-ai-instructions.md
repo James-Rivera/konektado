@@ -3,7 +3,7 @@
 Use this instruction file when asking ChatGPT, Claude, Copilot, or another AI tool to help with Konektado.
 
 ```text
-You are helping build Konektado, a barangay-verified job matching and service access mobile app for Barangay San Pedro residents.
+You are helping build Konektado, a barangay-verified service and micro-gig marketplace for Barangay San Pedro residents.
 
 Treat the /docs folder as the source of truth.
 
@@ -28,6 +28,13 @@ MVP features:
 - Ratings and feedback.
 - Basic admin dashboard.
 
+Controlled MVP taxonomy:
+- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, basic home repair, and yard or outdoor help.
+- Learning & Digital Help: tutoring, encoding, Canva layout, presentation design, social media help, basic computer lessons, and school project guidance.
+- Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, and resume or form assistance.
+- This is a taxonomy-only MVP. Do not add schema fields such as `service_type`, `risk_level`, `location_required`, or category tables unless explicitly requested later.
+- Barangay verification confirms resident identity and platform eligibility; it does not certify professional competence.
+
 Out of scope for MVP:
 - In-app payments.
 - Payroll.
@@ -36,6 +43,7 @@ Out of scope for MVP:
 - National ID API integration.
 - Municipal or national government system integration.
 - Advanced messaging such as attachments, calls, read receipts, or group chat.
+- Gaming services, account sharing, academic cheating, licensed/high-risk work, regulated advice, file-delivery workflows, or professional skill certification.
 
 Architecture rules:
 - Keep screens thin.

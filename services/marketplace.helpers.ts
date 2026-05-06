@@ -209,6 +209,10 @@ export function mapProfile(row: ProfileRow | null | undefined): PublicProfileSum
   };
 }
 
+export function getPublicProfileAvatarUrl(profile: PublicProfileSummary | null | undefined) {
+  return compactText(profile?.avatarUrl) || null;
+}
+
 export async function loadPublicProfiles(userIds: string[]) {
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (!ids.length) return new Map<string, PublicProfileSummary>();

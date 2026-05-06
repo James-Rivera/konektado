@@ -126,7 +126,7 @@ Purpose: Provider service profile entries shown in search and provider profiles.
 | --- | --- | --- |
 | `id` | `uuid` | Primary key. |
 | `provider_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `category` | `text` | Example: cleaning, hauling, plumbing, tutoring. |
+| `category` | `text` | Selected service label from the controlled MVP taxonomy, such as `Cleaning`, `Canva layout`, or `Computer setup`. |
 | `title` | `text` | Short service title. |
 | `description` | `text` | Service details. |
 | `years_experience` | `numeric` | Optional. |
@@ -145,7 +145,7 @@ Important constraints:
 
 - Only provider owner can create/update/delete their services.
 - Public queries should only show active services.
-- `category` and `title` are required.
+- `category` and `title` are required. For the taxonomy-only MVP, `category` stores the selected service label rather than a separate category foreign key.
 
 Implementation note:
 
@@ -244,7 +244,7 @@ Purpose: Client-posted work opportunities.
 | `client_id` | `uuid` | References `profiles(id)` on delete cascade. |
 | `title` | `text` | Required. |
 | `description` | `text` | Required for useful matching. |
-| `category` | `text` | Optional but recommended. |
+| `category` | `text` | Top-level controlled category: `Home & Local Help`, `Learning & Digital Help`, or `Tech & Document Support`. |
 | `service_needed` | `text` | Specific service selected under the job category. Required by current app validation before preview/publish. |
 | `tags` | `text[]` | Optional short descriptors from the Post builder, maximum 4 in app UI. |
 | `photo_urls` | `text[]` | Optional job photos uploaded from the post builder. Public job cards/details may show the first image. |
@@ -285,7 +285,7 @@ Purpose: Private job-post drafts. These let unverified users compose a post befo
 | `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
 | `title` | `text` | Optional while drafting. Required before preview/publish in app UI. |
 | `description` | `text` | Optional while drafting. Required before preview/publish in app UI. |
-| `category` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `category` | `text` | Optional while drafting. Required before preview/publish in app UI. Uses the top-level controlled category. |
 | `service_needed` | `text` | Optional while drafting. Required before preview/publish in app UI. |
 | `tags` | `text[]` | Optional, maximum 4 in app UI. |
 | `photo_urls` | `text[]` | Optional uploaded photo URLs from the job builder. |

@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test:verification-email": "node ./scripts/test-verification-email.js"
+    "test:verification-email": "node ./scripts/test-verification-email.js",
+    "refresh:cloud-demo-taxonomy": "node ./scripts/refresh-cloud-demo-taxonomy.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

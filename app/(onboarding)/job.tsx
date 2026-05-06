@@ -9,26 +9,9 @@ import {
     OnboardingTextInput,
     onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
+import { MVP_SERVICE_OPTIONS } from '@/constants/service-taxonomy';
 
 import { useOnboarding } from './onboarding-context';
-
-const SERVICE_OPTIONS = [
-  'Cleaning',
-  'Laundry',
-  'Plumbing',
-  'Electrical',
-  'Carpentry',
-  'Appliance Repair',
-  'PC Repair',
-  'Phone Setup',
-  'Tutoring',
-  'Gardening',
-  'Painting',
-  'Delivery',
-  'Cooking',
-  'House Helper',
-  'Construction',
-];
 
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
@@ -156,7 +139,7 @@ function ServiceSection({
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.chipContainer}>
-        {SERVICE_OPTIONS.map((service) => {
+        {MVP_SERVICE_OPTIONS.map((service) => {
           const isSelected = selected.includes(service);
           return (
             <Pressable

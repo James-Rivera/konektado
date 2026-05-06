@@ -26,6 +26,7 @@ import {
   formatServiceJobsDoneText,
   formatServicePostTitle,
   formatServiceRatingText,
+  getPublicProfileAvatarUrl,
   getMarketplaceLocation,
   isPresenceActive,
 } from '@/services/marketplace.helpers';
@@ -232,7 +233,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
     ],
     tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
     primaryActionLabel: 'View Profile',
-    avatarUrl: service.provider?.avatarUrl,
+    avatarUrl: getPublicProfileAvatarUrl(service.provider),
     imageUrl: service.photoUrls[0],
     isOnline: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
   };

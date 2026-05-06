@@ -671,6 +671,6 @@ Also document which skeletons should remain separate if the real component canno
 
 ## Recommended Next Step
 
-- Run manual QA for Phases 1–4 before starting more performance work.
-- After manual QA, proceed to Product UX detail screen fixes.
+- Run end-to-end manual QA for the completed performance, Product UX, auth, and post-flow stabilization work before starting more optimization.
+- Use `docs/stabilization-audit.md` as the current cross-area status source.
 - Do not start database index, RPC, or view work unless real row counts, EXPLAIN output, or profiling show a need.

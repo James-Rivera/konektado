@@ -8,7 +8,7 @@
 | Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Role intent -> basic identity/location -> service preferences -> review -> complete -> Home. Do not collect certificates, ID documents, or verification uploads here. |
 | Roles | Client, provider, both, and barangay admin. | Both-role users receive client and provider role rows, but one active role is used in the app at a time. |
 | Profiles | Basic identity, address, contact, about, availability, and verification status. | Keep private identity fields protected. |
-| Service Profiles | Provider service categories, descriptions, experience, availability, and optional rate text. | Use "Services" in the UI; avoid abstract "skills" language for low-literacy users. |
+| Service Profiles | Provider service categories, selected service labels, descriptions, experience, availability, and optional rate text. | Use "Services" in the UI; avoid abstract "skills" language for low-literacy users. MVP services are limited to the controlled taxonomy. |
 | Credentials | Upload records for IDs, certificates, or proof of experience. | Store files in Supabase Storage and metadata in PostgreSQL. |
 | Verification | Resident submits required details and documents; admin approves or rejects. | Verification unlocks interaction features and grants the verified badge. |
 | Jobs | Client creates, edits, closes, or cancels a job post. | Payments and agreements remain outside the app. |
@@ -34,6 +34,9 @@ The following are intentionally out of scope for MVP:
 - Multi-barangay administration.
 - Push notifications beyond basic future support.
 - Advanced chat features such as attachments, read receipts, calls, or group chat.
+- Gaming services, account sharing, academic cheating, and high-risk licensed or regulated service categories.
+- Formal file delivery, output approval, revisions, or online freelancing contract workflows.
+- Professional skill certification, licensing checks, or guarantees of service competence.
 
 ## Future Features
 
@@ -49,6 +52,7 @@ These can be considered after the MVP is stable:
 - Offline-friendly profile/job draft saving.
 - Self-hosted backend migration.
 - Public web directory view for approved providers.
+- Structured service taxonomy tables, service type fields, location-required fields, and risk-level fields after the taxonomy-only MVP is stable.
 
 ## Thesis/Demo Priorities
 

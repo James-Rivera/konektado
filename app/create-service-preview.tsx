@@ -18,6 +18,7 @@ type ServiceDraft = {
   availability: string;
   category: string;
   description: string;
+  serviceGroup?: string | null;
   tags: string[];
   locationText?: string;
   photoUrls?: string[];
@@ -44,6 +45,7 @@ function parseDraft(value: string | undefined): ServiceDraft | null {
       availability: parsed.availability ?? '',
       category: parsed.category,
       description: parsed.description ?? '',
+      serviceGroup: parsed.serviceGroup ?? null,
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       locationText: parsed.locationText ?? '',
       photoUrls: Array.isArray(parsed.photoUrls) ? parsed.photoUrls : [],
@@ -73,6 +75,16 @@ function getRateLine(draft: ServiceDraft) {
   return `${rate} · ${availability}`;
 }
 
+function getPreviewTags(draft: ServiceDraft) {
+  return Array.from(
+    new Set(
+      [draft.serviceGroup, draft.category, ...draft.tags].filter(
+        (value): value is string => Boolean(value?.trim()),
+      ),
+    ),
+  );
+}
+
 export default function CreateServicePreviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ draft?: string | string[] }>();
@@ -94,7 +106,7 @@ export default function CreateServicePreviewScreen() {
       category: draft.category,
       title: draft.title,
       description: draft.description,
-      tags: draft.tags,
+      tags: getPreviewTags(draft),
       photoUrls: draft.photoUrls,
       availabilityText: draft.availability,
       rateText: draft.rate,
@@ -189,7 +201,7 @@ export default function CreateServicePreviewScreen() {
               ratingText="Preview listing"
               rateLine={getRateLine(draft)}
               statusLine={getStatusLine(draft)}
-              tags={[draft.category, ...draft.tags].filter(Boolean).slice(0, 4)}
+              tags={getPreviewTags(draft).slice(0, 4)}
             />
           </View>
 

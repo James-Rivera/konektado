@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, typography } from '@/constants/theme';
@@ -20,10 +21,7 @@ export function SearchWorkerResultCard({
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.identityRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitials(worker.name)}</Text>
-            <PresenceDot active={worker.isActive ?? true} size={10} style={styles.statusDot} />
-          </View>
+          <Avatar imageUrl={worker.avatarUrl} isActive={worker.isActive ?? true} name={worker.name} />
           <View style={styles.identityCopy}>
             <Text numberOfLines={1} style={styles.name}>
               {worker.name}
@@ -76,6 +74,38 @@ export function SearchWorkerResultCard({
         <MaterialIcons color={color.primary} name="visibility" size={16} />
         <Text style={styles.primaryButtonText}>View profile</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function Avatar({
+  imageUrl,
+  isActive,
+  name,
+}: {
+  imageUrl?: string | null;
+  isActive: boolean;
+  name: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  return (
+    <View style={styles.avatar}>
+      {imageUrl && !failed ? (
+        <Image
+          onError={() => setFailed(true)}
+          resizeMode="cover"
+          source={{ uri: imageUrl }}
+          style={styles.avatarImage}
+        />
+      ) : (
+        <Text style={styles.avatarText}>{getInitials(name)}</Text>
+      )}
+      <PresenceDot active={isActive} size={10} style={styles.statusDot} />
     </View>
   );
 }
@@ -173,6 +203,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     width: 44,
+  },
+  avatarImage: {
+    borderRadius: radius.pill,
+    height: '100%',
+    width: '100%',
   },
   avatarText: {
     color: color.text,

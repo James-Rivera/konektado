@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -32,6 +32,7 @@ import {
   formatServicePostTitle,
   formatServiceRatingText,
   getMarketplaceLocation,
+  getPublicProfileAvatarUrl,
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { searchJobs as searchOpenJobs } from '@/services/job.service';
@@ -72,6 +73,7 @@ type SearchListRow =
 export default function SearchScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const listRef = useRef<FlatList<SearchListRow>>(null);
   const topInset = useSafeTopInset();
   const { profile, loading: profileLoading } = useProfile();
   const params = useLocalSearchParams<{ filter?: string | string[] }>();
@@ -92,15 +94,16 @@ export default function SearchScreen() {
     workers: false,
   });
   const searchRequestRef = useRef(0);
+  const controlsTranslateY = useRef(new Animated.Value(0)).current;
+  const controlsHeightRef = useRef(0);
+  const controlsVisibleRef = useRef(true);
+  const lastScrollOffset = useRef(0);
+  const [controlsHeight, setControlsHeight] = useState(0);
   const debouncedQuery = useDebouncedValue(query, 300);
   const searchText = useMemo(
     () => Array.from(new Set([debouncedQuery.trim(), selectedService?.trim()].filter(Boolean))).join(' '),
     [debouncedQuery, selectedService],
   );
-
-  useEffect(() => {
-    setMode(getInitialMode(filterParam));
-  }, [filterParam]);
 
   useEffect(() => {
     let active = true;
@@ -146,7 +149,7 @@ export default function SearchScreen() {
   }, [isFocused, mode, searchText]);
 
   const resultHeading =
-    mode === 'jobs' ? 'Jobs near you' : getWorkerResultsHeading(query, selectedService);
+    mode === 'jobs' ? 'Showing jobs near you' : getWorkerResultsHeading(query, selectedService);
   const activeResultCount = mode === 'jobs' ? jobs.length : workers.length;
   const activeModeLoaded = loadedModes[mode];
   const activeModeRefreshing = refreshingModes[mode];
@@ -157,20 +160,72 @@ export default function SearchScreen() {
     Alert.alert(label, 'This part of Search will be connected in a later slice.');
   }, []);
 
-  const handleModeChange = useCallback((nextMode: SearchMode) => {
-    setMode(nextMode);
+  const setControlsVisible = useCallback((visible: boolean) => {
+    if (!controlsHeightRef.current) return;
+    if (controlsVisibleRef.current === visible) return;
+    controlsVisibleRef.current = visible;
+
+    Animated.timing(controlsTranslateY, {
+      toValue: visible ? 0 : -controlsHeightRef.current,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [controlsTranslateY]);
+
+  const handleControlsLayout = useCallback((event: { nativeEvent: { layout: { height: number } } }) => {
+    const height = Math.round(event.nativeEvent.layout.height);
+    if (!height || height === controlsHeightRef.current) return;
+    controlsHeightRef.current = height;
+    setControlsHeight(height);
   }, []);
+
+  const revealControlsAtTop = useCallback(() => {
+    lastScrollOffset.current = 0;
+    setControlsVisible(true);
+    listRef.current?.scrollToOffset({ animated: false, offset: 0 });
+  }, [setControlsVisible]);
+
+  useEffect(() => {
+    revealControlsAtTop();
+    setMode(getInitialMode(filterParam));
+  }, [filterParam, revealControlsAtTop]);
+
+  const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const offset = event.nativeEvent.contentOffset.y;
+    const delta = offset - lastScrollOffset.current;
+
+    if (offset <= 0 || offset < 24) {
+      setControlsVisible(true);
+      lastScrollOffset.current = offset;
+      return;
+    }
+
+    if (Math.abs(delta) < 6) {
+      lastScrollOffset.current = offset;
+      return;
+    }
+
+    setControlsVisible(delta < 0);
+    lastScrollOffset.current = offset;
+  }, [setControlsVisible]);
+
+  const handleModeChange = useCallback((nextMode: SearchMode) => {
+    revealControlsAtTop();
+    setMode(nextMode);
+  }, [revealControlsAtTop]);
 
   const handleChipPress = useCallback((serviceLabel: string) => {
     const nextSelected = selectedService === serviceLabel ? null : serviceLabel;
+    revealControlsAtTop();
     setSelectedService(nextSelected);
     setQuery(nextSelected ?? '');
-  }, [selectedService]);
+  }, [revealControlsAtTop, selectedService]);
 
   const clearSearch = useCallback(() => {
+    revealControlsAtTop();
     setQuery('');
     setSelectedService(null);
-  }, []);
+  }, [revealControlsAtTop]);
 
   const openJob = useCallback((jobId: string) => {
     router.push({ pathname: '/job/[jobId]', params: { jobId } });
@@ -224,7 +279,7 @@ export default function SearchScreen() {
 
   const keyExtractor = useCallback((item: SearchListRow) => item.key, []);
 
-  const renderListHeader = useCallback(
+  const renderSearchControls = useCallback(
     () => (
       <>
         <View style={[styles.searchModule, { paddingTop: topInset + 12 }]}>
@@ -329,15 +384,22 @@ export default function SearchScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaView edges={[]} style={styles.safeArea}>
+        <Animated.View
+          onLayout={handleControlsLayout}
+          style={[styles.controlsStack, { transform: [{ translateY: controlsTranslateY }] }]}>
+          {renderSearchControls()}
+        </Animated.View>
         <FlatList
-          contentContainerStyle={styles.content}
+          ref={listRef}
+          contentContainerStyle={[styles.content, { paddingTop: controlsHeight }]}
           data={listRows}
           keyExtractor={keyExtractor}
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={renderListHeader}
+          onScroll={handleScroll}
           renderItem={renderSearchRow}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[1]}
+          stickyHeaderIndices={[0]}
         />
       </SafeAreaView>
     </View>
@@ -374,6 +436,7 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
   return {
     id: service.id,
     name: service.provider?.fullName || 'Konektado resident',
+    avatarUrl: getPublicProfileAvatarUrl(service.provider),
     statusLine: formatWorkerAvailability(service.availabilityText),
     rateLine: service.rateText || 'Rate to coordinate',
     headline: formatServicePostTitle({
@@ -489,6 +552,14 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 112,
+  },
+  controlsStack: {
+    backgroundColor: color.background,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 10,
   },
   searchModule: {
     backgroundColor: color.background,
