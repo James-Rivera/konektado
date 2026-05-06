@@ -75,11 +75,13 @@ export function HomeFeedCard({
             </View>
           </View>
         </View>
-        <IconButton
-          icon="bookmark-border"
-          label={kind === 'job' ? 'Save job' : 'Save service'}
-          onPress={onSave}
-        />
+        {onSave ? (
+          <IconButton
+            icon="bookmark-border"
+            label={kind === 'job' ? 'Save job' : 'Save service'}
+            onPress={onSave}
+          />
+        ) : null}
       </View>
 
       <View style={styles.bodyBlock}>

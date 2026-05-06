@@ -11,7 +11,7 @@ export function SearchJobResultCard({
 }: {
   job: SearchJobItem;
   onOpenJob: () => void;
-  onSave: () => void;
+  onSave?: () => void;
 }) {
   const showLocationInline = canShowLocationInline(job.clientRatingText, job.jobsPostedText, job.location);
 
@@ -26,7 +26,7 @@ export function SearchJobResultCard({
           </View>
           <View style={styles.iconRow}>
             <IconButton label="More options" name="more-horiz" onPress={() => Alert.alert('Options', 'More search actions are not connected in this demo.')} />
-            <IconButton label="Save job" name="bookmark-border" onPress={onSave} />
+            {onSave ? <IconButton label="Save job" name="bookmark-border" onPress={onSave} /> : null}
           </View>
         </View>
       </View>

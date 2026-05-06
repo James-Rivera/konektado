@@ -84,6 +84,11 @@ export default function CreateServicePreviewScreen() {
   const publishService = async () => {
     if (!draft || publishing) return;
 
+    if (!isVerified) {
+      router.push('/verification');
+      return;
+    }
+
     setPublishing(true);
     const result = await createService({
       category: draft.category,
@@ -145,7 +150,7 @@ export default function CreateServicePreviewScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
         <Header
-          actionLabel={publishing ? 'Publishing...' : 'Publish'}
+          actionLabel={publishing ? 'Posting...' : 'Post service'}
           disabled={publishing}
           onAction={publishService}
           onBack={() => router.back()}

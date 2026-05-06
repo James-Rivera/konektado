@@ -440,6 +440,10 @@ export async function startJobConversation({
     return { data: null, error: 'This job is no longer accepting messages.' };
   }
 
+  if (!job.data.allowMessages) {
+    return { data: null, error: 'The client is not accepting new messages from this post.' };
+  }
+
   const { data: existing } = await supabase
     .from('conversations')
     .select(CONVERSATION_COLUMNS)

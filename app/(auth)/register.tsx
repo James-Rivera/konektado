@@ -28,6 +28,7 @@ import {
     ProgressBars,
 } from '@/components/onboarding/FigmaOnboarding';
 import {
+    ACCOUNT_EXISTS_SIGNUP_MESSAGE,
     getCurrentAuthUser,
     requestSignupEmailOtp,
     resendSignupEmailOtp,
@@ -90,6 +91,11 @@ export default function RegisterScreen() {
     setLoading(false);
 
     if (result.error) {
+      if (result.error === ACCOUNT_EXISTS_SIGNUP_MESSAGE) {
+        showAccountExistsAlert();
+        return;
+      }
+
       Alert.alert('Could not send code', result.error);
       return;
     }
@@ -126,6 +132,11 @@ export default function RegisterScreen() {
 
     if (result.error) {
       setOtp('');
+      if (result.error === ACCOUNT_EXISTS_SIGNUP_MESSAGE) {
+        showAccountExistsAlert();
+        return;
+      }
+
       Alert.alert('Invalid code', result.error);
       return;
     }
@@ -184,6 +195,28 @@ export default function RegisterScreen() {
 
     setLoading(false);
     router.replace(selectedRole ? '/(onboarding)' : '/(auth)/role');
+  };
+
+  const showAccountExistsAlert = () => {
+    Alert.alert(
+      'Account already exists',
+      ACCOUNT_EXISTS_SIGNUP_MESSAGE,
+      [
+        {
+          text: 'Forgot password?',
+          onPress: () => {
+            router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } });
+            setTimeout(() => {
+              Alert.alert('Password reset', 'Password reset is not configured yet.');
+            }, 250);
+          },
+        },
+        {
+          text: 'Go to Log In',
+          onPress: () => router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } }),
+        },
+      ],
+    );
   };
 
   const goBack = () => {

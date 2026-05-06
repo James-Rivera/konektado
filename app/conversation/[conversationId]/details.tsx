@@ -80,13 +80,13 @@ export default function ConversationDetailsScreen() {
     }
 
     if (conversation?.serviceId) {
-      router.push({ pathname: '/worker/[workerId]', params: { workerId: conversation.serviceId } });
+      router.push({ pathname: '/services/[serviceId]', params: { serviceId: conversation.serviceId } });
     }
   };
 
   const openProfile = () => {
     if (conversation?.serviceId) {
-      router.push({ pathname: '/worker/[workerId]', params: { workerId: conversation.serviceId } });
+      router.push({ pathname: '/services/[serviceId]', params: { serviceId: conversation.serviceId } });
       return;
     }
 

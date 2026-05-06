@@ -293,13 +293,6 @@ export default function CreateServiceScreen() {
 
           <Pressable
             accessibilityRole="button"
-            onPress={onNext}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
-            <Text style={styles.primaryButtonText}>Review service post</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
             onPress={() => router.back()}
             style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
             <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -782,17 +775,6 @@ const styles = StyleSheet.create({
   },
   toggleKnobOn: {
     alignSelf: 'flex-end',
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: color.verificationBlue,
-    borderRadius: radius.md,
-    marginTop: space.sm,
-    paddingVertical: space.md,
-  },
-  primaryButtonText: {
-    ...typography.button,
-    color: color.white,
   },
   secondaryButton: {
     alignItems: 'center',

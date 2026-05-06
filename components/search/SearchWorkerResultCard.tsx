@@ -12,7 +12,7 @@ export function SearchWorkerResultCard({
 }: {
   worker: SearchWorkerItem;
   onOpenWorker: () => void;
-  onSave: () => void;
+  onSave?: () => void;
 }) {
   const showLocationInline = canShowLocationInline(worker.ratingText, worker.jobsDoneText, worker.location);
 
@@ -36,7 +36,7 @@ export function SearchWorkerResultCard({
 
         <View style={styles.iconRow}>
           <IconButton label="More options" name="more-horiz" onPress={() => Alert.alert('Options', 'More search actions are not connected in this demo.')} />
-          <IconButton label="Save worker" name="bookmark-border" onPress={onSave} />
+          {onSave ? <IconButton label="Save worker" name="bookmark-border" onPress={onSave} /> : null}
         </View>
       </View>
 

@@ -106,10 +106,11 @@ function RootNavigator() {
         "create-job",
         "create-job-preview",
         "create-service",
+        "create-service-preview",
         "job",
         "post",
+        "services",
         "verification",
-        "worker",
       ].includes(String(activeGroup));
 
     if (
@@ -135,10 +136,11 @@ function RootNavigator() {
       <Stack.Screen name="create-job" options={{ headerShown: false }} />
       <Stack.Screen name="create-job-preview" options={{ headerShown: false }} />
       <Stack.Screen name="create-service" options={{ headerShown: false }} />
+      <Stack.Screen name="create-service-preview" options={{ headerShown: false }} />
       <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
       <Stack.Screen name="post/active" options={{ headerShown: false }} />
       <Stack.Screen name="post/renew" options={{ headerShown: false }} />
-      <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
+      <Stack.Screen name="services/[serviceId]" options={{ headerShown: false }} />
       <Stack.Screen name="verification" options={{ headerShown: false }} />
       <Stack.Screen
         name="modal"

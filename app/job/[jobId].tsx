@@ -173,8 +173,19 @@ export default function JobDetailScreen() {
       ),
     ),
   );
+  const isOwnJob = profile?.id === job.clientId;
+  const messageCta = getJobMessageCta({
+    allowMessages: job.allowMessages,
+    isOwnJob,
+    isVerified,
+    status: jobStatus,
+  });
 
   const handleMessage = () => {
+    if (messageCta.disabled && messageCta.reason !== 'verification') {
+      return;
+    }
+
     if (!isVerified) {
       showVerificationPrompt();
       return;
@@ -203,15 +214,6 @@ export default function JobDetailScreen() {
         params: { conversationId: result.data.id },
       });
     });
-  };
-
-  const handleSave = () => {
-    if (!isVerified) {
-      showVerificationPrompt();
-      return;
-    }
-
-    showComingSoon('Save');
   };
 
   return (
@@ -255,9 +257,11 @@ export default function JobDetailScreen() {
                 icon="schedule"
                 text={job.scheduleText ?? 'Schedule to coordinate'}
               />
-              {job.budgetAmount ? (
-                <MetaRow icon="local-offer" text={formatBudget(job.budgetAmount)} tint="primary" />
-              ) : null}
+              <MetaRow
+                icon="local-offer"
+                text={job.budgetAmount ? formatBudget(job.budgetAmount) : 'Budget to coordinate'}
+                tint="primary"
+              />
             </View>
           </View>
 
@@ -267,7 +271,7 @@ export default function JobDetailScreen() {
               items={[
                 { label: 'Status', value: formatStatus(jobStatus) },
                 { label: 'Workers needed', value: String(workersNeeded) },
-                { label: 'Accepted', value: String(acceptedCount) },
+                { label: 'Worker hired', value: acceptedCount ? 'Yes' : 'No worker hired yet' },
                 { label: 'Service', value: job.serviceNeeded || job.category || 'Service to coordinate' },
               ]}
             />
@@ -297,9 +301,9 @@ export default function JobDetailScreen() {
           ) : null}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>What to bring</Text>
+            <Text style={styles.sectionTitle}>Before you message</Text>
             <Text style={styles.bodyText}>
-              Bring a valid ID and confirm any tools or materials in Messages before the job starts.
+              Ask in Messages about exact location, tools, materials, and payment before starting.
             </Text>
           </View>
 
@@ -321,27 +325,33 @@ export default function JobDetailScreen() {
               <View style={styles.trustGrid}>
                 <TrustMetric icon="star-border" label={formatClientRatingText(job)} tint="yellow" />
                 <TrustMetric icon="work" label={formatClientJobsPostedText(job)} />
-                <TrustMetric icon="location-on" label={job.client?.barangay ?? location} />
               </View>
             </View>
           </View>
         </ScrollView>
 
         <View style={styles.actionBar}>
+          <Text style={styles.boundaryNote}>
+            Budget is for coordination. Payment and final agreement happen outside Konektado.
+          </Text>
+          {messageCta.helper ? <Text style={styles.actionHelper}>{messageCta.helper}</Text> : null}
           <Pressable
             accessibilityRole="button"
+            disabled={messageCta.disabled || messaging}
             onPress={handleMessage}
-            style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}>
-            <MaterialIcons color={color.primary} name="chat-bubble" size={16} />
-            <Text style={styles.primaryActionText}>{messaging ? 'Opening...' : 'Message'}</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleSave}
-            style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}>
-            <MaterialIcons color={color.textSubtle} name="bookmark-border" size={18} />
-            <Text style={styles.secondaryActionText}>Save</Text>
+            style={({ pressed }) => [
+              styles.primaryAction,
+              (messageCta.disabled || messaging) && styles.disabledAction,
+              pressed && !messageCta.disabled && !messaging && styles.pressed,
+            ]}>
+            <MaterialIcons
+              color={messageCta.disabled ? color.textSubtle : color.primary}
+              name="chat-bubble"
+              size={16}
+            />
+            <Text style={[styles.primaryActionText, messageCta.disabled && styles.disabledActionText]}>
+              {messaging ? 'Opening...' : messageCta.label}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -364,6 +374,70 @@ function formatStatus(status: JobDetail['status']) {
     .split('_')
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(' ');
+}
+
+function getJobMessageCta({
+  allowMessages,
+  isOwnJob,
+  isVerified,
+  status,
+}: {
+  allowMessages: boolean;
+  isOwnJob: boolean;
+  isVerified: boolean;
+  status: JobDetail['status'];
+}) {
+  if (isOwnJob) {
+    return {
+      disabled: true,
+      helper: 'You cannot message yourself from your own post.',
+      label: 'This is your post',
+      reason: 'own',
+    };
+  }
+
+  if (status === 'in_progress') {
+    return {
+      disabled: true,
+      helper: 'A worker has already been hired for this job.',
+      label: 'Worker already hired',
+      reason: 'status',
+    };
+  }
+
+  if (!['open', 'reviewing'].includes(status)) {
+    return {
+      disabled: true,
+      helper: 'This job is no longer accepting new messages.',
+      label: 'Job closed',
+      reason: 'status',
+    };
+  }
+
+  if (!allowMessages) {
+    return {
+      disabled: true,
+      helper: 'The client is not accepting new messages from this post.',
+      label: 'Messages are off for this job',
+      reason: 'messages_off',
+    };
+  }
+
+  if (!isVerified) {
+    return {
+      disabled: false,
+      helper: 'Complete barangay verification to message workers and clients.',
+      label: 'Verify to message',
+      reason: 'verification',
+    };
+  }
+
+  return {
+    disabled: false,
+    helper: null,
+    label: 'Message client',
+    reason: 'available',
+  };
 }
 
 function MetaRow({
@@ -658,26 +732,38 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     borderTopColor: color.border,
     borderTopWidth: 1,
-    flexDirection: 'row',
     gap: space.sm,
     paddingHorizontal: space.xl,
     paddingTop: space.md,
     paddingBottom: space.xl,
   },
+  boundaryNote: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  actionHelper: {
+    ...typography.caption,
+    color: color.textSubtle,
+  },
   primaryAction: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
     borderRadius: radius.pill,
-    flex: 1,
     flexDirection: 'row',
     gap: space.sm,
     justifyContent: 'center',
     minHeight: 34,
     paddingHorizontal: space.lg,
   },
+  disabledAction: {
+    backgroundColor: color.surfaceAlt,
+  },
   primaryActionText: {
     ...typography.captionMedium,
     color: color.primary,
+  },
+  disabledActionText: {
+    color: color.textSubtle,
   },
   secondaryAction: {
     alignItems: 'center',

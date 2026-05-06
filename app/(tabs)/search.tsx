@@ -153,10 +153,6 @@ export default function SearchScreen() {
   const showInitialSkeleton = activeModeRefreshing && !activeModeLoaded && activeResultCount === 0;
   const showRefreshIndicator = activeModeRefreshing && activeModeLoaded && activeResultCount > 0;
 
-  const showVerification = useCallback(() => {
-    router.push('/verification');
-  }, [router]);
-
   const showPlaceholder = useCallback((label: string) => {
     Alert.alert(label, 'This part of Search will be connected in a later slice.');
   }, []);
@@ -180,10 +176,10 @@ export default function SearchScreen() {
     router.push({ pathname: '/job/[jobId]', params: { jobId } });
   }, [router]);
 
-  const openWorker = useCallback((workerId: string) => {
+  const openService = useCallback((serviceId: string) => {
     router.push({
-      pathname: '/worker/[workerId]',
-      params: { workerId, variant: 'match' },
+      pathname: '/services/[serviceId]',
+      params: { serviceId, variant: 'match' },
     });
   }, [router]);
 
@@ -283,7 +279,6 @@ export default function SearchScreen() {
             <SearchJobResultCard
               job={item.job}
               onOpenJob={() => openJob(item.job.id)}
-              onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
             />
           </View>
         );
@@ -293,8 +288,7 @@ export default function SearchScreen() {
         return (
           <View style={rowStyle}>
             <SearchWorkerResultCard
-              onOpenWorker={() => openWorker(item.worker.id)}
-              onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
+              onOpenWorker={() => openService(item.worker.id)}
               worker={item.worker}
             />
           </View>
@@ -318,20 +312,17 @@ export default function SearchScreen() {
       return (
         <View style={rowStyle}>
           <Text style={styles.helperText}>
-            Save and message actions stay locked until your barangay verification is approved.
+            Messaging stays locked until your barangay verification is approved.
           </Text>
         </View>
       );
     },
     [
       clearSearch,
-      isVerified,
       openJob,
-      openWorker,
+      openService,
       resultHeading,
       showPlaceholder,
-      showVerification,
-      verificationKnown,
     ],
   );
 

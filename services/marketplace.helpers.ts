@@ -325,7 +325,7 @@ export function formatServiceRatingText(service: ServiceSearchResult) {
     return `${service.averageRating.toFixed(1)} rating`;
   }
 
-  return `${getDemoRating(service.id).toFixed(1)} rating`;
+  return 'No reviews yet';
 }
 
 export function formatServiceJobsDoneText(service: ServiceSearchResult, completedJobsCount = 0) {
@@ -337,19 +337,7 @@ export function formatServiceJobsDoneText(service: ServiceSearchResult, complete
     return `${service.reviewCount} review${service.reviewCount === 1 ? '' : 's'}`;
   }
 
-  return `${getDemoCount(service.id, 3, 14)} jobs done`;
-}
-
-function getStableNumber(seed: string) {
-  return Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0);
-}
-
-function getDemoRating(seed: string) {
-  return 4.6 + (getStableNumber(seed) % 4) / 10;
-}
-
-function getDemoCount(seed: string, min: number, max: number) {
-  return min + (getStableNumber(seed) % (max - min + 1));
+  return 'No completed Konektado jobs yet';
 }
 
 export function formatClientRatingText(job: JobSummary) {
@@ -357,7 +345,7 @@ export function formatClientRatingText(job: JobSummary) {
     return `${job.clientAverageRating.toFixed(1)} rating`;
   }
 
-  return `${getDemoRating(job.clientId).toFixed(1)} rating`;
+  return 'No reviews yet';
 }
 
 export function formatClientJobsPostedText(job: JobSummary) {
@@ -365,7 +353,7 @@ export function formatClientJobsPostedText(job: JobSummary) {
     return `${job.clientJobsPostedCount} job${job.clientJobsPostedCount === 1 ? '' : 's'} posted`;
   }
 
-  return `${getDemoCount(job.clientId, 2, 9)} jobs posted`;
+  return 'No posted-job history yet';
 }
 
 export function adaptJobToCardProps(job: JobSummary): JobCardProps {

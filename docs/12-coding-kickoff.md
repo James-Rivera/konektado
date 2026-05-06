@@ -33,13 +33,13 @@ Recently completed work:
 - Pill rows use the Figma full-width clipped frame behavior, with fixed-width filled pills and a right-edge chevron.
 - Browse-only detail routes now exist for static feed items:
   - `app/job/[jobId].tsx`
-  - `app/worker/[workerId].tsx`
+  - `app/services/[serviceId].tsx`
 - Static marketplace demo records now live in `constants/marketplace-demo-data.ts` and feed both Home/Search selectors and detail-route lookups.
 - Worker detail has been rebuilt to match the current Figma worker profile direction:
-  - `/worker/[workerId]` supports `default` and `match` variants.
+  - `/services/[serviceId]` supports `default` and `match` variants.
   - `match` adds the `Why this worker fits` panel.
   - `default` keeps the cleaner profile layout and the Work History utility action.
-- Root routing allows authenticated, onboarded users to stay on `job`, `worker`, and `verification` routes instead of redirecting back to tabs.
+- Root routing allows authenticated, onboarded users to stay on `job`, `services`, and `verification` routes instead of redirecting back to tabs.
 - Locked Home, Job Detail, Worker Detail, and Post actions route to `app/verification.tsx`, a Figma-matched verification intro/request flow.
 - The verification intro now continues into a multi-step request flow and admin review loop:
   - Contact details prefilled from profile.
@@ -90,7 +90,7 @@ Current limitations to preserve in docs and implementation:
 - `hooks/use-profile.ts` - profile state used by Home verification checks.
 - `app/(tabs)/post.tsx` - current Post tab placeholder/gated entry.
 - `app/job/[jobId].tsx` - static browse-only job detail route.
-- `app/worker/[workerId].tsx` - static browse-only worker profile detail route.
+- `app/services/[serviceId].tsx` - selected service offer detail route.
 - `app/verification.tsx` - Figma-matched verification intro/request flow for locked actions.
 - `app/admin/verifications.tsx` - admin verification dashboard with queue filters, metrics, file links, and approve/reject workflow.
 - `services/verification.service.ts` - verification prefill, request creation, and file upload service.

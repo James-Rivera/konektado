@@ -72,6 +72,23 @@ Supabase Auth OTP emails remain separate from this edge-function workflow. If yo
 
 See [docs/13-verification-email-setup.md](../docs/13-verification-email-setup.md) for deploy and test steps.
 
+## Signup Duplicate Email Check
+
+The signup flow uses `functions/signup-email-check/` before sending a signup OTP. The function runs server-side with the Supabase service role and checks whether the submitted email already belongs to a Konektado profile.
+
+Expected app behavior:
+
+- Existing email: signup stops with `This email already has a Konektado account. Please log in instead.`
+- New email: signup continues through email OTP, password creation, role, and onboarding.
+
+Deploy the function before testing duplicate-email signup behavior:
+
+```bash
+npx supabase functions deploy signup-email-check
+```
+
+The mobile app also has a fallback guard after OTP verification because Supabase client-side OTP signup may return a session for an existing confirmed email. If that happens, the app signs out immediately and sends the user to Log In instead of dashboard/onboarding.
+
 Current troubleshooting notes:
 
 - `404 Requested function was not found` means the function is not deployed for the target project.

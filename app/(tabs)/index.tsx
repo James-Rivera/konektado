@@ -440,8 +440,8 @@ export default function HomeScreen() {
     router.push({ pathname: '/job/[jobId]', params: { jobId } });
   }, [router]);
 
-  const openWorker = useCallback((workerId: string, variant: 'default' | 'match') => {
-    router.push({ pathname: '/worker/[workerId]', params: { workerId, variant } });
+  const openService = useCallback((serviceId: string, variant: 'default' | 'match') => {
+    router.push({ pathname: '/services/[serviceId]', params: { serviceId, variant } });
   }, [router]);
 
   const showPlaceholder = useCallback((label: string) => {
@@ -454,15 +454,12 @@ export default function HomeScreen() {
     ({ item }: { item: HomeFeedItem }) => (
       <FeedCard
         feedItem={item}
-        isVerified={isVerified}
         onOpenJob={openJob}
-        onOpenVerification={openVerification}
-        onOpenWorker={openWorker}
-        verificationKnown={verificationKnown}
+        onOpenService={openService}
         workerVariant={selectedFilter === 'Workers' ? 'default' : 'match'}
       />
     ),
-    [isVerified, openJob, openVerification, openWorker, selectedFilter, verificationKnown],
+    [openJob, openService, selectedFilter],
   );
 
   const renderListHeader = useCallback(
@@ -551,28 +548,21 @@ function FeedSeparator() {
 
 const FeedCard = memo(function FeedCard({
   feedItem,
-  isVerified,
-  verificationKnown,
   onOpenJob,
-  onOpenWorker,
-  onOpenVerification,
+  onOpenService,
   workerVariant,
 }: {
   feedItem: HomeFeedItem;
-  isVerified: boolean;
-  verificationKnown: boolean;
   onOpenJob: (jobId: string) => void;
-  onOpenWorker: (workerId: string, variant: 'default' | 'match') => void;
-  onOpenVerification: () => void;
+  onOpenService: (serviceId: string, variant: 'default' | 'match') => void;
   workerVariant: 'default' | 'match';
 }) {
   if (feedItem.type === 'worker') {
     return (
       <HomeFeedCard
         {...feedItem.cardProps}
-        onPress={() => onOpenWorker(feedItem.itemId, workerVariant)}
-        onSave={!verificationKnown || isVerified ? undefined : onOpenVerification}
-        onPrimaryAction={() => onOpenWorker(feedItem.itemId, workerVariant)}
+        onPress={() => onOpenService(feedItem.itemId, workerVariant)}
+        onPrimaryAction={() => onOpenService(feedItem.itemId, workerVariant)}
       />
     );
   }
@@ -581,7 +571,6 @@ const FeedCard = memo(function FeedCard({
     <HomeFeedCard
       {...feedItem.cardProps}
       onPress={() => onOpenJob(feedItem.itemId)}
-      onSave={!verificationKnown || isVerified ? undefined : onOpenVerification}
       onPrimaryAction={() => onOpenJob(feedItem.itemId)}
     />
   );

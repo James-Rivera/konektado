@@ -10,6 +10,9 @@ export type AuthUserSummary = {
   id: string;
 };
 
+export const ACCOUNT_EXISTS_SIGNUP_MESSAGE =
+  "This email already has a Konektado account. Please log in instead.";
+
 const EMAIL_OTP_LENGTH = 6;
 const EMAIL_OTP_TYPE = "email" as const;
 
@@ -72,6 +75,53 @@ function toAuthMessage(message: string, fallback: string) {
   return message || fallback;
 }
 
+async function checkSignupEmailExists(email: string) {
+  const { data, error } = await supabase.functions.invoke<{ exists?: boolean }>(
+    "signup-email-check",
+    {
+      body: { email },
+    },
+  );
+
+  if (error) {
+    return false;
+  }
+
+  return Boolean(data?.exists);
+}
+
+async function currentSessionLooksLikeExistingAccount(userId: string) {
+  const [{ data: profile }, { data: preferences }, { data: roles }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, full_name, first_name, last_name")
+        .eq("id", userId)
+        .maybeSingle<{
+          id: string;
+          full_name: string | null;
+          first_name: string | null;
+          last_name: string | null;
+        }>(),
+      supabase
+        .from("user_preferences")
+        .select("onboarding_completed_at")
+        .eq("user_id", userId)
+        .maybeSingle<{ onboarding_completed_at: string | null }>(),
+      supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1),
+    ]);
+
+  return Boolean(
+    profile?.id ||
+      preferences?.onboarding_completed_at ||
+      (roles && roles.length > 0),
+  );
+}
+
 export async function requestSignupEmailOtp({
   email,
   role,
@@ -83,6 +133,12 @@ export async function requestSignupEmailOtp({
 
   if (!isValidEmail(normalizedEmail)) {
     return { data: null, error: "Enter a valid email address." };
+  }
+
+  const exists = await checkSignupEmailExists(normalizedEmail);
+
+  if (exists) {
+    return { data: null, error: ACCOUNT_EXISTS_SIGNUP_MESSAGE };
   }
 
   const { error } = await sendOnboardingEmailOtp({
@@ -145,6 +201,11 @@ export async function verifySignupEmailOtp({
       data: null,
       error: "Could not verify this account. Please request a new code.",
     };
+  }
+
+  if (await currentSessionLooksLikeExistingAccount(data.user.id)) {
+    await supabase.auth.signOut();
+    return { data: null, error: ACCOUNT_EXISTS_SIGNUP_MESSAGE };
   }
 
   return {

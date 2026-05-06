@@ -31,17 +31,17 @@ function getVariant(value: string | string[] | undefined): DetailVariant {
   return getParamValue(value) === 'match' ? 'match' : 'default';
 }
 
-export default function WorkerDetailScreen() {
+export default function ServiceDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
   const params = useLocalSearchParams<{
-    workerId?: string | string[]; // service id for the public worker/service card
+    serviceId?: string | string[];
     variant?: string | string[];
   }>();
-  const serviceId = getParamValue(params.workerId);
+  const serviceId = getParamValue(params.serviceId);
   const variant = getVariant(params.variant);
   const [detail, setDetail] = useState<ServiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,16 +78,11 @@ export default function WorkerDetailScreen() {
     Alert.alert(label, 'This will open from Worker Profile in a later slice.');
   };
 
-  const handleSave = () => {
-    if (!isVerified) {
-      router.push('/verification');
+  const handleMessage = () => {
+    if (messageCta.disabled && messageCta.reason !== 'verification') {
       return;
     }
 
-    showPlaceholder('Save');
-  };
-
-  const handleMessage = () => {
     if (!isVerified) {
       router.push('/verification');
       return;
@@ -151,11 +146,14 @@ export default function WorkerDetailScreen() {
   );
   const ratingText = formatServiceRatingText(detail);
   const jobsDoneText = formatServiceJobsDoneText(detail, detail.completedJobsCount);
-  const jobsCompletedValue = detail.completedJobsCount
-    ? String(detail.completedJobsCount)
-    : String(getFallbackCount(detail.id, 3, 14));
-  const hoursWorkedText = `${Number(jobsCompletedValue) * 4} hrs`;
   const serviceImageUrl = detail.photoUrls?.[0] ?? null;
+  const messageCta = getWorkerMessageCta({
+    allowMessages: detail.allowMessages,
+    availabilityText: detail.availabilityText,
+    isActive: detail.isActive,
+    isOwnService: profile?.id === detail.providerId,
+    isVerified,
+  });
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -188,8 +186,9 @@ export default function WorkerDetailScreen() {
           ) : null}
 
           <SectionBand style={styles.skillsSection}>
-            <Text style={styles.sectionTitle}>Services and rate</Text>
+            <Text style={styles.sectionTitle}>Selected service</Text>
             <View style={styles.serviceRateRow}>
+              <Text style={styles.selectedServiceTitle}>{detail.title || detail.category}</Text>
               <View style={styles.servicesWrap}>
                 {serviceLabels.map((serviceLabel) => (
                   <View key={serviceLabel} style={styles.servicePill}>
@@ -205,13 +204,18 @@ export default function WorkerDetailScreen() {
           </SectionBand>
 
           <SectionBand style={styles.detailsSection}>
-            <Text style={styles.sectionTitle}>Worker details</Text>
+            <Text style={styles.sectionTitle}>Service details</Text>
             <WorkerMetricGrid
               metrics={[
-                { label: 'Location', value: location },
-                { label: 'Jobs completed', value: jobsCompletedValue },
+                { label: 'Rate', value: detail.rateText || 'Rate to coordinate' },
                 { label: 'Availability', value: detail.availabilityText || 'Schedule to coordinate' },
-                { label: 'Hours worked', value: hoursWorkedText },
+                { label: 'Service area', value: location },
+                {
+                  label: 'Experience',
+                  value: detail.yearsExperience
+                    ? `${detail.yearsExperience} year${detail.yearsExperience === 1 ? '' : 's'}`
+                    : 'Experience to coordinate',
+                },
               ]}
             />
           </SectionBand>
@@ -247,10 +251,10 @@ export default function WorkerDetailScreen() {
               <Text style={styles.reviewTitle}>
                 {detail.reviewCount > 0 && detail.averageRating
                   ? `${detail.averageRating.toFixed(1)} average from ${detail.reviewCount} review${detail.reviewCount === 1 ? '' : 's'}`
-                  : 'Reviews will show here after completed jobs'}
+                  : 'No reviews yet'}
               </Text>
               <Text style={styles.reviewBody}>
-                Full public review history stays minimal in this MVP slice, but the real provider and service record are now live.
+                Reviews appear after completed Konektado jobs.
               </Text>
             </View>
           </SectionBand>
@@ -271,9 +275,9 @@ export default function WorkerDetailScreen() {
 
         <DetailActionRow
           bottomInset={insets.bottom}
+          cta={messageCta}
           messaging={messaging}
           onMessage={handleMessage}
-          onSave={handleSave}
         />
       </View>
     </SafeAreaView>
@@ -435,32 +439,38 @@ function ServicePreviewCard({ service }: { service: ProviderService }) {
 
 function DetailActionRow({
   bottomInset,
+  cta,
   messaging,
   onMessage,
-  onSave,
 }: {
   bottomInset: number;
+  cta: ReturnType<typeof getWorkerMessageCta>;
   messaging: boolean;
   onMessage: () => void;
-  onSave: () => void;
 }) {
   return (
     <View style={[styles.actionRow, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
+      <Text style={styles.boundaryNote}>
+        Rate is for coordination. Payment and final agreement happen outside Konektado.
+      </Text>
+      {cta.helper ? <Text style={styles.actionHelper}>{cta.helper}</Text> : null}
       <Pressable
         accessibilityRole="button"
-        disabled={messaging}
+        disabled={messaging || cta.disabled}
         onPress={onMessage}
-        style={({ pressed }) => [styles.messageButton, pressed && styles.pressed, messaging && styles.disabled]}>
-        <MaterialIcons color={color.verificationBlue} name="chat-bubble" size={18} />
-        <Text style={styles.messageButtonText}>{messaging ? 'Opening...' : 'Message'}</Text>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={onSave}
-        style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}>
-        <MaterialIcons color={color.textSubtle} name="bookmark-border" size={18} />
-        <Text style={styles.saveButtonText}>Save</Text>
+        style={({ pressed }) => [
+          styles.messageButton,
+          pressed && !messaging && !cta.disabled && styles.pressed,
+          (messaging || cta.disabled) && styles.disabled,
+        ]}>
+        <MaterialIcons
+          color={cta.disabled ? color.textSubtle : color.verificationBlue}
+          name="chat-bubble"
+          size={18}
+        />
+        <Text style={[styles.messageButtonText, cta.disabled && styles.disabledButtonText]}>
+          {messaging ? 'Opening...' : cta.label}
+        </Text>
       </Pressable>
     </View>
   );
@@ -494,17 +504,75 @@ function BadgePill({
 }
 
 function getInitials(name: string) {
-  return name
+  const initials = name
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+
+  return initials || 'K';
 }
 
-function getFallbackCount(seed: string, min: number, max: number) {
-  const stableNumber = Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0);
-  return min + (stableNumber % (max - min + 1));
+function getWorkerMessageCta({
+  allowMessages,
+  availabilityText,
+  isActive,
+  isOwnService,
+  isVerified,
+}: {
+  allowMessages: boolean;
+  availabilityText: string | null;
+  isActive: boolean;
+  isOwnService: boolean;
+  isVerified: boolean;
+}) {
+  if (isOwnService) {
+    return {
+      disabled: true,
+      helper: 'You cannot message yourself from your own service.',
+      label: 'This is your service',
+      reason: 'own',
+    };
+  }
+
+  if (!isActive) {
+    return {
+      disabled: true,
+      helper: 'This service is not currently available.',
+      label: 'Worker unavailable',
+      reason: 'inactive',
+    };
+  }
+
+  if (!allowMessages) {
+    return {
+      disabled: true,
+      helper: 'This worker is not accepting new messages from this service.',
+      label: 'Messages unavailable',
+      reason: 'messages_off',
+    };
+  }
+
+  if (!isVerified) {
+    return {
+      disabled: false,
+      helper: 'Complete barangay verification to message workers and clients.',
+      label: 'Verify to message',
+      reason: 'verification',
+    };
+  }
+
+  return {
+    disabled: false,
+    helper: isUnavailableAvailability(availabilityText) ? 'Ask about next availability in Messages.' : null,
+    label: 'Message worker',
+    reason: 'available',
+  };
+}
+
+function isUnavailableAvailability(value: string | null) {
+  return Boolean(value?.match(/\b(unavailable|not available|away|paused)\b/i));
 }
 
 const styles = StyleSheet.create({
@@ -713,6 +781,12 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 12,
   },
+  selectedServiceTitle: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
   servicesWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -849,16 +923,22 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     borderTopColor: color.border,
     borderTopWidth: 1,
-    flexDirection: 'row',
-    gap: 4,
+    gap: 8,
     paddingHorizontal: 20,
     paddingTop: 13,
+  },
+  boundaryNote: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  actionHelper: {
+    ...typography.caption,
+    color: color.textSubtle,
   },
   messageButton: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
     borderRadius: radius.pill,
-    flex: 1,
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
@@ -870,23 +950,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  saveButton: {
-    alignItems: 'center',
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-    minHeight: 34,
-  },
-  saveButtonText: {
+  disabledButtonText: {
     color: color.textSubtle,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 12,
-    lineHeight: 16,
   },
   emptyWrap: {
     flex: 1,

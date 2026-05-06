@@ -1,6 +1,6 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -13,10 +13,18 @@ import { signInWithEmailPassword } from '@/services/auth.service';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const nextEmail = Array.isArray(params.email) ? params.email[0] : params.email;
+    if (nextEmail) {
+      setEmail(nextEmail);
+    }
+  }, [params.email]);
 
   const onLogin = async () => {
     if (loading) return;

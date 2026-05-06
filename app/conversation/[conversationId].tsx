@@ -255,7 +255,7 @@ export default function ConversationDetailScreen() {
     }
 
     if (conversation?.serviceId) {
-      router.push({ pathname: '/worker/[workerId]', params: { workerId: conversation.serviceId } });
+      router.push({ pathname: '/services/[serviceId]', params: { serviceId: conversation.serviceId } });
     }
   };
 
@@ -314,8 +314,8 @@ export default function ConversationDetailScreen() {
             onOpenProfile={() => {
               if (conversation.serviceId) {
                 router.push({
-                  pathname: '/worker/[workerId]',
-                  params: { workerId: conversation.serviceId },
+                  pathname: '/services/[serviceId]',
+                  params: { serviceId: conversation.serviceId },
                 });
                 return;
               }

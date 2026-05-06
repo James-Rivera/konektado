@@ -2,6 +2,8 @@
 
 ## Summary
 
+Current status note: the root-cause sections below are the original audit baseline. Phases 1-4 and post-Phase-4 stabilization have since addressed messaging freshness, Search/Home query behavior, Home/Search virtualization, shared profile state, and onboarding routing. Treat the later Implementation Status, phase notes, P1 reconciliation, and `docs/stabilization-audit.md` as the current status source.
+
 The main performance problems are not caused by one single slow screen. They come from a few repeated patterns:
 
 - Messaging uses optimistic local sends, but message fetching and conversation preview reconciliation are incomplete. There is no realtime subscription for `messages` or `conversations`, incoming messages do not update while a screen stays mounted, and preview updates only cover conversations already in local memory.
@@ -54,8 +56,8 @@ This report is documentation only. It does not change app behavior.
 
 - Problem: Starting a conversation from Job Detail or Worker Detail waits for the service call, then navigates to the conversation. The first message is persisted, but no preview event is emitted before navigation.
 - Confirmed root cause: `startJobConversation` and `startServiceConversation` call `sendMessage` inside the service and return `getConversation`, but only `app/conversation/[conversationId].tsx` emits `emitConversationPreviewUpdate`.
-- Evidence from code: `services/conversation.service.ts:442-447` and `services/conversation.service.ts:504-509` send the initial message and return `getConversation`. `app/job/[jobId].tsx:182-198` and `app/worker/[workerId].tsx:97-113` navigate using only `conversationId`.
-- Affected files: `services/conversation.service.ts`, `app/job/[jobId].tsx`, `app/worker/[workerId].tsx`, `services/conversation-preview-events.ts`.
+- Evidence from code: `services/conversation.service.ts:442-447` and `services/conversation.service.ts:504-509` send the initial message and return `getConversation`. `app/job/[jobId].tsx:182-198` and `app/services/[serviceId].tsx` navigate using only `conversationId`.
+- Affected files: `services/conversation.service.ts`, `app/job/[jobId].tsx`, `app/services/[serviceId].tsx`, `services/conversation-preview-events.ts`.
 - User impact: The new or reused conversation may not appear instantly in Messages, especially if the inbox cache does not already include that conversation.
 - Recommended fix: Return enough metadata from start-conversation calls to insert/update the preview cache, or centralize conversation mutations in a hook that updates both thread and inbox caches.
 - Risk level: Low to medium.
@@ -113,8 +115,8 @@ This report is documentation only. It does not change app behavior.
 
 - Problem: Existing useful content is replaced with skeletons during refreshes.
 - Confirmed root cause: Search sets `loading=true` for every request and renders skeletons instead of previous results. Detail screens often show full-screen skeletons on navigation even when the previous screen had enough summary data to render a shell.
-- Evidence from code: `app/(tabs)/search.tsx:80-90` sets loading around each search request, and `app/(tabs)/search.tsx:142-176` replaces results with skeletons. Conversation start routes pass only ids at `app/job/[jobId].tsx:194-197` and `app/worker/[workerId].tsx:109-112`, then `app/conversation/[conversationId].tsx:210-214` renders a full skeleton while refetching.
-- Affected files: `app/(tabs)/search.tsx`, `app/conversation/[conversationId].tsx`, `app/job/[jobId].tsx`, `app/worker/[workerId].tsx`.
+- Evidence from code: `app/(tabs)/search.tsx:80-90` sets loading around each search request, and `app/(tabs)/search.tsx:142-176` replaces results with skeletons. Conversation start routes pass only ids at `app/job/[jobId].tsx:194-197` and `app/services/[serviceId].tsx`, then `app/conversation/[conversationId].tsx:210-214` renders a full skeleton while refetching.
+- Affected files: `app/(tabs)/search.tsx`, `app/conversation/[conversationId].tsx`, `app/job/[jobId].tsx`, `app/services/[serviceId].tsx`.
 - User impact: The app appears slower than the data path requires.
 - Recommended fix: Add stale-while-revalidate behavior: keep previous content visible with small inline loading affordances. Cache detail results by id when navigation already fetched the target.
 - Risk level: Low.
@@ -181,8 +183,8 @@ This report is documentation only. It does not change app behavior.
 
 - Problem: Feed/detail cards use React Native `Image` for remote images while `expo-image` is already installed.
 - Confirmed root cause: `HomeFeedCard`, Job Detail, and Worker Detail import `Image` from `react-native`.
-- Evidence from code: `components/home/HomeFeedCard.tsx:3`, `app/job/[jobId].tsx:4`, `app/worker/[workerId].tsx:5`; `package.json` includes `expo-image`.
-- Affected files: `components/home/HomeFeedCard.tsx`, `app/job/[jobId].tsx`, `app/worker/[workerId].tsx`, other image-heavy screens.
+- Evidence from code: `components/home/HomeFeedCard.tsx:3`, `app/job/[jobId].tsx:4`, `app/services/[serviceId].tsx`; `package.json` includes `expo-image`.
+- Affected files: `components/home/HomeFeedCard.tsx`, `app/job/[jobId].tsx`, `app/services/[serviceId].tsx`, other image-heavy screens.
 - User impact: Less efficient caching/placeholder behavior for photo-heavy feeds.
 - Recommended fix: Consider `expo-image` for remote feed/detail photos with stable dimensions and transition disabled or tuned to match Figma.
 - Risk level: Low.
@@ -225,7 +227,7 @@ This report is documentation only. It does not change app behavior.
 - Whether it needs changes: Yes for responsiveness.
 - Suggested fix: Cache the returned conversation detail or update preview cache before navigation. Consider passing/loading route data from a detail cache instead of showing a full skeleton.
 
-### `app/worker/[workerId].tsx`
+### `app/services/[serviceId].tsx`
 
 - What it controls: Worker/service detail and starting service conversation.
 - Findings: Same start-conversation behavior as Job Detail. Worker detail fetches provider services and stats every mount.
@@ -377,7 +379,7 @@ Finding: Loading flags are broad in places where stale content plus small refres
 ### 3. Fix start-conversation preview/cache behavior
 
 - Goal: Make first job/service messages appear instantly in conversation previews.
-- Files to modify: `services/conversation.service.ts`, `services/conversation-preview-events.ts`, `app/job/[jobId].tsx`, `app/worker/[workerId].tsx`.
+- Files to modify: `services/conversation.service.ts`, `services/conversation-preview-events.ts`, `app/job/[jobId].tsx`, `app/services/[serviceId].tsx`.
 - Expected improvement: Messages tab feels current after starting a conversation from detail screens.
 - Risk: Low to medium.
 - How to test manually: Start a new job conversation, go back to Messages, and confirm the latest preview appears without waiting for a focus refetch.

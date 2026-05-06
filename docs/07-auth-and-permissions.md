@@ -7,11 +7,13 @@ Konektado uses Supabase Auth for MVP authentication.
 Active MVP onboarding auth flow:
 
 - User enters email.
+- App checks the email through the `signup-email-check` Edge Function before requesting a signup OTP. If the email already belongs to a Konektado profile, signup stops and directs the user to Log In.
 - App calls `supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, data } })`.
 - Supabase sends an email template containing `{{ .Token }}`, so the email shows a 6-digit OTP instead of requiring a link click.
 - Keep the Magic Link and Confirm sign up templates aligned with the same six-box `{{ .Token }}` body.
 - User enters the 6-digit OTP and the app verifies it with `verifyOtp({ type: 'email' })`.
 - Supabase creates a session after OTP verification.
+- Because Supabase client-side OTP signup can return a session for an existing confirmed email, the app also checks the returned session for an existing Konektado profile/role/preference row. If it looks like an existing account, the app signs out immediately and shows `This email already has a Konektado account. Please log in instead.`
 - App redirects to Create Password and saves the password with `supabase.auth.updateUser({ password })`.
 - Login after onboarding uses email/password.
 
@@ -23,12 +25,20 @@ Current OTP troubleshooting note:
 Required behavior:
 
 - Users register with Supabase email OTP, then create a password for email/password login.
+- Sign Up must only continue for new accounts. Existing account emails must not enter onboarding, update passwords from the signup path, create duplicate profile rows, or silently route to the dashboard.
+- Duplicate-email signup copy: `This email already has a Konektado account. Please log in instead.` Actions: `Go to Log In` and `Forgot password?`.
 - Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing.
 - The Supabase Auth email templates used by the signup OTP path must include `{{ .Token }}` so users receive a 6-digit code. Supabase Auth OTP length must be configured to 6 digits. For MVP signup, the app uses `signInWithOtp`; keep both **Magic Link** and **Confirm sign up** templates aligned.
 - In app code, verify signup email codes only through the auth service. Keep the request/resend/verify methods on Supabase email OTP/passwordless auth.
 - Do not require SMS OTP, mobile OTP, or an SMS gateway for the MVP.
 - Phone-first authentication can be revisited later when provider access and Android/device testing are available.
 - Email is used for login, verification updates, support, and account recovery.
+
+Current duplicate-email protection:
+
+- Server-side check: `supabase/functions/signup-email-check` uses the service role on the backend to check for an existing `profiles.email` during an explicit signup attempt. Service-role keys must never be placed in mobile/client code.
+- Client-side fallback: after signup OTP verification, the app checks whether the returned session already has profile, role, or onboarding preference rows. If so, it signs out immediately and shows the duplicate-email message.
+- Remaining risk: the Edge Function checks Konektado profile rows, not arbitrary Supabase Auth users with no profile row. Keep the fallback guard until a stricter auth-admin duplicate check is available.
 - Barangay verification email updates are custom transactional emails sent from backend code, not Supabase Auth templates. Keep them separate from the OTP auth templates.
 - App stores sessions through Supabase's React Native auth storage.
 - Screens must use an auth/session hook or service, not direct auth logic in every screen.
@@ -134,7 +144,7 @@ These role permissions apply after the user's barangay verification is approved.
 - Only barangay admins can approve or reject.
 - Approval sets the user/profile verification indicator.
 - Rejection stores a reason or note.
-- Public UI should show verification status as a badge, not expose private files.
+- Public UI should not show repeated verification badges on feed cards, search cards, Job Details, or selected service detail screens for MVP. Verification copy belongs in gated-action states, verification/onboarding screens, and owner-facing status surfaces; private files are never exposed publicly.
 - Verification is the gate for user-to-user interaction features.
 - The verification page is where heavier requirements belong: contact confirmation, email confirmation, optional phone number, ID, services, credentials, selfie/photo for manual comparison, and supporting details.
 - Verification contact details should reuse onboarding/profile values instead of asking the user to retype them.
@@ -150,7 +160,7 @@ Public-safe provider fields:
 - Service categories and descriptions.
 - Availability text.
 - Public rating summary.
-- Verification badge.
+- Product-approved verification/access-gate copy where needed; do not repeat public verification badges on MVP feed, search, or detail surfaces.
 - Public credential labels if approved and safe.
 
 Private or restricted fields:
