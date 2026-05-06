@@ -7,6 +7,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { Pill } from '@/components/Pill';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyJobs } from '@/services/job.service';
@@ -18,7 +19,7 @@ type ProfileMode = 'work' | 'hiring';
 
 export default function ProfileScreen() {
   const [mode, setMode] = useState<ProfileMode>('work');
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [services, setServices] = useState<ProviderService[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -58,35 +59,44 @@ export default function ProfileScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
-          </View>
-          <View style={styles.profileCopy}>
-            <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.location}>
-              {[profile?.barangay, profile?.city].filter(Boolean).join(', ') || 'Barangay San Pedro'}
-            </Text>
-            <View style={styles.profilePills}>
-              <Pill
-                icon={isVerified ? 'verified' : 'warning-amber'}
-                label={isVerified ? 'Barangay verified' : 'Verification needed'}
-                tone={isVerified ? 'success' : 'warning'}
-              />
-              <Pill label={`${services.length} Services`} tone="primary" />
+        {profileLoading ? (
+          <>
+            <ProfileHeaderSkeleton />
+            <NoticeBannerSkeleton />
+          </>
+        ) : (
+          <>
+            <View style={styles.profileCard}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
+              </View>
+              <View style={styles.profileCopy}>
+                <Text style={styles.name}>{displayName}</Text>
+                <Text style={styles.location}>
+                  {[profile?.barangay, profile?.city].filter(Boolean).join(', ') || 'Barangay San Pedro'}
+                </Text>
+                <View style={styles.profilePills}>
+                  <Pill
+                    icon={isVerified ? 'verified' : 'warning-amber'}
+                    label={isVerified ? 'Barangay verified' : 'Verification needed'}
+                    tone={isVerified ? 'success' : 'warning'}
+                  />
+                  <Pill label={`${services.length} Services`} tone="primary" />
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
 
-        <NoticeBanner
-          message={
-            isVerified
-              ? 'Posting, messaging, saving, and reviews are unlocked for this account.'
-              : 'Complete barangay verification to unlock posting, messaging, saving, and reviews.'
-          }
-          title={isVerified ? 'Verification approved' : 'Verification required'}
-          variant={isVerified ? 'info' : 'warning'}
-        />
+            <NoticeBanner
+              message={
+                isVerified
+                  ? 'Posting, messaging, saving, and reviews are unlocked for this account.'
+                  : 'Complete barangay verification to unlock posting, messaging, saving, and reviews.'
+              }
+              title={isVerified ? 'Verification approved' : 'Verification required'}
+              variant={isVerified ? 'info' : 'warning'}
+            />
+          </>
+        )}
 
         <View style={styles.segmented}>
           <PrimaryButton
@@ -225,6 +235,32 @@ function Metric({
   );
 }
 
+function ProfileHeaderSkeleton() {
+  return (
+    <View style={styles.profileCard}>
+      <Skeleton height={60} width={60} borderRadius={radius.pill} />
+      <View style={styles.profileCopy}>
+        <Skeleton height={20} width="62%" />
+        <Skeleton height={14} width="48%" />
+        <View style={styles.profilePills}>
+          <Skeleton height={26} width={134} borderRadius={radius.pill} />
+          <Skeleton height={26} width={86} borderRadius={radius.pill} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function NoticeBannerSkeleton() {
+  return (
+    <View style={styles.noticeSkeleton}>
+      <Skeleton height={16} width="48%" />
+      <Skeleton height={13} width="92%" />
+      <Skeleton height={13} width="70%" />
+    </View>
+  );
+}
+
 function HistoryRow({
   icon,
   title,
@@ -298,6 +334,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.sm,
+  },
+  noticeSkeleton: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: space.sm,
+    padding: space.lg,
   },
   segmented: {
     backgroundColor: color.background,

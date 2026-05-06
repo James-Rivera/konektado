@@ -49,10 +49,11 @@ export default function SearchScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const topInset = useSafeTopInset();
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const params = useLocalSearchParams<{ filter?: string | string[] }>();
   const filterParam = getParamValue(params.filter);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
   const [selectedService, setSelectedService] = useState<string | null>(null);
@@ -154,7 +155,7 @@ export default function SearchScreen() {
                     job={job}
                     key={job.id}
                     onOpenJob={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
-                    onSave={isVerified ? () => showPlaceholder('Save') : showVerification}
+                    onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
                   />
                 ))
                 : workers.map((worker) => (
@@ -166,7 +167,7 @@ export default function SearchScreen() {
                         params: { workerId: worker.id, variant: 'match' },
                       })
                     }
-                    onSave={isVerified ? () => showPlaceholder('Save') : showVerification}
+                    onSave={!verificationKnown || isVerified ? () => showPlaceholder('Save') : showVerification}
                     worker={worker}
                   />
                 ))}
@@ -186,7 +187,7 @@ export default function SearchScreen() {
               </View>
             )}
 
-            {!isVerified ? (
+            {verificationKnown && !isVerified ? (
               <Text style={styles.helperText}>
                 Save and message actions stay locked until your barangay verification is approved.
               </Text>

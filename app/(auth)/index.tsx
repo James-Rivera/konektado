@@ -13,6 +13,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   GradientImageScreen,
@@ -183,20 +184,20 @@ export default function AuthIntroScreen() {
                   <Text style={styles.subtitle}>{slide.subtitle}</Text>
                   <IntroPagination currentPage={page} progress={progressAnim} />
                 </View>
-
-                <View style={styles.actionBlock}>
-                  <OnboardingButton label="Get Started" onPress={goToRole} />
-                  <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
-                    <Text style={styles.loginText}>
-                      Already have an account? <Text style={styles.loginTextBold}>Login</Text>
-                    </Text>
-                  </Pressable>
-                </View>
               </View>
             </GradientImageScreen>
           </View>
         ))}
       </ScrollView>
+
+      <SafeAreaView edges={['bottom']} style={styles.fixedActionBlock}>
+        <OnboardingButton label="Get Started" onPress={goToRole} />
+        <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
+          <Text style={styles.loginText}>
+            Already have an account? <Text style={styles.loginTextBold}>Login</Text>
+          </Text>
+        </Pressable>
+      </SafeAreaView>
     </View>
   );
 }
@@ -238,8 +239,8 @@ const styles = StyleSheet.create({
   },
   slideContent: {
     flex: 1,
-    justifyContent: 'space-between',
-    paddingBottom: 8,
+    justifyContent: 'flex-start',
+    paddingBottom: 132,
     paddingHorizontal: 26,
     paddingTop: 50,
   },
@@ -261,10 +262,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 10,
   },
-  actionBlock: {
+  fixedActionBlock: {
+    bottom: 0,
     gap: 5,
+    left: 0,
     paddingBottom: 16,
-    paddingHorizontal: 3,
+    paddingHorizontal: 29,
+    position: 'absolute',
+    right: 0,
   },
   loginLink: {
     alignItems: 'center',
