@@ -251,6 +251,18 @@ Components:
 - Circular placeholder for avatars/icons
 - Props: `size`, `style`
 
+**SkeletonAvatar**
+- Avatar placeholder with optional presence dot
+- Props: `size`, `dotSize`, `showPresence`, `style`
+
+**SkeletonChip**
+- Pill/chip/button placeholder for tags, filters, and compact CTAs
+- Props: `height`, `width`, `style`
+
+**SkeletonImage**
+- Media placeholder for photos and other image blocks
+- Props: `height`, `width`, `borderRadius`, `style`
+
 **SkeletonText**
 - Multiple stacked lines mimicking paragraph text
 - Props: `lines`, `gap`, `lineHeight`, `lastLineWidth`
@@ -284,6 +296,26 @@ Rules:
 - Disable animation (`animated={false}`) for very fast loads (< 300ms)
 - Use for any async data loading: feeds, details, forms
 - Avoid overly complex skeletons; keep them lightweight
+
+Pattern guidance:
+
+- Prefer rendering the real component structure with `isLoading` and replacing content slots with skeleton primitives instead of building a second approximate layout.
+- Preserve the same spacing, card shell, image area, chips, metadata rows, section dividers, and CTA footprint as the loaded state.
+- If a component has variants, the loading state should support the same layout variants where practical.
+- Use skeletons for initial loading only; for refreshes, keep the stale UI visible and show a lightweight refreshing indicator.
+
+Current exceptions that remain separate for now:
+
+- `app/conversation/[conversationId].tsx` and `app/conversation/[conversationId]/details.tsx`
+  These thread screens derive layout from message grouping, sender direction, and context actions that do not safely exist before the conversation payload arrives.
+- `app/create-job.tsx`, `app/create-job-preview.tsx`, and `app/create-service-preview.tsx`
+  These flows assemble draft-dependent form sections and preview content where loading is still driven by screen-specific setup state rather than a reusable card/detail component.
+- `app/(tabs)/post.tsx`, `app/post/active.tsx`, and `app/post/renew.tsx`
+  These dashboards currently load mixed management panels and summary cards that still need a cleaner shared component layer before a safe `isLoading` conversion.
+- `app/(tabs)/profile.tsx`
+  The header and notice loading states are already layout-close, but the profile screen still mixes account, role-toggle, and activity sections that should be componentized first.
+- `components/verification/FigmaVerificationFlow.tsx`
+  The verification prefill skeleton remains separate because it protects partially known form state before the fields are ready to render with real values.
 
 ### Bottom Navigation
 
@@ -398,7 +430,7 @@ Rules:
 - Use one shared card layout for job posts and service posts in Home.
 - Always show avatar/name, the Konektado yellow online dot when presence is active, a short post-type label, relative time, a compact rate/budget line, post copy, tags, and trust/location metadata in the same positions.
 - Home feed cards should feel like community posts, not CTA-heavy listing cards. The whole card opens the relevant detail screen; do not show a full-width "View Job" or "View Profile" button in Home.
-- Use plain labels and post copy such as "Posted a job", "Posted a service", "Looking for cleaning", "Need help with laundry", and "I offer plumbing repair".
+- Use plain labels and post copy such as "Posted a job", "Posted a service", "Looking for cleaning", "Need help with laundry", and "I offer minor home fix help".
 - Keep the type distinction in labels, metadata, copy, and destination rather than using separate card structures.
 - Job posts open job detail; service posts open worker/service profile.
 - Search can use specialized job and worker result cards because the user is already in a focused browsing mode.

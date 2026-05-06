@@ -14,7 +14,7 @@ import {
 import { AppHeader } from '@/components/AppHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { PresenceDot } from '@/components/PresenceDot';
-import { Skeleton } from '@/components/Skeleton';
+import { Skeleton, SkeletonAvatar } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -218,9 +218,9 @@ export default function MessagesScreen() {
         showsVerticalScrollIndicator={false}>
         {profileLoading ? (
           <View style={styles.listStack}>
-            <MessageRowSkeleton />
-            <MessageRowSkeleton />
-            <MessageRowSkeleton />
+            <MessageRow isLoading />
+            <MessageRow isLoading />
+            <MessageRow isLoading />
           </View>
         ) : !isVerified ? (
           <LockedMessagesCard onVerify={() => router.push('/verification')} />
@@ -259,7 +259,7 @@ export default function MessagesScreen() {
           </View>
 
           {showInboxSkeleton ? (
-            <InboxSectionSkeleton />
+            <InboxSection isLoading loadingCount={3} title="Messages" />
           ) : null}
 
           {isVerified && messageRequests.length ? (
@@ -295,31 +295,37 @@ export default function MessagesScreen() {
 }
 
 const InboxSection = memo(function InboxSection({
-  conversations,
+  conversations = [],
   currentUserId,
   onOpen,
   title,
+  isLoading = false,
+  loadingCount = 3,
 }: {
-  conversations: ConversationSummary[];
+  conversations?: ConversationSummary[];
   currentUserId?: string;
-  onOpen: (conversationId: string) => void;
+  onOpen?: (conversationId: string) => void;
   title: string;
+  isLoading?: boolean;
+  loadingCount?: number;
 }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.editText}>Edit</Text>
+        {isLoading ? <Skeleton height={14} width={82} /> : <Text style={styles.sectionTitle}>{title}</Text>}
+        {isLoading ? <Skeleton height={14} width={28} /> : <Text style={styles.editText}>Edit</Text>}
       </View>
       <View style={styles.listStack}>
-        {conversations.map((conversation) => (
-          <MessageRow
-            conversation={conversation}
-            currentUserId={currentUserId}
-            key={conversation.id}
-            onPress={() => onOpen(conversation.id)}
-          />
-        ))}
+        {isLoading
+          ? Array.from({ length: loadingCount }).map((_, index) => <MessageRow isLoading key={index} />)
+          : conversations.map((conversation) => (
+              <MessageRow
+                conversation={conversation}
+                currentUserId={currentUserId}
+                key={conversation.id}
+                onPress={() => onOpen?.(conversation.id)}
+              />
+            ))}
       </View>
     </View>
   );
@@ -329,11 +335,31 @@ const MessageRow = memo(function MessageRow({
   conversation,
   currentUserId,
   onPress,
+  isLoading = false,
 }: {
-  conversation: ConversationSummary;
+  conversation?: ConversationSummary;
   currentUserId?: string;
-  onPress: () => void;
+  onPress?: () => void;
+  isLoading?: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <View style={styles.messageRow}>
+        <SkeletonAvatar dotSize={12} size={52} />
+        <View style={styles.messageInfo}>
+          <View style={styles.messageTitleRow}>
+            <Skeleton height={13} width="48%" />
+            <Skeleton height={12} width={42} />
+          </View>
+          <Skeleton height={12} width="34%" />
+          <Skeleton height={12} width="76%" />
+        </View>
+      </View>
+    );
+  }
+
+  if (!conversation || !onPress) return null;
+
   const other = getOtherParticipant(conversation, currentUserId);
   const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== currentUserId;
   const context = getConversationContext(conversation);
@@ -383,38 +409,6 @@ function LockedMessagesCard({ onVerify }: { onVerify: () => void }) {
         <Text style={styles.verifyButtonText}>Start verification</Text>
       </Pressable>
       <Text style={styles.lockedLink}>Maybe later</Text>
-    </View>
-  );
-}
-
-function MessageRowSkeleton() {
-  return (
-    <View style={styles.messageRow}>
-      <Skeleton height={52} width={52} borderRadius={26} />
-      <View style={styles.messageInfo}>
-        <View style={styles.messageTitleRow}>
-          <Skeleton height={13} width="48%" />
-          <Skeleton height={12} width={42} />
-        </View>
-        <Skeleton height={12} width="34%" />
-        <Skeleton height={12} width="76%" />
-      </View>
-    </View>
-  );
-}
-
-function InboxSectionSkeleton() {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Skeleton height={14} width={82} />
-        <Skeleton height={14} width={28} />
-      </View>
-      <View style={styles.listStack}>
-        <MessageRowSkeleton />
-        <MessageRowSkeleton />
-        <MessageRowSkeleton />
-      </View>
     </View>
   );
 }

@@ -88,8 +88,8 @@ where user_id = '00000000-0000-4000-8000-000000000006';
 update public.services
 set
   category = 'Basic home repair',
-  title = 'Basic home repair help',
-  description = 'Helps with loose hinges, shelves, door handles, and small household maintenance tasks.',
+  title = 'Minor home fix support',
+  description = 'Helps with loose hinges, shelves, door handles, and other small non-licensed household maintenance tasks.',
   tags = array['Home & Local Help', 'Basic home repair', 'Home maintenance'],
   photo_urls = array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80'],
   years_experience = 6,

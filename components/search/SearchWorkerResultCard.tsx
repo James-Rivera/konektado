@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PresenceDot } from '@/components/PresenceDot';
+import { Skeleton, SkeletonAvatar, SkeletonChip } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import type { SearchWorkerItem } from '@/constants/search-demo-data';
 
@@ -10,11 +11,79 @@ export function SearchWorkerResultCard({
   worker,
   onOpenWorker,
   onSave,
+  isLoading = false,
+  showSaveAction,
+  loadingLocationInline = true,
 }: {
-  worker: SearchWorkerItem;
-  onOpenWorker: () => void;
+  worker?: SearchWorkerItem;
+  onOpenWorker?: () => void;
   onSave?: () => void;
+  isLoading?: boolean;
+  showSaveAction?: boolean;
+  loadingLocationInline?: boolean;
 }) {
+  if (isLoading) {
+    const showLoadingSave = showSaveAction ?? Boolean(onSave);
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.headerRow}>
+          <View style={styles.identityRow}>
+            <SkeletonAvatar dotSize={10} size={44} />
+            <View style={styles.identityCopy}>
+              <Skeleton height={16} width="56%" />
+              <Skeleton height={12} width="76%" />
+            </View>
+          </View>
+
+          <View style={styles.iconRow}>
+            <Skeleton height={20} width={20} borderRadius={10} />
+            {showLoadingSave ? <Skeleton height={20} width={20} borderRadius={10} /> : null}
+          </View>
+        </View>
+
+        <Skeleton height={16} width="88%" />
+        <Skeleton height={12} width="46%" />
+
+        <View style={styles.metaBlock}>
+          <View style={[styles.metaRow, loadingLocationInline && styles.metaRowInline]}>
+            <View style={[styles.metaItem, loadingLocationInline && styles.metaItemCompact]}>
+              <Skeleton height={12} width={72} />
+            </View>
+            <View style={[styles.metaItem, loadingLocationInline && styles.metaItemCompact]}>
+              <Skeleton height={12} width={82} />
+            </View>
+            {loadingLocationInline ? (
+              <View style={[styles.metaItem, styles.metaItemCompact, styles.metaItemLocation]}>
+                <Skeleton height={12} width="100%" />
+              </View>
+            ) : null}
+          </View>
+          {!loadingLocationInline ? (
+            <View style={[styles.metaItem, styles.metaItemFull]}>
+              <Skeleton height={12} width="54%" />
+            </View>
+          ) : null}
+        </View>
+
+        <Skeleton height={12} width="70%" />
+
+        <View style={styles.tagRow}>
+          <View style={styles.tagClip}>
+            <SkeletonChip height={27} width={76} />
+            <SkeletonChip height={27} width={90} />
+            <SkeletonChip height={27} width={68} />
+          </View>
+          <Skeleton height={20} width={20} borderRadius={10} />
+        </View>
+
+        <SkeletonChip height={34} style={styles.loadingButton} width="100%" />
+      </View>
+    );
+  }
+
+  if (!worker || !onOpenWorker) return null;
+
   const showLocationInline = canShowLocationInline(worker.ratingText, worker.jobsDoneText, worker.location);
 
   return (
@@ -337,6 +406,9 @@ const styles = StyleSheet.create({
     minHeight: 34,
     paddingHorizontal: 18,
     paddingVertical: 8,
+  },
+  loadingButton: {
+    borderRadius: radius.pill,
   },
   primaryButtonText: {
     ...typography.button,

@@ -111,6 +111,16 @@ export type UpsertJobDraftInput = {
 export type JobSearchFilters = {
   text?: string;
   category?: string;
+  serviceNeeded?: string;
+  serviceNeededIn?: string[];
+  barangay?: string;
+  limit?: number;
+};
+
+export type ServiceSearchFilters = {
+  text?: string;
+  category?: string;
+  categories?: string[];
   barangay?: string;
   limit?: number;
 };

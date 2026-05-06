@@ -5,7 +5,8 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/Skeleton';
+import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } from '@/components/Skeleton';
+import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startJobConversation } from '@/services/conversation.service';
@@ -68,57 +69,7 @@ export default function JobDetailScreen() {
   };
 
   if (loading && !job) {
-    return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-        <View style={styles.screen}>
-          <View style={styles.header}>
-            <Skeleton height={28} width={28} borderRadius={14} />
-            <Skeleton height={20} width={112} />
-            <Skeleton height={28} width={28} borderRadius={14} />
-          </View>
-          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            <View style={styles.section}>
-              <View style={styles.jobTitleRow}>
-                <Skeleton height={22} width="68%" />
-                <Skeleton height={14} width={52} />
-              </View>
-              <Skeleton height={12} width={92} style={{ marginTop: space.sm }} />
-              <View style={styles.metaStack}>
-                <Skeleton height={14} width="70%" />
-                <Skeleton height={14} width="56%" />
-                <Skeleton height={14} width="42%" />
-              </View>
-            </View>
-            <View style={styles.section}>
-              <Skeleton height={16} width={124} />
-              <View style={styles.detailGrid}>
-                <Skeleton height={28} width={88} borderRadius={radius.pill} />
-                <Skeleton height={20} width={132} />
-              </View>
-            </View>
-            <View style={styles.section}>
-              <Skeleton height={16} width={116} />
-              <SkeletonText lines={4} lastLineWidth="64%" />
-            </View>
-            <View style={styles.section}>
-              <Skeleton height={16} width={76} />
-              <View style={styles.posterCard}>
-                <View style={styles.posterRow}>
-                  <View style={styles.posterInfo}>
-                    <SkeletonCircle size={44} />
-                    <View style={styles.posterCopy}>
-                      <Skeleton height={14} width="70%" />
-                      <Skeleton height={12} width="48%" />
-                    </View>
-                  </View>
-                  <Skeleton height={25} width={82} borderRadius={radius.pill} />
-                </View>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-      </SafeAreaView>
-    );
+    return <JobDetailSkeleton />;
   }
 
   if (!job) {
@@ -166,9 +117,14 @@ export default function JobDetailScreen() {
   const acceptedCount = job.acceptedProviderId ? 1 : 0;
   const jobImageUrl = job.photoUrls?.[0] ?? null;
   const location = getMarketplaceLocation(job);
+  const displayServiceNeeded = getDisplayLabelForMvpService(job.serviceNeeded) || job.serviceNeeded;
   const jobTags = Array.from(
     new Set(
-      [job.category, job.serviceNeeded, ...job.tags].filter(
+      [
+        job.category,
+        displayServiceNeeded,
+        ...job.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag),
+      ].filter(
         (tag): tag is string => Boolean(tag),
       ),
     ),
@@ -272,7 +228,7 @@ export default function JobDetailScreen() {
                 { label: 'Status', value: formatStatus(jobStatus) },
                 { label: 'Workers needed', value: String(workersNeeded) },
                 { label: 'Worker hired', value: acceptedCount ? 'Yes' : 'No worker hired yet' },
-                { label: 'Service', value: job.serviceNeeded || job.category || 'Service to coordinate' },
+                { label: 'Service', value: displayServiceNeeded || job.category || 'Service to coordinate' },
               ]}
             />
           </View>
@@ -353,6 +309,89 @@ export default function JobDetailScreen() {
               {messaging ? 'Opening...' : messageCta.label}
             </Text>
           </Pressable>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function JobDetailSkeleton() {
+  return (
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Skeleton height={28} width={28} borderRadius={14} />
+          <Skeleton height={20} width={112} />
+          <Skeleton height={28} width={28} borderRadius={14} />
+        </View>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} style={styles.scroll}>
+          <View style={styles.section}>
+            <View style={styles.jobTitleRow}>
+              <Skeleton height={22} width="68%" />
+              <StatusPill isLoading />
+            </View>
+            <Skeleton height={12} width={92} style={{ marginTop: space.sm }} />
+
+            <View style={styles.metaStack}>
+              <MetaRow icon="location-on" isLoading text="" />
+              <MetaRow icon="schedule" isLoading text="" />
+              <MetaRow icon="local-offer" isLoading text="" tint="primary" />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Skeleton height={16} width={124} />
+            <DetailGrid isLoading items={[]} />
+          </View>
+
+          <View style={styles.section}>
+            <Skeleton height={16} width={76} />
+            <SkeletonImage borderRadius={radius.lg} height={220} style={styles.detailPhoto} />
+          </View>
+
+          <View style={styles.section}>
+            <Skeleton height={16} width={116} />
+            <SkeletonText lastLineWidth="64%" lines={4} />
+          </View>
+
+          <View style={styles.section}>
+            <Skeleton height={16} width={86} />
+            <View style={styles.tagRow}>
+              <SkeletonChip height={30} width={88} />
+              <SkeletonChip height={30} width={104} />
+              <SkeletonChip height={30} width={78} />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Skeleton height={16} width={132} />
+            <SkeletonText lastLineWidth="72%" lineHeight={14} lines={2} />
+          </View>
+
+          <View style={styles.section}>
+            <Skeleton height={16} width={76} />
+            <View style={styles.posterCard}>
+              <View style={styles.posterRow}>
+                <View style={styles.posterInfo}>
+                  <SkeletonAvatar showPresence={false} size={44} />
+                  <View style={styles.posterCopy}>
+                    <Skeleton height={14} width="70%" />
+                    <Skeleton height={12} width="48%" />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.trustGrid}>
+                <TrustMetric icon="star-border" isLoading label="" tint="yellow" />
+                <TrustMetric icon="work" isLoading label="" />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.actionBar}>
+          <Skeleton height={12} width="92%" />
+          <SkeletonChip height={42} width="100%" />
         </View>
       </View>
     </SafeAreaView>
@@ -444,11 +483,22 @@ function MetaRow({
   icon,
   text,
   tint = 'subtle',
+  isLoading = false,
 }: {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
   text: string;
   tint?: 'subtle' | 'primary';
+  isLoading?: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <View style={styles.metaRow}>
+        <Skeleton height={12} width={16} borderRadius={8} />
+        <Skeleton height={14} width="56%" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.metaRow}>
       <MaterialIcons
@@ -469,7 +519,17 @@ function BadgePill({ label }: { label: string }) {
   );
 }
 
-function StatusPill({ status }: { status: JobDetail['status'] }) {
+function StatusPill({
+  status,
+  isLoading = false,
+}: {
+  status?: JobDetail['status'];
+  isLoading?: boolean;
+}) {
+  if (isLoading || !status) {
+    return <SkeletonChip height={24} width={64} />;
+  }
+
   return (
     <View style={styles.statusPill}>
       <Text style={styles.statusPillText}>{formatStatus(status)}</Text>
@@ -477,15 +537,28 @@ function StatusPill({ status }: { status: JobDetail['status'] }) {
   );
 }
 
-function DetailGrid({ items }: { items: { label: string; value: string }[] }) {
+function DetailGrid({
+  items,
+  isLoading = false,
+}: {
+  items: { label: string; value: string }[];
+  isLoading?: boolean;
+}) {
   return (
     <View style={styles.detailGrid}>
-      {items.map((item) => (
-        <View key={item.label} style={styles.detailGridItem}>
-          <Text style={styles.detailGridLabel}>{item.label}</Text>
-          <Text style={styles.detailGridValue}>{item.value}</Text>
-        </View>
-      ))}
+      {isLoading
+        ? Array.from({ length: 4 }).map((_, index) => (
+            <View key={index} style={styles.detailGridItem}>
+              <Skeleton height={12} width="44%" />
+              <Skeleton height={14} width="74%" />
+            </View>
+          ))
+        : items.map((item) => (
+            <View key={item.label} style={styles.detailGridItem}>
+              <Text style={styles.detailGridLabel}>{item.label}</Text>
+              <Text style={styles.detailGridValue}>{item.value}</Text>
+            </View>
+          ))}
     </View>
   );
 }
@@ -494,11 +567,21 @@ function TrustMetric({
   icon,
   label,
   tint = 'default',
+  isLoading = false,
 }: {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
   label: string;
   tint?: 'default' | 'yellow';
+  isLoading?: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <View style={styles.trustMetric}>
+        <Skeleton height={12} width="72%" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.trustMetric}>
       <MaterialIcons color={tint === 'yellow' ? color.brandYellow : color.textSubtle} name={icon} size={16} />

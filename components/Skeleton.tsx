@@ -78,6 +78,67 @@ export function SkeletonCircle({ size = 44, style }: { size?: number; style?: Vi
 }
 
 /**
+ * Skeleton for avatar slots with an optional presence dot.
+ */
+export function SkeletonAvatar({
+  size = 44,
+  dotSize = 10,
+  showPresence = true,
+  style,
+}: {
+  size?: number;
+  dotSize?: number;
+  showPresence?: boolean;
+  style?: ViewStyle;
+}) {
+  return (
+    <View style={[styles.avatarWrap, { height: size, width: size }, style]}>
+      <SkeletonCircle size={size} />
+      {showPresence ? (
+        <Skeleton
+          height={dotSize}
+          width={dotSize}
+          borderRadius={dotSize / 2}
+          style={styles.avatarDot}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Skeleton for pills, chips, and compact action buttons.
+ */
+export function SkeletonChip({
+  height = 27,
+  width = 72,
+  style,
+}: {
+  height?: number;
+  width?: ViewStyle['width'];
+  style?: ViewStyle;
+}) {
+  return <Skeleton height={height} width={width} borderRadius={height / 2} style={style} />;
+}
+
+/**
+ * Skeleton for image or media areas.
+ */
+export function SkeletonImage({
+  height = 220,
+  width = '100%',
+  borderRadius = radius.lg,
+  style,
+}: {
+  height?: number;
+  width?: ViewStyle['width'];
+  borderRadius?: number;
+  style?: ViewStyle;
+}) {
+  return <Skeleton height={height} width={width} borderRadius={borderRadius} style={style} />;
+}
+
+/**
  * Skeleton for text content.
  *
  * Renders multiple stacked lines that mimic paragraph text.
@@ -142,5 +203,13 @@ const styles = StyleSheet.create({
   cardContent: {
     alignItems: 'center',
     flexDirection: 'row',
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatarDot: {
+    bottom: 0,
+    position: 'absolute',
+    right: 0,
   },
 });

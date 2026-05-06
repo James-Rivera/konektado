@@ -222,6 +222,12 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
     query = query.ilike('category', `%${filters.category}%`);
   }
 
+  if (filters.serviceNeeded) {
+    query = query.eq('service_needed', filters.serviceNeeded);
+  } else if (filters.serviceNeededIn?.length) {
+    query = query.in('service_needed', filters.serviceNeededIn);
+  }
+
   if (filters.barangay) {
     query = query.ilike('barangay', `%${filters.barangay}%`);
   }

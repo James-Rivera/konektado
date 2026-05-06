@@ -3,15 +3,33 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { color, radius, space, typography } from '@/constants/theme';
-import type { PopularService } from '@/constants/search-demo-data';
+import type { DiscoveryGroupKey, MvpServiceOption } from '@/constants/service-taxonomy';
+
+type BrowseService = {
+  key: MvpServiceOption;
+  label: string;
+};
+
+type BrowseGroup = {
+  key: DiscoveryGroupKey;
+  label: string;
+};
 
 export function PopularServicesSection({
-  services,
+  collapsedServices,
+  groups,
+  selectedGroup,
   selectedService,
+  services,
+  onPressGroup,
   onPressService,
 }: {
-  services: PopularService[];
+  collapsedServices: BrowseService[];
+  groups: BrowseGroup[];
+  selectedGroup: DiscoveryGroupKey;
   selectedService?: string | null;
+  services: BrowseService[];
+  onPressGroup: (group: DiscoveryGroupKey) => void;
   onPressService: (serviceLabel: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(true);
@@ -23,9 +41,9 @@ export function PopularServicesSection({
         accessibilityState={{ expanded: !collapsed }}
         onPress={() => setCollapsed((value) => !value)}
         style={styles.headerRow}>
-        <Text style={styles.title}>Popular services</Text>
+        <Text style={styles.title}>Browse by category</Text>
         <MaterialIcons
-          color={color.verificationBlue}
+          color={color.primary}
           name={collapsed ? 'keyboard-arrow-down' : 'keyboard-arrow-up'}
           size={20}
         />
@@ -35,15 +53,15 @@ export function PopularServicesSection({
           contentContainerStyle={styles.chipRowSingleLine}
           horizontal
           showsHorizontalScrollIndicator={false}>
-          {services.map((service) => {
-            const selected = selectedService === service.label;
+          {collapsedServices.map((service) => {
+            const selected = selectedService === service.key;
 
             return (
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                key={service.id}
-                onPress={() => onPressService(service.label)}
+                key={service.key}
+                onPress={() => onPressService(service.key)}
                 style={({ pressed }) => [
                   styles.chip,
                   selected ? styles.chipSelected : styles.chipDefault,
@@ -57,16 +75,43 @@ export function PopularServicesSection({
           })}
         </ScrollView>
       ) : (
-        <View style={styles.chipRowWrap}>
+        <View style={styles.expandedSection}>
+          <ScrollView
+            contentContainerStyle={styles.chipRowSingleLine}
+            horizontal
+            showsHorizontalScrollIndicator={false}>
+            {groups.map((group) => {
+              const selected = selectedGroup === group.key;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={group.key}
+                  onPress={() => onPressGroup(group.key)}
+                  style={({ pressed }) => [
+                    styles.groupChip,
+                    selected ? styles.groupChipSelected : styles.groupChipDefault,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text style={[styles.groupChipText, selected && styles.groupChipTextSelected]}>
+                    {group.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.chipRowWrap}>
           {services.map((service) => {
-            const selected = selectedService === service.label;
+            const selected = selectedService === service.key;
 
             return (
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                key={service.id}
-                onPress={() => onPressService(service.label)}
+                key={service.key}
+                onPress={() => onPressService(service.key)}
                 style={({ pressed }) => [
                   styles.chip,
                   selected ? styles.chipSelected : styles.chipDefault,
@@ -78,6 +123,7 @@ export function PopularServicesSection({
               </Pressable>
             );
           })}
+          </View>
         </View>
       )}
     </View>
@@ -100,7 +146,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.sectionTitle,
-    color: '#050505',
+    color: color.text,
     fontSize: 14,
     lineHeight: 22,
   },
@@ -113,6 +159,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  expandedSection: {
+    gap: 12,
+  },
   chip: {
     alignItems: 'center',
     borderRadius: radius.pill,
@@ -124,11 +173,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipDefault: {
-    backgroundColor: color.background,
+    backgroundColor: color.surface,
     borderColor: color.border,
   },
   chipSelected: {
-    backgroundColor: color.cardTint,
+    backgroundColor: color.primarySoft,
     borderColor: color.primary,
   },
   chipText: {
@@ -137,6 +186,31 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+  },
+  groupChip: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 32,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  groupChipDefault: {
+    backgroundColor: color.primarySoft,
+    borderColor: color.border,
+  },
+  groupChipSelected: {
+    backgroundColor: color.primary,
+    borderColor: color.primary,
+  },
+  groupChipText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  groupChipTextSelected: {
+    color: color.white,
     fontFamily: 'Satoshi-Bold',
   },
   pressed: {

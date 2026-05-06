@@ -1,3 +1,5 @@
+import type { UserPreferences } from '@/types/onboarding.types';
+
 export const MVP_SERVICE_CATEGORIES = [
   'Home & Local Help',
   'Learning & Digital Help',
@@ -41,6 +43,73 @@ export const MVP_SERVICE_OPTIONS = MVP_SERVICE_CATEGORIES.flatMap(
 );
 
 export type MvpServiceOption = (typeof MVP_SERVICE_OPTIONS)[number];
+
+export type SearchWorkType = 'physical' | 'digital' | 'either';
+
+export const SEARCH_DISCOVERY_GROUPS = [
+  'Home & Local Help',
+  'Errands & Assistance',
+  'Learning & Tutoring',
+  'Digital & Document Help',
+  'Tech Setup Help',
+] as const;
+
+export type DiscoveryGroupKey = (typeof SEARCH_DISCOVERY_GROUPS)[number];
+
+export const SEARCH_DISCOVERY_SERVICES_BY_GROUP: Record<DiscoveryGroupKey, MvpServiceOption[]> = {
+  'Home & Local Help': [
+    'Cleaning',
+    'Laundry help',
+    'Home assistance',
+    'Basic home repair',
+    'Yard or outdoor help',
+  ],
+  'Errands & Assistance': ['Errands', 'Delivery help'],
+  'Learning & Tutoring': ['Tutoring', 'Basic computer lessons', 'School project guidance'],
+  'Digital & Document Help': [
+    'Encoding',
+    'Canva layout',
+    'Presentation design',
+    'Social media help',
+    'Document formatting',
+    'Resume or form assistance',
+  ],
+  'Tech Setup Help': [
+    'Computer setup',
+    'Phone setup',
+    'WiFi/router help',
+    'Printer setup',
+    'Basic troubleshooting',
+  ],
+};
+
+export const SEARCH_WORK_TYPE_BY_SERVICE: Record<MvpServiceOption, SearchWorkType> = {
+  Cleaning: 'physical',
+  'Laundry help': 'physical',
+  Errands: 'physical',
+  'Delivery help': 'physical',
+  'Home assistance': 'physical',
+  'Basic home repair': 'physical',
+  'Yard or outdoor help': 'physical',
+  Tutoring: 'either',
+  Encoding: 'digital',
+  'Canva layout': 'digital',
+  'Presentation design': 'digital',
+  'Social media help': 'digital',
+  'Basic computer lessons': 'either',
+  'School project guidance': 'either',
+  'Computer setup': 'either',
+  'Phone setup': 'either',
+  'WiFi/router help': 'either',
+  'Printer setup': 'either',
+  'Basic troubleshooting': 'either',
+  'Document formatting': 'digital',
+  'Resume or form assistance': 'digital',
+};
+
+export const SEARCH_SERVICE_DISPLAY_LABELS: Partial<Record<MvpServiceOption, string>> = {
+  'Basic home repair': 'Minor home fix help',
+};
 
 export const POPULAR_MVP_SERVICES = [
   'Cleaning',
@@ -115,6 +184,31 @@ export function isMvpServiceOption(value: string | null | undefined): value is M
   return MVP_SERVICE_OPTIONS.includes(value as MvpServiceOption);
 }
 
+export function isDiscoveryGroupKey(value: string | null | undefined): value is DiscoveryGroupKey {
+  return SEARCH_DISCOVERY_GROUPS.includes(value as DiscoveryGroupKey);
+}
+
+export function isSearchWorkType(value: string | null | undefined): value is SearchWorkType {
+  return value === 'physical' || value === 'digital' || value === 'either';
+}
+
+export function getStoredMvpServiceOption(value: string | null | undefined): MvpServiceOption | null {
+  if (isMvpServiceOption(value)) return value;
+
+  const entry = Object.entries(SEARCH_SERVICE_DISPLAY_LABELS).find(([, label]) => label === value);
+  return (entry?.[0] as MvpServiceOption | undefined) ?? null;
+}
+
+export function getDisplayLabelForMvpService(value: string | null | undefined) {
+  const storedValue = getStoredMvpServiceOption(value);
+  if (!storedValue) return value ?? '';
+  return SEARCH_SERVICE_DISPLAY_LABELS[storedValue] ?? storedValue;
+}
+
+export function getDisplayServiceLabels(values: Array<string | null | undefined>) {
+  return values.map((value) => getDisplayLabelForMvpService(value));
+}
+
 export function getServicesForMvpCategory(category: string | null | undefined) {
   return isMvpServiceCategory(category) ? MVP_SERVICES_BY_CATEGORY[category] : [];
 }
@@ -128,11 +222,164 @@ export function getTagsForMvpService(service: string | null | undefined) {
 }
 
 export function getCategoryForMvpService(service: string | null | undefined): MvpServiceCategory | null {
-  if (!isMvpServiceOption(service)) return null;
+  const storedService = getStoredMvpServiceOption(service);
+  if (!storedService) return null;
 
   return (
-    MVP_SERVICE_CATEGORIES.find((category) => MVP_SERVICES_BY_CATEGORY[category].includes(service)) ??
+    MVP_SERVICE_CATEGORIES.find((category) => MVP_SERVICES_BY_CATEGORY[category].includes(storedService)) ??
     null
   );
 }
 
+export function getDiscoveryGroupForService(service: string | null | undefined): DiscoveryGroupKey | null {
+  const storedService = getStoredMvpServiceOption(service);
+  if (!storedService) return null;
+
+  return (
+    SEARCH_DISCOVERY_GROUPS.find((group) =>
+      SEARCH_DISCOVERY_SERVICES_BY_GROUP[group].includes(storedService),
+    ) ?? null
+  );
+}
+
+export function getServicesForDiscoveryGroup(group: DiscoveryGroupKey | 'all') {
+  if (group === 'all') return [...MVP_SERVICE_OPTIONS];
+  return [...SEARCH_DISCOVERY_SERVICES_BY_GROUP[group]];
+}
+
+export function getWorkTypeForMvpService(service: string | null | undefined): SearchWorkType | null {
+  const storedService = getStoredMvpServiceOption(service);
+  return storedService ? SEARCH_WORK_TYPE_BY_SERVICE[storedService] : null;
+}
+
+export function doesServiceMatchWorkType(
+  service: string | null | undefined,
+  workType: SearchWorkType,
+) {
+  if (workType === 'either') return true;
+
+  const storedService = getStoredMvpServiceOption(service);
+  if (!storedService) return false;
+
+  const mappedType = SEARCH_WORK_TYPE_BY_SERVICE[storedService];
+  return mappedType === workType || mappedType === 'either';
+}
+
+export function getAllowedServicesForSearchWorkType(workType: SearchWorkType) {
+  if (workType === 'either') {
+    return [...MVP_SERVICE_OPTIONS];
+  }
+
+  return MVP_SERVICE_OPTIONS.filter((service) => doesServiceMatchWorkType(service, workType));
+}
+
+export function getDiscoveryGroupsForWorkType(
+  workType: SearchWorkType,
+  groups: readonly DiscoveryGroupKey[] = SEARCH_DISCOVERY_GROUPS,
+) {
+  if (workType === 'either') return [...groups];
+
+  return groups.filter((group) =>
+    SEARCH_DISCOVERY_SERVICES_BY_GROUP[group].some((service) =>
+      doesServiceMatchWorkType(service, workType),
+    ),
+  );
+}
+
+export function getServicesForDiscoveryGroupAndWorkType(
+  group: DiscoveryGroupKey | 'all',
+  workType: SearchWorkType,
+) {
+  return getServicesForDiscoveryGroup(group).filter((service) =>
+    doesServiceMatchWorkType(service, workType),
+  );
+}
+
+function getPreferenceServicesForMode({
+  mode,
+  preferences,
+}: {
+  mode: 'jobs' | 'workers';
+  preferences: UserPreferences | null;
+}) {
+  const structuredServices =
+    mode === 'jobs' ? preferences?.offeredServices ?? [] : preferences?.neededServices ?? [];
+
+  return structuredServices
+    .map((value) => getStoredMvpServiceOption(value))
+    .filter((value): value is MvpServiceOption => Boolean(value));
+}
+
+export function getDefaultSearchWorkTypeForMode({
+  mode,
+  preferences,
+}: {
+  mode: 'jobs' | 'workers';
+  preferences: UserPreferences | null;
+}) {
+  const services = getPreferenceServicesForMode({ mode, preferences });
+
+  if (!services.length) return 'physical' as const;
+
+  let physicalCount = 0;
+  let digitalCount = 0;
+  let eitherCount = 0;
+
+  for (const service of services) {
+    const workType = SEARCH_WORK_TYPE_BY_SERVICE[service];
+    if (workType === 'physical') physicalCount += 1;
+    if (workType === 'digital') digitalCount += 1;
+    if (workType === 'either') eitherCount += 1;
+  }
+
+  if (!physicalCount && !digitalCount && eitherCount) {
+    return 'either' as const;
+  }
+
+  if (digitalCount > physicalCount) {
+    return 'digital' as const;
+  }
+
+  if (physicalCount > digitalCount) {
+    return 'physical' as const;
+  }
+
+  if (eitherCount) {
+    return 'either' as const;
+  }
+
+  return 'physical' as const;
+}
+
+export function getOrderedDiscoveryGroupsForMode({
+  mode,
+  preferences,
+}: {
+  mode: 'jobs' | 'workers';
+  preferences: UserPreferences | null;
+}) {
+  const preferredServices = getPreferenceServicesForMode({ mode, preferences });
+  const fallbackOrder = new Map<DiscoveryGroupKey, number>(
+    SEARCH_DISCOVERY_GROUPS.map((group, index) => [group, index]),
+  );
+
+  if (!preferredServices.length) {
+    return [...SEARCH_DISCOVERY_GROUPS];
+  }
+
+  const groupScores = new Map<DiscoveryGroupKey, number>(
+    SEARCH_DISCOVERY_GROUPS.map((group) => [group, 0]),
+  );
+
+  preferredServices.forEach((service) => {
+    const group = getDiscoveryGroupForService(service);
+    if (!group) return;
+    groupScores.set(group, (groupScores.get(group) ?? 0) + 1);
+  });
+
+  return [...SEARCH_DISCOVERY_GROUPS].sort((left, right) => {
+    const scoreDiff = (groupScores.get(right) ?? 0) - (groupScores.get(left) ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return (fallbackOrder.get(left) ?? 0) - (fallbackOrder.get(right) ?? 0);
+  });
+}

@@ -18,7 +18,7 @@ export function SearchResultHeader({
         accessibilityRole="button"
         onPress={onFilterPress}
         style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-        <MaterialIcons color={color.verificationBlue} name="tune" size={22} />
+        <MaterialIcons color={color.primary} name="tune" size={22} />
       </Pressable>
     </View>
   );
@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.sectionTitle,
-    color: '#050505',
+    color: color.text,
     fontSize: 14,
     lineHeight: 18,
   },

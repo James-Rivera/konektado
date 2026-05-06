@@ -6,10 +6,14 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
+import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { PresenceDot } from '@/components/PresenceDot';
-import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
-import { getServiceTagsForCategory, POPULAR_SERVICE_POST_OPTIONS, SERVICE_POST_OPTIONS } from '@/constants/service-post-options';
+import {
+  getServiceTagsForCategory,
+  SERVICE_POST_CATEGORIES,
+  SERVICE_POST_OPTIONS_BY_CATEGORY,
+} from '@/constants/service-post-options';
 import { getCategoryForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -304,15 +308,15 @@ export default function CreateServiceScreen() {
         </ScrollView>
       </View>
 
-      <PostOptionPickerSheet
-        allOptions={[...SERVICE_POST_OPTIONS]}
+      <GroupedServicePickerSheet
+        categories={[...SERVICE_POST_CATEGORIES]}
         description="Pick the one service this listing will highlight"
         onClose={() => setServicePickerVisible(false)}
         onSelect={selectCategory}
-        popularLabel="Popular services"
-        popularOptions={[...POPULAR_SERVICE_POST_OPTIONS]}
         searchPlaceholder="Search services"
-        selectedValue={category}
+        selectedCategory={serviceGroup}
+        selectedService={category}
+        servicesByCategory={SERVICE_POST_OPTIONS_BY_CATEGORY}
         title="Choose service"
         visible={servicePickerVisible}
       />

@@ -1,24 +1,36 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { PopularServicesSection } from '@/components/search/PopularServicesSection';
+import {
+  SearchFiltersSheet,
+  type SearchDiscoveryFilters,
+} from '@/components/search/SearchFiltersSheet';
 import { SearchHeaderRow } from '@/components/search/SearchHeaderRow';
 import { SearchJobResultCard } from '@/components/search/SearchJobResultCard';
 import { SearchResultHeader } from '@/components/search/SearchResultHeader';
 import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
 import { SearchWorkerResultCard } from '@/components/search/SearchWorkerResultCard';
-import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
+import type { SearchJobItem, SearchMode, SearchWorkerItem } from '@/constants/search-demo-data';
 import {
-  getWorkerResultsHeading,
-  popularServices,
-  type SearchJobItem,
-  type SearchWorkerItem,
-  type SearchMode,
-} from '@/constants/search-demo-data';
+  SEARCH_DISCOVERY_GROUPS,
+  type DiscoveryGroupKey,
+  type MvpServiceOption,
+  type SearchWorkType,
+  doesServiceMatchWorkType,
+  getDefaultSearchWorkTypeForMode,
+  getDiscoveryGroupsForWorkType,
+  getDiscoveryGroupForService,
+  getDisplayLabelForMvpService,
+  getOrderedDiscoveryGroupsForMode,
+  getServicesForDiscoveryGroup,
+  getServicesForDiscoveryGroupAndWorkType,
+  getStoredMvpServiceOption,
+} from '@/constants/service-taxonomy';
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
@@ -36,8 +48,10 @@ import {
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { searchJobs as searchOpenJobs } from '@/services/job.service';
+import { getMyUserPreferences } from '@/services/onboarding.service';
 import { searchServices } from '@/services/service-profile.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
+import type { UserPreferences } from '@/types/onboarding.types';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -70,6 +84,26 @@ type SearchListRow =
   | { key: 'empty'; type: 'empty' }
   | { key: 'helper'; type: 'helper' };
 
+type RankingContext = {
+  filters: SearchDiscoveryFilters;
+  mode: SearchMode;
+  preferences: UserPreferences | null;
+  query: string;
+  userBarangay?: string | null;
+  userCity?: string | null;
+};
+
+const ALL_GROUP_OPTION = { key: 'all' as const, label: 'All groups' };
+const ALL_SERVICE_OPTION = { key: 'all' as const, label: 'All services' };
+const SEARCH_LIMIT = 40;
+const SEARCH_RESULT_GROUP_LABELS: Record<DiscoveryGroupKey, string> = {
+  'Home & Local Help': 'Home & Local Help',
+  'Errands & Assistance': 'Errands & Assistance',
+  'Learning & Tutoring': 'Learning & Tutoring',
+  'Digital & Document Help': 'Digital & Document Help',
+  'Tech Setup Help': 'Tech Setup Help',
+};
+
 export default function SearchScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -82,9 +116,11 @@ export default function SearchScreen() {
   const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
-  const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<SearchJobItem[]>([]);
-  const [workers, setWorkers] = useState<SearchWorkerItem[]>([]);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [browseGroup, setBrowseGroup] = useState<DiscoveryGroupKey>('Home & Local Help');
+  const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [workers, setWorkers] = useState<ServiceSearchResult[]>([]);
   const [loadedModes, setLoadedModes] = useState<Record<SearchMode, boolean>>({
     jobs: false,
     workers: false,
@@ -93,6 +129,12 @@ export default function SearchScreen() {
     jobs: false,
     workers: false,
   });
+  const [appliedFilters, setAppliedFilters] = useState<SearchDiscoveryFilters>(() =>
+    buildDefaultFilters('jobs', null),
+  );
+  const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(() =>
+    buildDefaultFilters('jobs', null),
+  );
   const searchRequestRef = useRef(0);
   const controlsTranslateY = useRef(new Animated.Value(0)).current;
   const controlsHeightRef = useRef(0);
@@ -100,10 +142,43 @@ export default function SearchScreen() {
   const lastScrollOffset = useRef(0);
   const [controlsHeight, setControlsHeight] = useState(0);
   const debouncedQuery = useDebouncedValue(query, 300);
-  const searchText = useMemo(
-    () => Array.from(new Set([debouncedQuery.trim(), selectedService?.trim()].filter(Boolean))).join(' '),
-    [debouncedQuery, selectedService],
+  const normalizedQuery = useMemo(() => normalizeSearchText(debouncedQuery.trim()), [debouncedQuery]);
+
+  const orderedGroups = useMemo(
+    () => getOrderedDiscoveryGroupsForMode({ mode, preferences }),
+    [mode, preferences],
   );
+
+  const browseGroupsForWorkType = useMemo(
+    () => getDiscoveryGroupsForWorkType(appliedFilters.workType, orderedGroups),
+    [appliedFilters.workType, orderedGroups],
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    getMyUserPreferences().then((result) => {
+      if (!active || result.error) return;
+      setPreferences(result.data);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextDefaultFilters = buildDefaultFilters(mode, preferences);
+    const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextDefaultFilters.workType, orderedGroups);
+    setAppliedFilters(nextDefaultFilters);
+    setDraftFilters(nextDefaultFilters);
+    setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
+  }, [mode, orderedGroups, preferences]);
+
+  useEffect(() => {
+    if (browseGroupsForWorkType.includes(browseGroup)) return;
+    setBrowseGroup(browseGroupsForWorkType[0] ?? orderedGroups[0] ?? 'Home & Local Help');
+  }, [browseGroup, browseGroupsForWorkType, orderedGroups]);
 
   useEffect(() => {
     let active = true;
@@ -116,23 +191,41 @@ export default function SearchScreen() {
       };
     }
 
+    const structuredServices = getStructuredServiceFilterValues(appliedFilters);
+    const barangayFilter =
+      appliedFilters.locationScope === 'same_barangay' ? profile?.barangay ?? undefined : undefined;
+
     setRefreshingModes((current) => ({ ...current, [mode]: true }));
 
     const searchPromise =
       mode === 'jobs'
-        ? searchOpenJobs({ text: searchText, limit: 30 }).then((result) => {
+        ? searchOpenJobs({
+            text: normalizedQuery,
+            serviceNeeded:
+              appliedFilters.service !== 'all' ? appliedFilters.service : undefined,
+            serviceNeededIn:
+              appliedFilters.service === 'all' && structuredServices.length !== getAllServiceCount()
+                ? structuredServices
+                : undefined,
+            barangay: barangayFilter,
+            limit: SEARCH_LIMIT,
+          }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
-
-            if (result.data) {
-              setJobs(result.data.map(mapJobToSearchItem));
-            }
+            if (result.data) setJobs(result.data);
           })
-        : searchServices({ text: searchText, limit: 30 }).then((result) => {
+        : searchServices({
+            text: normalizedQuery,
+            category:
+              appliedFilters.service !== 'all' ? appliedFilters.service : undefined,
+            categories:
+              appliedFilters.service === 'all' && structuredServices.length !== getAllServiceCount()
+                ? structuredServices
+                : undefined,
+            barangay: barangayFilter,
+            limit: SEARCH_LIMIT,
+          }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
-
-            if (result.data) {
-              setWorkers(result.data.map(mapServiceToSearchItem));
-            }
+            if (result.data) setWorkers(result.data);
           });
 
     searchPromise
@@ -146,19 +239,110 @@ export default function SearchScreen() {
     return () => {
       active = false;
     };
-  }, [isFocused, mode, searchText]);
+  }, [appliedFilters, isFocused, mode, normalizedQuery, profile?.barangay]);
 
-  const resultHeading =
-    mode === 'jobs' ? 'Showing jobs near you' : getWorkerResultsHeading(query, selectedService);
-  const activeResultCount = mode === 'jobs' ? jobs.length : workers.length;
+  const selectedService = appliedFilters.service === 'all' ? null : appliedFilters.service;
+
+  const visibleJobs = useMemo(() => {
+    const context: RankingContext = {
+      filters: appliedFilters,
+      mode,
+      preferences,
+      query: normalizedQuery,
+      userBarangay: profile?.barangay,
+      userCity: profile?.city,
+    };
+
+    return rankJobsForSearch(filterJobsForClient(jobs, context), context).map(mapJobToSearchItem);
+  }, [appliedFilters, jobs, mode, normalizedQuery, preferences, profile?.barangay, profile?.city]);
+
+  const visibleWorkers = useMemo(() => {
+    const context: RankingContext = {
+      filters: appliedFilters,
+      mode,
+      preferences,
+      query: normalizedQuery,
+      userBarangay: profile?.barangay,
+      userCity: profile?.city,
+    };
+
+    return rankWorkersForSearch(filterWorkersForClient(workers, context), context).map(
+      mapServiceToSearchItem,
+    );
+  }, [appliedFilters, mode, normalizedQuery, preferences, profile?.barangay, profile?.city, workers]);
+
+  const resultHeading = getSearchResultsHeading({
+    mode,
+    query,
+    selectedService,
+  });
+  const activeResultCount = mode === 'jobs' ? visibleJobs.length : visibleWorkers.length;
   const activeModeLoaded = loadedModes[mode];
   const activeModeRefreshing = refreshingModes[mode];
   const showInitialSkeleton = activeModeRefreshing && !activeModeLoaded && activeResultCount === 0;
   const showRefreshIndicator = activeModeRefreshing && activeModeLoaded && activeResultCount > 0;
 
-  const showPlaceholder = useCallback((label: string) => {
-    Alert.alert(label, 'This part of Search will be connected in a later slice.');
-  }, []);
+  const groupedBrowseServices = useMemo(() => {
+    const browseServices = getServicesForDiscoveryGroupAndWorkType(
+      browseGroup,
+      appliedFilters.workType,
+    );
+    return browseServices.map((service) => ({
+      key: service,
+      label: getDisplayLabelForMvpService(service),
+    }));
+  }, [appliedFilters.workType, browseGroup]);
+
+  const collapsedBrowseServices = useMemo(() => {
+    const primaryGroup = browseGroupsForWorkType[0] ?? orderedGroups[0] ?? 'Home & Local Help';
+    return getServicesForDiscoveryGroupAndWorkType(
+      primaryGroup,
+      appliedFilters.workType,
+    ).map((service) => ({
+      key: service,
+      label: getDisplayLabelForMvpService(service),
+    }));
+  }, [appliedFilters.workType, browseGroupsForWorkType, orderedGroups]);
+
+  const groupOptions = useMemo(
+    () =>
+      browseGroupsForWorkType.map((group) => ({
+        key: group,
+        label: SEARCH_RESULT_GROUP_LABELS[group],
+      })),
+    [browseGroupsForWorkType],
+  );
+
+  const sheetGroupsForWorkType = useMemo(
+    () => getDiscoveryGroupsForWorkType(draftFilters.workType, orderedGroups),
+    [draftFilters.workType, orderedGroups],
+  );
+
+  const sheetGroupOptions = useMemo(
+    () => [
+      ALL_GROUP_OPTION,
+      ...sheetGroupsForWorkType.map((group) => ({
+        key: group,
+        label: SEARCH_RESULT_GROUP_LABELS[group],
+      })),
+    ],
+    [sheetGroupsForWorkType],
+  );
+
+  const sheetServiceOptions = useMemo(() => {
+    const servicesForSheet = getServicesForDiscoveryGroupAndWorkType(
+      draftFilters.serviceGroup,
+      draftFilters.workType,
+    );
+
+    return [
+      ALL_SERVICE_OPTION,
+      ...servicesForSheet.map((service) => ({
+        key: service,
+        label: getDisplayLabelForMvpService(service),
+      })),
+    ];
+  }, [draftFilters.serviceGroup, draftFilters.workType]);
 
   const setControlsVisible = useCallback((visible: boolean) => {
     if (!controlsHeightRef.current) return;
@@ -214,18 +398,89 @@ export default function SearchScreen() {
     setMode(nextMode);
   }, [revealControlsAtTop]);
 
-  const handleChipPress = useCallback((serviceLabel: string) => {
-    const nextSelected = selectedService === serviceLabel ? null : serviceLabel;
+  const handleGroupPress = useCallback((group: DiscoveryGroupKey) => {
     revealControlsAtTop();
-    setSelectedService(nextSelected);
-    setQuery(nextSelected ?? '');
-  }, [revealControlsAtTop, selectedService]);
+    setBrowseGroup(group);
+  }, [revealControlsAtTop]);
+
+  const handleChipPress = useCallback((service: string) => {
+    const nextStoredService = getStoredMvpServiceOption(service);
+    const nextSelected = selectedService === nextStoredService ? null : nextStoredService;
+    const nextGroup = getDiscoveryGroupForService(nextStoredService) ?? browseGroup;
+
+    revealControlsAtTop();
+    setBrowseGroup(nextGroup);
+    setAppliedFilters((current) => ({
+      ...current,
+      serviceGroup: nextGroup,
+      service: nextSelected ?? 'all',
+    }));
+    setDraftFilters((current) => ({
+      ...current,
+      serviceGroup: nextGroup,
+      service: nextSelected ?? 'all',
+    }));
+    setQuery(nextSelected ? getDisplayLabelForMvpService(nextSelected) : '');
+  }, [browseGroup, revealControlsAtTop, selectedService]);
 
   const clearSearch = useCallback(() => {
+    const nextDefaults = buildDefaultFilters(mode, preferences);
+    const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextDefaults.workType, orderedGroups);
     revealControlsAtTop();
     setQuery('');
-    setSelectedService(null);
-  }, [revealControlsAtTop]);
+    setAppliedFilters(nextDefaults);
+    setDraftFilters(nextDefaults);
+    setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
+  }, [mode, orderedGroups, preferences, revealControlsAtTop]);
+
+  const handleOpenFilters = useCallback(() => {
+    setDraftFilters(appliedFilters);
+    setIsFilterSheetVisible(true);
+  }, [appliedFilters]);
+
+  const handleDraftFilterChange = useCallback(
+    <K extends keyof SearchDiscoveryFilters,>(key: K, value: SearchDiscoveryFilters[K]) => {
+      setDraftFilters((current) => {
+        const next = { ...current, [key]: value };
+
+        if (key === 'workType') {
+          return reconcileFiltersForWorkType(next, orderedGroups);
+        }
+
+        if (key === 'serviceGroup') {
+          next.service = 'all';
+        }
+
+        if (key === 'service' && value !== 'all') {
+          next.serviceGroup = getDiscoveryGroupForService(value) ?? current.serviceGroup;
+        }
+
+        return next;
+      });
+    },
+    [orderedGroups],
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setDraftFilters(buildDefaultFilters(mode, preferences));
+  }, [mode, preferences]);
+
+  const handleApplyFilters = useCallback(() => {
+    const nextFilters = reconcileFiltersForWorkType(draftFilters, orderedGroups);
+    const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextFilters.workType, orderedGroups);
+
+    setAppliedFilters(nextFilters);
+    if (nextFilters.service !== 'all') {
+      setQuery((current) => current || getDisplayLabelForMvpService(nextFilters.service));
+      setBrowseGroup(getDiscoveryGroupForService(nextFilters.service) ?? nextBrowseGroups[0] ?? browseGroup);
+    } else if (nextFilters.serviceGroup !== 'all') {
+      setBrowseGroup(nextFilters.serviceGroup);
+    } else {
+      setBrowseGroup(nextBrowseGroups[0] ?? browseGroup);
+    }
+    revealControlsAtTop();
+    setIsFilterSheetVisible(false);
+  }, [browseGroup, draftFilters, orderedGroups, revealControlsAtTop]);
 
   const openJob = useCallback((jobId: string) => {
     router.push({ pathname: '/job/[jobId]', params: { jobId } });
@@ -251,9 +506,15 @@ export default function SearchScreen() {
         { key: `${mode}-skeleton-2`, type: mode === 'jobs' ? 'jobSkeleton' : 'workerSkeleton' },
       );
     } else if (mode === 'jobs') {
-      rows.push(...jobs.map((job) => ({ key: `job-${job.id}`, type: 'job' as const, job })));
+      rows.push(...visibleJobs.map((job) => ({ key: `job-${job.id}`, type: 'job' as const, job })));
     } else {
-      rows.push(...workers.map((worker) => ({ key: `worker-${worker.id}`, type: 'worker' as const, worker })));
+      rows.push(
+        ...visibleWorkers.map((worker) => ({
+          key: `worker-${worker.id}`,
+          type: 'worker' as const,
+          worker,
+        })),
+      );
     }
 
     if (!activeResultCount && !showInitialSkeleton && !activeModeRefreshing) {
@@ -269,12 +530,12 @@ export default function SearchScreen() {
     activeModeRefreshing,
     activeResultCount,
     isVerified,
-    jobs,
     mode,
     showInitialSkeleton,
     showRefreshIndicator,
     verificationKnown,
-    workers,
+    visibleJobs,
+    visibleWorkers,
   ]);
 
   const keyExtractor = useCallback((item: SearchListRow) => item.key, []);
@@ -287,19 +548,35 @@ export default function SearchScreen() {
           <SearchSegmentedControl flush mode={mode} onChange={handleModeChange} />
         </View>
         <PopularServicesSection
+          collapsedServices={collapsedBrowseServices}
+          groups={groupOptions}
+          onPressGroup={handleGroupPress}
           onPressService={handleChipPress}
+          selectedGroup={browseGroup}
           selectedService={selectedService}
-          services={popularServices}
+          services={groupedBrowseServices}
         />
       </>
     ),
-    [handleChipPress, handleModeChange, mode, query, selectedService, topInset],
+    [
+      browseGroup,
+      collapsedBrowseServices,
+      groupOptions,
+      groupedBrowseServices,
+      handleChipPress,
+      handleGroupPress,
+      handleModeChange,
+      mode,
+      query,
+      selectedService,
+      topInset,
+    ],
   );
 
   const renderSearchRow = useCallback(
     ({ index, item }: { index: number; item: SearchListRow }) => {
       if (item.type === 'resultHeader') {
-        return <SearchResultHeader title={resultHeading} onFilterPress={() => showPlaceholder('Filters')} />;
+        return <SearchResultHeader title={resultHeading} onFilterPress={handleOpenFilters} />;
       }
 
       const rowStyle = [styles.resultRow, index === 1 && styles.firstResultRow];
@@ -315,7 +592,7 @@ export default function SearchScreen() {
       if (item.type === 'jobSkeleton') {
         return (
           <View style={rowStyle}>
-            <SearchJobResultSkeleton />
+            <SearchJobResultSkeleton loadingLocationInline={index % 2 === 1} />
           </View>
         );
       }
@@ -323,7 +600,7 @@ export default function SearchScreen() {
       if (item.type === 'workerSkeleton') {
         return (
           <View style={rowStyle}>
-            <SearchWorkerResultSkeleton />
+            <SearchWorkerResultSkeleton loadingLocationInline={index % 2 === 1} />
           </View>
         );
       }
@@ -331,10 +608,7 @@ export default function SearchScreen() {
       if (item.type === 'job') {
         return (
           <View style={rowStyle}>
-            <SearchJobResultCard
-              job={item.job}
-              onOpenJob={() => openJob(item.job.id)}
-            />
+            <SearchJobResultCard job={item.job} onOpenJob={() => openJob(item.job.id)} />
           </View>
         );
       }
@@ -372,13 +646,7 @@ export default function SearchScreen() {
         </View>
       );
     },
-    [
-      clearSearch,
-      openJob,
-      openService,
-      resultHeading,
-      showPlaceholder,
-    ],
+    [clearSearch, handleOpenFilters, openJob, openService, resultHeading],
   );
 
   return (
@@ -399,39 +667,336 @@ export default function SearchScreen() {
           renderItem={renderSearchRow}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[0]}
+        />
+
+        <SearchFiltersSheet
+          filters={draftFilters}
+          groups={sheetGroupOptions}
+          onApply={handleApplyFilters}
+          onChange={handleDraftFilterChange}
+          onClose={() => setIsFilterSheetVisible(false)}
+          onReset={handleResetFilters}
+          services={sheetServiceOptions}
+          visible={isFilterSheetVisible}
         />
       </SafeAreaView>
     </View>
   );
 }
 
+function buildDefaultFilters(mode: SearchMode, preferences: UserPreferences | null): SearchDiscoveryFilters {
+  const workType = getDefaultSearchWorkTypeForMode({ mode, preferences });
+  const orderedGroups = getOrderedDiscoveryGroupsForMode({ mode, preferences });
+  const defaultGroup = getDiscoveryGroupsForWorkType(workType, orderedGroups)[0] ?? 'all';
+
+  return {
+    workType,
+    serviceGroup: defaultGroup,
+    service: 'all',
+    locationScope: 'nearby',
+    sort: 'relevant',
+  };
+}
+
+function reconcileFiltersForWorkType(
+  filters: SearchDiscoveryFilters,
+  orderedGroups: readonly DiscoveryGroupKey[],
+): SearchDiscoveryFilters {
+  const validGroups = getDiscoveryGroupsForWorkType(filters.workType, orderedGroups);
+  const service =
+    filters.service !== 'all' && doesServiceMatchWorkType(filters.service, filters.workType)
+      ? filters.service
+      : 'all';
+  const serviceGroup =
+    filters.serviceGroup !== 'all' && validGroups.includes(filters.serviceGroup)
+      ? filters.serviceGroup
+      : 'all';
+
+  return {
+    ...filters,
+    service,
+    serviceGroup: service !== 'all' ? getDiscoveryGroupForService(service) ?? serviceGroup : serviceGroup,
+  };
+}
+
+function getStructuredServiceFilterValues(filters: SearchDiscoveryFilters) {
+  if (filters.service !== 'all') {
+    return doesServiceMatchWorkType(filters.service, filters.workType) ? [filters.service] : [];
+  }
+
+  return getServicesForDiscoveryGroupAndWorkType(filters.serviceGroup, filters.workType);
+}
+
+function getServicesForAllGroups() {
+  return SEARCH_DISCOVERY_GROUPS.flatMap((group) => getServicesForDiscoveryGroup(group));
+}
+
+function getAllServiceCount() {
+  return getServicesForAllGroups().length;
+}
+
+function getSearchResultsHeading({
+  mode,
+  query,
+  selectedService,
+}: {
+  mode: SearchMode;
+  query: string;
+  selectedService: MvpServiceOption | null;
+}) {
+  const subject = selectedService
+    ? getDisplayLabelForMvpService(selectedService)
+    : query.trim();
+
+  if (subject) {
+    return `Showing ${subject.toLowerCase()} ${mode === 'jobs' ? 'jobs' : 'workers'} near you`;
+  }
+
+  return mode === 'jobs' ? 'Showing jobs near you' : 'Showing workers near you';
+}
+
+function normalizeSearchText(value: string) {
+  const storedService = getStoredMvpServiceOption(value);
+  return storedService ?? value;
+}
+
+function filterJobsForClient(items: JobSummary[], context: RankingContext) {
+  return items.filter((job) => {
+    if (!matchesWorkType(job.serviceNeeded, context.filters.workType)) return false;
+    if (!matchesGroup(job.serviceNeeded, context.filters.serviceGroup)) return false;
+    if (
+      context.filters.locationScope === 'same_barangay' &&
+      context.userBarangay &&
+      normalizeLocationValue(job.barangay) !== normalizeLocationValue(context.userBarangay)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function filterWorkersForClient(items: ServiceSearchResult[], context: RankingContext) {
+  return items.filter((service) => {
+    if (!matchesWorkType(service.category, context.filters.workType)) return false;
+    if (!matchesGroup(service.category, context.filters.serviceGroup)) return false;
+    if (
+      context.filters.locationScope === 'same_barangay' &&
+      context.userBarangay &&
+      normalizeLocationValue(service.barangay ?? service.provider?.barangay) !==
+        normalizeLocationValue(context.userBarangay)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function rankJobsForSearch(items: JobSummary[], context: RankingContext) {
+  if (context.filters.sort === 'newest') return items;
+
+  return [...items].sort((left, right) => {
+    const leftScore =
+      context.filters.sort === 'nearby'
+        ? scoreLocation(left.barangay, left.locationText, context) * 100 + scoreJobRelevance(left, context)
+        : scoreJobRelevance(left, context);
+    const rightScore =
+      context.filters.sort === 'nearby'
+        ? scoreLocation(right.barangay, right.locationText, context) * 100 + scoreJobRelevance(right, context)
+        : scoreJobRelevance(right, context);
+
+    if (rightScore !== leftScore) return rightScore - leftScore;
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
+}
+
+function rankWorkersForSearch(items: ServiceSearchResult[], context: RankingContext) {
+  if (context.filters.sort === 'newest') return items;
+
+  return [...items].sort((left, right) => {
+    const leftScore =
+      context.filters.sort === 'nearby'
+        ? scoreLocation(left.barangay ?? left.provider?.barangay, left.locationText, context) * 100 +
+          scoreWorkerRelevance(left, context)
+        : scoreWorkerRelevance(left, context);
+    const rightScore =
+      context.filters.sort === 'nearby'
+        ? scoreLocation(right.barangay ?? right.provider?.barangay, right.locationText, context) * 100 +
+          scoreWorkerRelevance(right, context)
+        : scoreWorkerRelevance(right, context);
+
+    if (rightScore !== leftScore) return rightScore - leftScore;
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
+}
+
+function scoreJobRelevance(job: JobSummary, context: RankingContext) {
+  const serviceNeeded = job.serviceNeeded ?? job.category;
+  const exactServiceMatch =
+    context.filters.service !== 'all' && serviceNeeded === context.filters.service ? 40 : 0;
+  const groupMatch =
+    context.filters.serviceGroup !== 'all' &&
+    getDiscoveryGroupForService(serviceNeeded) === context.filters.serviceGroup
+      ? 16
+      : 0;
+  const preferenceMatch = scorePreferenceMatch(serviceNeeded, context);
+  const workTypeMatch = matchesWorkType(serviceNeeded, context.filters.workType) ? 12 : 0;
+  const locationMatch = scoreLocation(job.barangay, job.locationText, context) * 20;
+  const freshness = scoreFreshness(job.createdAt, 7) * 12;
+  const queryMatch = scoreQueryMatch([job.title, job.description, job.category, job.serviceNeeded, ...job.tags], context.query);
+  const trustMatch =
+    Math.min(job.clientReviewCount, 3) * 2 +
+    Math.min(job.clientJobsPostedCount, 3) +
+    (job.clientAverageRating && job.clientAverageRating >= 4.5 ? 2 : 0);
+
+  return exactServiceMatch + groupMatch + preferenceMatch + workTypeMatch + locationMatch + freshness + queryMatch + trustMatch;
+}
+
+function scoreWorkerRelevance(service: ServiceSearchResult, context: RankingContext) {
+  const category = service.category;
+  const exactServiceMatch =
+    context.filters.service !== 'all' && category === context.filters.service ? 40 : 0;
+  const groupMatch =
+    context.filters.serviceGroup !== 'all' &&
+    getDiscoveryGroupForService(category) === context.filters.serviceGroup
+      ? 16
+      : 0;
+  const preferenceMatch = scorePreferenceMatch(category, context);
+  const workTypeMatch = matchesWorkType(category, context.filters.workType) ? 12 : 0;
+  const locationMatch = scoreLocation(service.barangay ?? service.provider?.barangay, service.locationText, context) * 20;
+  const freshness = scoreFreshness(service.createdAt, 14) * 8;
+  const queryMatch = scoreQueryMatch(
+    [service.title, service.description, service.category, service.locationText, ...service.tags],
+    context.query,
+  );
+  const trustMatch =
+    Math.min(service.reviewCount, 3) * 2 +
+    Math.min(service.completedJobsCount, 3) * 2 +
+    (service.averageRating && service.averageRating >= 4.5 ? 3 : 0);
+
+  return exactServiceMatch + groupMatch + preferenceMatch + workTypeMatch + locationMatch + freshness + queryMatch + trustMatch;
+}
+
+function scorePreferenceMatch(service: string | null | undefined, context: RankingContext) {
+  const structuredPreferences =
+    context.mode === 'jobs'
+      ? context.preferences?.offeredServices ?? []
+      : context.preferences?.neededServices ?? [];
+  const customPreferences =
+    context.mode === 'jobs'
+      ? context.preferences?.customOfferedServices ?? []
+      : context.preferences?.customNeededServices ?? [];
+  const storedService = getStoredMvpServiceOption(service);
+  if (!storedService) return 0;
+
+  if (structuredPreferences.includes(storedService)) return 24;
+  if (
+    structuredPreferences.some(
+      (preference) =>
+        getDiscoveryGroupForService(preference) && getDiscoveryGroupForService(preference) === getDiscoveryGroupForService(storedService),
+    )
+  ) {
+    return 12;
+  }
+
+  const normalizedService = normalizeText(service);
+  return customPreferences.some((preference) => normalizedService.includes(normalizeText(preference))) ? 6 : 0;
+}
+
+function scoreQueryMatch(values: (string | null | undefined)[], query: string) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return 0;
+
+  const haystack = normalizeText(values.filter(Boolean).join(' '));
+  if (!haystack) return 0;
+  if (haystack.includes(normalizedQuery)) return 18;
+
+  const queryWords = normalizedQuery.split(' ').filter((word) => word.length >= 4);
+  return queryWords.some((word) => haystack.includes(word)) ? 8 : 0;
+}
+
+function scoreLocation(
+  barangay: string | null | undefined,
+  locationText: string | null | undefined,
+  context: RankingContext,
+) {
+  const normalizedUserBarangay = normalizeLocationValue(context.userBarangay);
+  const normalizedUserCity = normalizeLocationValue(context.userCity);
+  const normalizedBarangay = normalizeLocationValue(barangay);
+  const normalizedLocation = normalizeLocationValue(locationText);
+
+  if (normalizedUserBarangay && normalizedBarangay === normalizedUserBarangay) return 1;
+  if (normalizedUserBarangay && normalizedLocation.includes(normalizedUserBarangay)) return 0.8;
+  if (normalizedUserCity && normalizedLocation.includes(normalizedUserCity)) return 0.45;
+  return 0;
+}
+
+function scoreFreshness(createdAt: string, windowDays: number) {
+  const createdTime = new Date(createdAt).getTime();
+  if (Number.isNaN(createdTime)) return 0;
+  const ageDays = Math.max(0, (Date.now() - createdTime) / (24 * 60 * 60 * 1000));
+  return Math.max(0, 1 - Math.min(1, ageDays / windowDays));
+}
+
+function matchesWorkType(service: string | null | undefined, workType: SearchWorkType) {
+  return doesServiceMatchWorkType(service, workType);
+}
+
+function matchesGroup(service: string | null | undefined, group: 'all' | DiscoveryGroupKey) {
+  if (group === 'all') return true;
+  return getDiscoveryGroupForService(service) === group;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function normalizeLocationValue(value: string | null | undefined) {
+  return normalizeText(value)
+    .replace(/\bbarangay\b/g, '')
+    .replace(/\bbrgy\b/g, '')
+    .replace(/\bsto\b/g, 'santo')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function mapJobToSearchItem(job: JobSummary): SearchJobItem {
   const category = job.category || 'Job';
   const location = getMarketplaceLocation(job);
+  const displayService = getDisplayLabelForMvpService(job.serviceNeeded);
+  const displayCategory = displayService || category;
 
   return {
     id: job.id,
     postedAt: formatRelativeMarketplaceDate(job.createdAt),
     title: formatJobPostTitle({
       title: job.title,
-      serviceNeeded: job.serviceNeeded,
-      category: job.category,
+      serviceNeeded: displayService || job.serviceNeeded,
+      category: displayCategory,
       cue: job.serviceNeeded ? 'needHelpWith' : 'lookingFor',
     }),
     subtitle: formatJobSubtitle(job),
     description: job.description || 'No description provided yet.',
-    tags: Array.from(new Set([category, ...job.tags, 'Open job'].filter(Boolean))),
+    tags: Array.from(
+      new Set(
+        [displayCategory, ...job.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag), 'Open job'].filter(Boolean),
+      ),
+    ),
     clientRatingText: formatClientRatingText(job),
     jobsPostedText: formatClientJobsPostedText(job),
     location,
-    matchReason: `Open ${category.toLowerCase()} job near ${location}.`,
+    matchReason: `Open ${displayCategory.toLowerCase()} job near ${location}.`,
   };
 }
 
 function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem {
-  const category = service.category || 'Service';
+  const category = getDisplayLabelForMvpService(service.category) || service.category || 'Service';
   const location = getMarketplaceLocation(service);
+  const headlineTitle =
+    service.category === 'Basic home repair' && service.title === 'Basic home repair help'
+      ? 'Minor home fix support'
+      : service.title;
 
   return {
     id: service.id,
@@ -440,16 +1005,20 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
     statusLine: formatWorkerAvailability(service.availabilityText),
     rateLine: service.rateText || 'Rate to coordinate',
     headline: formatServicePostTitle({
-      title: service.title,
-      category: service.category,
+      title: headlineTitle,
+      category,
       cue: service.isActive ? 'availableFor' : 'offers',
     }),
-    tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
+    tags: Array.from(
+      new Set([category, ...service.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag)].filter(Boolean)),
+    ),
     ratingText: formatServiceRatingText(service),
     jobsDoneText: formatServiceJobsDoneText(service, service.completedJobsCount),
     location,
     matchReason: `Offers ${category.toLowerCase()} help near ${location}.`,
-    isActive: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
+    isActive: isPresenceActive(
+      service.isActive && (service.availabilityText || service.provider?.availability || true),
+    ),
   };
 }
 
@@ -471,73 +1040,30 @@ function formatWorkerAvailability(value: string | null) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const withPrefix = /^available\b/i.test(shortened) ? shortened : `Available ${shortened.charAt(0).toLowerCase()}${shortened.slice(1)}`;
+  const withPrefix = /^available\b/i.test(shortened)
+    ? shortened
+    : `Available ${shortened.charAt(0).toLowerCase()}${shortened.slice(1)}`;
 
-  return withPrefix.length <= 40 ? withPrefix : shortened.length <= 40 ? shortened : `${shortened.slice(0, 37).trim()}...`;
+  return withPrefix.length <= 40
+    ? withPrefix
+    : shortened.length <= 40
+      ? shortened
+      : `${shortened.slice(0, 37).trim()}...`;
 }
 
-function SearchJobResultSkeleton() {
+function SearchJobResultSkeleton({ loadingLocationInline }: { loadingLocationInline: boolean }) {
   return (
-    <View style={styles.skeletonCard}>
-      <Skeleton height={12} width="24%" />
-      <View style={styles.skeletonHeader}>
-        <View style={styles.skeletonCopy}>
-          <Skeleton height={16} width="72%" />
-          <Skeleton height={12} width="58%" />
-        </View>
-        <View style={styles.skeletonIconRow}>
-          <Skeleton height={20} width={20} borderRadius={10} />
-          <Skeleton height={20} width={20} borderRadius={10} />
-        </View>
-      </View>
-      <View style={styles.skeletonMetaRow}>
-        <Skeleton height={12} width={72} />
-        <Skeleton height={12} width={80} />
-        <Skeleton height={12} width={96} />
-      </View>
-      <Skeleton height={14} width="92%" />
-      <Skeleton height={12} width="74%" />
-      <View style={styles.skeletonTagRow}>
-        <Skeleton height={27} width={70} borderRadius={13} />
-        <Skeleton height={27} width={84} borderRadius={13} />
-        <Skeleton height={27} width={62} borderRadius={13} />
-      </View>
-      <Skeleton height={34} width="100%" borderRadius={999} />
-    </View>
+    <SearchJobResultCard isLoading loadingLocationInline={loadingLocationInline} showSaveAction={false} />
   );
 }
 
-function SearchWorkerResultSkeleton() {
+function SearchWorkerResultSkeleton({ loadingLocationInline }: { loadingLocationInline: boolean }) {
   return (
-    <View style={styles.skeletonCard}>
-      <View style={styles.skeletonHeader}>
-        <View style={styles.workerSkeletonIdentity}>
-          <SkeletonCircle size={44} />
-          <View style={styles.skeletonCopy}>
-            <Skeleton height={16} width="56%" />
-            <Skeleton height={12} width="76%" />
-          </View>
-        </View>
-        <View style={styles.skeletonIconRow}>
-          <Skeleton height={20} width={20} borderRadius={10} />
-          <Skeleton height={20} width={20} borderRadius={10} />
-        </View>
-      </View>
-      <Skeleton height={16} width="88%" />
-      <Skeleton height={12} width="46%" />
-      <View style={styles.skeletonMetaRow}>
-        <Skeleton height={12} width={72} />
-        <Skeleton height={12} width={82} />
-        <Skeleton height={12} width={94} />
-      </View>
-      <Skeleton height={12} width="70%" />
-      <View style={styles.skeletonTagRow}>
-        <Skeleton height={27} width={76} borderRadius={13} />
-        <Skeleton height={27} width={90} borderRadius={13} />
-        <Skeleton height={27} width={68} borderRadius={13} />
-      </View>
-      <Skeleton height={34} width="100%" borderRadius={999} />
-    </View>
+    <SearchWorkerResultCard
+      isLoading
+      loadingLocationInline={loadingLocationInline}
+      showSaveAction={false}
+    />
   );
 }
 
@@ -574,41 +1100,6 @@ const styles = StyleSheet.create({
   },
   firstResultRow: {
     paddingTop: 12,
-  },
-  skeletonCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-    padding: 16,
-  },
-  skeletonHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  workerSkeletonIdentity: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  skeletonCopy: {
-    flex: 1,
-    gap: 6,
-  },
-  skeletonIconRow: {
-    flexDirection: 'row',
-    gap: 9,
-  },
-  skeletonMetaRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  skeletonTagRow: {
-    flexDirection: 'row',
-    gap: 8,
   },
   emptyCard: {
     backgroundColor: color.background,

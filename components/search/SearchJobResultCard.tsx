@@ -1,6 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Skeleton, SkeletonChip } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import type { SearchJobItem } from '@/constants/search-demo-data';
 
@@ -8,11 +9,75 @@ export function SearchJobResultCard({
   job,
   onOpenJob,
   onSave,
+  isLoading = false,
+  showSaveAction,
+  loadingLocationInline = true,
 }: {
-  job: SearchJobItem;
-  onOpenJob: () => void;
+  job?: SearchJobItem;
+  onOpenJob?: () => void;
   onSave?: () => void;
+  isLoading?: boolean;
+  showSaveAction?: boolean;
+  loadingLocationInline?: boolean;
 }) {
+  if (isLoading) {
+    const showLoadingSave = showSaveAction ?? Boolean(onSave);
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.topBlock}>
+          <Skeleton height={12} width="24%" />
+          <View style={styles.headerRow}>
+            <View style={styles.titleWrap}>
+              <Skeleton height={16} width="72%" />
+              <Skeleton height={12} width="58%" />
+            </View>
+            <View style={styles.iconRow}>
+              <Skeleton height={20} width={20} borderRadius={10} />
+              {showLoadingSave ? <Skeleton height={20} width={20} borderRadius={10} /> : null}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.metaBlock}>
+          <View style={[styles.metaRow, loadingLocationInline && styles.metaRowInline]}>
+            <View style={[styles.metaItem, loadingLocationInline && styles.metaItemCompact]}>
+              <Skeleton height={12} width={72} />
+            </View>
+            <View style={[styles.metaItem, loadingLocationInline && styles.metaItemCompact]}>
+              <Skeleton height={12} width={80} />
+            </View>
+            {loadingLocationInline ? (
+              <View style={[styles.metaItem, styles.metaItemCompact, styles.metaItemLocation]}>
+                <Skeleton height={12} width="100%" />
+              </View>
+            ) : null}
+          </View>
+          {!loadingLocationInline ? (
+            <View style={[styles.metaItem, styles.metaItemFull]}>
+              <Skeleton height={12} width="52%" />
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.bodyBlock}>
+          <Skeleton height={14} width="92%" />
+          <Skeleton height={12} width="74%" />
+        </View>
+
+        <View style={styles.tagRow}>
+          <SkeletonChip height={27} width={70} />
+          <SkeletonChip height={27} width={84} />
+          <SkeletonChip height={27} width={62} />
+        </View>
+
+        <SkeletonChip height={34} style={styles.loadingButton} width="100%" />
+      </View>
+    );
+  }
+
+  if (!job || !onOpenJob) return null;
+
   const showLocationInline = canShowLocationInline(job.clientRatingText, job.jobsPostedText, job.location);
 
   return (
@@ -254,6 +319,9 @@ const styles = StyleSheet.create({
     minHeight: 34,
     paddingHorizontal: 18,
     paddingVertical: 8,
+  },
+  loadingButton: {
+    borderRadius: radius.pill,
   },
   primaryButtonText: {
     ...typography.button,

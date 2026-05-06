@@ -11,6 +11,7 @@ import type {
   CreateServiceInput,
   ProviderService,
   PublicProfileSummary,
+  ServiceSearchFilters,
   ServiceDetail,
   ServiceSearchResult,
 } from '@/types/marketplace.types';
@@ -162,7 +163,7 @@ export async function listMyServices(): Promise<ServiceResult<ProviderService[]>
   return { data: ((data as ServiceRow[] | null) ?? []).map(mapService), error: null };
 }
 
-export async function searchServices(filters: { text?: string; limit?: number } = {}): Promise<
+export async function searchServices(filters: ServiceSearchFilters = {}): Promise<
   ServiceResult<ServiceSearchResult[]>
 > {
   const text = compactText(filters.text).toLowerCase();
@@ -172,6 +173,16 @@ export async function searchServices(filters: { text?: string; limit?: number } 
     .select(SERVICE_COLUMNS)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
+
+  if (filters.category) {
+    query = query.eq('category', filters.category);
+  } else if (filters.categories?.length) {
+    query = query.in('category', filters.categories);
+  }
+
+  if (filters.barangay) {
+    query = query.ilike('barangay', `%${filters.barangay}%`);
+  }
 
   if (text) {
     const escapedText = escapePostgrestFilterValue(text);

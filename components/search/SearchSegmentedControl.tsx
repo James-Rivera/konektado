@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   segmentSelected: {
-    backgroundColor: color.verificationBlue,
+    backgroundColor: color.primary,
   },
   segmentText: {
     ...typography.captionMedium,

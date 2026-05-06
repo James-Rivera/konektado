@@ -40,7 +40,7 @@ export function SearchHeaderRow({
           style={styles.input}
           value={value}
         />
-        <MaterialIcons color={color.verificationBlue} name="search" size={24} />
+        <MaterialIcons color={color.primary} name="search" size={24} />
       </View>
     </View>
   );

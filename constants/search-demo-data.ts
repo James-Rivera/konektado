@@ -1,5 +1,3 @@
-import { POPULAR_MVP_SERVICES } from '@/constants/service-taxonomy';
-
 export const searchModeLabels = {
   jobs: 'Find Jobs',
   workers: 'Find Workers',
@@ -39,11 +37,6 @@ export type SearchWorkerItem = {
   matchReason: string;
   isActive?: boolean;
 };
-
-export const popularServices: PopularService[] = POPULAR_MVP_SERVICES.map((label) => ({
-  id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-  label,
-}));
 
 function normalizeValue(value: string) {
   return value.trim().toLowerCase();

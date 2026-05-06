@@ -46,6 +46,10 @@ type ProfileContextValue = {
 const PROFILE_FALLBACK_POLL_MS = 30000;
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
+type LoadOptions = {
+  showLoading?: boolean;
+};
+
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -59,7 +63,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const pendingLoadRef = useRef(false);
   const loadPromiseRef = useRef<Promise<void> | null>(null);
 
-  const load = useCallback(async () => {
+  const loadInternal = useCallback(async ({ showLoading = false }: LoadOptions = {}) => {
     if (inFlightRef.current) {
       pendingLoadRef.current = true;
       await loadPromiseRef.current;
@@ -68,7 +72,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     inFlightRef.current = true;
 
     const loadPromise = (async () => {
-      if (!hasLoadedOnceRef.current) {
+      if (showLoading || !hasLoadedOnceRef.current) {
         setLoading(true);
       }
       setError(null);
@@ -151,22 +155,32 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     await loadPromise;
   }, []);
 
+  const refresh = useCallback(async () => {
+    await loadInternal();
+  }, [loadInternal]);
+
   useEffect(() => {
     activeRef.current = true;
-    void load();
+    void loadInternal({ showLoading: true });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
-      void load();
+    const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+      const shouldShowLoading =
+        event === 'INITIAL_SESSION' ||
+        event === 'SIGNED_IN' ||
+        event === 'SIGNED_OUT' ||
+        event === 'USER_UPDATED';
+
+      void loadInternal({ showLoading: shouldShowLoading });
     });
 
     const appStateSubscription = AppState.addEventListener('change', (status) => {
       if (status === 'active') {
-        void load();
+        void refresh();
       }
     });
 
     const pollTimer = setInterval(() => {
-      void load();
+      void refresh();
     }, PROFILE_FALLBACK_POLL_MS);
 
     return () => {
@@ -175,7 +189,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       appStateSubscription.remove();
       clearInterval(pollTimer);
     };
-  }, [load]);
+  }, [loadInternal, refresh]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -191,7 +205,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           filter: `id=eq.${user.id}`,
         },
         () => {
-          void load();
+          void refresh();
         },
       )
       .on(
@@ -203,7 +217,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          void load();
+          void refresh();
         },
       )
       .subscribe();
@@ -211,7 +225,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [load, user?.id]);
+  }, [refresh, user?.id]);
 
   const value = useMemo(
     () => ({
@@ -219,11 +233,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       error,
       loading,
       profile,
-      refresh: load,
+      refresh,
       user,
       version,
     }),
-    [authenticated, error, load, loading, profile, user, version],
+    [authenticated, error, loading, profile, refresh, user, version],
   );
 
   return createElement(ProfileContext.Provider, { value }, children);

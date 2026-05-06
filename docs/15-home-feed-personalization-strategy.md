@@ -510,6 +510,19 @@ That preserves "mixed discovery" without forcing low-value cards into the top of
 - Improve barangay matching
 - Replace forced alternation with mode-aware mixing
 
+Implementation status: completed in `services/home-feed.service.ts`.
+
+Notes:
+
+- `app/(tabs)/index.tsx` now keeps loading, tab state, rendering, and navigation in the screen while delegating ranking and `For you` assembly to the service.
+- Feed mode resolution follows Phase 1 scope: `profiles.active_role` first, then `user_preferences.intent`, then `mixed`.
+- Provider-mode job ranking uses `offered_services` and `custom_offered_services`.
+- Client-mode worker/service ranking uses `needed_services` and `custom_needed_services`.
+- Exact taxonomy matches are scored before same-category and custom text fallback matches.
+- Location ranking uses existing profile barangay/city plus job/service/provider barangay and location text.
+- Mode-aware feed assembly uses provider-first, client-first, or balanced mixing without forcing low-relevance opposite-type cards into the top of the feed.
+- No schema changes, AI/ML, onboarding changes, Profile preference editor, or `intent = both` TypeScript expansion were added in this phase.
+
 ### Phase 2: Preference state cleanup
 
 - Load `user_preferences` through shared app state

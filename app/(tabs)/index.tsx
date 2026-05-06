@@ -12,8 +12,9 @@ import {
     HomeTopHeader,
 } from '@/components/home/HomeDashboardUI';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
-import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
+import { Skeleton } from '@/components/Skeleton';
 import { homeFilters, type HomeFilter } from '@/constants/demo-data';
+import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
@@ -34,139 +35,36 @@ import { searchJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
 import { searchServices } from '@/services/service-profile.service';
 import { getMyVerificationPrefill } from '@/services/verification.service';
+import {
+  buildHomeForYouFeed,
+  getDefaultHomeFilter,
+  rankHomeFeedJobs,
+  rankHomeFeedWorkers,
+} from '@/services/home-feed.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
 
-type HomeFeedItem =
-  | {
-      key: string;
-      type: 'worker';
-      itemId: string;
-      cardProps: HomeFeedCardProps;
-      createdAt: string;
-      scoreText: string;
-    }
-  | {
-      key: string;
-      type: 'job';
-      itemId: string;
-      cardProps: HomeFeedCardProps;
-      createdAt: string;
-      scoreText: string;
-    };
+type HomeJobFeedItem = {
+  key: string;
+  type: 'job';
+  itemId: string;
+  cardProps: HomeFeedCardProps;
+  createdAt: string;
+  job: JobSummary;
+};
+
+type HomeWorkerFeedItem = {
+  key: string;
+  type: 'worker';
+  itemId: string;
+  cardProps: HomeFeedCardProps;
+  createdAt: string;
+  service: ServiceSearchResult;
+};
+
+type HomeFeedItem = HomeJobFeedItem | HomeWorkerFeedItem;
 
 const HOME_FEED_LIMIT = 30;
-
-function getDefaultFilter(preferences: UserPreferences | null): HomeFilter {
-  if (preferences?.intent === 'provider') return 'Jobs';
-  if (preferences?.intent === 'client') return 'Workers';
-  return 'For you';
-}
-
-function normalizeSearchText(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-function getPreferenceTerms(preferences: UserPreferences | null) {
-  if (!preferences) return [];
-
-  return Array.from(
-    new Set(
-      [
-        ...preferences.offeredServices,
-        ...preferences.customOfferedServices,
-        ...preferences.neededServices,
-        ...preferences.customNeededServices,
-      ]
-        .map(normalizeSearchText)
-        .filter(Boolean),
-    ),
-  );
-}
-
-function getFreshnessScore(createdAt: string) {
-  const createdTime = new Date(createdAt).getTime();
-  if (Number.isNaN(createdTime)) return 0;
-
-  const ageHours = Math.max(0, (Date.now() - createdTime) / 3600000);
-  return Math.max(0, 3 - Math.min(3, ageHours / 24));
-}
-
-function scoreFeedItem(
-  item: HomeFeedItem,
-  preferences: UserPreferences | null,
-  terms = getPreferenceTerms(preferences),
-) {
-  const haystack = normalizeSearchText(item.scoreText);
-  const intentBoost =
-    preferences?.intent === 'provider'
-      ? item.type === 'job'
-        ? 4
-        : 1
-      : preferences?.intent === 'client'
-        ? item.type === 'worker'
-          ? 4
-          : 1
-        : 2;
-
-  const matchScore = terms.reduce((score, term) => {
-    if (haystack.includes(term)) return score + 8;
-
-    const words = term.split(' ').filter((word) => word.length >= 4);
-    return score + words.filter((word) => haystack.includes(word)).length * 3;
-  }, 0);
-
-  const localScore = haystack.includes('barangay san pedro') || haystack.includes('near your barangay') ? 2 : 0;
-
-  return intentBoost + matchScore + localScore + getFreshnessScore(item.createdAt);
-}
-
-function sortByFeedScore(items: HomeFeedItem[], preferences: UserPreferences | null) {
-  const terms = getPreferenceTerms(preferences);
-  return items
-    .map((item) => ({
-      item,
-      score: scoreFeedItem(item, preferences, terms),
-      createdTime: new Date(item.createdAt).getTime(),
-    }))
-    .sort((left, right) => {
-      const scoreDiff = right.score - left.score;
-      if (scoreDiff !== 0) return scoreDiff;
-      return right.createdTime - left.createdTime;
-    })
-    .map(({ item }) => item);
-}
-
-function getOptionalScore(item: HomeFeedItem | undefined, preferences: UserPreferences | null) {
-  return item ? scoreFeedItem(item, preferences) : Number.NEGATIVE_INFINITY;
-}
-
-function buildForYouFeed(
-  jobs: HomeFeedItem[],
-  workers: HomeFeedItem[],
-  preferences: UserPreferences | null,
-) {
-  const jobQueue = sortByFeedScore(jobs, preferences);
-  const workerQueue = sortByFeedScore(workers, preferences);
-  const mixed: HomeFeedItem[] = [];
-  let nextType: HomeFeedItem['type'] =
-    getOptionalScore(workerQueue[0], preferences) > getOptionalScore(jobQueue[0], preferences)
-      ? 'worker'
-      : 'job';
-
-  while (jobQueue.length || workerQueue.length) {
-    const preferredQueue = nextType === 'job' ? jobQueue : workerQueue;
-    const fallbackQueue = nextType === 'job' ? workerQueue : jobQueue;
-    const nextItem = preferredQueue.shift() ?? fallbackQueue.shift();
-
-    if (!nextItem) break;
-
-    mixed.push(nextItem);
-    nextType = nextItem.type === 'job' ? 'worker' : 'job';
-  }
-
-  return mixed;
-}
 
 function formatBudgetText(amount: number | null) {
   if (!amount) return 'Budget to coordinate';
@@ -176,8 +74,10 @@ function formatBudgetText(amount: number | null) {
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
   const category = compactText(job.category) || 'Job';
   const serviceNeeded = compactText(job.serviceNeeded);
+  const displayServiceNeeded = compactText(getDisplayLabelForMvpService(job.serviceNeeded));
   const schedule = compactText(job.scheduleText) || 'Schedule to coordinate';
   const posterName = compactText(job.client?.fullName) || 'Konektado resident';
+  const displayCategory = displayServiceNeeded || category;
 
   return {
     kind: 'job',
@@ -187,8 +87,8 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
     detailLine: `${formatBudgetText(job.budgetAmount)} - ${schedule}`,
     title: formatJobPostTitle({
       title: job.title,
-      serviceNeeded: job.serviceNeeded,
-      category: job.category,
+      serviceNeeded: displayServiceNeeded || job.serviceNeeded,
+      category: displayCategory,
       cue: serviceNeeded ? 'needHelpWith' : 'lookingFor',
     }),
     description: job.description || 'No description provided yet.',
@@ -197,7 +97,11 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
       { icon: 'work', text: formatClientJobsPostedText(job) },
       { icon: 'location-on', text: getMarketplaceLocation(job) },
     ],
-    tags: Array.from(new Set([category, serviceNeeded, ...job.tags].filter(Boolean))),
+    tags: Array.from(
+      new Set(
+        [displayCategory, displayServiceNeeded, ...job.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag)].filter(Boolean),
+      ),
+    ),
     primaryActionLabel: 'View Job',
     avatarUrl: job.client?.avatarUrl,
     imageUrl: job.photoUrls[0],
@@ -206,8 +110,11 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
 }
 
 function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardProps {
-  const category = compactText(service.category) || 'Service';
-  const serviceTitle = compactText(service.title) || category;
+  const category = compactText(getDisplayLabelForMvpService(service.category)) || compactText(service.category) || 'Service';
+  const serviceTitle =
+    service.category === 'Basic home repair' && compactText(service.title) === 'Basic home repair help'
+      ? 'Minor home fix support'
+      : compactText(service.title) || category;
   const providerName = compactText(service.provider?.fullName) || 'Konektado resident';
   const availability = compactText(service.availabilityText) || 'Available to coordinate';
 
@@ -231,7 +138,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
       { icon: 'check-circle', text: formatServiceJobsDoneText(service, service.completedJobsCount) },
       { icon: 'location-on', text: getMarketplaceLocation(service) },
     ],
-    tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
+    tags: Array.from(new Set([category, ...service.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag)].filter(Boolean))),
     primaryActionLabel: 'View Profile',
     avatarUrl: getPublicProfileAvatarUrl(service.provider),
     imageUrl: service.photoUrls[0],
@@ -246,7 +153,7 @@ export default function HomeScreen() {
   const topInset = useSafeTopInset();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [feedSources, setFeedSources] = useState<{ jobs: HomeFeedItem[]; workers: HomeFeedItem[] }>({
+  const [feedSources, setFeedSources] = useState<{ jobs: HomeJobFeedItem[]; workers: HomeWorkerFeedItem[] }>({
     jobs: [],
     workers: [],
   });
@@ -271,13 +178,18 @@ export default function HomeScreen() {
     getMyUserPreferences().then((result) => {
       if (!active || result.error) return;
       setPreferences(result.data);
-      setSelectedFilter(getDefaultFilter(result.data));
+      setSelectedFilter(
+        getDefaultHomeFilter({
+          activeRole: profile?.active_role,
+          preferences: result.data,
+        }),
+      );
     });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [profile?.active_role]);
 
   useEffect(() => {
     let active = true;
@@ -336,18 +248,7 @@ export default function HomeScreen() {
           itemId: job.id,
           cardProps: mapJobToHomeFeedCard(job),
           createdAt: job.createdAt,
-          scoreText: [
-            job.title,
-            job.description,
-            job.category,
-            job.serviceNeeded,
-            job.scheduleText,
-            job.locationText,
-            job.barangay,
-            ...job.tags,
-          ]
-            .filter(Boolean)
-            .join(' '),
+          job,
         })) ?? [];
 
       const workers =
@@ -357,19 +258,7 @@ export default function HomeScreen() {
           itemId: service.id,
           cardProps: mapServiceToHomeFeedCard(service),
           createdAt: service.createdAt,
-          scoreText: [
-            service.title,
-            service.description,
-            service.category,
-            service.availabilityText,
-            service.rateText,
-            service.locationText,
-            service.barangay,
-            service.provider?.availability,
-            ...service.tags,
-          ]
-            .filter(Boolean)
-            .join(' '),
+          service,
         })) ?? [];
 
       setFeedSources({ jobs, workers });
@@ -383,15 +272,27 @@ export default function HomeScreen() {
   }, [feedLoaded, isFocused]);
 
   const feedVariants = useMemo(() => {
-    const jobs = sortByFeedScore(feedSources.jobs, preferences);
-    const workers = sortByFeedScore(feedSources.workers, preferences);
+    const rankingContext = {
+      activeRole: profile?.active_role,
+      city: profile?.city,
+      preferences,
+      userBarangay: profile?.barangay,
+    };
+    const jobCandidates = feedSources.jobs.map((item) => ({ item, job: item.job }));
+    const workerCandidates = feedSources.workers.map((item) => ({ item, service: item.service }));
+    const jobs = rankHomeFeedJobs(jobCandidates, rankingContext);
+    const workers = rankHomeFeedWorkers(workerCandidates, rankingContext);
 
     return {
       Jobs: jobs,
       Workers: workers,
-      'For you': buildForYouFeed(jobs, workers, preferences),
+      'For you': buildHomeForYouFeed({
+        context: rankingContext,
+        jobs: jobCandidates,
+        workers: workerCandidates,
+      }),
     };
-  }, [feedSources, preferences]);
+  }, [feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
 
@@ -496,9 +397,9 @@ export default function HomeScreen() {
       <>
         {feedLoading ? (
           <View style={styles.skeletonFeed}>
-            <HomeFeedCardSkeleton />
-            <HomeFeedCardSkeleton />
-            {selectedFilter === 'For you' ? <HomeFeedCardSkeleton /> : null}
+            <HomeFeedCardSkeleton kind={selectedFilter === 'Workers' ? 'worker' : 'job'} loadingImage />
+            <HomeFeedCardSkeleton kind={selectedFilter === 'Workers' ? 'worker' : 'job'} />
+            {selectedFilter === 'For you' ? <HomeFeedCardSkeleton kind="worker" loadingImage /> : null}
           </View>
         ) : null}
         {!feedLoading && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
@@ -592,34 +493,27 @@ function VerificationBannerSkeleton() {
   );
 }
 
-function HomeFeedCardSkeleton() {
+function HomeFeedCardSkeleton({
+  kind,
+  loadingImage = false,
+}: {
+  kind: HomeFeedCardProps['kind'];
+  loadingImage?: boolean;
+}) {
   return (
-    <View style={styles.skeletonCard}>
-      <View style={styles.feedSkeletonHeader}>
-        <View style={styles.feedSkeletonIdentity}>
-          <SkeletonCircle size={44} />
-          <View style={styles.feedSkeletonCopy}>
-            <Skeleton height={16} width="58%" />
-            <Skeleton height={12} width="76%" />
-          </View>
-        </View>
-        <Skeleton height={28} width={28} borderRadius={14} />
-      </View>
-      <Skeleton height={12} width="54%" />
-      <Skeleton height={18} width="88%" />
-      <Skeleton height={38} width="94%" />
-      <Skeleton height={222} width="100%" borderRadius={16} />
-      <View style={styles.skeletonTagRow}>
-        <Skeleton height={27} width={76} borderRadius={13} />
-        <Skeleton height={27} width={84} borderRadius={13} />
-        <Skeleton height={27} width={68} borderRadius={13} />
-      </View>
-      <View style={styles.skeletonMetaRow}>
-        <Skeleton height={12} width={76} />
-        <Skeleton height={12} width={84} />
-        <Skeleton height={12} width={96} />
-      </View>
-    </View>
+    <HomeFeedCard
+      description=""
+      isLoading
+      kind={kind}
+      label=""
+      loadingImage={loadingImage}
+      meta={[]}
+      name=""
+      postedAt=""
+      primaryActionLabel={kind === 'worker' ? 'View Profile' : 'View Job'}
+      tags={[]}
+      title=""
+    />
   );
 }
 
@@ -671,34 +565,6 @@ const styles = StyleSheet.create({
   bannerSkeletonCopy: {
     flex: 1,
     gap: 8,
-  },
-  skeletonCard: {
-    backgroundColor: color.background,
-    gap: 18,
-    padding: 16,
-  },
-  feedSkeletonHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  feedSkeletonIdentity: {
-    alignItems: 'center',
-    flex: 1,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  feedSkeletonCopy: {
-    flex: 1,
-    gap: 6,
-  },
-  skeletonTagRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  skeletonMetaRow: {
-    flexDirection: 'row',
-    gap: 12,
   },
   emptyText: {
     ...typography.body,

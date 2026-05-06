@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PresenceDot } from '@/components/PresenceDot';
+import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 
 type FeedMetaItem = {
@@ -27,6 +28,11 @@ export type HomeFeedCardProps = {
   onPress?: () => void;
   onPrimaryAction?: () => void;
   onSave?: () => void;
+  isLoading?: boolean;
+  loadingImage?: boolean;
+  loadingTagCount?: number;
+  loadingMetaCount?: number;
+  showSaveAction?: boolean;
 };
 
 export function HomeFeedCard({
@@ -46,9 +52,74 @@ export function HomeFeedCard({
   onPress,
   onPrimaryAction,
   onSave,
+  isLoading = false,
+  loadingImage = Boolean(imageUrl),
+  loadingTagCount,
+  loadingMetaCount,
+  showSaveAction,
 }: HomeFeedCardProps) {
   const visibleTags = tags.slice(0, 3);
   const overflowTagCount = Math.max(0, tags.length - visibleTags.length);
+  const visibleLoadingTags = loadingTagCount ?? Math.max(1, Math.min(3, tags.length || 3));
+  const visibleLoadingMeta = loadingMetaCount ?? Math.max(1, Math.min(3, meta.length || 3));
+
+  if (isLoading) {
+    return (
+      <View style={styles.card}>
+        <View style={styles.headerRow}>
+          <View style={styles.identityRow}>
+            <SkeletonAvatar dotSize={11} size={44} />
+            <View style={styles.identityCopy}>
+              <Skeleton height={16} width="58%" />
+              <View style={styles.contextRow}>
+                <Skeleton height={12} width="38%" />
+                <Skeleton height={6} width={6} borderRadius={3} />
+                <Skeleton height={12} width="26%" />
+              </View>
+            </View>
+          </View>
+          {showSaveAction ?? Boolean(onSave) ? (
+            <Skeleton height={28} width={28} borderRadius={14} />
+          ) : null}
+        </View>
+
+        <View style={styles.bodyBlock}>
+          <Skeleton height={12} width="54%" />
+          <Skeleton height={kind === 'job' ? 18 : 16} width={kind === 'job' ? '88%' : '82%'} />
+          <Skeleton height={38} width={kind === 'job' ? '94%' : '78%'} />
+        </View>
+
+        {loadingImage ? <SkeletonImage borderRadius={radius.lg} height={222} style={styles.photo} /> : null}
+
+        {visibleLoadingTags > 0 ? (
+          <View style={styles.tagRail}>
+            <View style={styles.tagRow}>
+              {Array.from({ length: visibleLoadingTags }).map((_, index) => (
+                <SkeletonChip
+                  height={27}
+                  key={index}
+                  width={index === 0 ? 76 : index === 1 ? 84 : 68}
+                />
+              ))}
+            </View>
+            <Skeleton height={20} width={20} borderRadius={10} />
+          </View>
+        ) : (
+          <View style={styles.chevronOnly}>
+            <Skeleton height={20} width={20} borderRadius={10} />
+          </View>
+        )}
+
+        <View style={styles.metaRow}>
+          {Array.from({ length: visibleLoadingMeta }).map((_, index) => (
+            <View key={index} style={styles.metaItem}>
+              <Skeleton height={12} width={index === 0 ? 76 : index === 1 ? 84 : 96} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <Pressable

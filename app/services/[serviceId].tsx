@@ -6,7 +6,8 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/Skeleton';
+import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } from '@/components/Skeleton';
+import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startServiceConversation } from '@/services/conversation.service';
@@ -93,7 +94,7 @@ export default function ServiceDetailScreen() {
     setMessaging(true);
     startServiceConversation({
       serviceId: detail.id,
-      message: `Hi, I am interested in your ${detail.category.toLowerCase()} service. Are you available?`,
+      message: `Hi, I am interested in your ${(getDisplayLabelForMvpService(detail.category) || detail.category).toLowerCase()} service. Are you available?`,
     }).then((result) => {
       setMessaging(false);
 
@@ -116,7 +117,7 @@ export default function ServiceDetailScreen() {
   };
 
   if (loading) {
-    return <WorkerDetailSkeleton />;
+    return <WorkerDetailSkeleton bottomInset={insets.bottom} variant={variant} />;
   }
 
   if (!detail) {
@@ -140,9 +141,20 @@ export default function ServiceDetailScreen() {
 
   const providerName = detail.provider?.fullName || 'Konektado resident';
   const location = getMarketplaceLocation(detail);
-  const serviceTags = Array.from(new Set([detail.category, ...detail.tags].filter(Boolean)));
+  const displayCategory = getDisplayLabelForMvpService(detail.category) || detail.category;
+  const selectedServiceTitle =
+    detail.category === 'Basic home repair' && detail.title === 'Basic home repair help'
+      ? 'Minor home fix support'
+      : detail.title || displayCategory;
+  const serviceTags = Array.from(
+    new Set([displayCategory, ...detail.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag)].filter(Boolean)),
+  );
   const serviceLabels = Array.from(
-    new Set(detail.providerServices.map((service) => service.category || service.title).filter(Boolean)),
+    new Set(
+      detail.providerServices
+        .map((service) => getDisplayLabelForMvpService(service.category) || service.category || service.title)
+        .filter(Boolean),
+    ),
   );
   const ratingText = formatServiceRatingText(detail);
   const jobsDoneText = formatServiceJobsDoneText(detail, detail.completedJobsCount);
@@ -173,13 +185,13 @@ export default function ServiceDetailScreen() {
             location={location}
             name={providerName}
             ratingText={ratingText}
-            serviceTitle={detail.title || detail.category}
+            serviceTitle={selectedServiceTitle}
           />
 
           {variant === 'match' ? (
             <SectionBand style={styles.matchSection}>
               <MatchNoticeCard
-                body={`Matches your search for ${detail.category.toLowerCase()} help near ${location}.`}
+                body={`Matches your search for ${displayCategory.toLowerCase()} help near ${location}.`}
                 title="Why this worker fits"
               />
             </SectionBand>
@@ -188,7 +200,7 @@ export default function ServiceDetailScreen() {
           <SectionBand style={styles.skillsSection}>
             <Text style={styles.sectionTitle}>Selected service</Text>
             <View style={styles.serviceRateRow}>
-              <Text style={styles.selectedServiceTitle}>{detail.title || detail.category}</Text>
+              <Text style={styles.selectedServiceTitle}>{selectedServiceTitle}</Text>
               <View style={styles.servicesWrap}>
                 {serviceLabels.map((serviceLabel) => (
                   <View key={serviceLabel} style={styles.servicePill}>
@@ -229,7 +241,7 @@ export default function ServiceDetailScreen() {
 
           <SectionBand style={styles.aboutSection}>
             <Text style={styles.sectionTitle}>About this service</Text>
-            <Text style={styles.bodyText}>{detail.description || detail.title}</Text>
+            <Text style={styles.bodyText}>{detail.description || selectedServiceTitle}</Text>
           </SectionBand>
 
           {serviceTags.length ? (
@@ -284,41 +296,123 @@ export default function ServiceDetailScreen() {
   );
 }
 
-function WorkerDetailSkeleton() {
+function WorkerDetailSkeleton({
+  bottomInset,
+  variant,
+}: {
+  bottomInset: number;
+  variant: DetailVariant;
+}) {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <View style={styles.header}>
-          <Skeleton height={24} width={24} borderRadius={12} />
-          <Skeleton height={20} width={120} />
-          <Skeleton height={24} width={24} borderRadius={12} />
-        </View>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <SectionBand style={styles.workerInfoSection}>
-            <View style={styles.heroRow}>
-              <SkeletonCircle size={44} />
-              <View style={styles.heroCopy}>
-                <Skeleton height={16} width="60%" />
-                <Skeleton height={12} width="46%" />
-              </View>
-              <Skeleton height={28} width={110} borderRadius={radius.pill} />
-            </View>
-          </SectionBand>
+        <DetailHeader isLoading onBack={() => undefined} onMore={() => undefined} />
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: 24 + Math.max(bottomInset, 12) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          style={styles.scroll}>
+          <WorkerProfileHero
+            availabilityText=""
+            isLoading
+            jobsDoneText=""
+            location=""
+            name=""
+            ratingText=""
+            serviceTitle=""
+          />
+          {variant === 'match' ? (
+            <SectionBand style={styles.matchSection}>
+              <MatchNoticeCard body="" isLoading title="" />
+            </SectionBand>
+          ) : null}
           <SectionBand style={styles.skillsSection}>
             <Skeleton height={16} width={120} />
-            <SkeletonText lines={3} />
+            <View style={styles.serviceRateRow}>
+              <Skeleton height={20} width="58%" />
+              <View style={styles.servicesWrap}>
+                <SkeletonChip height={28} width={92} />
+                <SkeletonChip height={28} width={104} />
+              </View>
+              <SkeletonChip height={32} width={148} />
+            </View>
           </SectionBand>
           <SectionBand style={styles.detailsSection}>
             <Skeleton height={16} width={110} />
-            <SkeletonText lines={4} />
+            <WorkerMetricGrid isLoading metrics={[]} />
+          </SectionBand>
+          <SectionBand style={styles.photoSection}>
+            <Skeleton height={16} width={92} />
+            <SkeletonImage borderRadius={radius.lg} height={220} style={styles.detailPhoto} />
+          </SectionBand>
+          <SectionBand style={styles.aboutSection}>
+            <Skeleton height={16} width={132} />
+            <SkeletonText lastLineWidth="68%" lines={4} />
+          </SectionBand>
+          <SectionBand style={styles.tagsSection}>
+            <Skeleton height={16} width={98} />
+            <View style={styles.tagRow}>
+              <SkeletonChip height={32} width={92} />
+              <SkeletonChip height={32} width={110} />
+              <SkeletonChip height={32} width={84} />
+            </View>
+          </SectionBand>
+          <SectionBand style={styles.historySection}>
+            <Skeleton height={16} width={76} />
+            <View style={styles.reviewCard}>
+              <Skeleton height={16} width="62%" />
+              <Skeleton height={12} width="78%" />
+            </View>
+          </SectionBand>
+          <SectionBand style={styles.historySection}>
+            <Skeleton height={16} width={188} />
+            <View style={styles.serviceList}>
+              {Array.from({ length: 2 }).map((_, index) => (
+                <View key={index} style={styles.servicePreviewCard}>
+                  <Skeleton height={16} width="64%" />
+                  <SkeletonText lastLineWidth="72%" lineHeight={12} lines={2} />
+                  <View style={styles.servicePreviewMeta}>
+                    <SkeletonChip height={32} width={92} />
+                    <SkeletonChip height={32} width={112} />
+                  </View>
+                </View>
+              ))}
+            </View>
           </SectionBand>
         </ScrollView>
+        <DetailActionRow
+          bottomInset={bottomInset}
+          cta={{ disabled: false, helper: null, label: 'Message worker', reason: 'available' }}
+          isLoading
+          messaging={false}
+          onMessage={() => undefined}
+        />
       </View>
     </SafeAreaView>
   );
 }
 
-function DetailHeader({ onBack, onMore }: { onBack: () => void; onMore: () => void }) {
+function DetailHeader({
+  onBack,
+  onMore,
+  isLoading = false,
+}: {
+  onBack: () => void;
+  onMore: () => void;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <View style={styles.header}>
+        <Skeleton height={24} width={24} borderRadius={12} />
+        <Skeleton height={20} width={120} />
+        <Skeleton height={24} width={24} borderRadius={12} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.header}>
       <Pressable
@@ -347,6 +441,7 @@ function WorkerProfileHero({
   location,
   ratingText,
   serviceTitle,
+  isLoading = false,
 }: {
   availabilityText: string;
   jobsDoneText: string;
@@ -354,7 +449,39 @@ function WorkerProfileHero({
   location: string;
   ratingText: string;
   serviceTitle: string;
+  isLoading?: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <SectionBand style={styles.workerInfoSection}>
+        <View style={styles.heroRow}>
+          <SkeletonAvatar dotSize={10} size={56} />
+
+          <View style={styles.heroCopy}>
+            <Skeleton height={18} width="54%" />
+            <Skeleton height={16} width="72%" />
+            <View style={styles.heroLocationRow}>
+              <Skeleton height={12} width={14} borderRadius={7} />
+              <Skeleton height={12} width="42%" />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.heroMetrics}>
+          <View style={styles.heroMetric}>
+            <Skeleton height={12} width="82%" />
+          </View>
+          <View style={styles.heroMetric}>
+            <Skeleton height={12} width="76%" />
+          </View>
+          <View style={styles.heroMetric}>
+            <Skeleton height={12} width="88%" />
+          </View>
+        </View>
+      </SectionBand>
+    );
+  }
+
   return (
     <SectionBand style={styles.workerInfoSection}>
       <View style={styles.heroRow}>
@@ -402,7 +529,24 @@ function HeroMetric({
   );
 }
 
-function MatchNoticeCard({ title, body }: { title: string; body: string }) {
+function MatchNoticeCard({
+  title,
+  body,
+  isLoading = false,
+}: {
+  title: string;
+  body: string;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <View style={styles.matchCard}>
+        <Skeleton height={16} width="52%" />
+        <SkeletonText lastLineWidth="74%" lineHeight={12} lines={2} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.matchCard}>
       <Text style={styles.matchTitle}>{title}</Text>
@@ -411,26 +555,45 @@ function MatchNoticeCard({ title, body }: { title: string; body: string }) {
   );
 }
 
-function WorkerMetricGrid({ metrics }: { metrics: { label: string; value: string }[] }) {
+function WorkerMetricGrid({
+  metrics,
+  isLoading = false,
+}: {
+  metrics: { label: string; value: string }[];
+  isLoading?: boolean;
+}) {
   return (
     <View style={styles.metricGrid}>
-      {metrics.map((metric) => (
-        <View key={metric.label} style={styles.metricCell}>
-          <Text style={styles.metricLabel}>{metric.label}</Text>
-          <Text style={styles.metricValue}>{metric.value}</Text>
-        </View>
-      ))}
+      {isLoading
+        ? Array.from({ length: 4 }).map((_, index) => (
+            <View key={index} style={styles.metricCell}>
+              <Skeleton height={12} width="42%" />
+              <Skeleton height={14} width="74%" />
+            </View>
+          ))
+        : metrics.map((metric) => (
+            <View key={metric.label} style={styles.metricCell}>
+              <Text style={styles.metricLabel}>{metric.label}</Text>
+              <Text style={styles.metricValue}>{metric.value}</Text>
+            </View>
+          ))}
     </View>
   );
 }
 
 function ServicePreviewCard({ service }: { service: ProviderService }) {
+  const displayCategory = getDisplayLabelForMvpService(service.category) || service.category;
+  const displayTitle =
+    service.category === 'Basic home repair' && service.title === 'Basic home repair help'
+      ? 'Minor home fix support'
+      : service.title;
+
   return (
     <View style={styles.servicePreviewCard}>
-      <Text style={styles.servicePreviewTitle}>{service.title}</Text>
-      <Text style={styles.servicePreviewBody}>{service.description || service.category}</Text>
+      <Text style={styles.servicePreviewTitle}>{displayTitle}</Text>
+      <Text style={styles.servicePreviewBody}>{service.description || displayCategory}</Text>
       <View style={styles.servicePreviewMeta}>
-        <BadgePill icon="construction" label={service.category} />
+        <BadgePill icon="construction" label={displayCategory} />
         <BadgePill icon="location-on" label={getMarketplaceLocation(service)} />
       </View>
     </View>
@@ -442,12 +605,23 @@ function DetailActionRow({
   cta,
   messaging,
   onMessage,
+  isLoading = false,
 }: {
   bottomInset: number;
   cta: ReturnType<typeof getWorkerMessageCta>;
   messaging: boolean;
   onMessage: () => void;
+  isLoading?: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <View style={[styles.actionRow, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
+        <Skeleton height={12} width="92%" />
+        <SkeletonChip height={46} width="100%" />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.actionRow, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
       <Text style={styles.boundaryNote}>

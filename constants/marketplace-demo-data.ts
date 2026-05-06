@@ -82,13 +82,13 @@ export const demoWorkers: DemoWorkerSummary[] = [
     headline: 'Available for home cleaning, laundry help, and organizing for nearby households.',
     imageUrl:
       'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1200&q=80',
-    tags: ['Cleaning', 'Laundry help', 'Home assistance', 'Basic home repair'],
+    tags: ['Cleaning', 'Laundry help', 'Home assistance', 'Minor home fix help'],
     ratingText: '4.8 rating',
     jobsDoneText: '11 jobs done',
     location: 'Barangay San Pedro',
     about:
       'Available for home support work around Barangay San Pedro, including basic cleaning, laundry help, room organizing, and small household tasks.',
-    services: ['Cleaning', 'Laundry help', 'Home assistance', 'Basic home repair'],
+    services: ['Cleaning', 'Laundry help', 'Home assistance', 'Minor home fix help'],
     matchReason: 'Matches your search for cleaning and laundry help near Barangay San Pedro.',
     isActive: true,
   },
@@ -113,16 +113,16 @@ export const demoWorkers: DemoWorkerSummary[] = [
     name: 'Mila Flores',
     statusLine: 'Unavailable today, back this weekend',
     rateLine: 'Rate ₱250-700 · Available weekends',
-    headline: 'Offers basic home repair, yard help, and quick home maintenance support.',
+    headline: 'Offers minor home fix help, yard help, and quick home maintenance support.',
     imageUrl:
       'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80',
-    tags: ['Basic home repair', 'Yard or outdoor help', 'Home assistance'],
+    tags: ['Minor home fix help', 'Yard or outdoor help', 'Home assistance'],
     ratingText: '4.7 rating',
     jobsDoneText: '9 jobs done',
     location: 'Barangay San Pedro',
     about:
       'Best for quick fixes at home, including leaks, loose hinges, shelves, and other simple maintenance work.',
-    services: ['Basic home repair', 'Yard or outdoor help', 'Home assistance'],
+    services: ['Minor home fix help', 'Yard or outdoor help', 'Home assistance'],
     matchReason: 'Matches your search for repair and home maintenance support nearby.',
     isActive: false,
   },
@@ -212,7 +212,7 @@ export const demoWorkerDetails: DemoWorkerDetail[] = [
     rateLine: '₱200-800 per task',
     about:
       'Adrian helps nearby households with daily cleaning, laundry, room organizing, and light household support. Best for short notice home help around Barangay San Pedro.',
-    services: ['Cleaning', 'Laundry help', 'Home assistance', 'Basic home repair'],
+    services: ['Cleaning', 'Laundry help', 'Home assistance', 'Minor home fix help'],
     metrics: [
       { label: 'Availability', value: 'Mornings' },
       { label: 'Response time', value: 'Usually within 15 min' },
@@ -290,15 +290,15 @@ export const demoWorkerDetails: DemoWorkerDetail[] = [
   {
     id: 'demo-worker-mila',
     name: 'Mila Flores',
-    headline: 'Quick home maintenance and basic repair support',
+    headline: 'Quick home maintenance and minor home fix support',
     location: 'Barangay San Pedro',
     verificationText: 'Verified resident',
     ratingText: '4.7 rating',
     jobsDoneText: '9 jobs done',
     rateLine: '₱250-700 per task',
     about:
-      'Mila handles shelf and hinge fixes, basic home repair, and outdoor support for nearby homes. Good for quick maintenance needs around the barangay.',
-    services: ['Basic home repair', 'Yard or outdoor help', 'Home assistance'],
+      'Mila handles shelf and hinge fixes, minor home fix help, and outdoor support for nearby homes. Good for quick maintenance needs around the barangay.',
+    services: ['Minor home fix help', 'Yard or outdoor help', 'Home assistance'],
     metrics: [
       { label: 'Availability', value: 'Weekends' },
       { label: 'Response time', value: 'Usually within 20 min' },
