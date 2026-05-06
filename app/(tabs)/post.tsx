@@ -10,6 +10,7 @@ import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
+import { formatJobPostTitle } from '@/services/marketplace.helpers';
 import { listMyServices } from '@/services/service-profile.service';
 import type { JobDraftSummary, JobSummary, ProviderService } from '@/types/marketplace.types';
 
@@ -234,7 +235,11 @@ export default function PostScreen() {
                 key={job.id}
                 label={formatDate(job.createdAt)}
                 onEdit={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
-                title={job.title}
+                title={formatJobPostTitle({
+                  title: job.title,
+                  serviceNeeded: job.serviceNeeded,
+                  category: job.category,
+                })}
               />
             ))}
 
@@ -245,7 +250,11 @@ export default function PostScreen() {
                 onPress={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
                 status="Visible"
                 subtitle="Updated today"
-                title={job.title}
+                title={formatJobPostTitle({
+                  title: job.title,
+                  serviceNeeded: job.serviceNeeded,
+                  category: job.category,
+                })}
               />
             ))}
           </View>

@@ -1,6 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, typography } from '@/constants/theme';
 
 export type WorkerCardProps = {
@@ -13,6 +15,7 @@ export type WorkerCardProps = {
   jobsDoneText: string;
   location: string;
   imageUrl?: string;
+  isActive?: boolean;
   onPress?: () => void;
   onViewProfile?: () => void;
   onSave?: () => void;
@@ -28,6 +31,7 @@ export function WorkerCard({
   jobsDoneText,
   location,
   imageUrl,
+  isActive = true,
   onPress,
   onViewProfile,
   onSave,
@@ -43,7 +47,7 @@ export function WorkerCard({
           <View style={styles.identityRow}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(name)}</Text>
-              <View style={styles.statusDot} />
+              <PresenceDot active={isActive} size={10} style={styles.statusDot} />
             </View>
             <View style={styles.titleWrap}>
               <Text numberOfLines={1} style={styles.name}>
@@ -64,7 +68,7 @@ export function WorkerCard({
         </Text>
       </View>
 
-      {imageUrl ? <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photo} /> : null}
+      {imageUrl ? <WorkerPhoto imageUrl={imageUrl} /> : null}
 
       <View style={styles.tagRow}>
         <View style={styles.tagClip}>
@@ -85,6 +89,31 @@ export function WorkerCard({
         <Meta icon="location-on" text={location} />
       </View>
     </Pressable>
+  );
+}
+
+function WorkerPhoto({ imageUrl }: { imageUrl: string }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (failed) {
+    return (
+      <View style={[styles.photo, styles.photoFallback]}>
+        <MaterialIcons color={color.textSubtle} name="image-not-supported" size={24} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      onError={() => setFailed(true)}
+      resizeMode="cover"
+      source={{ uri: imageUrl }}
+      style={styles.photo}
+    />
   );
 }
 
@@ -174,15 +203,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   statusDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: radius.pill,
-    borderWidth: 2,
     bottom: 1,
-    height: 10,
-    position: 'absolute',
     right: 1,
-    width: 10,
   },
   titleWrap: {
     gap: 2,
@@ -217,6 +239,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 238,
     width: '100%',
+  },
+  photoFallback: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    justifyContent: 'center',
   },
   tagRow: {
     alignItems: 'center',

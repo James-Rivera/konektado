@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -13,10 +13,18 @@ import {
 
 import { AppHeader } from '@/components/AppHeader';
 import { EmptyState } from '@/components/EmptyState';
+import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyConversations } from '@/services/conversation.service';
+import {
+  getConversationPreviewCache,
+  setConversationPreviewCache,
+  subscribeConversationPreviewUpdates,
+  updateConversationPreviewCache,
+} from '@/services/conversation-preview-events';
+import { isPresenceActive } from '@/services/marketplace.helpers';
 import type { ConversationSummary } from '@/types/marketplace.types';
 
 type InboxFilter = 'all' | 'jobs' | 'services' | 'unread';
@@ -31,38 +39,84 @@ const FILTERS: { label: string; value: InboxFilter }[] = [
 export default function MessagesScreen() {
   const router = useRouter();
   const { profile, loading: profileLoading } = useProfile();
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const profileId = profile?.id ?? null;
+  const cachedConversations = getConversationPreviewCache(profileId);
+  const hasCachedConversations = cachedConversations !== null;
+  const [conversations, setConversations] = useState<ConversationSummary[]>(cachedConversations ?? []);
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasCachedConversations);
+  const hasLoadedOnceRef = useRef(hasCachedConversations);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
-  useEffect(() => {
-    let active = true;
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!profileId) return undefined;
 
-    setLoading(true);
-    listMyConversations().then((result) => {
-      if (!active) return;
+      const cached = getConversationPreviewCache(profileId);
+      const showSkeleton = !cached && !hasLoadedOnceRef.current;
 
-      if (result.error || !result.data) {
-        Alert.alert('Messages', result.error ?? 'Could not load conversations.');
-      } else {
-        setConversations(result.data);
+      if (cached) {
+        setConversations(cached);
+        setLoading(false);
+        hasLoadedOnceRef.current = true;
       }
 
-      setLoading(false);
-    });
+      if (showSkeleton) {
+        setLoading(true);
+      }
 
-    return () => {
-      active = false;
-    };
-  }, []);
+      listMyConversations().then((result) => {
+        if (!active) return;
 
-  const visibleConversations = conversations.filter((conversation) => {
-    const other = getOtherParticipant(conversation, profile?.id);
+        if (result.error || !result.data) {
+          Alert.alert('Messages', result.error ?? 'Could not load conversations.');
+        } else {
+          setConversationPreviewCache(result.data, profileId);
+          setConversations(result.data);
+        }
+
+        hasLoadedOnceRef.current = true;
+        setLoading(false);
+      });
+
+      return () => {
+        active = false;
+      };
+    }, [profileId]),
+  );
+
+  useEffect(
+    () =>
+      subscribeConversationPreviewUpdates(({ conversationId, message }) => {
+        updateConversationPreviewCache({ conversationId, message });
+        setConversations((current) => {
+          let found = false;
+          const updated = current.map((conversation) => {
+            if (conversation.id !== conversationId) return conversation;
+            found = true;
+            return {
+              ...conversation,
+              lastMessage: message,
+              updatedAt: message.createdAt,
+            };
+          });
+
+          if (!found) return current;
+          return sortConversationsByUpdatedAt(updated);
+        });
+      }),
+    [],
+  );
+
+  const showInboxSkeleton = loading && !conversations.length;
+
+  const visibleConversations = useMemo(() => conversations.filter((conversation) => {
+    const other = getOtherParticipant(conversation, profileId ?? undefined);
     const context = getConversationContext(conversation);
     const latest = conversation.lastMessage?.body ?? '';
-    const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== profile?.id;
+    const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== profileId;
     const haystack = [other?.fullName, context, latest].filter(Boolean).join(' ').toLowerCase();
     const matchesSearch = !query.trim() || haystack.includes(query.trim().toLowerCase());
 
@@ -71,21 +125,28 @@ export default function MessagesScreen() {
     if (filter === 'services') return Boolean(conversation.serviceId);
     if (filter === 'unread') return unread;
     return true;
-  });
+  }), [conversations, filter, profileId, query]);
 
-  const messageRequests = visibleConversations.filter(
-    (conversation) => filter === 'all' && conversation.startedBy !== profile?.id && conversation.status === 'active',
+  const messageRequests = useMemo(
+    () =>
+      visibleConversations.filter(
+        (conversation) => filter === 'all' && conversation.startedBy !== profileId && conversation.status === 'active',
+      ),
+    [filter, profileId, visibleConversations],
   );
-  const regularMessages = visibleConversations.filter(
-    (conversation) => filter !== 'all' || !messageRequests.some((request) => request.id === conversation.id),
-  );
+  const regularMessages = useMemo(() => {
+    const requestIds = new Set(messageRequests.map((request) => request.id));
+    return visibleConversations.filter(
+      (conversation) => filter !== 'all' || !requestIds.has(conversation.id),
+    );
+  }, [filter, messageRequests, visibleConversations]);
 
-  const openConversation = (conversationId: string) => {
+  const openConversation = useCallback((conversationId: string) => {
     router.push({
       pathname: '/conversation/[conversationId]',
       params: { conversationId },
     });
-  };
+  }, [router]);
 
   return (
     <View style={styles.screen}>
@@ -146,27 +207,23 @@ export default function MessagesScreen() {
             })}
           </View>
 
-          {loading ? (
-            <View style={styles.listStack}>
-              <MessageRowSkeleton />
-              <MessageRowSkeleton />
-              <MessageRowSkeleton />
-            </View>
+          {showInboxSkeleton ? (
+            <InboxSectionSkeleton />
           ) : null}
 
-          {!loading && isVerified && messageRequests.length ? (
+          {isVerified && messageRequests.length ? (
             <InboxSection
               conversations={messageRequests}
-              currentUserId={profile?.id}
+              currentUserId={profileId ?? undefined}
               onOpen={openConversation}
               title="Message Requests"
             />
           ) : null}
 
-          {!loading && isVerified && regularMessages.length ? (
+          {isVerified && regularMessages.length ? (
             <InboxSection
               conversations={regularMessages}
-              currentUserId={profile?.id}
+              currentUserId={profileId ?? undefined}
               onOpen={openConversation}
               title="Messages"
             />
@@ -186,7 +243,7 @@ export default function MessagesScreen() {
   );
 }
 
-function InboxSection({
+const InboxSection = memo(function InboxSection({
   conversations,
   currentUserId,
   onOpen,
@@ -215,9 +272,9 @@ function InboxSection({
       </View>
     </View>
   );
-}
+});
 
-function MessageRow({
+const MessageRow = memo(function MessageRow({
   conversation,
   currentUserId,
   onPress,
@@ -229,9 +286,11 @@ function MessageRow({
   const other = getOtherParticipant(conversation, currentUserId);
   const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== currentUserId;
   const context = getConversationContext(conversation);
-  const preview = unread
-    ? `${getUnreadCount(conversation.id)} + new messages`
-    : conversation.lastMessage?.body ?? 'No messages yet';
+  const sentByCurrentUser = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId === currentUserId;
+  const preview = conversation.lastMessage
+    ? `${sentByCurrentUser ? 'You: ' : ''}${conversation.lastMessage.body}`
+    : 'No messages yet';
+  const timestamp = conversation.lastMessage?.createdAt ?? conversation.updatedAt;
 
   return (
     <Pressable
@@ -240,14 +299,14 @@ function MessageRow({
       style={({ pressed }) => [styles.messageRow, pressed && styles.pressed]}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
-        <View style={styles.onlineDot} />
+        <PresenceDot active={isPresenceActive(other?.availability)} size={12} style={styles.onlineDot} />
       </View>
       <View style={styles.messageInfo}>
         <View style={styles.messageTitleRow}>
           <Text numberOfLines={1} style={styles.senderName}>
             {other?.fullName ?? 'Konektado resident'}
           </Text>
-          <Text style={styles.timeText}>{formatTime(conversation.updatedAt)}</Text>
+          <Text style={styles.timeText}>{formatTime(timestamp)}</Text>
         </View>
         <Text numberOfLines={1} style={styles.contextText}>
           {context}
@@ -258,7 +317,7 @@ function MessageRow({
       </View>
     </Pressable>
   );
-}
+});
 
 function LockedMessagesCard({ onVerify }: { onVerify: () => void }) {
   return (
@@ -282,9 +341,28 @@ function MessageRowSkeleton() {
     <View style={styles.messageRow}>
       <Skeleton height={52} width={52} borderRadius={26} />
       <View style={styles.messageInfo}>
-        <Skeleton height={12} width="48%" />
-        <Skeleton height={10} width="38%" />
+        <View style={styles.messageTitleRow}>
+          <Skeleton height={13} width="48%" />
+          <Skeleton height={12} width={42} />
+        </View>
+        <Skeleton height={12} width="34%" />
         <Skeleton height={12} width="76%" />
+      </View>
+    </View>
+  );
+}
+
+function InboxSectionSkeleton() {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Skeleton height={14} width={82} />
+        <Skeleton height={14} width={28} />
+      </View>
+      <View style={styles.listStack}>
+        <MessageRowSkeleton />
+        <MessageRowSkeleton />
+        <MessageRowSkeleton />
       </View>
     </View>
   );
@@ -307,14 +385,16 @@ function getInitials(name: string) {
     .join('');
 }
 
-function getUnreadCount(seed: string) {
-  return 1 + (Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) % 3);
-}
-
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+}
+
+function sortConversationsByUpdatedAt(conversations: ConversationSummary[]) {
+  return [...conversations].sort(
+    (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+  );
 }
 
 const styles = StyleSheet.create({
@@ -415,6 +495,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 52,
     justifyContent: 'center',
+    position: 'relative',
     width: 52,
   },
   avatarText: {
@@ -424,15 +505,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   onlineDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: 6,
-    borderWidth: 1,
     bottom: 0,
-    height: 12,
-    position: 'absolute',
     right: 0,
-    width: 12,
   },
   messageInfo: {
     flex: 1,

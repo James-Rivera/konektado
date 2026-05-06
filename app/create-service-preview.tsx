@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { WorkerCard } from '@/components/WorkerCard';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { formatServicePostTitle, isPresenceActive } from '@/services/marketplace.helpers';
 import { createService } from '@/services/service-profile.service';
 
 type ServiceDraft = {
@@ -168,8 +169,13 @@ export default function CreateServicePreviewScreen() {
 
           <View style={styles.previewFrame}>
             <WorkerCard
-              headline={draft.title}
+              headline={formatServicePostTitle({
+                title: draft.title,
+                category: draft.category,
+                cue: 'offers',
+              })}
               imageUrl={draft.photoUrls?.[0]}
+              isActive={isPresenceActive(draft.availability || profile?.availability)}
               jobsDoneText="Jobs after publish"
               location={draft.locationText || profile?.barangay || 'Barangay San Pedro'}
               name={getDisplayName(profile)}

@@ -1,6 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, typography } from '@/constants/theme';
 import type { SearchWorkerItem } from '@/constants/search-demo-data';
 
@@ -21,7 +22,7 @@ export function SearchWorkerResultCard({
         <View style={styles.identityRow}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{getInitials(worker.name)}</Text>
-            <View style={styles.statusDot} />
+            <PresenceDot active={worker.isActive ?? true} size={10} style={styles.statusDot} />
           </View>
           <View style={styles.identityCopy}>
             <Text numberOfLines={1} style={styles.name}>
@@ -180,15 +181,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   statusDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: radius.pill,
-    borderWidth: 2,
     bottom: 0,
-    height: 10,
-    position: 'absolute',
     right: 0,
-    width: 10,
   },
   identityCopy: {
     flex: 1,

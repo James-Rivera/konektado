@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
+import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton } from '@/components/Skeleton';
 import {
   getContextTagsForCategory,
@@ -28,6 +29,7 @@ import {
 } from '@/constants/job-post-options';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { isPresenceActive } from '@/services/marketplace.helpers';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { type JobPhotoAsset, uploadJobPhotos } from '@/services/job-photo.service';
 import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.types';
@@ -399,7 +401,7 @@ export default function CreateJobScreen() {
           <View style={styles.userRow}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
-              <View style={styles.avatarDot} />
+              <PresenceDot active={isPresenceActive(profile?.availability)} size={12} style={styles.avatarDot} />
             </View>
             <View style={styles.userCopy}>
               <Text style={styles.userName}>{displayName}</Text>
@@ -902,6 +904,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 46,
     justifyContent: 'center',
+    position: 'relative',
     width: 46,
   },
   avatarText: {
@@ -910,15 +913,8 @@ const styles = StyleSheet.create({
     color: color.text,
   },
   avatarDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: radius.pill,
-    borderWidth: 2,
     bottom: 0,
-    height: 12,
-    position: 'absolute',
     right: 0,
-    width: 12,
   },
   userCopy: {
     flex: 1,

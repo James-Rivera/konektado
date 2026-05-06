@@ -50,6 +50,45 @@ type MessageRow = {
   created_at: string;
 };
 
+type ConversationInboxRow = {
+  conversation_id: string;
+  job_id: string | null;
+  service_id: string | null;
+  client_id: string;
+  provider_id: string;
+  started_by: string;
+  status: ConversationStatus;
+  hired_at: string | null;
+  conversation_created_at: string;
+  conversation_updated_at: string;
+  job_title: string | null;
+  service_title: string | null;
+  client_full_name: string | null;
+  client_first_name: string | null;
+  client_last_name: string | null;
+  client_barangay: string | null;
+  client_city: string | null;
+  client_about: string | null;
+  client_avatar_url: string | null;
+  client_availability: string | null;
+  client_verified_at: string | null;
+  client_barangay_verified_at: string | null;
+  provider_full_name: string | null;
+  provider_first_name: string | null;
+  provider_last_name: string | null;
+  provider_barangay: string | null;
+  provider_city: string | null;
+  provider_about: string | null;
+  provider_avatar_url: string | null;
+  provider_availability: string | null;
+  provider_verified_at: string | null;
+  provider_barangay_verified_at: string | null;
+  last_message_id: string | null;
+  last_message_sender_id: string | null;
+  last_message_body: string | null;
+  last_message_created_at: string | null;
+};
+
 function mapMessage(row: MessageRow): ConversationMessage {
   return {
     id: row.id,
@@ -57,6 +96,114 @@ function mapMessage(row: MessageRow): ConversationMessage {
     senderId: row.sender_id,
     body: row.body,
     createdAt: row.created_at,
+  };
+}
+
+function mapInboxProfile(
+  row: ConversationInboxRow,
+  role: 'client' | 'provider',
+) {
+  const fullName = compactText(row[`${role}_full_name`]) ||
+    `${compactText(row[`${role}_first_name`])} ${compactText(row[`${role}_last_name`])}`.trim() ||
+    'Konektado resident';
+
+  return {
+    id: role === 'client' ? row.client_id : row.provider_id,
+    fullName,
+    firstName: row[`${role}_first_name`],
+    lastName: row[`${role}_last_name`],
+    barangay: row[`${role}_barangay`],
+    city: row[`${role}_city`],
+    about: row[`${role}_about`],
+    avatarUrl: row[`${role}_avatar_url`],
+    availability: row[`${role}_availability`],
+    barangayVerifiedAt: row[`${role}_barangay_verified_at`],
+    verifiedAt: row[`${role}_verified_at`],
+  };
+}
+
+function mapInboxJob(row: ConversationInboxRow): JobSummary | null {
+  if (!row.job_id) return null;
+
+  return {
+    id: row.job_id,
+    clientId: row.client_id,
+    title: row.job_title ?? 'Job post',
+    description: null,
+    category: null,
+    serviceNeeded: null,
+    tags: [],
+    photoUrls: [],
+    barangay: null,
+    locationText: null,
+    budgetAmount: null,
+    workersNeeded: null,
+    scheduleText: null,
+    status: 'open',
+    acceptedProviderId: null,
+    allowMessages: true,
+    autoReplyEnabled: false,
+    autoCloseEnabled: false,
+    createdAt: row.conversation_created_at,
+    updatedAt: row.conversation_updated_at,
+    client: mapInboxProfile(row, 'client'),
+    clientAverageRating: null,
+    clientReviewCount: 0,
+    clientJobsPostedCount: 0,
+  };
+}
+
+function mapInboxService(row: ConversationInboxRow): ProviderService | null {
+  if (!row.service_id) return null;
+
+  return {
+    id: row.service_id,
+    providerId: row.provider_id,
+    category: 'Service',
+    title: row.service_title ?? 'Service post',
+    description: null,
+    tags: [],
+    photoUrls: [],
+    yearsExperience: null,
+    availabilityText: null,
+    rateText: null,
+    barangay: null,
+    locationText: null,
+    allowMessages: true,
+    autoReplyEnabled: false,
+    autoPauseEnabled: false,
+    isActive: true,
+    createdAt: row.conversation_created_at,
+    updatedAt: row.conversation_updated_at,
+  };
+}
+
+function mapInboxRow(row: ConversationInboxRow): ConversationSummary {
+  return {
+    id: row.conversation_id,
+    jobId: row.job_id,
+    serviceId: row.service_id,
+    clientId: row.client_id,
+    providerId: row.provider_id,
+    startedBy: row.started_by,
+    status: row.status,
+    hiredAt: row.hired_at,
+    createdAt: row.conversation_created_at,
+    updatedAt: row.last_message_created_at ?? row.conversation_updated_at,
+    job: mapInboxJob(row),
+    service: mapInboxService(row),
+    client: mapInboxProfile(row, 'client'),
+    provider: mapInboxProfile(row, 'provider'),
+    lastMessage:
+      row.last_message_id && row.last_message_sender_id && row.last_message_body && row.last_message_created_at
+        ? {
+            id: row.last_message_id,
+            conversationId: row.conversation_id,
+            senderId: row.last_message_sender_id,
+            body: row.last_message_body,
+            createdAt: row.last_message_created_at,
+          }
+        : null,
   };
 }
 
@@ -139,6 +286,30 @@ export async function listMyConversations(filters: {
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
+  const { data: inboxRows, error: inboxError } = await supabase.rpc(
+    'get_my_conversation_inbox',
+    { p_include_archived: filters.includeArchived ?? false },
+  );
+
+  if (!inboxError) {
+    return {
+      data: filterConversationSummaries(
+        ((inboxRows as ConversationInboxRow[] | null) ?? []).map(mapInboxRow),
+        filters,
+        user.data,
+      ),
+      error: null,
+    };
+  }
+
+  const shouldFallback =
+    inboxError.code === 'PGRST202' ||
+    inboxError.message.toLowerCase().includes('get_my_conversation_inbox');
+
+  if (!shouldFallback) {
+    return { data: null, error: inboxError.message };
+  }
+
   const { data, error } = await supabase
     .from('conversations')
     .select(CONVERSATION_COLUMNS)
@@ -151,6 +322,20 @@ export async function listMyConversations(filters: {
 
   let conversations = await mapConversationRows((data as ConversationRow[] | null) ?? []);
 
+  return {
+    data: filterConversationSummaries(conversations, filters, user.data),
+    error: null,
+  };
+}
+
+function filterConversationSummaries(
+  conversations: ConversationSummary[],
+  filters: {
+    kind?: 'all' | 'jobs' | 'services' | 'unread';
+    includeArchived?: boolean;
+  },
+  userId: string,
+) {
   if (!filters.includeArchived) {
     conversations = conversations.filter((conversation) => conversation.status !== 'archived');
   }
@@ -166,11 +351,11 @@ export async function listMyConversations(filters: {
   if (filters.kind === 'unread') {
     conversations = conversations.filter(
       (conversation) =>
-        Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== user.data,
+        Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== userId,
     );
   }
 
-  return { data: conversations, error: null };
+  return conversations;
 }
 
 export async function getConversation(conversationId: string): Promise<ServiceResult<ConversationDetail>> {

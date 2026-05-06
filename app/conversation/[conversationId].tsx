@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -23,11 +24,22 @@ import {
   markWorkerHired,
   sendMessage,
 } from '@/services/conversation.service';
-import { getMarketplaceLocation } from '@/services/marketplace.helpers';
+import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
+import {
+  formatJobPostTitle,
+  formatServicePostTitle,
+  getMarketplaceLocation,
+  isPresenceActive,
+} from '@/services/marketplace.helpers';
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
 
 const JOB_PROMPTS = ['Where is the exact location?', 'What should I bring?', 'Send me your location'];
 const SERVICE_PROMPTS = ['Are you available?', 'Can we discuss the schedule?', 'How much is your rate?'];
+
+type LocalMessageStatus = 'sending' | 'failed';
+type ThreadMessage = ConversationMessage & {
+  localStatus?: LocalMessageStatus;
+};
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -45,15 +57,19 @@ export default function ConversationDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [conversationReady, setConversationReady] = useState(false);
   const [conversationError, setConversationError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [contextExpanded, setContextExpanded] = useState(false);
   const [visibleTimestampId, setVisibleTimestampId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
-  const load = () => {
+  const load = useCallback((options: { showSkeleton?: boolean } = {}) => {
     if (!conversationId) return;
 
-    setConversationReady(false);
+    const showSkeleton = options.showSkeleton ?? true;
+    if (showSkeleton) {
+      setConversationReady(false);
+      setLoading(true);
+    }
     setConversationError(null);
 
     getConversation(conversationId).then((result) => {
@@ -67,9 +83,11 @@ export default function ConversationDetailScreen() {
       setLoading(false);
       setConversationReady(true);
     });
-  };
+  }, [conversationId]);
 
-  useEffect(load, [conversationId]);
+  useEffect(() => {
+    load({ showSkeleton: true });
+  }, [load]);
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -102,21 +120,67 @@ export default function ConversationDetailScreen() {
     Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
   const prompts = isJobConversation ? JOB_PROMPTS : SERVICE_PROMPTS;
 
-  const onSend = async (overrideBody?: string) => {
+  const replaceMessage = (messageId: string, nextMessage: ThreadMessage | null) => {
+    setConversation((current) => {
+      if (!current) return current;
+      const messages = (current.messages as ThreadMessage[]).flatMap((message) => {
+        if (message.id !== messageId) return [message];
+        return nextMessage ? [nextMessage] : [];
+      });
+
+      return { ...current, messages };
+    });
+  };
+
+  const onSend = async (overrideBody?: string, retryMessageId?: string) => {
     if (!conversationId) return;
 
-    const messageBody = overrideBody ?? body;
-    setSending(true);
-    const result = await sendMessage({ conversationId, body: messageBody });
-    setSending(false);
+    const messageBody = (overrideBody ?? body).trim();
+    if (!messageBody) return;
 
-    if (result.error) {
-      Alert.alert('Message', result.error);
-      return;
+    setSendError(null);
+    const tempMessage: ThreadMessage = {
+      id: retryMessageId ?? `local-${Date.now()}`,
+      conversationId,
+      senderId: profile?.id ?? '',
+      body: messageBody,
+      createdAt: new Date().toISOString(),
+      localStatus: 'sending',
+    };
+
+    if (retryMessageId) {
+      replaceMessage(retryMessageId, tempMessage);
+    } else {
+      setConversation((current) =>
+        current
+          ? {
+              ...current,
+              lastMessage: tempMessage,
+              messages: [...current.messages, tempMessage],
+              updatedAt: tempMessage.createdAt,
+            }
+          : current,
+      );
     }
 
     if (!overrideBody) setBody('');
-    load();
+    emitConversationPreviewUpdate({ conversationId, message: tempMessage });
+    scrollToBottom();
+
+    const result = await sendMessage({ conversationId, body: messageBody });
+
+    if (result.error) {
+      setSendError(result.error);
+      replaceMessage(tempMessage.id, { ...tempMessage, localStatus: 'failed' });
+      emitConversationPreviewUpdate({ conversationId, message: tempMessage });
+      return;
+    }
+
+    if (result.data) {
+      replaceMessage(tempMessage.id, result.data);
+      emitConversationPreviewUpdate({ conversationId, message: result.data });
+      load({ showSkeleton: false });
+    }
   };
 
   const onMarkHired = async () => {
@@ -164,7 +228,7 @@ export default function ConversationDetailScreen() {
           </Pressable>
           <View style={styles.headerAvatar}>
             <Text style={styles.headerAvatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
-            <View style={styles.onlineDot} />
+            <PresenceDot active={isPresenceActive(other?.availability)} borderColor={color.background} size={8} style={styles.onlineDot} />
           </View>
           <View style={styles.headerCopy}>
             <Text numberOfLines={1} style={styles.headerTitle}>
@@ -232,7 +296,7 @@ export default function ConversationDetailScreen() {
             </View>
           ) : null}
 
-          {conversation?.messages.map((message, index, messages) => {
+          {(conversation.messages as ThreadMessage[]).map((message, index, messages) => {
             const previousMessage = messages[index - 1];
             const nextMessage = messages[index + 1];
 
@@ -242,6 +306,11 @@ export default function ConversationDetailScreen() {
                 key={message.id}
                 message={message}
                 nextMessage={nextMessage}
+                onRetryFailed={
+                  message.localStatus === 'failed'
+                    ? () => onSend(message.body, message.id)
+                    : undefined
+                }
                 onToggleTime={() =>
                   setVisibleTimestampId((current) => (current === message.id ? null : message.id))
                 }
@@ -253,6 +322,7 @@ export default function ConversationDetailScreen() {
         </ScrollView>
 
         <View style={styles.composerWrap}>
+          {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
           <ScrollView
             contentContainerStyle={styles.promptRow}
             horizontal
@@ -285,9 +355,8 @@ export default function ConversationDetailScreen() {
             />
             <Pressable
               accessibilityLabel="Send message"
-              disabled={sending}
               onPress={() => onSend()}
-              style={({ pressed }) => [styles.sendButton, pressed && styles.pressed, sending && styles.disabled]}>
+              style={({ pressed }) => [styles.sendButton, pressed && styles.pressed]}>
               <MaterialIcons color={color.verificationBlue} name="send" size={24} />
             </Pressable>
           </View>
@@ -304,8 +373,8 @@ function ConversationScreenSkeleton() {
         <View style={styles.header}>
           <Skeleton height={36} width={36} borderRadius={18} />
           <View style={styles.loadingHeaderAvatarWrap}>
-            <Skeleton height={40} width={40} borderRadius={20} />
-            <Skeleton height={10} width={10} borderRadius={5} style={styles.loadingOnlineDot} />
+            <Skeleton height={36} width={36} borderRadius={18} />
+            <Skeleton height={8} width={8} borderRadius={4} style={styles.loadingOnlineDot} />
           </View>
           <View style={styles.headerCopy}>
             <Skeleton height={16} width="64%" />
@@ -441,15 +510,17 @@ function MessageBubble({
   currentUserId,
   message,
   nextMessage,
+  onRetryFailed,
   onToggleTime,
   previousMessage,
   showTime,
 }: {
   currentUserId?: string;
-  message: ConversationMessage;
-  nextMessage?: ConversationMessage;
+  message: ThreadMessage;
+  nextMessage?: ThreadMessage;
+  onRetryFailed?: () => void;
   onToggleTime: () => void;
-  previousMessage?: ConversationMessage;
+  previousMessage?: ThreadMessage;
   showTime: boolean;
 }) {
   const mine = message.senderId === currentUserId;
@@ -485,6 +556,14 @@ function MessageBubble({
           <Text style={[styles.messageTime, mine && styles.myMessageTime]}>
             {formatTime(message.createdAt)}
           </Text>
+        ) : null}
+        {message.localStatus === 'sending' ? (
+          <Text style={[styles.messageStatus, mine && styles.myMessageTime]}>Sending</Text>
+        ) : null}
+        {message.localStatus === 'failed' ? (
+          <Pressable accessibilityRole="button" onPress={onRetryFailed}>
+            <Text style={[styles.messageStatus, styles.failedMessageStatus]}>Failed to send. Tap to retry.</Text>
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -522,7 +601,11 @@ function getContextSummary(conversation: ConversationDetail) {
   if (conversation.job) {
     const budget = conversation.job.budgetAmount ? `PHP ${conversation.job.budgetAmount}` : 'Budget to coordinate';
     return {
-      title: conversation.job.title,
+      title: formatJobPostTitle({
+        title: conversation.job.title,
+        serviceNeeded: conversation.job.serviceNeeded,
+        category: conversation.job.category,
+      }),
       subtitle: `Job by ${conversation.client?.fullName ?? 'Konektado resident'}`,
       meta: `${getMarketplaceLocation(conversation.job)} · ${conversation.job.scheduleText ?? 'Schedule to coordinate'} · ${budget}`,
     };
@@ -530,7 +613,11 @@ function getContextSummary(conversation: ConversationDetail) {
 
   if (conversation.service) {
     return {
-      title: conversation.service.title,
+      title: formatServicePostTitle({
+        title: conversation.service.title,
+        category: conversation.service.category,
+        cue: conversation.service.isActive ? 'availableFor' : 'offers',
+      }),
       subtitle: `Service by ${conversation.provider?.fullName ?? 'Konektado resident'}`,
       meta: `${getMarketplaceLocation(conversation.service)} · ${conversation.service.rateText ?? 'Rate to coordinate'}`,
     };
@@ -603,6 +690,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     height: 36,
     justifyContent: 'center',
+    position: 'relative',
     width: 36,
   },
   headerAvatarText: {
@@ -612,15 +700,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   onlineDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: 4,
-    borderWidth: 1,
     bottom: 1,
-    height: 8,
-    position: 'absolute',
     right: 1,
-    width: 8,
   },
   headerCopy: {
     flex: 1,
@@ -643,8 +724,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   loadingHeaderAvatarWrap: {
-    height: 40,
-    width: 40,
+    height: 36,
+    width: 36,
   },
   loadingOnlineDot: {
     borderColor: color.background,
@@ -864,6 +945,16 @@ const styles = StyleSheet.create({
   myMessageTime: {
     color: color.textSubtle,
   },
+  messageStatus: {
+    color: color.textSubtle,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+  failedMessageStatus: {
+    color: color.danger,
+  },
   composerWrap: {
     backgroundColor: color.background,
     borderTopColor: color.border,
@@ -889,6 +980,12 @@ const styles = StyleSheet.create({
   promptRow: {
     alignItems: 'center',
     gap: 8,
+  },
+  sendError: {
+    color: color.danger,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 11,
+    lineHeight: 15,
   },
   promptPill: {
     alignItems: 'center',

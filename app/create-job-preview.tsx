@@ -11,6 +11,7 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { createJob } from '@/services/job.service';
+import { formatJobPostTitle } from '@/services/marketplace.helpers';
 
 type JobDraft = {
   title: string;
@@ -233,7 +234,11 @@ export default function CreateJobPreviewScreen() {
               showSaveButton={false}
               subtitle={`${formatBudget(budgetAmount)} - ${draft.scheduleText || 'Schedule to coordinate'}`}
               tags={[draft.category, draft.serviceNeeded, ...draft.tags].filter(Boolean).slice(0, 4)}
-              title={draft.title}
+              title={formatJobPostTitle({
+                title: draft.title,
+                serviceNeeded: draft.serviceNeeded,
+                category: draft.category,
+              })}
               onPress={() => {}}
               onViewJob={() => {}}
             />

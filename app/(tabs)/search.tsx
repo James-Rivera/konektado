@@ -26,10 +26,13 @@ import {
   formatJobSubtitle,
   formatClientJobsPostedText,
   formatClientRatingText,
+  formatJobPostTitle,
   formatRelativeMarketplaceDate,
   formatServiceJobsDoneText,
+  formatServicePostTitle,
   formatServiceRatingText,
   getMarketplaceLocation,
+  isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { searchJobs as searchOpenJobs } from '@/services/job.service';
 import { searchServices } from '@/services/service-profile.service';
@@ -206,7 +209,12 @@ function mapJobToSearchItem(job: JobSummary): SearchJobItem {
   return {
     id: job.id,
     postedAt: formatRelativeMarketplaceDate(job.createdAt),
-    title: job.title,
+    title: formatJobPostTitle({
+      title: job.title,
+      serviceNeeded: job.serviceNeeded,
+      category: job.category,
+      cue: job.serviceNeeded ? 'needHelpWith' : 'lookingFor',
+    }),
     subtitle: formatJobSubtitle(job),
     description: job.description || 'No description provided yet.',
     tags: Array.from(new Set([category, ...job.tags, 'Open job'].filter(Boolean))),
@@ -226,12 +234,17 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
     name: service.provider?.fullName || 'Konektado resident',
     statusLine: formatWorkerAvailability(service.availabilityText),
     rateLine: service.rateText || 'Rate to coordinate',
-    headline: service.description || service.title,
+    headline: formatServicePostTitle({
+      title: service.title,
+      category: service.category,
+      cue: service.isActive ? 'availableFor' : 'offers',
+    }),
     tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
     ratingText: formatServiceRatingText(service),
     jobsDoneText: formatServiceJobsDoneText(service, service.completedJobsCount),
     location,
     matchReason: `Offers ${category.toLowerCase()} help near ${location}.`,
+    isActive: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
   };
 }
 

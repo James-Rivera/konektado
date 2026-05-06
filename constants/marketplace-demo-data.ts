@@ -14,6 +14,7 @@ export type DemoWorkerSummary = {
   about: string;
   services: string[];
   matchReason: string;
+  isActive?: boolean;
 };
 
 export type DemoJobSummary = {
@@ -75,10 +76,10 @@ export type DemoWorkerDetail = {
 export const demoWorkers: DemoWorkerSummary[] = [
   {
     id: 'demo-worker-adrian',
-    name: 'Adrian Caranay',
+    name: 'Rodel Caranay',
     statusLine: 'Available today near your barangay',
     rateLine: 'Rate ₱200-800 · Available mornings',
-    headline: 'Offers basic home cleaning, laundry help, and organizing for nearby households.',
+    headline: 'Available for home cleaning, laundry help, and organizing for nearby households.',
     imageUrl:
       'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1200&q=80',
     tags: ['Cleaning', 'Laundry', 'Home Organizing', 'Basic Repair'],
@@ -89,6 +90,7 @@ export const demoWorkers: DemoWorkerSummary[] = [
       'Available for home support work around Barangay San Pedro, including basic cleaning, laundry help, room organizing, and small household tasks.',
     services: ['Cleaning', 'Laundry Help', 'Home Organizing', 'Basic Repair'],
     matchReason: 'Matches your search for cleaning and laundry help near Barangay San Pedro.',
+    isActive: true,
   },
   {
     id: 'demo-worker-luis',
@@ -104,11 +106,12 @@ export const demoWorkers: DemoWorkerSummary[] = [
       'Tech support worker for nearby residents. Usually helps with routers, printers, laptops, and other simple home setup issues.',
     services: ['Wi-Fi Setup', 'PC Repair', 'Printer Setup'],
     matchReason: 'Matches your search for repair and setup help near Barangay San Pedro.',
+    isActive: true,
   },
   {
     id: 'demo-worker-mila',
     name: 'Mila Flores',
-    statusLine: 'Available on weekends nearby',
+    statusLine: 'Unavailable today, back this weekend',
     rateLine: 'Rate ₱250-700 · Available weekends',
     headline: 'Offers plumbing checks, small carpentry jobs, and quick home maintenance support.',
     imageUrl:
@@ -121,6 +124,7 @@ export const demoWorkers: DemoWorkerSummary[] = [
       'Best for quick fixes at home, including leaks, loose hinges, shelves, and other simple maintenance work.',
     services: ['Plumbing', 'Carpentry', 'Home Repair'],
     matchReason: 'Matches your search for repair and home maintenance support nearby.',
+    isActive: false,
   },
 ];
 
@@ -128,7 +132,7 @@ export const demoJobs: DemoJobSummary[] = [
   {
     id: 'demo-job-furniture-event',
     postedAt: 'Posted 2 hours ago',
-    title: 'Move furniture for barangay event',
+    title: 'Need help with moving chairs for barangay event',
     subtitle: 'Budget ₱300 · Less than a day to finish',
     description:
       'Need 2 people to help move chairs and tables for a barangay event. This is a short task only and we prefer workers who can arrive before 3 PM.',
@@ -147,7 +151,7 @@ export const demoJobs: DemoJobSummary[] = [
   {
     id: 'demo-job-moving-photo',
     postedAt: 'Today',
-    title: 'Need help moving furniture',
+    title: 'Looking for moving help',
     subtitle: 'Posted by Maria Santos',
     description: 'Photo included so workers can quickly judge the scope before messaging.',
     tags: ['One-time job'],
@@ -164,7 +168,7 @@ export const demoJobs: DemoJobSummary[] = [
   {
     id: 'demo-job-wifi',
     postedAt: 'Posted 5 hours ago',
-    title: 'Set up Wi-Fi extender',
+    title: 'Need help with Wi-Fi extender setup',
     subtitle: 'Budget ₱500 · One afternoon only',
     description:
       'Need help installing a Wi-Fi extender and checking the best location for a stronger signal upstairs.',
@@ -181,7 +185,7 @@ export const demoJobs: DemoJobSummary[] = [
   {
     id: 'demo-job-cleaning',
     postedAt: 'Today',
-    title: 'Need cleaning help before visitors arrive',
+    title: 'Need help with cleaning before visitors arrive',
     subtitle: 'Budget ₱400 · Morning help needed',
     description: 'Looking for someone who can help clean the sala and kitchen before noon.',
     tags: ['Cleaning', 'Home help', 'Urgent'],

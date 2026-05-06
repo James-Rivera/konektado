@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,10 +21,13 @@ import {
   compactText,
   formatClientJobsPostedText,
   formatClientRatingText,
+  formatJobPostTitle,
   formatRelativeMarketplaceDate,
   formatServiceJobsDoneText,
+  formatServicePostTitle,
   formatServiceRatingText,
   getMarketplaceLocation,
+  isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { searchJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
@@ -86,8 +89,11 @@ function getFreshnessScore(createdAt: string) {
   return Math.max(0, 3 - Math.min(3, ageHours / 24));
 }
 
-function scoreFeedItem(item: HomeFeedItem, preferences: UserPreferences | null) {
-  const terms = getPreferenceTerms(preferences);
+function scoreFeedItem(
+  item: HomeFeedItem,
+  preferences: UserPreferences | null,
+  terms = getPreferenceTerms(preferences),
+) {
   const haystack = normalizeSearchText(item.scoreText);
   const intentBoost =
     preferences?.intent === 'provider'
@@ -113,8 +119,9 @@ function scoreFeedItem(item: HomeFeedItem, preferences: UserPreferences | null) 
 }
 
 function sortByFeedScore(items: HomeFeedItem[], preferences: UserPreferences | null) {
+  const terms = getPreferenceTerms(preferences);
   return [...items].sort((left, right) => {
-    const scoreDiff = scoreFeedItem(right, preferences) - scoreFeedItem(left, preferences);
+    const scoreDiff = scoreFeedItem(right, preferences, terms) - scoreFeedItem(left, preferences, terms);
     if (scoreDiff !== 0) return scoreDiff;
     return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
   });
@@ -151,17 +158,6 @@ function buildForYouFeed(
   return mixed;
 }
 
-function buildIntentTitle(prefix: string, value: string) {
-  const cleanValue = compactText(value);
-  if (!cleanValue) return prefix;
-
-  if (/^(i offer|available for|looking for|need help)/i.test(cleanValue)) {
-    return cleanValue;
-  }
-
-  return `${prefix} ${cleanValue.charAt(0).toLowerCase()}${cleanValue.slice(1)}`;
-}
-
 function formatBudgetText(amount: number | null) {
   if (!amount) return 'Budget to coordinate';
   return `PHP ${amount.toLocaleString('en-PH')}`;
@@ -170,7 +166,6 @@ function formatBudgetText(amount: number | null) {
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
   const category = compactText(job.category) || 'Job';
   const serviceNeeded = compactText(job.serviceNeeded);
-  const titleSubject = serviceNeeded || compactText(job.title) || category;
   const schedule = compactText(job.scheduleText) || 'Schedule to coordinate';
   const posterName = compactText(job.client?.fullName) || 'Konektado resident';
 
@@ -180,7 +175,12 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
     label: 'Posted a job',
     postedAt: formatRelativeMarketplaceDate(job.createdAt).replace(/^Posted /, ''),
     detailLine: `${formatBudgetText(job.budgetAmount)} - ${schedule}`,
-    title: compactText(job.title) || buildIntentTitle(serviceNeeded ? 'Looking for' : 'Need help with', titleSubject),
+    title: formatJobPostTitle({
+      title: job.title,
+      serviceNeeded: job.serviceNeeded,
+      category: job.category,
+      cue: serviceNeeded ? 'needHelpWith' : 'lookingFor',
+    }),
     description: job.description || 'No description provided yet.',
     meta: [
       { icon: 'star-border', text: formatClientRatingText(job) },
@@ -191,6 +191,7 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
     primaryActionLabel: 'View Job',
     avatarUrl: job.client?.avatarUrl,
     imageUrl: job.photoUrls[0],
+    isOnline: isPresenceActive(job.client?.availability),
   };
 }
 
@@ -206,7 +207,11 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
     label: 'Posted a service',
     postedAt: formatRelativeMarketplaceDate(service.createdAt).replace(/^Posted /, ''),
     detailLine: `${compactText(service.rateText) || 'Rate to coordinate'} - ${availability}`,
-    title: buildIntentTitle('I offer', serviceTitle),
+    title: formatServicePostTitle({
+      title: serviceTitle,
+      category: service.category,
+      cue: service.isActive ? 'availableFor' : 'offers',
+    }),
     description:
       service.description && compactText(service.description) !== serviceTitle
         ? service.description
@@ -220,6 +225,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
     primaryActionLabel: 'View Profile',
     avatarUrl: service.provider?.avatarUrl,
     imageUrl: service.photoUrls[0],
+    isOnline: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
   };
 }
 
@@ -230,8 +236,12 @@ export default function HomeScreen() {
   const topInset = useSafeTopInset();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [feed, setFeed] = useState<HomeFeedItem[]>([]);
+  const [feedSources, setFeedSources] = useState<{ jobs: HomeFeedItem[]; workers: HomeFeedItem[] }>({
+    jobs: [],
+    workers: [],
+  });
   const [feedLoading, setFeedLoading] = useState(true);
+  const [feedLoaded, setFeedLoaded] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState<
@@ -295,7 +305,7 @@ export default function HomeScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!isFocused) {
+    if (!isFocused || feedLoaded) {
       return () => {
         active = false;
       };
@@ -349,21 +359,27 @@ export default function HomeScreen() {
             .join(' '),
         })) ?? [];
 
-      if (selectedFilter === 'Jobs') {
-        setFeed(sortByFeedScore(jobs, preferences));
-      } else if (selectedFilter === 'Workers') {
-        setFeed(sortByFeedScore(workers, preferences));
-      } else {
-        setFeed(buildForYouFeed(jobs, workers, preferences));
-      }
-
+      setFeedSources({ jobs, workers });
+      setFeedLoaded(true);
       setFeedLoading(false);
     });
 
     return () => {
       active = false;
     };
-  }, [isFocused, preferences, selectedFilter]);
+  }, [feedLoaded, isFocused]);
+
+  const feed = useMemo(() => {
+    if (selectedFilter === 'Jobs') {
+      return sortByFeedScore(feedSources.jobs, preferences);
+    }
+
+    if (selectedFilter === 'Workers') {
+      return sortByFeedScore(feedSources.workers, preferences);
+    }
+
+    return buildForYouFeed(feedSources.jobs, feedSources.workers, preferences);
+  }, [feedSources, preferences, selectedFilter]);
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -403,21 +419,21 @@ export default function HomeScreen() {
     lastScrollOffset.current = offset;
   };
 
-  const openVerification = () => {
+  const openVerification = useCallback(() => {
     router.push('/verification');
-  };
+  }, [router]);
 
-  const openJob = (jobId: string) => {
+  const openJob = useCallback((jobId: string) => {
     router.push({ pathname: '/job/[jobId]', params: { jobId } });
-  };
+  }, [router]);
 
-  const openWorker = (workerId: string, variant: 'default' | 'match') => {
+  const openWorker = useCallback((workerId: string, variant: 'default' | 'match') => {
     router.push({ pathname: '/worker/[workerId]', params: { workerId, variant } });
-  };
+  }, [router]);
 
-  const showPlaceholder = (label: string) => {
+  const showPlaceholder = useCallback((label: string) => {
     Alert.alert(label, 'This part of Home will be connected in a later slice.');
-  };
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -484,7 +500,7 @@ export default function HomeScreen() {
   );
 }
 
-function FeedCard({
+const FeedCard = memo(function FeedCard({
   feedItem,
   isVerified,
   verificationKnown,
@@ -520,7 +536,7 @@ function FeedCard({
       onPrimaryAction={() => onOpenJob(feedItem.itemId)}
     />
   );
-}
+});
 
 function VerificationBannerSkeleton() {
   return (

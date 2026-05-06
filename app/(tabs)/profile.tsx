@@ -6,11 +6,13 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/AppHeader';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { Pill } from '@/components/Pill';
+import { PresenceDot } from '@/components/PresenceDot';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyJobs } from '@/services/job.service';
+import { isPresenceActive } from '@/services/marketplace.helpers';
 import { listProfileReviews } from '@/services/review.service';
 import { listMyServices } from '@/services/service-profile.service';
 import type { JobSummary, ProviderService, Review } from '@/types/marketplace.types';
@@ -69,6 +71,7 @@ export default function ProfileScreen() {
             <View style={styles.profileCard}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
+                <PresenceDot active={isPresenceActive(profile?.availability)} size={13} style={styles.avatarDot} />
               </View>
               <View style={styles.profileCopy}>
                 <Text style={styles.name}>{displayName}</Text>
@@ -312,7 +315,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     height: 60,
     justifyContent: 'center',
+    position: 'relative',
     width: 60,
+  },
+  avatarDot: {
+    bottom: 1,
+    right: 1,
   },
   avatarText: {
     ...typography.sectionTitle,

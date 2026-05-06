@@ -7,10 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
+import { PresenceDot } from '@/components/PresenceDot';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { getServiceTagsForCategory, POPULAR_SERVICE_POST_OPTIONS, SERVICE_POST_OPTIONS } from '@/constants/service-post-options';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { isPresenceActive } from '@/services/marketplace.helpers';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
 
 const MAX_SERVICE_PHOTOS = 10;
@@ -117,7 +119,7 @@ export default function CreateServiceScreen() {
           <View style={styles.userRow}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(getDisplayName(profile))}</Text>
-              <View style={styles.avatarDot} />
+              <PresenceDot active={isPresenceActive(profile?.availability)} size={12} style={styles.avatarDot} />
             </View>
             <View style={styles.userCopy}>
               <Text style={styles.userName}>{getDisplayName(profile)}</Text>
@@ -507,15 +509,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   avatarDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: radius.pill,
-    borderWidth: 2,
     bottom: 0,
-    height: 12,
-    position: 'absolute',
     right: 0,
-    width: 12,
   },
   userCopy: {
     flex: 1,

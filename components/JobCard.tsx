@@ -1,4 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { color, radius, typography } from '@/constants/theme';
@@ -65,9 +66,7 @@ export function JobCard({
         {description}
       </Text>
 
-      {imageUrl ? (
-        <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photo} />
-      ) : null}
+      {imageUrl ? <JobPhoto imageUrl={imageUrl} /> : null}
 
       <View style={styles.tagRow}>
         <View style={styles.tagClip}>
@@ -104,6 +103,31 @@ export function JobCard({
         </>
       ) : null}
     </Pressable>
+  );
+}
+
+function JobPhoto({ imageUrl }: { imageUrl: string }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (failed) {
+    return (
+      <View style={[styles.photo, styles.photoFallback]}>
+        <MaterialIcons color={color.textSubtle} name="image-not-supported" size={24} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      onError={() => setFailed(true)}
+      resizeMode="cover"
+      source={{ uri: imageUrl }}
+      style={styles.photo}
+    />
   );
 }
 
@@ -225,6 +249,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 238,
     width: '100%',
+  },
+  photoFallback: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    justifyContent: 'center',
   },
   tagRow: {
     alignItems: 'center',

@@ -75,6 +75,70 @@ export function compactText(value: string | null | undefined) {
   return value?.trim() ?? '';
 }
 
+type JobPostCue = 'lookingFor' | 'needHelpWith' | 'hiringFor';
+type ServicePostCue = 'availableFor' | 'canHelpWith' | 'offers';
+
+const jobCueText: Record<JobPostCue, string> = {
+  lookingFor: 'Looking for',
+  needHelpWith: 'Need help with',
+  hiringFor: 'Hiring for',
+};
+
+const serviceCueText: Record<ServicePostCue, string> = {
+  availableFor: 'Available for',
+  canHelpWith: 'Can help with',
+  offers: 'Offers',
+};
+
+const postCuePattern = /^(looking for|need help with|hiring for|available for|can help with|offers|i offer)\b/i;
+
+function lowerFirst(value: string) {
+  if (!value) return value;
+  return `${value.charAt(0).toLowerCase()}${value.slice(1)}`;
+}
+
+function formatPostTitleWithCue(cue: string, subject: string) {
+  const cleanSubject = compactText(subject);
+  if (!cleanSubject) return cue;
+  if (postCuePattern.test(cleanSubject)) return cleanSubject.replace(/^i offer\b/i, 'Offers');
+  return `${cue} ${lowerFirst(cleanSubject)}`;
+}
+
+export function formatJobPostTitle({
+  title,
+  serviceNeeded,
+  category,
+  cue = 'needHelpWith',
+}: {
+  title?: string | null;
+  serviceNeeded?: string | null;
+  category?: string | null;
+  cue?: JobPostCue;
+}) {
+  const subject = compactText(serviceNeeded) || compactText(title) || compactText(category) || 'local help';
+  return formatPostTitleWithCue(jobCueText[cue], subject);
+}
+
+export function formatServicePostTitle({
+  title,
+  category,
+  cue = 'availableFor',
+}: {
+  title?: string | null;
+  category?: string | null;
+  cue?: ServicePostCue;
+}) {
+  const subject = compactText(title) || compactText(category) || 'local services';
+  return formatPostTitleWithCue(serviceCueText[cue], subject);
+}
+
+export function isPresenceActive(value: string | boolean | null | undefined) {
+  if (typeof value === 'boolean') return value;
+  const cleanValue = compactText(value).toLowerCase();
+  if (!cleanValue) return false;
+  return !/(inactive|offline|away|unavailable|not available|paused|closed)/i.test(cleanValue);
+}
+
 export async function getCurrentUserId(): Promise<ServiceResult<string>> {
   const { data, error } = await supabase.auth.getUser();
 
@@ -310,7 +374,12 @@ export function adaptJobToCardProps(job: JobSummary): JobCardProps {
 
   return {
     postedAt: formatRelativeMarketplaceDate(job.createdAt),
-    title: job.title,
+    title: formatJobPostTitle({
+      title: job.title,
+      serviceNeeded: job.serviceNeeded,
+      category: job.category,
+      cue: serviceNeeded ? 'needHelpWith' : 'lookingFor',
+    }),
     subtitle: formatJobSubtitle(job),
     description: job.description || 'No description provided yet.',
     tags: Array.from(new Set([category, serviceNeeded, ...job.tags].filter(Boolean))),
@@ -335,11 +404,16 @@ export function adaptServiceToCardProps(
       ? `${availability} near your barangay`
       : 'Available near your barangay',
     rateLine: compactText(service.rateText) || 'Rate to coordinate',
-    headline: service.description || service.title,
+    headline: formatServicePostTitle({
+      title: service.title,
+      category: service.category,
+      cue: service.isActive ? 'availableFor' : 'offers',
+    }),
     tags: Array.from(new Set([category, ...service.tags].filter(Boolean))),
     ratingText: formatServiceRatingText(service),
     jobsDoneText: formatServiceJobsDoneText(service, service.completedJobsCount),
     location: getMarketplaceLocation(service),
     imageUrl: service.photoUrls[0],
+    isActive: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
   };
 }

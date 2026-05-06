@@ -1,6 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, typography } from '@/constants/theme';
 
 type FeedMetaItem = {
@@ -94,7 +96,7 @@ export function HomeFeedCard({
         ) : null}
       </View>
 
-      {imageUrl ? <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.photo} /> : null}
+      {imageUrl ? <FeedPhoto imageUrl={imageUrl} /> : null}
 
       {tags.length ? (
         <View style={styles.tagRail}>
@@ -161,15 +163,51 @@ function Avatar({
   isOnline: boolean;
   name: string;
 }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
   return (
     <View style={styles.avatar}>
-      {imageUrl ? (
-        <Image resizeMode="cover" source={{ uri: imageUrl }} style={styles.avatarImage} />
+      {imageUrl && !failed ? (
+        <Image
+          onError={() => setFailed(true)}
+          resizeMode="cover"
+          source={{ uri: imageUrl }}
+          style={styles.avatarImage}
+        />
       ) : (
         <Text style={styles.avatarText}>{getInitials(name)}</Text>
       )}
-      {isOnline ? <View style={styles.onlineDot} /> : null}
+      <PresenceDot active={isOnline} size={11} style={styles.onlineDot} />
     </View>
+  );
+}
+
+function FeedPhoto({ imageUrl }: { imageUrl: string }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (failed) {
+    return (
+      <View style={[styles.photo, styles.photoFallback]}>
+        <MaterialIcons color={color.textSubtle} name="image-not-supported" size={24} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      onError={() => setFailed(true)}
+      resizeMode="cover"
+      source={{ uri: imageUrl }}
+      style={styles.photo}
+    />
   );
 }
 
@@ -262,15 +300,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   onlineDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: radius.pill,
-    borderWidth: 2,
     bottom: 0,
-    height: 11,
-    position: 'absolute',
     right: 0,
-    width: 11,
   },
   identityCopy: {
     flex: 1,
@@ -334,6 +365,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 222,
     width: '100%',
+  },
+  photoFallback: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    justifyContent: 'center',
   },
   tagRail: {
     alignItems: 'center',

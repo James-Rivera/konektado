@@ -34,6 +34,7 @@ export type SearchWorkerItem = {
   jobsDoneText: string;
   location: string;
   matchReason: string;
+  isActive?: boolean;
 };
 
 export const popularServices: PopularService[] = [

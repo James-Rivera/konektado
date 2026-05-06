@@ -6,6 +6,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton } from '@/components/Skeleton';
 import { color } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -15,7 +16,12 @@ import {
   markWorkerHired,
   reportConversation,
 } from '@/services/conversation.service';
-import { getMarketplaceLocation } from '@/services/marketplace.helpers';
+import {
+  formatJobPostTitle,
+  formatServicePostTitle,
+  getMarketplaceLocation,
+  isPresenceActive,
+} from '@/services/marketplace.helpers';
 import type { ConversationDetail } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
@@ -65,6 +71,7 @@ export default function ConversationDetailsScreen() {
   const isClient = conversation?.clientId === profile?.id;
   const canMarkHired = Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
   const context = conversation ? getContextSummary(conversation) : null;
+  const other = conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
 
   const openPost = () => {
     if (conversation?.jobId) {
@@ -145,7 +152,7 @@ export default function ConversationDetailsScreen() {
             <View style={styles.hero}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{getInitials(context.title)}</Text>
-                <View style={styles.onlineDot} />
+                <PresenceDot active={isPresenceActive(other?.availability)} size={13} style={styles.onlineDot} />
               </View>
               <Text numberOfLines={2} style={styles.title}>{context.title}</Text>
               <Text numberOfLines={2} style={styles.subtitle}>{context.subtitle}</Text>
@@ -370,14 +377,22 @@ function getContextSummary(conversation: ConversationDetail) {
   if (conversation.job) {
     const budget = conversation.job.budgetAmount ? `PHP ${conversation.job.budgetAmount}` : 'Budget to coordinate';
     return {
-      title: conversation.job.title,
+      title: formatJobPostTitle({
+        title: conversation.job.title,
+        serviceNeeded: conversation.job.serviceNeeded,
+        category: conversation.job.category,
+      }),
       subtitle: `Job by ${conversation.client?.fullName ?? 'Konektado resident'} - ${getMarketplaceLocation(conversation.job)} - ${conversation.job.scheduleText ?? 'Schedule to coordinate'} - ${budget}`,
     };
   }
 
   if (conversation.service) {
     return {
-      title: conversation.service.title,
+      title: formatServicePostTitle({
+        title: conversation.service.title,
+        category: conversation.service.category,
+        cue: conversation.service.isActive ? 'availableFor' : 'offers',
+      }),
       subtitle: `Service by ${conversation.provider?.fullName ?? 'Konektado resident'} - ${getMarketplaceLocation(conversation.service)} - ${conversation.service.rateText ?? 'Rate to coordinate'}`,
     };
   }
@@ -475,6 +490,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     height: 52,
     justifyContent: 'center',
+    position: 'relative',
     width: 52,
   },
   avatarText: {
@@ -484,15 +500,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   onlineDot: {
-    backgroundColor: color.brandYellow,
-    borderColor: color.background,
-    borderRadius: 7,
-    borderWidth: 1,
     bottom: 0,
-    height: 13,
-    position: 'absolute',
     right: 0,
-    width: 13,
   },
   title: {
     color: color.text,
