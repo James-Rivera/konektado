@@ -15,6 +15,7 @@ import "react-native-reanimated";
 import { AppSplashScreen } from "@/components/app-splash-screen";
 import { color } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ProfileProvider } from "@/hooks/use-profile";
 import { useProfileStatus } from "@/hooks/use-profile-status";
 
 export const unstable_settings = {
@@ -23,10 +24,6 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
-  const segments = useSegments();
-  const { loading, authenticated, needsRole, needsProfile, isAdmin } =
-    useProfileStatus();
   const [fontsLoaded] = useFonts({
     "Satoshi-Black": require("../assets/images/fonts/Satoshi-Black.otf"),
     "Satoshi-BlackItalic": require("../assets/images/fonts/Satoshi-BlackItalic.otf"),
@@ -47,6 +44,28 @@ export default function RootLayout() {
       });
     }
   }, []);
+
+  if (!fontsLoaded) {
+    return <AppSplashScreen />;
+  }
+
+  return (
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <SafeAreaProvider>
+        <ProfileProvider>
+          <RootNavigator />
+          <StatusBar backgroundColor={color.background} style="dark" translucent={false} />
+        </ProfileProvider>
+      </SafeAreaProvider>
+    </ThemeProvider>
+  );
+}
+
+function RootNavigator() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { loading, authenticated, needsRole, needsProfile, isAdmin } =
+    useProfileStatus();
 
   useEffect(() => {
     if (loading) return;
@@ -103,39 +122,30 @@ export default function RootLayout() {
     }
   }, [authenticated, isAdmin, loading, needsProfile, needsRole, router, segments]);
 
-  if (!fontsLoaded) {
-    return <AppSplashScreen />;
-  }
-
   if (loading) {
     return <AppSplashScreen />;
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
-          <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />
-          <Stack.Screen name="conversation/[conversationId]/details" options={{ headerShown: false }} />
-          <Stack.Screen name="create-job" options={{ headerShown: false }} />
-          <Stack.Screen name="create-job-preview" options={{ headerShown: false }} />
-          <Stack.Screen name="create-service" options={{ headerShown: false }} />
-          <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
-          <Stack.Screen name="post/active" options={{ headerShown: false }} />
-          <Stack.Screen name="post/renew" options={{ headerShown: false }} />
-          <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
-          <Stack.Screen name="verification" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="modal"
-            options={{ presentation: "modal", title: "Modal" }}
-          />
-          <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar backgroundColor={color.background} style="dark" translucent={false} />
-      </SafeAreaProvider>
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
+      <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />
+      <Stack.Screen name="conversation/[conversationId]/details" options={{ headerShown: false }} />
+      <Stack.Screen name="create-job" options={{ headerShown: false }} />
+      <Stack.Screen name="create-job-preview" options={{ headerShown: false }} />
+      <Stack.Screen name="create-service" options={{ headerShown: false }} />
+      <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
+      <Stack.Screen name="post/active" options={{ headerShown: false }} />
+      <Stack.Screen name="post/renew" options={{ headerShown: false }} />
+      <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
+      <Stack.Screen name="verification" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="modal"
+        options={{ presentation: "modal", title: "Modal" }}
+      />
+      <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+    </Stack>
   );
 }

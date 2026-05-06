@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps } from 'react';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { AppHeader } from '@/components/AppHeader';
 import { NoticeBanner } from '@/components/NoticeBanner';
@@ -15,11 +16,13 @@ import { listMyJobs } from '@/services/job.service';
 import { isPresenceActive } from '@/services/marketplace.helpers';
 import { listProfileReviews } from '@/services/review.service';
 import { listMyServices } from '@/services/service-profile.service';
+import { supabase } from '@/utils/supabase';
 import type { JobSummary, ProviderService, Review } from '@/types/marketplace.types';
 
 type ProfileMode = 'work' | 'hiring';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const [mode, setMode] = useState<ProfileMode>('work');
   const { profile, loading: profileLoading } = useProfile();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -30,6 +33,24 @@ export default function ProfileScreen() {
     `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
     'Konektado resident';
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+
+  const handleLogout = () => {
+    Alert.alert('Log out', 'End this session on this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            Alert.alert('Log out', error.message);
+            return;
+          }
+          router.replace('/(auth)');
+        },
+      },
+    ]);
+  };
 
   useEffect(() => {
     let active = true;
@@ -119,6 +140,15 @@ export default function ProfileScreen() {
         ) : (
           <HiringProfile jobs={jobs} reviews={reviews} />
         )}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          onPress={handleLogout}
+          style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.danger} name="logout" size={18} />
+          <Text style={styles.logoutText}>Log out</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -437,5 +467,24 @@ const styles = StyleSheet.create({
   historyMeta: {
     ...typography.captionMedium,
     color: color.primary,
+  },
+  logoutButton: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderColor: color.danger,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    justifyContent: 'center',
+    marginTop: space.sm,
+    minHeight: 46,
+  },
+  pressed: {
+    opacity: 0.72,
+  },
+  logoutText: {
+    ...typography.bodyMedium,
+    color: color.danger,
   },
 });

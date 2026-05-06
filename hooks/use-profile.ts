@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
+import type { User } from '@supabase/supabase-js';
+import type { ReactNode } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
-import { supabase } from "@/utils/supabase";
+import { supabase } from '@/utils/supabase';
 
 export type ProfileRecord = {
   id: string;
@@ -31,130 +33,208 @@ type ProviderProfileRecord = {
   certification_status: string | null;
 };
 
-export function useProfile() {
+type ProfileContextValue = {
+  authenticated: boolean;
+  error: string | null;
+  loading: boolean;
+  profile: ProfileRecord | null;
+  refresh: () => Promise<void>;
+  user: User | null;
+  version: number;
+};
+
+const PROFILE_FALLBACK_POLL_MS = 30000;
+const ProfileContext = createContext<ProfileContextValue | null>(null);
+
+export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
   const hasLoadedOnceRef = useRef(false);
+  const activeRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const pendingLoadRef = useRef(false);
+  const loadPromiseRef = useRef<Promise<void> | null>(null);
 
   const load = useCallback(async () => {
-    if (!hasLoadedOnceRef.current) {
-      setLoading(true);
+    if (inFlightRef.current) {
+      pendingLoadRef.current = true;
+      await loadPromiseRef.current;
+      return;
     }
-    setError(null);
+    inFlightRef.current = true;
 
-    try {
-      const { data: userResult, error: userError } =
-        await supabase.auth.getUser();
-
-      if (userError || !userResult.user) {
-        setProfile(null);
-        setError(userError?.message ?? "Not signed in");
-        return;
+    const loadPromise = (async () => {
+      if (!hasLoadedOnceRef.current) {
+        setLoading(true);
       }
+      setError(null);
 
-      const { data, error: profileError } = await supabase
-        .from("profiles")
-        .select(
-          "id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at, barangay_verified_at",
-        )
-        .eq("id", userResult.user.id)
-        .maybeSingle();
+      try {
+        do {
+          pendingLoadRef.current = false;
 
-      if (profileError) {
-        setProfile(null);
-        setError(profileError.message);
-      } else {
-        const base = data as ProfileRecord;
-        const { data: providerData } = await supabase
-          .from("provider_profiles")
-          .select("service_type, has_certifications, certification_status")
-          .eq("user_id", userResult.user.id)
-          .maybeSingle();
+          const { data: userResult, error: userError } = await supabase.auth.getUser();
 
-        const providerProfile =
-          (providerData as ProviderProfileRecord | null) ?? null;
-        setProfile({
-          ...base,
-          service_type: providerProfile?.service_type ?? null,
-          has_certifications: providerProfile?.has_certifications ?? null,
-          certification_status: providerProfile?.certification_status ?? null,
-        });
+          if (!activeRef.current) return;
+
+          if (userError || !userResult.user) {
+            setAuthenticated(false);
+            setUser(null);
+            setProfile(null);
+            setError(userError?.message ?? null);
+            return;
+          }
+
+          setAuthenticated(true);
+          setUser(userResult.user);
+
+          const { data, error: profileError } = await supabase
+            .from('profiles')
+            .select(
+              'id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at, barangay_verified_at',
+            )
+            .eq('id', userResult.user.id)
+            .maybeSingle();
+
+          if (!activeRef.current) return;
+
+          if (profileError) {
+            setProfile(null);
+            setError(profileError.message);
+            return;
+          }
+
+          const { data: providerData } = await supabase
+            .from('provider_profiles')
+            .select('service_type, has_certifications, certification_status')
+            .eq('user_id', userResult.user.id)
+            .maybeSingle();
+
+          if (!activeRef.current) return;
+
+          const base = data as Omit<
+            ProfileRecord,
+            'service_type' | 'has_certifications' | 'certification_status'
+          > | null;
+          const providerProfile = (providerData as ProviderProfileRecord | null) ?? null;
+
+          setProfile(
+            base
+              ? {
+                  ...base,
+                  service_type: providerProfile?.service_type ?? null,
+                  has_certifications: providerProfile?.has_certifications ?? null,
+                  certification_status: providerProfile?.certification_status ?? null,
+                }
+              : null,
+          );
+        } while (pendingLoadRef.current && activeRef.current);
+      } catch (loadError) {
+        if (!activeRef.current) return;
+        setError(loadError instanceof Error ? loadError.message : 'Could not load profile');
+      } finally {
+        if (activeRef.current) {
+          hasLoadedOnceRef.current = true;
+          setLoading(false);
+          setVersion((current) => current + 1);
+        }
+        inFlightRef.current = false;
+        loadPromiseRef.current = null;
       }
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load profile");
-    } finally {
-      hasLoadedOnceRef.current = true;
-      setLoading(false);
-    }
+    })();
+
+    loadPromiseRef.current = loadPromise;
+    await loadPromise;
   }, []);
 
   useEffect(() => {
-    let active = true;
-    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-    const subscribeToProfile = async () => {
-      if (profileChannel) {
-        await supabase.removeChannel(profileChannel);
-        profileChannel = null;
-      }
-
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
-      if (!active || !userId) return;
-
-      profileChannel = supabase
-        .channel(`profile-refresh-${userId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "profiles",
-            filter: `id=eq.${userId}`,
-          },
-          () => {
-            load();
-          },
-        )
-        .subscribe();
-    };
-
-    load();
-    subscribeToProfile();
+    activeRef.current = true;
+    void load();
 
     const { data: subscription } = supabase.auth.onAuthStateChange(() => {
-      if (active) {
-        load();
-        subscribeToProfile();
+      void load();
+    });
+
+    const appStateSubscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') {
+        void load();
       }
     });
 
-    const appStateSubscription = AppState.addEventListener("change", (status) => {
-      if (active && status === "active") {
-        load();
-      }
-    });
-
-    pollTimer = setInterval(() => {
-      if (active) {
-        load();
-      }
-    }, 5000);
+    const pollTimer = setInterval(() => {
+      void load();
+    }, PROFILE_FALLBACK_POLL_MS);
 
     return () => {
-      active = false;
+      activeRef.current = false;
       subscription?.subscription.unsubscribe();
       appStateSubscription.remove();
-      if (pollTimer) {
-        clearInterval(pollTimer);
-      }
-      if (profileChannel) {
-        supabase.removeChannel(profileChannel);
-      }
+      clearInterval(pollTimer);
     };
   }, [load]);
 
-  return { profile, loading, error, refresh: load };
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    const channel = supabase
+      .channel(`profile-cache-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        () => {
+          void load();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'provider_profiles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void load();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [load, user?.id]);
+
+  const value = useMemo(
+    () => ({
+      authenticated,
+      error,
+      loading,
+      profile,
+      refresh: load,
+      user,
+      version,
+    }),
+    [authenticated, error, load, loading, profile, user, version],
+  );
+
+  return createElement(ProfileContext.Provider, { value }, children);
+}
+
+export function useProfile() {
+  const context = useContext(ProfileContext);
+
+  if (!context) {
+    throw new Error('useProfile must be used inside ProfileProvider');
+  }
+
+  return context;
 }

@@ -80,6 +80,8 @@ This report is documentation only. It does not change app behavior.
 - Affected files: `services/job.service.ts`, `services/service-profile.service.ts`, `app/(tabs)/index.tsx`, `app/(tabs)/search.tsx`.
 - User impact: Initial Home load, Search load, and query changes get slower as rows grow.
 - Recommended fix: Add limits/pagination first. Move text/category/location filtering into Supabase queries or RPCs. Return list-ready fields and stats in a single view/RPC when possible.
+- Current status: Partially implemented in Phase 2. Search and Home now use bounded query limits, and obvious scalar text filtering moved into Supabase `ilike` filters. Some tag matching remains client-side. RPCs/views, EXPLAIN/query-plan verification, infinite pagination, and index work were not added.
+- Remaining work: Deferred database-scaling work, not current app-blocking work.
 - Risk level: Medium.
 - Estimated implementation difficulty: Medium to high if database views/RPCs are added.
 
@@ -453,16 +455,21 @@ Likely index candidates based on current code, to verify before adding:
 
 ## Implementation Status
 
-- Current phase: Phase 3 — List virtualization and layout-matched skeletons
-- Status: Implemented, pending manual device testing
+- Current phase: Post-Phase-4 stabilization
+- Status: Awaiting manual device QA
 
 - [x] Create audit report
 - [x] Fix P0 messaging freshness, optimistic-send race, and preview-cache issues
-- [ ] Fix P1 issues
+- [x] P1 Issue 3 — Start-conversation preview cache behavior
+- [x] P1 Issue 4 — Search debounce and active-mode fetching
+- [ ] P1 Issue 5 — Partially implemented; deeper database optimization deferred
+- [x] P1 Issue 6 — Home feed recomputation and virtualization
+- [x] P1 Issue 7 — Profile polling consolidation
 - [ ] Review P2 issues
 - [x] Run typecheck/lint for Phase 1 messaging changes
 - [x] Run typecheck/lint for Phase 2 Search/Home changes
 - [x] Run typecheck/lint for Phase 3 list virtualization and skeleton changes
+- [x] Run typecheck/lint for Phase 4 profile polling cleanup
 - [ ] Manually test messaging
 - [ ] Manually test conversation previews
 - [ ] Manually test tab switching
@@ -549,6 +556,88 @@ Deferred items:
 - Infinite pagination remains out of scope for this phase.
 - Skeleton animation sharing remains deferred; this pass only improves layout matching.
 
+## Phase 4 Profile Polling and Background Query Cleanup Notes
+
+Implemented changes:
+
+- `useProfile` now reads from one shared `ProfileProvider` cache instead of every screen owning its own Supabase auth/profile lifecycle.
+- The shared profile cache preserves the existing `useProfile()` API shape (`profile`, `loading`, `error`, `refresh`) and adds shared `authenticated`, `user`, and `version` fields for route-guard consumers.
+- The shared profile cache owns one auth listener, one app-foreground refresh listener, one profile/provider-profile realtime subscription for the active user, explicit `refresh()`, and one 30-second fallback poll.
+- The previous per-screen 5-second `useProfile` polling loop was removed.
+- `useProfileStatus` now derives authenticated user/profile state from the shared profile cache, keeps only route-guard-specific `user_roles` and `user_preferences` queries, and subscribes to those two tables for routing updates.
+- The previous root-level 2-second `useProfileStatus` polling loop was removed.
+- `app/_layout.tsx` now mounts `ProfileProvider` once around the root navigator so tabs, detail screens, post flows, messaging, and the route guard share the same profile/session cache.
+- Existing login/logout, onboarding, admin, verification, and main-app route guard logic was preserved in the root navigator.
+
+Validation results:
+
+- `npm.cmd run lint` passed.
+- `npx.cmd tsc --noEmit` passed.
+- No Expo/manual device test was run during this implementation pass.
+
+Manual testing checklist:
+
+- Fresh login redirects correctly.
+- Logout returns to the auth screen.
+- Onboarding incomplete user routes correctly.
+- Verified user routes correctly.
+- Verification status update appears after realtime/profile refresh/app foreground.
+- Profile edit/update still appears in screens using profile data.
+- Switching tabs no longer causes repeated profile polling from each mounted `useProfile` caller.
+- App background/foreground refresh still works.
+
+Deferred items:
+
+- The shared fallback poll remains enabled at 30 seconds for environments where realtime events are unavailable or delayed.
+- Route status still performs separate `user_roles` and `user_preferences` queries because those tables are route-guard-specific and not part of the public `useProfile` screen contract.
+- Broader query consolidation for profile-adjacent screen data, such as profile jobs/services/reviews, remains outside this phase.
+
+## Post-Phase-4 Stabilization Notes
+
+Implemented changes:
+
+- Fixed an onboarding routing regression where a newly onboarded user could briefly reach the completion screen, be routed back to the onboarding name step from stale route-guard state, and then later jump to the dashboard after the shared profile cache caught up.
+- Onboarding profile save now explicitly refreshes the shared `ProfileProvider` cache after `profiles`, `user_preferences`, and role/profile-adjacent rows are written.
+- `ProfileProvider.refresh()` now queues overlapping loads and lets callers await the active refresh instead of dropping refresh requests while an auth/profile load is already in flight.
+- The onboarding completion CTA now waits for `useProfileStatus` to confirm that the user is authenticated and no longer needs role/profile setup before routing into tabs.
+
+Validation results:
+
+- `npm.cmd run lint` passed.
+- `npx.cmd tsc --noEmit` passed.
+
+Manual testing checklist:
+
+- Create a brand-new account.
+- Complete onboarding once.
+- Confirm the app routes to the dashboard/main app without returning to the onboarding name step.
+- Confirm the welcome/completion screen does not reappear after entering the app.
+- Force-close and reopen the app; confirm the user remains in the correct app state.
+- Logout and login again; confirm there is no onboarding loop.
+
+Deferred items:
+
+- No additional polling was added. Route status still depends on the shared profile cache plus route-specific `user_roles` and `user_preferences` queries.
+- Manual device QA is still required to verify timing on real devices and slower networks.
+
+## P1 Status Reconciliation
+
+Implemented P1 work:
+
+- Issue 3 — Start-conversation preview cache behavior: Implemented in Phase 1. Job Detail and Worker Profile emit returned conversation details into the preview cache before navigation.
+- Issue 4 — Search debounce and active-mode fetching: Implemented in Phase 2. Search input is debounced, only the active mode fetches first, and stale results remain visible during refresh.
+- Issue 6 — Home feed recomputation and virtualization: Implemented across Phases 2 and 3. Home precomputes feed variants, avoids repeated scoring during filter switches, and renders the feed through `FlatList`.
+- Issue 7 — Profile polling consolidation: Implemented in Phase 4. Profile/session state is shared through one provider/cache, per-screen polling was removed, and the root status poll was removed.
+
+Partially implemented P1 work:
+
+- Issue 5 — Marketplace search overfetch reduction: Partially implemented in Phase 2. Home and Search now use bounded query limits, obvious scalar text filtering moved into Supabase `ilike` filters, and active-mode Search fetches reduce duplicate work. Some tag matching remains client-side.
+
+Deferred P1 work:
+
+- Issue 5 still needs deeper database-scaling work if production-sized row counts prove it necessary: list-ready RPCs/views, EXPLAIN/query-plan verification, database index work, and infinite pagination.
+- These deferred parts are not blocking right now because the current implementation has bounded payloads, active-mode fetching, debounced Search, and virtualized list rendering. The remaining work should be driven by real row counts, query plans, or measured device/server profiling rather than done speculatively.
+
 ## Skeleton Strategy Improvement
 
 Audit all skeleton/loading states and convert them to layout-matched skeletons where practical.
@@ -577,3 +666,9 @@ Recommended implementation pattern:
 - Use skeleton only for initial loading. For refreshes, keep existing UI visible and show a small refresh/loading indicator.
 
 Also document which skeletons should remain separate if the real component cannot safely render without data.
+
+## Recommended Next Step
+
+- Run manual QA for Phases 1–4 before starting more performance work.
+- After manual QA, proceed to Product UX detail screen fixes.
+- Do not start database index, RPC, or view work unless real row counts, EXPLAIN output, or profiling show a need.

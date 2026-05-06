@@ -7,6 +7,7 @@ import {
   loadOnboardingDraft,
   saveOnboardingProfile,
 } from '@/services/onboarding.service';
+import { useProfile } from '@/hooks/use-profile';
 import type { OnboardingDraft, OnboardingIntent, VerificationUpload } from '@/types/onboarding.types';
 
 export type { OnboardingDraft, VerificationUpload };
@@ -24,6 +25,7 @@ export type OnboardingContextValue = {
 const OnboardingContext = createContext<OnboardingContextValue | undefined>(undefined);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
+  const { refresh: refreshProfile } = useProfile();
   const [draft, setDraft] = useState<OnboardingDraft>(emptyOnboardingDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,21 +74,26 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }
 
     setSaving(true);
-    const result = await saveOnboardingProfile({
-      draft,
-      email: userMeta.email,
-      intent: cachedRole,
-      userId: userMeta.id,
-    });
-    setSaving(false);
 
-    if (result.error) {
-      Alert.alert('Could not save profile', result.error);
-      return false;
+    try {
+      const result = await saveOnboardingProfile({
+        draft,
+        email: userMeta.email,
+        intent: cachedRole,
+        userId: userMeta.id,
+      });
+
+      if (result.error) {
+        Alert.alert('Could not save profile', result.error);
+        return false;
+      }
+
+      await refreshProfile();
+      return true;
+    } finally {
+      setSaving(false);
     }
-
-    return true;
-  }, [cachedRole, draft, userMeta]);
+  }, [cachedRole, draft, refreshProfile, userMeta]);
 
   const value = useMemo(
     () => ({

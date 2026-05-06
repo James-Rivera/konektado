@@ -9,9 +9,18 @@ import {
   OnboardingButton,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
+import { useProfileStatus } from '@/hooks/use-profile-status';
 
 export default function OnboardingCompleteScreen() {
   const router = useRouter();
+  const status = useProfileStatus();
+  const canStart =
+    !status.loading && status.authenticated && !status.needsRole && !status.needsProfile;
+
+  const startBrowsing = () => {
+    if (!canStart) return;
+    router.replace('/(tabs)');
+  };
 
   return (
     <View style={styles.screen}>
@@ -45,8 +54,10 @@ export default function OnboardingCompleteScreen() {
 
         <View style={styles.footer}>
           <OnboardingButton
+            disabled={!canStart}
             label="Start browsing Konektado"
-            onPress={() => router.replace('/(tabs)')}
+            loading={status.loading}
+            onPress={startBrowsing}
             variant="yellow"
           />
         </View>
