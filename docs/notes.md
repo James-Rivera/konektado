@@ -11,3 +11,6 @@
 - [ ] **Header Overlapping:** The Settings (cog) icon in the top right is overlapping with the mobile status bar (battery/clock area). Needs `SafeAreaView` or additional top padding.
 
 Checked and updated by: Aedrieu#
+
+use drp downs avoid typing
+use calendar when picking avalabilityvvv
