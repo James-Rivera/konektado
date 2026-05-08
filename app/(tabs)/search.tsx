@@ -22,7 +22,6 @@ import {
   type MvpServiceOption,
   type SearchWorkType,
   doesServiceMatchWorkType,
-  getDefaultSearchWorkTypeForMode,
   getDiscoveryGroupsForWorkType,
   getDiscoveryGroupForService,
   getDisplayLabelForMvpService,
@@ -129,12 +128,8 @@ export default function SearchScreen() {
     jobs: false,
     workers: false,
   });
-  const [appliedFilters, setAppliedFilters] = useState<SearchDiscoveryFilters>(() =>
-    buildDefaultFilters('jobs', null),
-  );
-  const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(() =>
-    buildDefaultFilters('jobs', null),
-  );
+  const [appliedFilters, setAppliedFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
+  const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
   const searchRequestRef = useRef(0);
   const controlsTranslateY = useRef(new Animated.Value(0)).current;
   const controlsHeightRef = useRef(0);
@@ -168,12 +163,12 @@ export default function SearchScreen() {
   }, []);
 
   useEffect(() => {
-    const nextDefaultFilters = buildDefaultFilters(mode, preferences);
+    const nextDefaultFilters = buildDefaultFilters();
     const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextDefaultFilters.workType, orderedGroups);
     setAppliedFilters(nextDefaultFilters);
     setDraftFilters(nextDefaultFilters);
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
-  }, [mode, orderedGroups, preferences]);
+  }, [orderedGroups]);
 
   useEffect(() => {
     if (browseGroupsForWorkType.includes(browseGroup)) return;
@@ -433,14 +428,14 @@ export default function SearchScreen() {
   }, [browseGroup, revealControlsAtTop, selectedService]);
 
   const clearSearch = useCallback(() => {
-    const nextDefaults = buildDefaultFilters(mode, preferences);
+    const nextDefaults = buildDefaultFilters();
     const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextDefaults.workType, orderedGroups);
     revealControlsAtTop();
     setQuery('');
     setAppliedFilters(nextDefaults);
     setDraftFilters(nextDefaults);
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
-  }, [mode, orderedGroups, preferences, revealControlsAtTop]);
+  }, [orderedGroups, revealControlsAtTop]);
 
   const handleOpenFilters = useCallback(() => {
     setDraftFilters(appliedFilters);
@@ -471,8 +466,8 @@ export default function SearchScreen() {
   );
 
   const handleResetFilters = useCallback(() => {
-    setDraftFilters(buildDefaultFilters(mode, preferences));
-  }, [mode, preferences]);
+    setDraftFilters(buildDefaultFilters());
+  }, []);
 
   const handleApplyFilters = useCallback(() => {
     const nextFilters = reconcileFiltersForWorkType(draftFilters, orderedGroups);
@@ -693,14 +688,10 @@ export default function SearchScreen() {
   );
 }
 
-function buildDefaultFilters(mode: SearchMode, preferences: UserPreferences | null): SearchDiscoveryFilters {
-  const workType = getDefaultSearchWorkTypeForMode({ mode, preferences });
-  const orderedGroups = getOrderedDiscoveryGroupsForMode({ mode, preferences });
-  const defaultGroup = getDiscoveryGroupsForWorkType(workType, orderedGroups)[0] ?? 'all';
-
+function buildDefaultFilters(): SearchDiscoveryFilters {
   return {
-    workType,
-    serviceGroup: defaultGroup,
+    workType: 'either',
+    serviceGroup: 'all',
     service: 'all',
     locationScope: 'nearby',
     sort: 'relevant',

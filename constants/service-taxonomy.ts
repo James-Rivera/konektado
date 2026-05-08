@@ -111,6 +111,50 @@ export const SEARCH_SERVICE_DISPLAY_LABELS: Partial<Record<MvpServiceOption, str
   'Basic home repair': 'Minor home fix help',
 };
 
+function normalizeServiceLookupKey(value: string | null | undefined) {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export const LEGACY_MVP_SERVICE_ALIASES: Record<string, MvpServiceOption> = {
+  'House cleaning': 'Cleaning',
+  'Home cleaning': 'Cleaning',
+  Housekeeping: 'Cleaning',
+  'Whole-house cleaning': 'Cleaning',
+  'Laundry service': 'Laundry help',
+  'Pickup errands': 'Errands',
+  'Small delivery': 'Delivery help',
+  'General home help': 'Home assistance',
+  'Minor home fix help': 'Basic home repair',
+  'Home repair': 'Basic home repair',
+  'Small fix': 'Basic home repair',
+  'Yard sweeping': 'Yard or outdoor help',
+  'Yard cleanup': 'Yard or outdoor help',
+  'Garden help': 'Yard or outdoor help',
+  Typing: 'Encoding',
+  'Data entry': 'Encoding',
+  'Document help': 'Document formatting',
+  'Computer lessons': 'Basic computer lessons',
+  'Laptop setup': 'Computer setup',
+  'Phone assistance': 'Phone setup',
+  'Wi-Fi setup': 'WiFi/router help',
+  'Wifi setup': 'WiFi/router help',
+  'Router setup': 'WiFi/router help',
+  'Printer pairing': 'Printer setup',
+  Troubleshooting: 'Basic troubleshooting',
+  Resume: 'Resume or form assistance',
+  Forms: 'Resume or form assistance',
+};
+
+const NORMALIZED_MVP_SERVICE_LOOKUP = new Map<string, MvpServiceOption>([
+  ...MVP_SERVICE_OPTIONS.map((service) => [normalizeServiceLookupKey(service), service] as const),
+  ...Object.entries(SEARCH_SERVICE_DISPLAY_LABELS).flatMap(([service, label]) =>
+    label ? [[normalizeServiceLookupKey(label), service as MvpServiceOption] as const] : [],
+  ),
+  ...Object.entries(LEGACY_MVP_SERVICE_ALIASES).map(
+    ([legacyLabel, service]) => [normalizeServiceLookupKey(legacyLabel), service] as const,
+  ),
+]);
+
 export const POPULAR_MVP_SERVICES = [
   'Cleaning',
   'Laundry help',
@@ -195,8 +239,31 @@ export function isSearchWorkType(value: string | null | undefined): value is Sea
 export function getStoredMvpServiceOption(value: string | null | undefined): MvpServiceOption | null {
   if (isMvpServiceOption(value)) return value;
 
-  const entry = Object.entries(SEARCH_SERVICE_DISPLAY_LABELS).find(([, label]) => label === value);
-  return (entry?.[0] as MvpServiceOption | undefined) ?? null;
+  return NORMALIZED_MVP_SERVICE_LOOKUP.get(normalizeServiceLookupKey(value)) ?? null;
+}
+
+export function getServiceSearchValues(value: string | null | undefined) {
+  const storedValue = getStoredMvpServiceOption(value);
+  const values = new Set<string>();
+  const rawValue = value?.trim();
+
+  if (rawValue) values.add(rawValue);
+  if (!storedValue) return [...values];
+
+  values.add(storedValue);
+
+  const displayLabel = SEARCH_SERVICE_DISPLAY_LABELS[storedValue];
+  if (displayLabel) values.add(displayLabel);
+
+  Object.entries(LEGACY_MVP_SERVICE_ALIASES).forEach(([legacyLabel, service]) => {
+    if (service === storedValue) values.add(legacyLabel);
+  });
+
+  return [...values];
+}
+
+export function getServiceSearchValuesForOptions(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.flatMap((value) => getServiceSearchValues(value))));
 }
 
 export function getDisplayLabelForMvpService(value: string | null | undefined) {
@@ -317,9 +384,11 @@ export function getDefaultSearchWorkTypeForMode({
   mode: 'jobs' | 'workers';
   preferences: UserPreferences | null;
 }) {
+  if (!preferences) return 'either' as const;
+
   const services = getPreferenceServicesForMode({ mode, preferences });
 
-  if (!services.length) return 'physical' as const;
+  if (!services.length) return 'either' as const;
 
   let physicalCount = 0;
   let digitalCount = 0;

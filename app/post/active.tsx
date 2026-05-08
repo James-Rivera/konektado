@@ -8,13 +8,16 @@ import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyJobs } from '@/services/job.service';
-import type { JobSummary } from '@/types/marketplace.types';
+import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketplace.helpers';
+import { listMyServices } from '@/services/service-profile.service';
+import type { JobSummary, ProviderService } from '@/types/marketplace.types';
 
 export default function ActivePostsScreen() {
   const router = useRouter();
   const { profile, loading: profileLoading } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [services, setServices] = useState<ProviderService[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [query, setQuery] = useState('');
@@ -42,12 +45,22 @@ export default function ActivePostsScreen() {
 
       void (async () => {
         try {
-          const result = await listMyJobs();
+          const [jobResult, serviceResult] = await Promise.all([
+            listMyJobs(),
+            listMyServices(),
+          ]);
           if (!active) return;
-          if (result.error || !result.data) {
-            Alert.alert('Active posts', result.error ?? 'Could not load your posts.');
+
+          if (jobResult.error || !jobResult.data) {
+            Alert.alert('Active posts', jobResult.error ?? 'Could not load your posts.');
           } else {
-            setJobs(result.data.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status)));
+            setJobs(jobResult.data.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status)));
+          }
+
+          if (serviceResult.error || !serviceResult.data) {
+            setServices([]);
+          } else {
+            setServices(serviceResult.data.filter((service) => service.isActive));
           }
         } catch {
           if (active) {
@@ -71,11 +84,20 @@ export default function ActivePostsScreen() {
     const text = query.trim().toLowerCase();
     if (!text) return jobs;
     return jobs.filter((job) =>
-      [job.title, job.description, job.category, job.locationText]
+      [job.title, job.description, job.category, job.serviceNeeded, job.locationText]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(text)),
     );
   }, [jobs, query]);
+  const filteredServices = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    if (!text) return services;
+    return services.filter((service) =>
+      [service.title, service.description, service.category, service.availabilityText, service.locationText, service.barangay]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(text)),
+    );
+  }, [query, services]);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -117,10 +139,10 @@ export default function ActivePostsScreen() {
             </View>
           ) : null}
 
-          {!loading && filteredJobs.length === 0 ? (
+          {!loading && filteredJobs.length === 0 && filteredServices.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No active posts</Text>
-              <Text style={styles.emptyText}>Published job posts will appear here.</Text>
+              <Text style={styles.emptyText}>Published job and service posts will appear here.</Text>
             </View>
           ) : null}
 
@@ -129,6 +151,14 @@ export default function ActivePostsScreen() {
               job={job}
               key={job.id}
               onManage={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
+            />
+          ))}
+
+          {filteredServices.map((service) => (
+            <ActiveServicePostCard
+              key={service.id}
+              onManage={() => router.push({ pathname: '/services/[serviceId]', params: { serviceId: service.id } })}
+              service={service}
             />
           ))}
         </ScrollView>
@@ -146,7 +176,11 @@ function ActivePostCard({ job, onManage }: { job: JobSummary; onManage: () => vo
         </View>
         <View style={styles.cardCopy}>
           <Text numberOfLines={1} style={styles.cardTitle}>
-            {job.title}
+            {formatJobPostTitle({
+              title: job.title,
+              serviceNeeded: job.serviceNeeded,
+              category: job.category,
+            })}
           </Text>
           <Text style={styles.cardDate}>{formatDate(job.createdAt)}</Text>
           <View style={styles.cardMetaRow}>
@@ -158,6 +192,35 @@ function ActivePostCard({ job, onManage }: { job: JobSummary; onManage: () => vo
       </View>
       <Pressable accessibilityRole="button" onPress={onManage} style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}>
         <Text style={styles.manageButtonText}>Manage post</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ActiveServicePostCard({ service, onManage }: { service: ProviderService; onManage: () => void }) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={styles.thumb}>
+          <MaterialIcons color={color.verificationBlue} name="build" size={28} />
+        </View>
+        <View style={styles.cardCopy}>
+          <Text numberOfLines={1} style={styles.cardTitle}>
+            {formatServicePostTitle({
+              title: service.title,
+              category: service.category,
+            })}
+          </Text>
+          <Text style={styles.cardDate}>{formatDate(service.createdAt)}</Text>
+          <View style={styles.cardMetaRow}>
+            <TinyMeta icon="category" text={service.category} />
+            <TinyMeta icon="place" text={service.locationText ?? service.barangay ?? 'Location to coordinate'} />
+          </View>
+        </View>
+        <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+      </View>
+      <Pressable accessibilityRole="button" onPress={onManage} style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}>
+        <Text style={styles.manageButtonText}>Manage service</Text>
       </Pressable>
     </View>
   );

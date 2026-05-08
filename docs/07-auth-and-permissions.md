@@ -17,6 +17,15 @@ Active MVP onboarding auth flow:
 - App redirects to Create Password and saves the password with `supabase.auth.updateUser({ password })`.
 - Login after onboarding uses email/password.
 
+Active MVP password recovery flow:
+
+- User taps Forgot Password from Log In or from the duplicate-account signup alert.
+- App calls `supabase.auth.resetPasswordForEmail(email)`.
+- Supabase sends the Password Recovery template containing `{{ .Token }}`, so the user receives a 6-digit reset code inside the app-compatible email body.
+- User enters the 6-digit code and the app verifies it with `verifyOtp({ type: 'recovery' })`.
+- Supabase creates a temporary recovery session after the code is verified.
+- App keeps the user on the Forgot Password route, lets them create a new password with `supabase.auth.updateUser({ password })`, then signs out and returns them to Log In.
+
 Current OTP troubleshooting note:
 
 - 2026-05-03, Asia/Shanghai: root cause found. Supabase Auth was configured to generate 8-digit OTP codes while the app and email template displayed and accepted 6 digits. Supabase Auth OTP length has been set to 6 digits.
@@ -29,6 +38,7 @@ Required behavior:
 - Duplicate-email signup copy: `This email already has a Konektado account. Please log in instead.` Actions: `Go to Log In` and `Forgot password?`.
 - Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing.
 - The Supabase Auth email templates used by the signup OTP path must include `{{ .Token }}` so users receive a 6-digit code. Supabase Auth OTP length must be configured to 6 digits. For MVP signup, the app uses `signInWithOtp`; keep both **Magic Link** and **Confirm sign up** templates aligned.
+- The Supabase Auth **Password Recovery** template must also include `{{ .Token }}` and should avoid link-only copy, because the app verifies recovery through a six-box code entry flow.
 - In app code, verify signup email codes only through the auth service. Keep the request/resend/verify methods on Supabase email OTP/passwordless auth.
 - Do not require SMS OTP, mobile OTP, or an SMS gateway for the MVP.
 - Phone-first authentication can be revisited later when provider access and Android/device testing are available.

@@ -158,7 +158,6 @@ export default function HomeScreen() {
     workers: [],
   });
   const [feedLoading, setFeedLoading] = useState(true);
-  const [feedLoaded, setFeedLoaded] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState<
@@ -171,6 +170,7 @@ export default function HomeScreen() {
   const headerHeightRef = useRef(0);
   const headerVisibleRef = useRef(true);
   const lastScrollOffset = useRef(0);
+  const feedRequestRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -227,19 +227,21 @@ export default function HomeScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!isFocused || feedLoaded) {
+    if (!isFocused) {
       return () => {
         active = false;
       };
     }
 
+    const requestId = feedRequestRef.current + 1;
+    feedRequestRef.current = requestId;
     setFeedLoading(true);
 
     Promise.all([
       searchJobs({ limit: HOME_FEED_LIMIT }),
       searchServices({ limit: HOME_FEED_LIMIT }),
     ]).then(([jobsResult, servicesResult]) => {
-      if (!active) return;
+      if (!active || requestId !== feedRequestRef.current) return;
 
       const jobs =
         jobsResult.data?.map((job) => ({
@@ -262,14 +264,16 @@ export default function HomeScreen() {
         })) ?? [];
 
       setFeedSources({ jobs, workers });
-      setFeedLoaded(true);
+      setFeedLoading(false);
+    }).catch(() => {
+      if (!active || requestId !== feedRequestRef.current) return;
       setFeedLoading(false);
     });
 
     return () => {
       active = false;
     };
-  }, [feedLoaded, isFocused]);
+  }, [isFocused, profile?.id]);
 
   const feedVariants = useMemo(() => {
     const rankingContext = {

@@ -3,14 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useProfile } from '@/hooks/use-profile';
 import { supabase } from '@/utils/supabase';
 
-function isProviderRole(role: string | null | undefined): role is 'provider' {
-  return (role ?? '').toLowerCase() === 'provider';
-}
-
-function isClientRole(role: string | null | undefined): role is 'client' {
-  return (role ?? '').toLowerCase() === 'client';
-}
-
 function isOnboardingIntent(role: string | null | undefined) {
   const normalized = (role ?? '').toLowerCase();
   return normalized === 'client' || normalized === 'provider' || normalized === 'both';
@@ -32,6 +24,7 @@ export type ProfileStatus = {
   authenticated: boolean;
   needsRole: boolean;
   needsProfile: boolean;
+  needsSignupPassword: boolean;
   needsCertificationReview: boolean;
   isAdmin: boolean;
   profile: {
@@ -47,7 +40,6 @@ export function useProfileStatus(): ProfileStatus {
     authenticated,
     loading: profileLoading,
     profile,
-    refresh: refreshProfile,
     user,
     version,
   } = useProfile();
@@ -56,6 +48,7 @@ export function useProfileStatus(): ProfileStatus {
     authenticated: false,
     needsRole: false,
     needsProfile: false,
+    needsSignupPassword: false,
     needsCertificationReview: false,
     isAdmin: false,
     profile: null,
@@ -79,6 +72,7 @@ export function useProfileStatus(): ProfileStatus {
         authenticated: false,
         needsRole: false,
         needsProfile: false,
+        needsSignupPassword: false,
         needsCertificationReview: false,
         isAdmin: false,
         profile: null,
@@ -108,6 +102,7 @@ export function useProfileStatus(): ProfileStatus {
       if (requestId !== loadRequestRef.current) return;
 
       const metadataRole = user.user_metadata?.role as string | null | undefined;
+      const needsSignupPassword = user.user_metadata?.signup_password_required === true;
       const userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
       const candidateRoleSource =
         profile?.active_role || profile?.role || userRolesRole || activeRoleFromIntent(metadataRole);
@@ -124,24 +119,13 @@ export function useProfileStatus(): ProfileStatus {
       const needsProfile =
         !isAdmin && (!hasName || !hasCompletedTasteSetup || !isOnboardingIntent(intentSource));
 
-      if (!profile?.active_role && (isClientRole(candidateRole) || isProviderRole(candidateRole))) {
-        await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            active_role: candidateRole,
-            role: candidateRole,
-          })
-          .single();
-        void refreshProfile();
-      }
-
       hasLoadedStatusRef.current = true;
       setState({
         loading: false,
         authenticated: true,
         needsRole,
         needsProfile,
+        needsSignupPassword,
         needsCertificationReview: false,
         isAdmin,
         profile: profile ?? null,
@@ -154,12 +138,13 @@ export function useProfileStatus(): ProfileStatus {
         authenticated: false,
         needsRole: false,
         needsProfile: false,
+        needsSignupPassword: false,
         needsCertificationReview: false,
         isAdmin: false,
         profile: null,
       });
     }
-  }, [authenticated, profile, profileLoading, refreshProfile, user]);
+  }, [authenticated, profile, profileLoading, user]);
 
   useEffect(() => {
     void loadStatus();

@@ -13,11 +13,21 @@
 9. User enters Home as an unverified viewer if barangay verification is not complete.
 10. Verified users can access marketplace interactions based on their role.
 
+Forgot password flow:
+
+1. User taps Forgot Password from Log In or from the duplicate-account signup alert.
+2. App asks for the account email and requests Supabase password recovery.
+3. User enters the 6-digit recovery code from the Supabase Password Recovery email.
+4. App verifies the code with Supabase recovery OTP, which creates a temporary recovery session.
+5. User creates and confirms a new password.
+6. App saves the new password, signs out the temporary session, and returns the user to Log In with their email prefilled.
+
 Failure states:
 
 - Invalid login shows a simple error.
 - Network errors show retry.
 - Missing profile row triggers profile creation or onboarding.
+- Invalid or expired recovery code clears the code and lets the user request a new one.
 
 ## Lightweight Onboarding / Viewer Entry Flow
 

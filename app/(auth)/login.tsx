@@ -38,6 +38,16 @@ export default function LoginScreen() {
     }
   };
 
+  const onForgotPassword = () => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    router.push(
+      normalizedEmail
+        ? { pathname: '/(auth)/forgot-password', params: { email: normalizedEmail } }
+        : '/(auth)/forgot-password',
+    );
+  };
+
   return (
     <>
       <StatusBar style="dark" />
@@ -82,7 +92,7 @@ export default function LoginScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={() => Alert.alert('Password reset', 'Password reset is not configured yet.')}
+            onPress={onForgotPassword}
             style={styles.forgotLink}>
             <Text style={styles.forgotText}>Forgot Password?</Text>
           </Pressable>

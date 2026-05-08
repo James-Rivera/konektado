@@ -115,7 +115,7 @@ export function formatJobPostTitle({
   category?: string | null;
   cue?: JobPostCue;
 }) {
-  const subject = compactText(serviceNeeded) || compactText(title) || compactText(category) || 'local help';
+  const subject = compactText(title) || compactText(serviceNeeded) || compactText(category) || 'local help';
   return formatPostTitleWithCue(jobCueText[cue], subject);
 }
 

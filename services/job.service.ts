@@ -1,3 +1,7 @@
+import {
+  getServiceSearchValues,
+  getServiceSearchValuesForOptions,
+} from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
 import {
     compactText,
@@ -223,9 +227,9 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   }
 
   if (filters.serviceNeeded) {
-    query = query.eq('service_needed', filters.serviceNeeded);
+    query = query.in('service_needed', getServiceSearchValues(filters.serviceNeeded));
   } else if (filters.serviceNeededIn?.length) {
-    query = query.in('service_needed', filters.serviceNeededIn);
+    query = query.in('service_needed', getServiceSearchValuesForOptions(filters.serviceNeededIn));
   }
 
   if (filters.barangay) {

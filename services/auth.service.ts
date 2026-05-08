@@ -15,9 +15,24 @@ export const ACCOUNT_EXISTS_SIGNUP_MESSAGE =
 
 const EMAIL_OTP_LENGTH = 6;
 const EMAIL_OTP_TYPE = "email" as const;
+const RECOVERY_OTP_TYPE = "recovery" as const;
 
 function roleMetadata(role: OnboardingIntent | null) {
   return role ? { app_role: role, role } : undefined;
+}
+
+function signupOtpMetadata(role: OnboardingIntent | null) {
+  return {
+    signup_password_required: true,
+    ...(roleMetadata(role) ?? {}),
+  };
+}
+
+function signupPasswordMetadata(role: OnboardingIntent | null) {
+  return {
+    signup_password_required: false,
+    ...(roleMetadata(role) ?? {}),
+  };
 }
 
 function normalizeEmail(email: string) {
@@ -32,6 +47,10 @@ function normalizeOtpToken(token: string) {
   return token.replace(/\D/g, "");
 }
 
+function normalizeIntent(raw: unknown): OnboardingIntent | null {
+  return raw === "client" || raw === "provider" ? raw : null;
+}
+
 async function sendOnboardingEmailOtp({
   email,
   role,
@@ -39,15 +58,17 @@ async function sendOnboardingEmailOtp({
   email: string;
   role: OnboardingIntent | null;
 }) {
-  const metadata = roleMetadata(role);
-
   return supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: true,
-      ...(metadata ? { data: metadata } : {}),
+      data: signupOtpMetadata(role),
     },
   });
+}
+
+async function sendPasswordRecoveryEmailOtp(email: string) {
+  return supabase.auth.resetPasswordForEmail(email);
 }
 
 function toAuthMessage(message: string, fallback: string) {
@@ -248,6 +269,115 @@ export async function resendSignupEmailOtp({
   return { data: undefined, error: null };
 }
 
+export async function requestPasswordResetEmailOtp({
+  email,
+}: {
+  email: string;
+}): Promise<ServiceResult<void>> {
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!isValidEmail(normalizedEmail)) {
+    return { data: null, error: "Enter a valid email address." };
+  }
+
+  const { error } = await sendPasswordRecoveryEmailOtp(normalizedEmail);
+
+  if (error) {
+    return {
+      data: null,
+      error: toAuthMessage(
+        error.message,
+        "Could not send the password reset code. Please try again.",
+      ),
+    };
+  }
+
+  return { data: undefined, error: null };
+}
+
+export async function resendPasswordResetEmailOtp({
+  email,
+}: {
+  email: string;
+}): Promise<ServiceResult<void>> {
+  return requestPasswordResetEmailOtp({ email });
+}
+
+export async function verifyPasswordResetEmailOtp({
+  email,
+  token,
+}: {
+  email: string;
+  token: string;
+}): Promise<ServiceResult<AuthUserSummary>> {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedToken = normalizeOtpToken(token);
+
+  if (!isValidEmail(normalizedEmail)) {
+    return {
+      data: null,
+      error: "Enter a valid email address before verifying the code.",
+    };
+  }
+
+  if (normalizedToken.length !== EMAIL_OTP_LENGTH) {
+    return { data: null, error: "Enter the 6-digit code from your email." };
+  }
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: normalizedEmail,
+    token: normalizedToken,
+    type: RECOVERY_OTP_TYPE,
+  });
+
+  if (error) {
+    return {
+      data: null,
+      error: toAuthMessage(
+        error.message,
+        "Could not verify the password reset code. Please try again.",
+      ),
+    };
+  }
+
+  if (!data.user) {
+    return {
+      data: null,
+      error: "Could not verify this reset code. Please request a new code.",
+    };
+  }
+
+  return {
+    data: {
+      email: data.user.email ?? normalizedEmail,
+      id: data.user.id,
+    },
+    error: null,
+  };
+}
+
+export async function setRecoveredPassword({
+  password,
+}: {
+  password: string;
+}): Promise<ServiceResult<void>> {
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    return {
+      data: null,
+      error: toAuthMessage(
+        error.message,
+        "Could not save your new password. Please try again.",
+      ),
+    };
+  }
+
+  await supabase.auth.signOut();
+
+  return { data: undefined, error: null };
+}
+
 export async function setSignupPassword({
   password,
   role,
@@ -255,10 +385,9 @@ export async function setSignupPassword({
   password: string;
   role: OnboardingIntent | null;
 }): Promise<ServiceResult<void>> {
-  const metadata = roleMetadata(role);
   const { error } = await supabase.auth.updateUser({
     password,
-    ...(metadata ? { data: metadata } : {}),
+    data: signupPasswordMetadata(role),
   });
 
   if (error) {
@@ -290,6 +419,21 @@ export async function getCurrentAuthUser(): Promise<
     },
     error: null,
   };
+}
+
+export async function getCurrentSignupRole(): Promise<
+  ServiceResult<OnboardingIntent | null>
+> {
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data.user) {
+    return { data: null, error: "Please verify your email again to continue." };
+  }
+
+  const metadata = data.user.user_metadata as Record<string, unknown>;
+  const role = normalizeIntent(metadata.role) ?? normalizeIntent(metadata.app_role);
+
+  return { data: role, error: null };
 }
 
 export async function signInWithEmailPassword({

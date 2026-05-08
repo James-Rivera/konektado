@@ -10,7 +10,7 @@ import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
-import { formatJobPostTitle } from '@/services/marketplace.helpers';
+import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketplace.helpers';
 import { listMyServices } from '@/services/service-profile.service';
 import type { JobDraftSummary, JobSummary, ProviderService } from '@/types/marketplace.types';
 
@@ -88,6 +88,33 @@ export default function PostScreen() {
 
   const activeJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
   const activeServices = services.filter((service) => service.isActive);
+  const recentPosts = [
+    ...jobs.map((job) => ({
+      createdAt: job.createdAt,
+      id: `job-${job.id}`,
+      label: formatDate(job.createdAt),
+      onPress: () => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } }),
+      status: ['open', 'reviewing'].includes(job.status) ? 'Visible' : 'Active',
+      subtitle: job.status === 'open' ? 'Open job post' : `Job status: ${job.status.replace(/_/g, ' ')}`,
+      title: formatJobPostTitle({
+        title: job.title,
+        serviceNeeded: job.serviceNeeded,
+        category: job.category,
+      }),
+    })),
+    ...services.map((service) => ({
+      createdAt: service.createdAt,
+      id: `service-${service.id}`,
+      label: formatDate(service.createdAt),
+      onPress: () => router.push({ pathname: '/services/[serviceId]', params: { serviceId: service.id } }),
+      status: service.isActive ? 'Visible' : 'Paused',
+      subtitle: service.isActive ? 'Active service post' : 'Inactive service post',
+      title: formatServicePostTitle({
+        title: service.title,
+        category: service.category,
+      }),
+    })),
+  ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 
   const openCreateSheet = () => {
     setSheetOpen(true);
@@ -195,7 +222,7 @@ export default function PostScreen() {
                 icon="business-center"
                 label="Active"
                 onPress={() => router.push('/post/active')}
-                value={String(activeJobs.length)}
+                value={String(activeJobs.length + activeServices.length)}
               />
               <StatBox icon="description" label="Drafts" value={String(drafts.length)} />
               <StatBox icon="arrow-circle-up" label="To renew" onPress={() => router.push('/post/renew')} value="0" />
@@ -230,31 +257,23 @@ export default function PostScreen() {
               </>
             ) : null}
 
-            {jobs.slice(0, 2).map((job) => (
+            {recentPosts.slice(0, 2).map((post) => (
               <RecentPostCard
-                key={job.id}
-                label={formatDate(job.createdAt)}
-                onEdit={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
-                title={formatJobPostTitle({
-                  title: job.title,
-                  serviceNeeded: job.serviceNeeded,
-                  category: job.category,
-                })}
+                key={post.id}
+                label={post.label}
+                onEdit={post.onPress}
+                title={post.title}
               />
             ))}
 
             <Text style={styles.sectionTitle}>Recent posts</Text>
-            {jobs.slice(0, 1).map((job) => (
+            {recentPosts.slice(0, 3).map((post) => (
               <MiniPostCard
-                key={job.id}
-                onPress={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
-                status="Visible"
-                subtitle="Updated today"
-                title={formatJobPostTitle({
-                  title: job.title,
-                  serviceNeeded: job.serviceNeeded,
-                  category: job.category,
-                })}
+                key={post.id}
+                onPress={post.onPress}
+                status={post.status}
+                subtitle={post.subtitle}
+                title={post.title}
               />
             ))}
           </View>

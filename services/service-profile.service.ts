@@ -1,3 +1,7 @@
+import {
+  getServiceSearchValues,
+  getServiceSearchValuesForOptions,
+} from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
 import {
   compactText,
@@ -175,9 +179,9 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
     .order('created_at', { ascending: false });
 
   if (filters.category) {
-    query = query.eq('category', filters.category);
+    query = query.in('category', getServiceSearchValues(filters.category));
   } else if (filters.categories?.length) {
-    query = query.in('category', filters.categories);
+    query = query.in('category', getServiceSearchValuesForOptions(filters.categories));
   }
 
   if (filters.barangay) {

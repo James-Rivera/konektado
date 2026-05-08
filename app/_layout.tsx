@@ -64,7 +64,7 @@ export default function RootLayout() {
 function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
-  const { loading, authenticated, needsRole, needsProfile, isAdmin } =
+  const { loading, authenticated, needsRole, needsProfile, needsSignupPassword, isAdmin } =
     useProfileStatus();
 
   useEffect(() => {
@@ -73,6 +73,8 @@ function RootNavigator() {
     const activeGroup = segments[0];
     const targetGroup = !authenticated
       ? "(auth)"
+      : needsSignupPassword
+        ? "(auth)"
       : needsRole
         ? "(auth)"
         : needsProfile
@@ -83,6 +85,8 @@ function RootNavigator() {
 
     const targetPath = !authenticated
       ? "/(auth)"
+      : needsSignupPassword
+        ? "/(auth)/create-password"
       : needsRole
         ? "/(auth)/role"
         : needsProfile
@@ -96,8 +100,13 @@ function RootNavigator() {
     const isCompletingAuthRegistration =
       authenticated &&
       activeGroup === "(auth)" &&
-      segments[1] === "register" &&
+      (segments[1] === "register" || segments[1] === "create-password") &&
       (needsRole || needsProfile);
+    const isRecoveringPassword =
+      activeGroup === "(auth)" && segments[1] === "forgot-password";
+    const isMissingSignupPasswordRoute =
+      needsSignupPassword &&
+      !(activeGroup === "(auth)" && segments[1] === "create-password");
     const isMainAppRootRoute =
       targetGroup === "(tabs)" &&
       [
@@ -114,14 +123,18 @@ function RootNavigator() {
       ].includes(String(activeGroup));
 
     if (
-      activeGroup !== targetGroup &&
-      !isMainAppRootRoute &&
-      !(targetGroup === "(tabs)" && isOnboardingComplete) &&
-      !isCompletingAuthRegistration
+      isMissingSignupPasswordRoute ||
+      (
+        activeGroup !== targetGroup &&
+        !isMainAppRootRoute &&
+        !(targetGroup === "(tabs)" && isOnboardingComplete) &&
+        !isCompletingAuthRegistration &&
+        !isRecoveringPassword
+      )
     ) {
       router.replace(targetPath);
     }
-  }, [authenticated, isAdmin, loading, needsProfile, needsRole, router, segments]);
+  }, [authenticated, isAdmin, loading, needsProfile, needsRole, needsSignupPassword, router, segments]);
 
   if (loading) {
     return <AppSplashScreen />;

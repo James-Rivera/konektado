@@ -24,20 +24,17 @@ import {
     onboardingColors,
     OnboardingLoadingOverlay,
     OtpCodeInput,
-    PasswordRequirementRow,
     ProgressBars,
 } from '@/components/onboarding/FigmaOnboarding';
 import {
     ACCOUNT_EXISTS_SIGNUP_MESSAGE,
-    getCurrentAuthUser,
     requestSignupEmailOtp,
     resendSignupEmailOtp,
-    setSignupPassword,
     verifySignupEmailOtp,
 } from '@/services/auth.service';
-import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
+import type { OnboardingIntent } from '@/utils/save-role';
 
-type AccountStep = 'email' | 'code' | 'password';
+type AccountStep = 'email' | 'code';
 const EMAIL_OTP_LENGTH = 6;
 
 function normalizeRole(raw: unknown): OnboardingIntent | null {
@@ -46,10 +43,6 @@ function normalizeRole(raw: unknown): OnboardingIntent | null {
     return raw[0];
   }
   return null;
-}
-
-function hasSpecialCharacter(value: string) {
-  return /[^A-Za-z0-9]/.test(value);
 }
 
 export default function RegisterScreen() {
@@ -61,8 +54,6 @@ export default function RegisterScreen() {
   const [step, setStep] = useState<AccountStep>('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [password, setPassword] = useState('');
-  const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(60);
@@ -70,8 +61,6 @@ export default function RegisterScreen() {
 
   const compactHeight = height < 760;
   const normalizedEmail = email.trim().toLowerCase();
-  const passwordHasLength = password.length >= 8 && password.length <= 20;
-  const passwordHasSpecial = hasSpecialCharacter(password);
 
   useEffect(() => {
     if (step !== 'code' || resendSeconds <= 0) return;
@@ -141,7 +130,13 @@ export default function RegisterScreen() {
       return;
     }
 
-    setStep('password');
+    router.replace({
+      pathname: '/(auth)/create-password',
+      params: {
+        email: normalizedEmail,
+        ...(selectedRole ? { role: selectedRole } : {}),
+      },
+    });
   };
 
   const handleOtpChange = (nextValue: string) => {
@@ -149,52 +144,6 @@ export default function RegisterScreen() {
     if (nextValue.length === EMAIL_OTP_LENGTH) {
       void verifyCode(nextValue);
     }
-  };
-
-  const savePassword = async () => {
-    if (loading) return;
-
-    if (!passwordHasLength || !passwordHasSpecial) {
-      Alert.alert('Password requirements', 'Use 8 to 20 characters and include at least one special character.');
-      return;
-    }
-
-    setLoading(true);
-    const passwordResult = await setSignupPassword({ password, role: selectedRole });
-
-    if (passwordResult.error) {
-      setLoading(false);
-      Alert.alert('Could not save password', passwordResult.error);
-      return;
-    }
-
-    const userResult = await getCurrentAuthUser();
-
-    if (userResult.error || !userResult.data) {
-      setLoading(false);
-      Alert.alert('Session expired', userResult.error ?? 'Please verify your email again to continue.');
-      setStep('email');
-      return;
-    }
-
-    const currentUser = userResult.data;
-
-    if (selectedRole) {
-      const saveRoleError = await saveUserRole({
-        email: currentUser.email,
-        role: selectedRole,
-        userId: currentUser.id,
-      });
-
-      if (saveRoleError) {
-        setLoading(false);
-        Alert.alert('Could not save role', saveRoleError.message);
-        return;
-      }
-    }
-
-    setLoading(false);
-    router.replace(selectedRole ? '/(onboarding)' : '/(auth)/role');
   };
 
   const showAccountExistsAlert = () => {
@@ -205,10 +154,7 @@ export default function RegisterScreen() {
         {
           text: 'Forgot password?',
           onPress: () => {
-            router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } });
-            setTimeout(() => {
-              Alert.alert('Password reset', 'Password reset is not configured yet.');
-            }, 250);
+            router.replace({ pathname: '/(auth)/forgot-password', params: { email: normalizedEmail } });
           },
         },
         {
@@ -224,11 +170,6 @@ export default function RegisterScreen() {
 
     if (step === 'code') {
       setStep('email');
-      return;
-    }
-
-    if (step === 'password') {
-      setStep('code');
       return;
     }
 
@@ -316,40 +257,10 @@ export default function RegisterScreen() {
     </AccountStepFrame>
   );
 
-  const renderPasswordStep = () => (
-    <AccountStepFrame
-      contentStyle={[styles.passwordContent, compactHeight ? styles.passwordContentCompact : undefined]}
-      footer={<OnboardingButton label="Next" loading={loading} onPress={savePassword} style={styles.primaryButton} />}
-      onBack={goBack}
-    >
-      <View style={styles.formTitleBlock}>
-        <Text style={styles.title}>Create a Password</Text>
-        <ProgressBars current={2} total={4} />
-      </View>
-
-      <FloatingOnboardingInput
-        label="Password"
-        onChangeText={setPassword}
-        secureTextEntry={!passwordVisible}
-        textContentType="newPassword"
-        trailingIcon={passwordVisible ? 'visibility' : 'visibility-off'}
-        trailingIconLabel={passwordVisible ? 'Hide password' : 'Show password'}
-        onTrailingIconPress={() => setPasswordVisible((visible) => !visible)}
-        value={password}
-      />
-
-      <View style={styles.passwordChecklist}>
-        <Text style={styles.passwordChecklistTitle}>Your password must have atleast:</Text>
-        <PasswordRequirementRow checked={passwordHasLength}>must be 8 characters (20 max)</PasswordRequirementRow>
-        <PasswordRequirementRow checked={passwordHasSpecial}>password must have special characters</PasswordRequirementRow>
-      </View>
-    </AccountStepFrame>
-  );
-
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      {step === 'email' ? renderEmailStep() : step === 'code' ? renderCodeStep() : renderPasswordStep()}
+      {step === 'email' ? renderEmailStep() : renderCodeStep()}
       <OnboardingLoadingOverlay visible={loading} />
     </View>
   );
