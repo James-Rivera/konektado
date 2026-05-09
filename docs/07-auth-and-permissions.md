@@ -7,7 +7,7 @@ Konektado uses Supabase Auth for MVP authentication.
 Active MVP onboarding auth flow:
 
 - User enters email.
-- App checks the email through the `signup-email-check` Edge Function before requesting a signup OTP. If the email already belongs to a Konektado profile, signup stops and directs the user to Log In.
+- App checks the email through the `signup-email-check` Edge Function before requesting a signup OTP. If the email already belongs to a Konektado profile or completed Supabase Auth account, signup stops and directs the user to Log In before any OTP email is sent.
 - App calls `supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, data } })`.
 - Supabase sends an email template containing `{{ .Token }}`, so the email shows a 6-digit OTP instead of requiring a link click.
 - Keep the Magic Link and Confirm sign up templates aligned with the same six-box `{{ .Token }}` body.
@@ -46,14 +46,16 @@ Required behavior:
 
 Current duplicate-email protection:
 
-- Server-side check: `supabase/functions/signup-email-check` uses the service role on the backend to check for an existing `profiles.email` during an explicit signup attempt. Service-role keys must never be placed in mobile/client code.
+- Server-side check: `supabase/functions/signup-email-check` uses the service role on the backend to check for an existing `profiles.email` or completed Supabase Auth user during an explicit signup attempt. Service-role keys must never be placed in mobile/client code.
 - Client-side fallback: after signup OTP verification, the app checks whether the returned session already has profile, role, or onboarding preference rows. If so, it signs out immediately and shows the duplicate-email message.
-- Remaining risk: the Edge Function checks Konektado profile rows, not arbitrary Supabase Auth users with no profile row. Keep the fallback guard until a stricter auth-admin duplicate check is available.
+- In-progress signup exception: Auth users with `user_metadata.signup_password_required = true` are treated as incomplete signup attempts rather than completed accounts, so they can still continue the OTP-to-password flow.
+- Remaining risk: the auth-admin check pages through recent users and is intended for MVP/demo scale. If user volume grows, replace it with a dedicated server-side lookup path.
 - Barangay verification email updates are custom transactional emails sent from backend code, not Supabase Auth templates. Keep them separate from the OTP auth templates.
 - App stores sessions through Supabase's React Native auth storage.
 - Screens must use an auth/session hook or service, not direct auth logic in every screen.
+- The global splash should appear only for initial app boot/font/session hydration. Auth and onboarding transitions should keep the current screen visible while status reloads, then route when settled.
 - App data must be protected with PostgreSQL Row Level Security.
-- Authentication alone does not grant full marketplace interaction. Barangay verification is required for posting, messaging, saving if enabled, and reviewing.
+- Authentication alone does not grant full marketplace interaction. Barangay verification is required first, and public role-profile completion is required before posting or messaging.
 
 ## Unverified Viewer Mode
 
@@ -102,6 +104,26 @@ Unverified viewers cannot:
 - Appear as verified users in public search.
 - Access admin screens.
 
+## Public Profile Completion Gate
+
+Barangay verification proves the account belongs to a real resident. Public profile completion proves the resident has enough visible context for another person to safely start a marketplace interaction.
+
+Completion layers:
+
+- Core Profile: public name, barangay/city, intro, and availability.
+- Work Profile: worker headline, bio, offered services, service area, availability, and optional rate note.
+- Hiring Profile: client headline, bio, needed services, preferred schedule, and optional budget preference.
+
+Action gates:
+
+- Publishing jobs requires barangay verification plus a completed Hiring Profile.
+- Messaging workers about service posts requires barangay verification plus a completed Hiring Profile.
+- Publishing services requires barangay verification plus a completed Work Profile.
+- Messaging clients about jobs requires barangay verification plus a completed Work Profile.
+- Sending messages in an existing conversation checks the sender's role in that conversation and applies the matching Work/Hiring Profile gate.
+
+Private verification files, ID uploads, selfie files, certificates, and admin notes must not be copied into public profile fields or used as public profile photos. A public profile photo is recommended, but not required for this MVP gate.
+
 ## Role-Based Permissions
 
 | Resource/Action               | Provider                      | Client                  | Barangay Admin                 |
@@ -109,11 +131,11 @@ Unverified viewers cannot:
 | Read own profile              | Yes                           | Yes                     | Yes                            |
 | Update own profile            | Yes                           | Yes                     | Yes                            |
 | Read public provider profiles | Yes                           | Yes                     | Yes                            |
-| Create service profile        | Yes                           | No                      | No, unless acting as provider  |
+| Create service profile        | Yes, after Work Profile       | No                      | No, unless acting as provider  |
 | Update own service profile    | Yes                           | No                      | No, unless owner               |
-| Create job                    | No, unless active client role | Yes                     | No, unless acting as client    |
+| Create job                    | No, unless active client role | Yes, after Hiring Profile | No, unless acting as client    |
 | Browse open jobs              | Yes                           | Yes                     | Yes                            |
-| Message about job/service     | Yes                           | Yes                     | Admin read only for moderation |
+| Message about job/service     | Yes, after Work Profile       | Yes, after Hiring Profile | Admin read only for moderation |
 | Mark worker hired for own job | No                            | Yes                     | Admin read only for moderation |
 | Submit verification request   | Yes                           | Optional                | No                             |
 | Approve/reject verification   | No                            | No                      | Yes                            |
@@ -121,7 +143,7 @@ Unverified viewers cannot:
 | Create report                 | Yes                           | Yes                     | Yes                            |
 | Moderate reports              | No                            | No                      | Yes                            |
 
-These role permissions apply after the user's barangay verification is approved. Before approval, the stricter unverified viewer rules apply.
+These role permissions apply after the user's barangay verification is approved and the relevant public role profile is complete. Before approval, the stricter unverified viewer rules apply.
 
 ## Resource Rules
 
@@ -129,13 +151,13 @@ These role permissions apply after the user's barangay verification is approved.
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `profiles`              | Owner can read full profile. Public users can read safe public fields. Admin can read needed fields.                                           | Created for authenticated user.                  | Owner can update editable fields. Admin can update verification fields only through admin service. | Hard delete should be admin-only or handled through account deletion.        |
 | `user_roles`            | Owner can read own roles. Admin can read roles.                                                                                                | Users can add client/provider role for self.     | Owner can switch active client/provider role. Admin role is protected.                             | Admin-only or restricted.                                                    |
-| `services`              | Authenticated viewers can read active public services. Owner can read all own services. Admin can read for moderation.                         | Verified provider owner only.                    | Verified provider owner only. Admin can hide/moderate if needed.                                   | Provider owner can delete own services if no required history depends on it. |
+| `services`              | Authenticated viewers can read active public services. Owner can read all own services. Admin can read for moderation.                         | Verified provider owner with completed Work Profile only. | Verified provider owner only. Admin can hide/moderate if needed.                                   | Provider owner can delete own services if no required history depends on it. |
 | `credentials`           | Owner and admin can read. Public cannot read private files.                                                                                    | Provider owner only.                             | Provider owner can update metadata. Admin can update review status.                                | Owner can delete unused credentials. Admin can hide for moderation.          |
 | `verification_requests` | Owner and admin can read.                                                                                                                      | Owner can create own request.                    | Admin approves/rejects. Owner can cancel pending request.                                          | Avoid hard delete; use status.                                               |
-| `jobs`                  | Open jobs are readable by authenticated viewers. Owner can read own jobs. Admin can read for moderation.                                       | Verified client owner only.                      | Verified job owner can edit own open job. Admin can moderate.                                      | Prefer status `cancelled` or `closed`; hard delete owner/admin only if safe. |
+| `jobs`                  | Open jobs are readable by authenticated viewers. Owner can read own jobs. Admin can read for moderation.                                       | Verified client owner with completed Hiring Profile only. | Verified job owner can edit own open job. Admin can moderate.                                      | Prefer status `cancelled` or `closed`; hard delete owner/admin only if safe. |
 | `job_drafts`            | Owner can read own drafts only.                                                                                                                | Authenticated owner, verified or unverified.     | Owner can update own drafts.                                                                       | Owner can delete own drafts.                                                |
-| `conversations`         | Participants can read their own conversations. Job owner can read conversations tied to own jobs. Admin can read for moderation when reported. | Verified user only.                              | Participants can archive/decline where allowed. Job owner can mark hired.                          | Prefer status changes.                                                       |
-| `messages`              | Conversation participants only. Admin can read only for moderation/report workflows.                                                           | Verified sender only.                            | Avoid editing messages in MVP.                                                                     | Prefer archive/report over hard delete.                                      |
+| `conversations`         | Participants can read their own conversations. Job owner can read conversations tied to own jobs. Admin can read for moderation when reported. | Verified user with relevant role profile only.   | Participants can archive/decline where allowed. Job owner can mark hired.                          | Prefer status changes.                                                       |
+| `messages`              | Conversation participants only. Admin can read only for moderation/report workflows.                                                           | Verified sender with relevant role profile only. | Avoid editing messages in MVP.                                                                     | Prefer archive/report over hard delete.                                      |
 | `reviews`               | Public can read approved public reviews.                                                                                                       | Verified job participants only after completion. | Reviewer can edit own review if allowed. Admin can hide/moderate reported reviews.                 | Avoid hard delete; admin moderation preferred.                               |
 | `reports`               | Reporter can read own report. Admin can read all.                                                                                              | Authenticated users.                             | Admin updates status.                                                                              | Admin-only.                                                                  |
 
@@ -155,7 +177,7 @@ These role permissions apply after the user's barangay verification is approved.
 - Approval sets the user/profile verification indicator.
 - Rejection stores a reason or note.
 - Public UI should not show repeated verification badges on feed cards, search cards, Job Details, or selected service detail screens for MVP. Verification copy belongs in gated-action states, verification/onboarding screens, and owner-facing status surfaces; private files are never exposed publicly.
-- Verification is the gate for user-to-user interaction features.
+- Verification is the identity gate for user-to-user interaction features; Work/Hiring Profile completion is the public-context gate before posting or messaging.
 - The verification page is where heavier requirements belong: contact confirmation, email confirmation, optional phone number, ID, services, credentials, selfie/photo for manual comparison, and supporting details.
 - Verification contact details should reuse onboarding/profile values instead of asking the user to retype them.
 - First name and last name can be edited during verification only to correct mismatches with the user's ID.
@@ -167,6 +189,9 @@ Public-safe provider fields:
 
 - Display name.
 - Barangay/city level location.
+- Public profile headline and bio.
+- Offered or needed service categories.
+- Service area and preferred schedule text.
 - Service categories and descriptions.
 - Availability text.
 - Public rating summary.

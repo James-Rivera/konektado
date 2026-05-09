@@ -10,6 +10,7 @@ import {
   type JobRow,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
+import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import { getServiceDetail } from '@/services/service-profile.service';
 import type {
   ConversationDetail,
@@ -423,7 +424,7 @@ export async function startJobConversation({
   jobId: string;
   message?: string;
 }): Promise<ServiceResult<ConversationDetail>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('provider');
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
@@ -488,7 +489,7 @@ export async function startServiceConversation({
   serviceId: string;
   message?: string;
 }): Promise<ServiceResult<ConversationDetail>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('client');
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
@@ -550,7 +551,7 @@ export async function sendMessage({
   conversationId: string;
   body: string;
 }): Promise<ServiceResult<ConversationMessage>> {
-  const user = await requireVerifiedUser();
+  const user = await getCurrentUserId();
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
@@ -558,6 +559,23 @@ export async function sendMessage({
   if (!text) {
     return { data: null, error: 'Enter a message.' };
   }
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from('conversations')
+    .select('client_id, provider_id')
+    .eq('id', conversationId)
+    .maybeSingle<{ client_id: string; provider_id: string }>();
+
+  if (conversationError) return { data: null, error: conversationError.message };
+  if (!conversation) return { data: null, error: 'Conversation not found.' };
+  if (![conversation.client_id, conversation.provider_id].includes(user.data)) {
+    return { data: null, error: 'Only conversation participants can send messages.' };
+  }
+
+  const completion = await requireVerifiedCompleteProfile(
+    conversation.client_id === user.data ? 'client' : 'provider',
+  );
+  if (completion.error) return completion;
 
   const { data, error } = await supabase
     .from('messages')

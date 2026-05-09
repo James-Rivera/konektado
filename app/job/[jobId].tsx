@@ -17,6 +17,11 @@ import {
   formatClientRatingText,
   getMarketplaceLocation,
 } from '@/services/marketplace.helpers';
+import {
+  getCompletionModeForError,
+  getCompletionTitleForMode,
+  isProfileCompletionRequiredError,
+} from '@/services/profile-completion.service';
 import type { JobDetail } from '@/types/marketplace.types';
 
 function getParamValue(value: string | string[] | undefined) {
@@ -155,6 +160,18 @@ export default function JobDetailScreen() {
       setMessaging(false);
 
       if (result.error || !result.data) {
+        if (isProfileCompletionRequiredError(result.error)) {
+          const mode = getCompletionModeForError(result.error) ?? 'work';
+          Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Complete profile',
+              onPress: () => router.push({ pathname: '/profile/complete' as never, params: { mode } }),
+            },
+          ]);
+          return;
+        }
+
         Alert.alert('Message', result.error ?? 'Could not open the conversation.');
         return;
       }

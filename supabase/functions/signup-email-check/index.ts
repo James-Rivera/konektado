@@ -5,6 +5,17 @@ type RequestBody = {
   email?: string | null;
 };
 
+type AuthUserSummary = {
+  confirmed_at?: string | null;
+  email?: string | null;
+  email_confirmed_at?: string | null;
+  last_sign_in_at?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
+
+const AUTH_USERS_PER_PAGE = 1000;
+const AUTH_USERS_MAX_PAGES = 10;
+
 const supabaseUrl = Deno.env.get('PROJECT_URL');
 const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY');
 
@@ -31,6 +42,42 @@ function normalizeEmail(value: string | null | undefined) {
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isCompletedAuthAccount(user: AuthUserSummary) {
+  const metadata = user.user_metadata ?? {};
+  const stillNeedsSignupPassword = metadata.signup_password_required === true;
+
+  return Boolean(
+    !stillNeedsSignupPassword &&
+      (user.email_confirmed_at || user.confirmed_at || user.last_sign_in_at),
+  );
+}
+
+async function completedAuthUserExists(email: string) {
+  for (let page = 1; page <= AUTH_USERS_MAX_PAGES; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: AUTH_USERS_PER_PAGE,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const users = (data.users ?? []) as AuthUserSummary[];
+    const matchingUser = users.find((user) => normalizeEmail(user.email) === email);
+
+    if (matchingUser) {
+      return isCompletedAuthAccount(matchingUser);
+    }
+
+    if (users.length < AUTH_USERS_PER_PAGE) {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 Deno.serve(async (request) => {
@@ -64,7 +111,9 @@ Deno.serve(async (request) => {
       throw new Error(profileError.message);
     }
 
-    return new Response(JSON.stringify({ exists: Boolean(profile) }), {
+    const existsInAuth = profile ? false : await completedAuthUserExists(email);
+
+    return new Response(JSON.stringify({ exists: Boolean(profile) || existsInAuth }), {
       headers: { ...corsHeaders, 'content-type': 'application/json' },
       status: 200,
     });

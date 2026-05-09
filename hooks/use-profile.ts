@@ -22,6 +22,7 @@ export type ProfileRecord = {
   certification_status: string | null;
   phone: string | null;
   about: string | null;
+  avatar_url: string | null;
   availability: string | null;
   verified_at: string | null;
   barangay_verified_at: string | null;
@@ -99,7 +100,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           const { data, error: profileError } = await supabase
             .from('profiles')
             .select(
-              'id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, availability, verified_at, barangay_verified_at',
+              'id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, avatar_url, availability, verified_at, barangay_verified_at',
             )
             .eq('id', userResult.user.id)
             .maybeSingle();
@@ -214,6 +215,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           event: '*',
           schema: 'public',
           table: 'provider_profiles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void refresh();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'client_profiles',
           filter: `user_id=eq.${user.id}`,
         },
         () => {

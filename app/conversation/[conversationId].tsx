@@ -33,6 +33,11 @@ import {
   getMarketplaceLocation,
   isPresenceActive,
 } from '@/services/marketplace.helpers';
+import {
+  getCompletionModeForError,
+  getCompletionTitleForMode,
+  isProfileCompletionRequiredError,
+} from '@/services/profile-completion.service';
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -225,6 +230,21 @@ export default function ConversationDetailScreen() {
 
     if (result.error) {
       setSendError(result.error);
+      if (isProfileCompletionRequiredError(result.error)) {
+        const mode =
+          getCompletionModeForError(result.error) ??
+          (conversation?.clientId === profile?.id ? 'hiring' : 'work');
+        replaceMessage(tempMessage.id, null);
+        Alert.alert(getCompletionTitleForMode(mode), result.error, [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Complete profile',
+            onPress: () => router.push({ pathname: '/profile/complete' as never, params: { mode } }),
+          },
+        ]);
+        return;
+      }
+
       replaceMessage(tempMessage.id, { ...tempMessage, localStatus: 'failed' });
       return;
     }

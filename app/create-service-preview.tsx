@@ -9,6 +9,11 @@ import { WorkerCard } from '@/components/WorkerCard';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { formatServicePostTitle, isPresenceActive } from '@/services/marketplace.helpers';
+import {
+  getCompletionModeForError,
+  getCompletionTitleForMode,
+  isProfileCompletionRequiredError,
+} from '@/services/profile-completion.service';
 import { createService } from '@/services/service-profile.service';
 
 type ServiceDraft = {
@@ -119,6 +124,18 @@ export default function CreateServicePreviewScreen() {
     setPublishing(false);
 
     if (result.error || !result.data) {
+      if (isProfileCompletionRequiredError(result.error)) {
+        const mode = getCompletionModeForError(result.error) ?? 'work';
+        Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Complete profile',
+            onPress: () => router.push({ pathname: '/profile/complete' as never, params: { mode } }),
+          },
+        ]);
+        return;
+      }
+
       Alert.alert('Could not publish service', result.error ?? 'Please try again.');
       return;
     }

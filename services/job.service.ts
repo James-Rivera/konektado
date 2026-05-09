@@ -11,6 +11,7 @@ import {
     requireVerifiedUser,
     type JobRow,
 } from '@/services/marketplace.helpers';
+import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import type {
     CreateJobInput,
     JobDetail,
@@ -123,7 +124,7 @@ function applyClientStats(job: JobSummary, stats: Map<string, ClientStats>): Job
 }
 
 export async function createJob(input: CreateJobInput): Promise<ServiceResult<JobSummary>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('client');
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
   const userId = user.data;

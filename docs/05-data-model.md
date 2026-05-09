@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`.
 
 ## Common Types
 
@@ -56,6 +56,7 @@ Purpose: Shared user profile and resident identity details.
 | `city` | `text` | City/municipality. |
 | `phone` | `text` | Private by default; visible only when user chooses or after job acceptance. |
 | `about` | `text` | Public profile summary. |
+| `availability` | `text` | Public availability or response expectation. |
 | `avatar_url` | `text` | Optional storage URL. |
 | `active_role` | `app_role` | Current app mode. |
 | `barangay_verified_at` | `timestamptz` | Set when admin approves barangay verification. |
@@ -72,6 +73,7 @@ Important constraints:
 - `id` must equal `auth.uid()` for owner writes.
 - Public search should not expose birthdate, full street address, or private phone by default.
 - `barangay_verified_at` should only be written by admin verification actions.
+- Verification selfie, ID files, certificates, and admin notes must never be copied into public profile fields or `avatar_url`.
 
 ## user_roles
 
@@ -118,6 +120,52 @@ Important constraints:
 - These preferences are first-party personalization data, not verification proof.
 - For provider and both-role users, `provider_profiles.service_type` is seeded from offered services until the future `services` table is fully built.
 
+## provider_profiles
+
+Purpose: Role-specific public Work Profile completion details.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `user_id` | `uuid` | Primary key. References `profiles(id)` on delete cascade. |
+| `service_type` | `text` | Legacy/onboarding service summary, currently comma-separated. |
+| `headline` | `text` | Public worker headline shown in Profile trust surfaces. |
+| `bio` | `text` | Public worker bio. |
+| `service_area` | `text` | Public area where the provider can work. |
+| `availability` | `text` | Public work availability. |
+| `rate_text` | `text` | Optional public rate note. |
+| `response_time` | `text` | Optional response expectation. |
+| `profile_completed_at` | `timestamptz` | Set when Work Profile required fields are complete. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on change. |
+
+Important constraints:
+
+- Owner can read, insert, and update only their own Work Profile.
+- Work Profile completion is required before publishing service posts or messaging clients about jobs.
+- Credentials and private verification files are separate from this public profile row.
+
+## client_profiles
+
+Purpose: Role-specific public Hiring Profile completion details.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `user_id` | `uuid` | Primary key. References `profiles(id)` on delete cascade. |
+| `headline` | `text` | Public client headline shown in Profile trust surfaces. |
+| `bio` | `text` | Public client intro. |
+| `needed_services` | `text[]` | Public services the client usually needs. |
+| `preferred_schedule` | `text` | Public schedule or coordination preference. |
+| `budget_preference` | `text` | Optional public budget expectation. |
+| `profile_completed_at` | `timestamptz` | Set when Hiring Profile required fields are complete. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on change. |
+
+Important constraints:
+
+- Owner can read, insert, and update only their own Hiring Profile.
+- Hiring Profile completion is required before publishing jobs or messaging workers about service posts.
+- Onboarding `user_preferences.needed_services` may backfill this row, but preferences remain personalization data rather than verification proof.
+
 ## services
 
 Purpose: Provider service profile entries shown in search and provider profiles.
@@ -143,7 +191,7 @@ Relationships:
 
 Important constraints:
 
-- Only provider owner can create/update/delete their services.
+- Only verified provider owner with completed Work Profile can create services. Only provider owner can update/delete their services.
 - Public queries should only show active services.
 - `category` and `title` are required. For the taxonomy-only MVP, `category` stores the selected service label rather than a separate category foreign key.
 
@@ -304,7 +352,7 @@ Important constraints:
 
 - Drafts are owner-private and never appear in Home, Search, Job Detail, provider browsing, conversations, or admin queues.
 - Both verified and unverified authenticated users can create, update, read, and delete only their own drafts.
-- Publishing a draft creates a real `jobs` row only after barangay verification passes.
+- Publishing a draft creates a real `jobs` row only after barangay verification and Hiring Profile completion pass.
 
 ## conversations
 
@@ -359,7 +407,7 @@ Relationships:
 Important constraints:
 
 - Only conversation participants can read messages.
-- Only verified users can send messages.
+- Only verified users with the relevant Work or Hiring Profile can send messages.
 - MVP messages are text-only. Attachments, read receipts, calls, and group chat are future features.
 
 ## saved_items

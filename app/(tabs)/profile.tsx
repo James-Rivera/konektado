@@ -14,17 +14,24 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyJobs } from '@/services/job.service';
 import { isPresenceActive } from '@/services/marketplace.helpers';
+import {
+  getMyProfileCompletion,
+} from '@/services/profile-completion.service';
 import { listProfileReviews } from '@/services/review.service';
 import { listMyServices } from '@/services/service-profile.service';
-import { supabase } from '@/utils/supabase';
 import type { JobSummary, ProviderService, Review } from '@/types/marketplace.types';
+import type { ProfileCompletionMode, ProfileCompletionStatus } from '@/types/profile.types';
+import { supabase } from '@/utils/supabase';
 
 type ProfileMode = 'work' | 'hiring';
+type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [mode, setMode] = useState<ProfileMode>('work');
-  const { profile, loading: profileLoading } = useProfile();
+  const { profile, loading: profileLoading, version } = useProfile();
+  const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
+  const [completionLoading, setCompletionLoading] = useState(true);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [services, setServices] = useState<ProviderService[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -32,7 +39,45 @@ export default function ProfileScreen() {
     profile?.full_name ||
     `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
     'Konektado resident';
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const isVerified = Boolean(
+    completion?.isVerified || profile?.barangay_verified_at || profile?.verified_at,
+  );
+  const completedCount = [
+    completion?.coreComplete,
+    completion?.workComplete,
+    completion?.hiringComplete,
+  ].filter(Boolean).length;
+
+  useEffect(() => {
+    let active = true;
+
+    setCompletionLoading(true);
+    Promise.all([
+      getMyProfileCompletion(),
+      listMyJobs(),
+      listMyServices(),
+      profile?.id ? listProfileReviews(profile.id) : Promise.resolve({ data: [], error: null } as const),
+    ]).then(([completionResult, jobResult, serviceResult, reviewResult]) => {
+      if (!active) return;
+
+      if (!completionResult.error && completionResult.data) setCompletion(completionResult.data);
+      if (!jobResult.error && jobResult.data) setJobs(jobResult.data);
+      if (!serviceResult.error && serviceResult.data) setServices(serviceResult.data);
+      if (!reviewResult.error && reviewResult.data) setReviews([...reviewResult.data]);
+      setCompletionLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id, version]);
+
+  const openCompletion = (nextMode: ProfileCompletionMode) => {
+    router.push({
+      pathname: '/profile/complete' as never,
+      params: { mode: nextMode },
+    });
+  };
 
   const handleLogout = () => {
     Alert.alert('Log out', 'End this session on this device?', [
@@ -52,41 +97,19 @@ export default function ProfileScreen() {
     ]);
   };
 
-  useEffect(() => {
-    let active = true;
-
-    Promise.all([
-      listMyJobs(),
-      listMyServices(),
-      profile?.id ? listProfileReviews(profile.id) : Promise.resolve({ data: [], error: null } as const),
-    ]).then(([jobResult, serviceResult, reviewResult]) => {
-      if (!active) return;
-      if (!jobResult.error && jobResult.data) setJobs(jobResult.data);
-      if (!serviceResult.error && serviceResult.data) setServices(serviceResult.data);
-      if (!reviewResult.error && reviewResult.data) setReviews([...reviewResult.data]);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [profile?.id]);
-
   return (
     <View style={styles.screen}>
       <AppHeader
         actionIcon="settings"
         actionLabel="Profile settings"
-        eyebrow="One account"
+        eyebrow="Trust center"
         title="Profile"
-        subtitle="Manage your Work Profile and Hiring Profile."
+        subtitle="Verification proves identity. Profile completion builds trust."
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {profileLoading ? (
-          <>
-            <ProfileHeaderSkeleton />
-            <NoticeBannerSkeleton />
-          </>
+        {profileLoading || completionLoading ? (
+          <ProfileSkeleton />
         ) : (
           <>
             <View style={styles.profileCard}>
@@ -97,7 +120,7 @@ export default function ProfileScreen() {
               <View style={styles.profileCopy}>
                 <Text style={styles.name}>{displayName}</Text>
                 <Text style={styles.location}>
-                  {[profile?.barangay, profile?.city].filter(Boolean).join(', ') || 'Barangay San Pedro'}
+                  {[profile?.barangay, profile?.city].filter(Boolean).join(', ') || 'Location not set'}
                 </Text>
                 <View style={styles.profilePills}>
                   <Pill
@@ -105,20 +128,43 @@ export default function ProfileScreen() {
                     label={isVerified ? 'Barangay verified' : 'Verification needed'}
                     tone={isVerified ? 'success' : 'warning'}
                   />
-                  <Pill label={`${services.length} Services`} tone="primary" />
+                  <Pill label={`${completedCount}/3 profile steps`} tone={completedCount === 3 ? 'success' : 'primary'} />
                 </View>
               </View>
             </View>
 
             <NoticeBanner
-              message={
-                isVerified
-                  ? 'Posting, messaging, saving, and reviews are unlocked for this account.'
-                  : 'Complete barangay verification to unlock posting, messaging, saving, and reviews.'
-              }
-              title={isVerified ? 'Verification approved' : 'Verification required'}
-              variant={isVerified ? 'info' : 'warning'}
+              message={getTrustMessage({ completion, isVerified })}
+              title={getTrustTitle({ completion, isVerified })}
+              variant={isVerified && completedCount === 3 ? 'info' : 'warning'}
             />
+
+            <View style={styles.completionGrid}>
+              <CompletionCard
+                body="Your name, location, intro, and availability. Shared by Work and Hiring."
+                complete={Boolean(completion?.coreComplete)}
+                icon="badge"
+                missing={completion?.missingCore ?? []}
+                title="Core Profile"
+                onPress={() => openCompletion('core')}
+              />
+              <CompletionCard
+                body="What clients see before messaging you or viewing your service posts."
+                complete={Boolean(completion?.workComplete)}
+                icon="handyman"
+                missing={completion?.missingWork ?? []}
+                title="Work Profile"
+                onPress={() => openCompletion('work')}
+              />
+              <CompletionCard
+                body="What workers see before responding to your job posts."
+                complete={Boolean(completion?.hiringComplete)}
+                icon="assignment-ind"
+                missing={completion?.missingHiring ?? []}
+                title="Hiring Profile"
+                onPress={() => openCompletion('hiring')}
+              />
+            </View>
           </>
         )}
 
@@ -136,9 +182,19 @@ export default function ProfileScreen() {
         </View>
 
         {mode === 'work' ? (
-          <WorkProfile reviews={reviews} services={services} />
+          <WorkProfile
+            completion={completion}
+            reviews={reviews}
+            services={services}
+            onComplete={() => openCompletion('work')}
+          />
         ) : (
-          <HiringProfile jobs={jobs} reviews={reviews} />
+          <HiringProfile
+            completion={completion}
+            jobs={jobs}
+            reviews={reviews}
+            onComplete={() => openCompletion('hiring')}
+          />
         )}
 
         <Pressable
@@ -154,54 +210,132 @@ export default function ProfileScreen() {
   );
 }
 
-function WorkProfile({ reviews, services }: { reviews: Review[]; services: ProviderService[] }) {
-  const completedJobs = reviews.length;
+function CompletionCard({
+  body,
+  complete,
+  icon,
+  missing,
+  onPress,
+  title,
+}: {
+  body: string;
+  complete: boolean;
+  icon: MaterialIconName;
+  missing: string[];
+  onPress: () => void;
+  title: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.completionCard, pressed && styles.pressed]}>
+      <View style={styles.completionHeader}>
+        <View style={[styles.completionIcon, complete && styles.completionIconDone]}>
+          <MaterialIcons color={complete ? color.success : color.primary} name={icon} size={19} />
+        </View>
+        <View style={styles.completionCopy}>
+          <Text style={styles.completionTitle}>{title}</Text>
+          <Text style={styles.completionBody}>{body}</Text>
+        </View>
+        <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
+      </View>
+      <View style={styles.completionFooter}>
+        <Pill
+          icon={complete ? 'check-circle' : 'error-outline'}
+          label={complete ? 'Complete' : 'Needs info'}
+          tone={complete ? 'success' : 'warning'}
+        />
+        {!complete && missing.length ? (
+          <Text style={styles.missingText}>Missing: {missing.slice(0, 3).join(', ')}</Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function WorkProfile({
+  completion,
+  onComplete,
+  reviews,
+  services,
+}: {
+  completion: ProfileCompletionStatus | null;
+  onComplete: () => void;
+  reviews: Review[];
+  services: ProviderService[];
+}) {
   const rating = reviews.length
     ? (reviews.reduce((total, review) => total + review.rating, 0) / reviews.length).toFixed(1)
     : '-';
+  const profileServices = completion?.work.offeredServices ?? [];
 
   return (
     <View style={styles.stack}>
       <View style={styles.metricRow}>
         <Metric icon="star" label="Worker rating" value={rating} />
-        <Metric icon="check-circle" label="Reviews" value={String(completedJobs)} />
+        <Metric icon="check-circle" label="Reviews" value={String(reviews.length)} />
         <Metric icon="handyman" label="Services" value={String(services.length)} />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Availability</Text>
-        <Text style={styles.body}>{services[0]?.availabilityText ?? 'Availability has not been set yet.'}</Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Services</Text>
-        <View style={styles.pillWrap}>
-          {services.map((service) => (
-            <Pill key={service.id} label={service.title} />
-          ))}
-          {!services.length ? <Text style={styles.body}>No services posted yet.</Text> : null}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Work trust profile</Text>
+          <PrimaryButton compact label={completion?.workComplete ? 'Edit' : 'Complete'} onPress={onComplete} variant="secondary" />
+        </View>
+        <Text style={styles.profileHeadline}>
+          {completion?.work.headline || 'Add a headline for clients.'}
+        </Text>
+        <Text style={styles.body}>
+          {completion?.work.bio || 'Tell clients what you can help with before they message.'}
+        </Text>
+        <View style={styles.detailRows}>
+          <DetailRow icon="location-on" label="Service area" value={completion?.work.serviceArea || 'Not set'} />
+          <DetailRow icon="schedule" label="Availability" value={completion?.work.availability || 'Not set'} />
+          <DetailRow icon="payments" label="Rate note" value={completion?.work.rateText || 'Optional'} />
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Reviews</Text>
-        {reviews.map((item) => (
+        <Text style={styles.sectionTitle}>Services offered</Text>
+        <View style={styles.pillWrap}>
+          {profileServices.map((service) => (
+            <Pill key={service} label={service} />
+          ))}
+          {!profileServices.length ? <Text style={styles.body}>Add services so clients know what to ask about.</Text> : null}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Posted services</Text>
+        {services.slice(0, 4).map((service) => (
           <HistoryRow
-            key={item.id}
-            icon="work-outline"
-            meta={`${item.rating} rating`}
-            subtitle={item.comment ?? 'Completed job review'}
-            title={item.reviewer?.fullName ?? 'Konektado resident'}
+            key={service.id}
+            icon="design-services"
+            meta={service.isActive ? 'active' : 'paused'}
+            subtitle={service.locationText ?? service.barangay ?? 'Nearby'}
+            title={service.title}
           />
         ))}
-        {!reviews.length ? <Text style={styles.body}>Reviews appear after completed jobs.</Text> : null}
+        {!services.length ? <Text style={styles.body}>Service posts appear here after publishing.</Text> : null}
       </View>
     </View>
   );
 }
 
-function HiringProfile({ jobs, reviews }: { jobs: JobSummary[]; reviews: Review[] }) {
+function HiringProfile({
+  completion,
+  jobs,
+  onComplete,
+  reviews,
+}: {
+  completion: ProfileCompletionStatus | null;
+  jobs: JobSummary[];
+  onComplete: () => void;
+  reviews: Review[];
+}) {
   const openJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
+  const neededServices = completion?.hiring.neededServices ?? [];
 
   return (
     <View style={styles.stack}>
@@ -212,14 +346,36 @@ function HiringProfile({ jobs, reviews }: { jobs: JobSummary[]; reviews: Review[
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Open jobs</Text>
-        <Text style={styles.body}>{openJobs.length} jobs are open or in progress.</Text>
-        <PrimaryButton disabled icon="list-alt" label="Manage job posts" variant="secondary" />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Hiring trust profile</Text>
+          <PrimaryButton compact label={completion?.hiringComplete ? 'Edit' : 'Complete'} onPress={onComplete} variant="secondary" />
+        </View>
+        <Text style={styles.profileHeadline}>
+          {completion?.hiring.headline || 'Add a headline for workers.'}
+        </Text>
+        <Text style={styles.body}>
+          {completion?.hiring.bio || 'Tell workers what kind of help you usually need.'}
+        </Text>
+        <View style={styles.detailRows}>
+          <DetailRow icon="schedule" label="Preferred schedule" value={completion?.hiring.preferredSchedule || 'Not set'} />
+          <DetailRow icon="payments" label="Budget preference" value={completion?.hiring.budgetPreference || 'Optional'} />
+          <DetailRow icon="assignment" label="Open jobs" value={`${openJobs.length} active`} />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Services needed</Text>
+        <View style={styles.pillWrap}>
+          {neededServices.map((service) => (
+            <Pill key={service} label={service} />
+          ))}
+          {!neededServices.length ? <Text style={styles.body}>Add needed services so workers understand your usual requests.</Text> : null}
+        </View>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Job history</Text>
-        {jobs.map((item) => (
+        {jobs.slice(0, 4).map((item) => (
           <HistoryRow
             key={item.id}
             icon="history"
@@ -230,24 +386,74 @@ function HiringProfile({ jobs, reviews }: { jobs: JobSummary[]; reviews: Review[
         ))}
         {!jobs.length ? <Text style={styles.body}>No jobs posted yet.</Text> : null}
       </View>
+    </View>
+  );
+}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Reviews from workers</Text>
-        <Text style={styles.body}>
-          Workers can review this Hiring Profile after completed jobs in a later slice.
-        </Text>
+function DetailRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: MaterialIconName;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.detailRow}>
+      <MaterialIcons color={color.primary} name={icon} size={17} />
+      <View style={styles.detailCopy}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailValue}>{value}</Text>
       </View>
     </View>
   );
 }
 
+function getTrustTitle({
+  completion,
+  isVerified,
+}: {
+  completion: ProfileCompletionStatus | null;
+  isVerified: boolean;
+}) {
+  if (!isVerified) return 'Verification required';
+  if (!completion?.coreComplete) return 'Complete your public basics';
+  if (!completion.workComplete || !completion.hiringComplete) return 'Finish role profiles';
+  return 'Trust profile ready';
+}
+
+function getTrustMessage({
+  completion,
+  isVerified,
+}: {
+  completion: ProfileCompletionStatus | null;
+  isVerified: boolean;
+}) {
+  if (!isVerified) {
+    return 'Complete barangay verification first. After approval, finish Work or Hiring details before posting or messaging.';
+  }
+
+  if (!completion?.coreComplete) {
+    return 'Add your public intro, location, and availability so neighbors have context before conversations begin.';
+  }
+
+  if (!completion.workComplete || !completion.hiringComplete) {
+    return 'You are verified. Finish the role profile you want to use before publishing or messaging.';
+  }
+
+  return 'You can publish, message, and manage marketplace activity with a complete public trust profile.';
+}
+
 function getInitials(name: string) {
-  return name
+  const initials = name
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('');
+
+  return initials || 'K';
 }
 
 function Metric({
@@ -255,7 +461,7 @@ function Metric({
   label,
   value,
 }: {
-  icon: ComponentProps<typeof MaterialIcons>['name'];
+  icon: MaterialIconName;
   label: string;
   value: string;
 }) {
@@ -268,29 +474,26 @@ function Metric({
   );
 }
 
-function ProfileHeaderSkeleton() {
+function ProfileSkeleton() {
   return (
-    <View style={styles.profileCard}>
-      <Skeleton height={60} width={60} borderRadius={radius.pill} />
-      <View style={styles.profileCopy}>
-        <Skeleton height={20} width="62%" />
-        <Skeleton height={14} width="48%" />
-        <View style={styles.profilePills}>
-          <Skeleton height={26} width={134} borderRadius={radius.pill} />
-          <Skeleton height={26} width={86} borderRadius={radius.pill} />
+    <>
+      <View style={styles.profileCard}>
+        <Skeleton height={60} width={60} borderRadius={radius.pill} />
+        <View style={styles.profileCopy}>
+          <Skeleton height={20} width="62%" />
+          <Skeleton height={14} width="48%" />
+          <View style={styles.profilePills}>
+            <Skeleton height={26} width={134} borderRadius={radius.pill} />
+            <Skeleton height={26} width={118} borderRadius={radius.pill} />
+          </View>
         </View>
       </View>
-    </View>
-  );
-}
-
-function NoticeBannerSkeleton() {
-  return (
-    <View style={styles.noticeSkeleton}>
-      <Skeleton height={16} width="48%" />
-      <Skeleton height={13} width="92%" />
-      <Skeleton height={13} width="70%" />
-    </View>
+      <View style={styles.noticeSkeleton}>
+        <Skeleton height={16} width="48%" />
+        <Skeleton height={13} width="92%" />
+        <Skeleton height={13} width="70%" />
+      </View>
+    </>
   );
 }
 
@@ -300,7 +503,7 @@ function HistoryRow({
   subtitle,
   meta,
 }: {
-  icon: ComponentProps<typeof MaterialIcons>['name'];
+  icon: MaterialIconName;
   title: string;
   subtitle: string;
   meta: string;
@@ -381,6 +584,56 @@ const styles = StyleSheet.create({
     gap: space.sm,
     padding: space.lg,
   },
+  completionGrid: {
+    gap: space.md,
+  },
+  completionCard: {
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: space.md,
+    padding: space.lg,
+  },
+  completionHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: space.md,
+  },
+  completionIcon: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  completionIconDone: {
+    backgroundColor: color.successSoft,
+  },
+  completionCopy: {
+    flex: 1,
+    gap: space.xs,
+  },
+  completionTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  completionBody: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  completionFooter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  missingText: {
+    ...typography.caption,
+    color: color.textMuted,
+    flexShrink: 1,
+  },
   segmented: {
     backgroundColor: color.background,
     borderColor: color.border,
@@ -423,12 +676,43 @@ const styles = StyleSheet.create({
     gap: space.md,
     padding: space.lg,
   },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.md,
+    justifyContent: 'space-between',
+  },
   sectionTitle: {
     ...typography.sectionTitle,
+    color: color.text,
+    flex: 1,
+  },
+  profileHeadline: {
+    ...typography.bodyMedium,
     color: color.text,
   },
   body: {
     ...typography.body,
+    color: color.textMuted,
+  },
+  detailRows: {
+    gap: space.sm,
+  },
+  detailRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  detailCopy: {
+    flex: 1,
+    gap: space['2xs'],
+  },
+  detailLabel: {
+    ...typography.captionMedium,
+    color: color.text,
+  },
+  detailValue: {
+    ...typography.caption,
     color: color.textMuted,
   },
   pillWrap: {

@@ -11,6 +11,7 @@ import {
   requireVerifiedUser,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
+import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import type {
   CreateServiceInput,
   ProviderService,
@@ -105,7 +106,7 @@ function mapServiceSearchResult(
 export async function createService(
   input: CreateServiceInput,
 ): Promise<ServiceResult<ProviderService>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('provider');
   if (user.error) return user;
 
   const category = compactText(input.category);

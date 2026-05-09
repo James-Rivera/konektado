@@ -11,7 +11,7 @@
 7. App collects only the minimum onboarding details needed to orient the user.
 8. User reviews the lightweight onboarding details and completes onboarding.
 9. User enters Home as an unverified viewer if barangay verification is not complete.
-10. Verified users can access marketplace interactions based on their role.
+10. Verified users must complete the relevant public role profile before posting or messaging.
 
 Forgot password flow:
 
@@ -54,6 +54,8 @@ Rules:
 - Provider intent opens Home on Jobs, client intent opens Home on Workers.
 - Users can add a second profile (Work Profile or Hiring Profile) later from Profile tab without re-entering full onboarding.
 
+## Barangay Verification Flow
+
 1. Unverified user starts verification from a locked action, profile prompt, or verification page.
 2. App shows the Figma verification intro explaining what verification unlocks.
 3. App shows the Figma "Before you continue" requirements: valid ID, clear face photo, and good lighting.
@@ -73,11 +75,13 @@ Rules:
 
 Verification unlocks:
 
-- Posting jobs.
-- Creating public service profiles or service posts.
-- Messaging about jobs or services.
-- Messaging other users.
+- Eligibility to complete the final interaction gate for posting jobs.
+- Eligibility to complete the final interaction gate for creating public service posts.
+- Eligibility to complete the final interaction gate for messaging about jobs or services.
+- Eligibility to complete the final interaction gate for messaging other users.
 - Leaving reviews after completed jobs.
+
+Verification proves identity. Public profile completion gives other residents enough context before interaction.
 
 Contact details rules:
 
@@ -88,6 +92,24 @@ Contact details rules:
 - Email should not be displayed on public profiles, job cards, service cards, or worker cards.
 - SMS/mobile OTP is not required for MVP. Add it only when an SMS provider and Android/device testing path are available.
 
+## Public Profile Completion Flow
+
+1. Verified user opens Profile and sees a trust checklist for Core Profile, Work Profile, and Hiring Profile.
+2. Core Profile collects public name, barangay/city, short intro, and availability.
+3. Work Profile collects worker-facing headline, bio, offered services, service area, availability, and optional rate note.
+4. Hiring Profile collects client-facing headline, bio, needed services, preferred schedule, and optional budget preference.
+5. App saves role-profile rows without changing the user's active role.
+6. When a verified user tries to publish or message without the relevant role profile, the app routes them to `/profile/complete`.
+
+Rules:
+
+- Keep first onboarding lightweight; do not force full Work/Hiring completion before Home.
+- Barangay verification and public profile completion are separate trust layers.
+- Verification selfie, ID files, certificate files, and admin notes are private and must never become public profile photos or profile content.
+- A profile photo is recommended but not required for this MVP pass.
+- Publishing jobs and messaging workers require a completed Hiring Profile.
+- Publishing services and messaging clients about jobs require a completed Work Profile.
+
 ## Service Profile Creation Flow
 
 1. Provider opens Work Profile, Post, or provider setup.
@@ -95,8 +117,9 @@ Contact details rules:
 3. Provider adds service title, description, availability, experience, and optional rate text.
 4. Provider may attach credentials related to the service.
 5. App validates required fields.
-6. `ServiceProfileService.createService` saves the service.
-7. Service appears on provider public profile, Home feed, and search results if active.
+6. App checks barangay verification and completed Work Profile.
+7. `ServiceProfileService.createService` saves the service.
+8. Service appears on provider public profile, Home feed, and search results if active.
 
 Rules:
 
@@ -104,6 +127,7 @@ Rules:
 - A service belongs to one provider.
 - Inactive services are hidden from public search.
 - Admin verification belongs to the user/profile, while credentials can support a service.
+- Service posting is blocked until the provider has a completed Work Profile.
 
 ## Job Posting Flow
 
@@ -114,9 +138,10 @@ Rules:
 5. App saves a private `job_drafts` row before showing Preview.
 6. App shows the Figma Preview screen with safety reminders.
 7. If the client is not barangay-verified and taps Publish, the app shows the Figma barangay verification gate with Start Verification and Keep Editing Draft actions.
-8. If the client is barangay-verified and taps Publish, `JobService.createJob` saves the job with status `open` and deletes the draft.
-9. Job appears in Home, job search, post dashboard, active posts, and provider browsing.
-10. Client can open the created job detail after publishing.
+8. If the client is barangay-verified but missing Hiring Profile details, the app routes to `/profile/complete?mode=hiring`.
+9. If the client is barangay-verified and Hiring Profile complete, `JobService.createJob` saves the job with status `open` and deletes the draft.
+10. Job appears in Home, job search, post dashboard, active posts, and provider browsing.
+11. Client can open the created job detail after publishing.
 
 Rules:
 
@@ -124,6 +149,7 @@ Rules:
 - Unverified users can create and edit private drafts, but they cannot publish public jobs.
 - Unverified users are routed to verification only when they try to publish or choose Start Verification from the gate.
 - Approved users must be able to create a real job without relogging if profile refresh has received the approval state.
+- Approved users must complete Hiring Profile before publishing public jobs.
 - Payments and job agreements happen outside the app.
 - Jobs should be clear enough for providers to decide whether to message.
 - Closed or cancelled jobs should not accept new interested workers.
@@ -137,18 +163,21 @@ Rules:
 1. Provider browses open jobs.
 2. Provider opens a job or taps Message.
 3. App checks barangay verification.
-4. App checks that the provider is not messaging their own job.
-5. `ConversationService.startJobConversation` creates or reuses a job-related conversation.
-6. Provider sends the first message or uses a suggested quick message.
-7. Client sees the worker in Messages as an interested worker.
-8. Client can reply, view the worker profile, mark hired, decline through a menu, or report.
-9. Provider sees the conversation and job context in Messages.
+4. App checks completed Work Profile.
+5. App checks that the provider is not messaging their own job.
+6. `ConversationService.startJobConversation` creates or reuses a job-related conversation.
+7. Provider sends the first message or uses a suggested quick message.
+8. Client sees the worker in Messages as an interested worker.
+9. Client can reply, view the worker profile, mark hired, decline through a menu, or report.
+10. Provider sees the conversation and job context in Messages.
 
 Rules:
 
 - A provider should have only one active job conversation per job.
 - A provider cannot show interest in their own job.
 - Conversations cannot be started for closed or cancelled jobs.
+- Providers must complete Work Profile before messaging clients about jobs.
+- Clients must complete Hiring Profile before messaging workers about service posts.
 - "Apply" should not be used in the UI for the MVP unless a formal application feature is added later.
 
 ## Message-Based Hiring Flow

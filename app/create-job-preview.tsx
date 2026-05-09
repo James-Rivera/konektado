@@ -12,6 +12,11 @@ import { useProfile } from '@/hooks/use-profile';
 import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { createJob } from '@/services/job.service';
 import { formatJobPostTitle } from '@/services/marketplace.helpers';
+import {
+  getCompletionModeForError,
+  getCompletionTitleForMode,
+  isProfileCompletionRequiredError,
+} from '@/services/profile-completion.service';
 
 type JobDraft = {
   title: string;
@@ -120,6 +125,18 @@ export default function CreateJobPreviewScreen() {
     });
 
     if (result.error || !result.data) {
+      if (isProfileCompletionRequiredError(result.error)) {
+        const mode = getCompletionModeForError(result.error) ?? 'hiring';
+        Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Complete profile',
+            onPress: () => router.push({ pathname: '/profile/complete' as never, params: { mode } }),
+          },
+        ]);
+        return;
+      }
+
       Alert.alert('Could not publish post', result.error ?? 'Please try again.');
       return;
     }
