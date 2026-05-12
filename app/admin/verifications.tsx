@@ -5,17 +5,20 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
+  LayoutAnimation,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Pill } from '@/components/Pill';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -29,7 +32,10 @@ import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
 
 type QueueFilter = 'pending' | 'reviewed' | 'all';
+type ReviewSheetState = 'collapsed' | 'half' | 'full';
 type VerificationFilePreview = VerificationRequestDetail['files'][number];
+type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
+type StatusTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 
 type SubmissionDetails = {
   birthdate: string | null;
@@ -52,8 +58,37 @@ const reviewedStatuses: VerificationStatus[] = [
   'skipped',
 ];
 
+const filterTabs: { icon: MaterialIconName; label: string; value: QueueFilter }[] = [
+  { icon: 'pending-actions', label: 'Pending', value: 'pending' },
+  { icon: 'fact-check', label: 'Reviewed', value: 'reviewed' },
+  { icon: 'inventory-2', label: 'All', value: 'all' },
+];
+
+const adminPalette = {
+  canvas: '#F5F6F8',
+  canvasSoft: '#FAFBFC',
+  surfaceRaised: color.background,
+  surfaceMuted: '#F4F7FA',
+  line: '#E6EAF0',
+  lineStrong: '#CFE3FB',
+  trust: color.primary,
+  trustDeep: color.verificationBlue,
+  trustSoft: color.primarySoft,
+  successDeep: '#31945A',
+  successSoft: '#EAF7EF',
+  warningDeep: '#9A650E',
+  warningSoft: '#FFF5DC',
+  dangerDeep: color.danger,
+  dangerSoft: '#FFF1F1',
+  ink: color.text,
+  muted: color.textMuted,
+  faint: color.textSubtle,
+  shadow: '#0F172A',
+} as const;
+
 export default function AdminVerificationQueueScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [requests, setRequests] = useState<VerificationRequestDetail[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -61,7 +96,19 @@ export default function AdminVerificationQueueScreen() {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<QueueFilter>('pending');
+  const [reviewSheetState, setReviewSheetState] = useState<ReviewSheetState>('collapsed');
   const [previewFile, setPreviewFile] = useState<VerificationFilePreview | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+  }, []);
+
+  const setReviewSheetStateAnimated = (nextState: ReviewSheetState) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setReviewSheetState(nextState);
+  };
 
   const load = async ({ silent = false }: { silent?: boolean } = {}) => {
     if (silent) {
@@ -106,7 +153,7 @@ export default function AdminVerificationQueueScreen() {
   }, [filter, requests]);
 
   const selectedRequest =
-    requests.find((request) => request.id === selectedId) ?? visibleRequests[0] ?? null;
+    visibleRequests.find((request) => request.id === selectedId) ?? visibleRequests[0] ?? null;
 
   const review = async (requestId: string, decision: 'approved' | 'rejected' | 'needs_more_info') => {
     const note = notes[requestId]?.trim() ?? '';
@@ -172,13 +219,13 @@ export default function AdminVerificationQueueScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.adminIdentity}>
               <View style={styles.adminMark}>
-                <MaterialIcons color={color.primary} name="admin-panel-settings" size={18} />
+                <MaterialIcons color={color.primary} name="admin-panel-settings" size={22} />
               </View>
               <Text style={styles.eyebrow}>Barangay admin</Text>
             </View>
@@ -188,7 +235,7 @@ export default function AdminVerificationQueueScreen() {
                 accessibilityRole="button"
                 onPress={() => load({ silent: true })}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-                <MaterialIcons color={color.primary} name="refresh" size={20} />
+                <MaterialIcons color={color.primary} name="refresh" size={28} />
               </Pressable>
               <Pressable
                 accessibilityLabel="Log out"
@@ -207,33 +254,68 @@ export default function AdminVerificationQueueScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingBottom:
+                getSheetOffset(selectedRequest, reviewSheetState) + Math.max(insets.bottom, space.sm),
+            },
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load({ silent: true })} />}
           showsVerticalScrollIndicator={false}>
           <View style={styles.statsGrid}>
             <MetricCard icon="pending-actions" label="Pending" tone="warning" value={stats.pending} />
-            <MetricCard icon="verified" label="Approved" tone="success" value={stats.approved} />
-            <MetricCard icon="rule" label="Rejected" tone="danger" value={stats.rejected} />
+            <MetricCard icon="verified-user" label="Approved" tone="success" value={stats.approved} />
+            <MetricCard icon="shield" label="Rejected" tone="danger" value={stats.rejected} />
             <MetricCard icon="attach-file" label="Files" tone="primary" value={stats.files} />
           </View>
 
           <View style={styles.dashboardGrid}>
             <View style={styles.queueColumn}>
               <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Review queue</Text>
+                <View style={styles.sectionHeaderCopy}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionIcon}>
+                      <MaterialIcons color={color.primary} name="filter-list" size={20} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Review Queue</Text>
+                  </View>
                   <Text style={styles.sectionCaption}>
                     {loading ? 'Loading requests' : `${visibleRequests.length} shown from ${requests.length} requests`}
                   </Text>
                 </View>
-                <Pill label={filter} tone={filter === 'pending' ? 'warning' : 'neutral'} />
+                <View style={[styles.queueStatusBadge, getStatusChipStyle(getFilterBadgeTone(filter))]}>
+                  <Text style={[styles.queueStatusBadgeText, getStatusTextStyle(getFilterBadgeTone(filter))]}>
+                    {getFilterBadgeLabel(filter)}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.segmented}>
-                <SegmentButton active={filter === 'pending'} label="Pending" onPress={() => setFilter('pending')} />
-                <SegmentButton active={filter === 'reviewed'} label="Reviewed" onPress={() => setFilter('reviewed')} />
-                <SegmentButton active={filter === 'all'} label="All" onPress={() => setFilter('all')} />
+              <View style={styles.filterSegment}>
+                {filterTabs.map((tab) => (
+                  <FilterChip
+                    active={filter === tab.value}
+                    icon={tab.icon}
+                    key={tab.value}
+                    label={tab.label}
+                    onPress={() => setFilter(tab.value)}
+                  />
+                ))}
               </View>
+
+              {selectedRequest ? (
+                <View style={styles.selectedBanner}>
+                  <View style={styles.selectedBannerIcon}>
+                    <MaterialIcons color={color.primary} name="person-search" size={22} />
+                  </View>
+                  <View style={styles.selectedBannerCopy}>
+                    <Text numberOfLines={1} style={styles.selectedBannerTitle}>
+                      Reviewing {selectedRequest.profile?.fullName ?? 'Resident'}
+                    </Text>
+                    <Text style={styles.selectedBannerText}>Use the bottom sheet for details and actions.</Text>
+                  </View>
+                </View>
+              ) : null}
 
               {!loading && !visibleRequests.length ? (
                 <View style={styles.emptyCard}>
@@ -251,37 +333,35 @@ export default function AdminVerificationQueueScreen() {
                     active={selectedRequest?.id === request.id}
                     key={request.id}
                     request={request}
-                    onPress={() => setSelectedId(request.id)}
+                    onPress={() => {
+                      setSelectedId(request.id);
+                      setReviewSheetStateAnimated('half');
+                    }}
                   />
                 ))}
               </View>
             </View>
-
-            <View style={styles.reviewColumn}>
-              {selectedRequest ? (
-                <ReviewWorkspace
-                  note={notes[selectedRequest.id] ?? ''}
-                  request={selectedRequest}
-                  reviewing={reviewingId === selectedRequest.id}
-                  onChangeNote={(value) =>
-                    setNotes((current) => ({
-                      ...current,
-                      [selectedRequest.id]: value,
-                    }))
-                  }
-                  onOpenFile={previewOrOpenFile}
-                  onReview={review}
-                />
-              ) : (
-                <View style={styles.workspaceEmpty}>
-                  <MaterialIcons color={color.textSubtle} name="fact-check" size={26} />
-                  <Text style={styles.emptyTitle}>Select a request</Text>
-                  <Text style={styles.body}>Choose a resident from the queue to inspect their submitted details.</Text>
-                </View>
-              )}
-            </View>
           </View>
         </ScrollView>
+
+        {selectedRequest ? (
+          <BottomReviewSheet
+            bottomInset={insets.bottom}
+            note={notes[selectedRequest.id] ?? ''}
+            request={selectedRequest}
+            reviewing={reviewingId === selectedRequest.id}
+            state={reviewSheetState}
+            onChangeNote={(value) =>
+              setNotes((current) => ({
+                ...current,
+                [selectedRequest.id]: value,
+              }))
+            }
+            onOpenFile={previewOrOpenFile}
+            onReview={review}
+            onSetState={setReviewSheetStateAnimated}
+          />
+        ) : null}
 
         <FilePreviewModal
           file={previewFile}
@@ -306,21 +386,25 @@ function MetricCard({
 }) {
   return (
     <View style={styles.metricCard}>
-      <View style={[styles.metricIcon, styles[`${tone}Soft`]]}>
-        <MaterialIcons color={getToneColor(tone)} name={icon} size={20} />
+      <View style={styles.metricTop}>
+        <View style={[styles.metricIcon, styles[`${tone}Soft`]]}>
+          <MaterialIcons color={getToneColor(tone)} name={icon} size={24} />
+        </View>
+        <Text style={styles.metricValue}>{value}</Text>
       </View>
-      <Text style={styles.metricValue}>{value}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
 }
 
-function SegmentButton({
+function FilterChip({
   active,
+  icon,
   label,
   onPress,
 }: {
   active: boolean;
+  icon: MaterialIconName;
   label: string;
   onPress: () => void;
 }) {
@@ -330,11 +414,53 @@ function SegmentButton({
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.segmentButton,
-        active && styles.segmentButtonActive,
+        styles.filterChip,
+        active && styles.filterChipActive,
         pressed && styles.pressed,
       ]}>
-      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+      <MaterialIcons color={active ? adminPalette.trustDeep : adminPalette.faint} name={icon} size={18} />
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function AdminActionButton({
+  disabled = false,
+  icon,
+  label,
+  loading = false,
+  onPress,
+  variant,
+}: {
+  disabled?: boolean;
+  icon: MaterialIconName;
+  label: string;
+  loading?: boolean;
+  onPress: () => void;
+  variant: 'approve' | 'reject' | 'secondary';
+}) {
+  const foreground = disabled
+    ? adminPalette.faint
+    : variant === 'approve'
+      ? color.white
+      : variant === 'reject'
+        ? adminPalette.dangerDeep
+        : adminPalette.trustDeep;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled, busy: loading }}
+      disabled={disabled || loading}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.adminAction,
+        styles[`${variant}Action`],
+        disabled && styles.adminActionDisabled,
+        pressed && !disabled && styles.pressed,
+      ]}>
+      <MaterialIcons color={foreground} name={loading ? 'hourglass-empty' : icon} size={16} />
+      <Text style={[styles.adminActionText, { color: foreground }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -350,6 +476,7 @@ function RequestQueueCard({
 }) {
   const details = parseSubmissionDetails(request.notes);
   const subtitle = [request.profile?.barangay, request.profile?.city].filter(Boolean).join(', ') || 'No location';
+  const servicePreview = formatServicePreview(details.servicesOrPurpose || details.submittedNote || '');
 
   return (
     <Pressable
@@ -374,8 +501,8 @@ function RequestQueueCard({
         </View>
         <StatusPill status={request.status} />
       </View>
-      <Text numberOfLines={2} style={styles.queuePurpose}>
-        {details.servicesOrPurpose || details.submittedNote || 'No submitted purpose'}
+      <Text numberOfLines={1} style={styles.queuePurpose}>
+        {servicePreview || 'No submitted purpose'}
       </Text>
       <View style={styles.queueFooter}>
         <IconText icon="event" text={formatDate(request.createdAt)} />
@@ -385,134 +512,196 @@ function RequestQueueCard({
   );
 }
 
-function ReviewWorkspace({
+function BottomReviewSheet({
+  bottomInset,
   note,
   request,
   reviewing,
+  state,
   onChangeNote,
   onOpenFile,
   onReview,
+  onSetState,
 }: {
+  bottomInset: number;
   note: string;
   request: VerificationRequestDetail;
   reviewing: boolean;
+  state: ReviewSheetState;
   onChangeNote: (value: string) => void;
   onOpenFile: (file: VerificationFilePreview) => void;
   onReview: (requestId: string, decision: 'approved' | 'rejected' | 'needs_more_info') => void;
+  onSetState: (state: ReviewSheetState) => void;
 }) {
   const details = parseSubmissionDetails(request.notes);
   const canReview = request.status === 'pending';
+  const collapsed = state === 'collapsed';
+  const half = state === 'half';
+  const sheetStyle =
+    state === 'full' ? styles.reviewSheetFull : half ? styles.reviewSheetHalf : styles.reviewSheetCollapsed;
+
+  const toggleSheetState = () => {
+    onSetState(collapsed ? 'half' : half ? 'full' : 'collapsed');
+  };
+
+  const handleReject = () => {
+    if (!note.trim()) {
+      onSetState('full');
+      return;
+    }
+
+    onReview(request.id, 'rejected');
+  };
 
   return (
-    <View style={styles.workspace}>
-      <View style={styles.workspaceHeader}>
-        <View>
-          <Text style={styles.workspaceTitle}>{request.profile?.fullName ?? 'Resident'}</Text>
-          <Text style={styles.workspaceSubtitle}>
-            Submitted {formatDate(request.createdAt)} - {request.files.length} files
-          </Text>
+    <View style={[styles.reviewSheet, sheetStyle, { paddingBottom: Math.max(bottomInset, space.sm) + space.md }]}>
+      <Pressable accessibilityRole="button" onPress={toggleSheetState} style={styles.sheetHandleArea}>
+        <View style={styles.sheetHandle} />
+      </Pressable>
+
+      <View style={styles.sheetHeader}>
+        <View style={styles.sheetResident}>
+          <View style={styles.avatarSmall}>
+            <Text style={styles.avatarText}>{getInitials(request.profile?.fullName ?? 'Resident')}</Text>
+          </View>
+          <View style={styles.sheetTitleCopy}>
+            <Text numberOfLines={1} style={styles.workspaceTitle}>
+              {request.profile?.fullName ?? 'Resident'}
+            </Text>
+            <Text style={styles.workspaceSubtitle}>
+              {request.files.length} files - submitted {formatDate(request.createdAt)}
+            </Text>
+          </View>
         </View>
         <StatusPill status={request.status} />
       </View>
 
-      <View style={styles.reviewCard}>
-        <ReviewField label="Full Name" value={fullNameFromDetails(details, request)} />
-        <ReviewField
-          label="Address"
-          value={[
-            details.streetAddress,
-            request.profile?.barangay ?? details.city,
-            request.profile?.city ?? details.city,
-          ]
-            .filter(Boolean)
-            .join('\n')}
-          multiline
-        />
-        <ReviewField label="Birthdate" value={details.birthdate} />
-      </View>
+      {!collapsed ? (
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.sheetScroll}>
+          <View style={styles.reviewCard}>
+            <ReviewField label="Full name" value={fullNameFromDetails(details, request)} />
+            <ReviewField
+              label="Address"
+              value={[
+                details.streetAddress,
+                request.profile?.barangay ?? details.city,
+                request.profile?.city ?? details.city,
+              ]
+                .filter(Boolean)
+                .join('\n')}
+              multiline
+            />
+            <ReviewField label="Birthdate" value={details.birthdate} />
+          </View>
 
-      <View style={styles.infoGrid}>
-        <InfoTile icon="badge" label="Document" value={formatFileType(details.idType ?? 'not provided')} />
-        <InfoTile icon="call" label="Phone" value={details.contactPhone || 'Not provided'} />
-        <InfoTile icon="mail" label="Email" value={details.contactEmail || 'Not provided'} />
-        <InfoTile icon="handyman" label="Purpose" value={details.servicesOrPurpose || 'Not provided'} />
-      </View>
+          <View style={styles.infoGrid}>
+            <InfoTile icon="badge" label="Document" value={formatFileType(details.idType ?? 'not provided')} />
+            <InfoTile icon="call" label="Phone" value={details.contactPhone || 'Not provided'} />
+            <InfoTile icon="mail" label="Email" value={details.contactEmail || 'Not provided'} />
+            <InfoTile icon="handyman" label="Services" value={formatServicePreview(details.servicesOrPurpose ?? '')} />
+          </View>
 
-      {details.submittedNote ? (
-        <View style={styles.notePanel}>
-          <Text style={styles.detailLabel}>Resident note</Text>
-          <Text style={styles.body}>{details.submittedNote}</Text>
-        </View>
+          {details.submittedNote ? (
+            <View style={styles.notePanel}>
+              <Text style={styles.detailLabel}>Resident note</Text>
+              <Text style={styles.body}>{details.submittedNote}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.filesPanel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.detailLabel}>Uploaded files</Text>
+              <Pill label={`${request.files.length} files`} />
+            </View>
+            {request.files.length ? (
+              <View style={styles.files}>
+                {request.files.map((file) => (
+                  <Pressable
+                    accessibilityRole="link"
+                    key={file.id}
+                    onPress={() => onOpenFile(file)}
+                    style={({ pressed }) => [styles.fileButton, pressed && styles.pressed]}>
+                    <View style={styles.fileIcon}>
+                      <MaterialIcons color={color.primary} name="attach-file" size={18} />
+                    </View>
+                    <View style={styles.fileCopy}>
+                      <Text style={styles.fileTitle}>{formatFileType(file.fileType)}</Text>
+                      <Text numberOfLines={1} style={styles.fileUrl}>
+                        {file.url}
+                      </Text>
+                    </View>
+                    <MaterialIcons color={color.textSubtle} name="open-in-new" size={16} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.body}>No uploaded files are attached to this request.</Text>
+            )}
+          </View>
+
+          {state === 'full' ? (
+            <View style={styles.decisionPanel}>
+              <Text style={styles.detailLabel}>Reviewer note</Text>
+              <TextInput
+                multiline
+                onChangeText={onChangeNote}
+                placeholder="Add approval note or correction reason"
+                placeholderTextColor={color.textSubtle}
+                style={styles.input}
+                value={note}
+              />
+              {request.reviewerNote && request.status !== 'pending' ? (
+                <Text style={styles.previousNote}>Previous note: {request.reviewerNote}</Text>
+              ) : null}
+              <View style={styles.actions}>
+                <AdminActionButton
+                  disabled={!canReview || reviewing || !note.trim()}
+                  icon="upload-file"
+                  label="Request reupload"
+                  onPress={() => onReview(request.id, 'needs_more_info')}
+                  variant="secondary"
+                />
+                <AdminActionButton
+                  disabled={!canReview || reviewing || !note.trim()}
+                  icon="close"
+                  label="Reject"
+                  onPress={() => onReview(request.id, 'rejected')}
+                  variant="reject"
+                />
+                <AdminActionButton
+                  disabled={!canReview || reviewing}
+                  icon="check-circle"
+                  label="Approve"
+                  loading={reviewing}
+                  onPress={() => onReview(request.id, 'approved')}
+                  variant="approve"
+                />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.sheetHint}>
+              <Text style={styles.sheetHintText}>Tap the handle for full review notes and final actions.</Text>
+            </View>
+          )}
+        </ScrollView>
       ) : null}
 
-      <View style={styles.filesPanel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.detailLabel}>Uploaded files</Text>
-          <Pill label={`${request.files.length} files`} />
-        </View>
-        {request.files.length ? (
-          <View style={styles.files}>
-            {request.files.map((file) => (
-              <Pressable
-                accessibilityRole="link"
-                key={file.id}
-                onPress={() => onOpenFile(file)}
-                style={({ pressed }) => [styles.fileButton, pressed && styles.pressed]}>
-                <View style={styles.fileIcon}>
-                  <MaterialIcons color={color.primary} name="attach-file" size={18} />
-                </View>
-                <View style={styles.fileCopy}>
-                  <Text style={styles.fileTitle}>{formatFileType(file.fileType)}</Text>
-                  <Text numberOfLines={1} style={styles.fileUrl}>
-                    {file.url}
-                  </Text>
-                </View>
-                <MaterialIcons color={color.textSubtle} name="open-in-new" size={16} />
-              </Pressable>
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.body}>No uploaded files are attached to this request.</Text>
-        )}
-      </View>
-
-      <View style={styles.decisionPanel}>
-        <Text style={styles.detailLabel}>Reviewer note</Text>
-        <TextInput
-          multiline
-          onChangeText={onChangeNote}
-          placeholder="Add approval note or correction reason"
-          placeholderTextColor={color.textSubtle}
-          style={styles.input}
-          value={note}
+      <View style={styles.quickActions}>
+        <AdminActionButton
+          disabled={!canReview || reviewing}
+          icon="check-circle"
+          label="Approve"
+          loading={reviewing}
+          onPress={() => onReview(request.id, 'approved')}
+          variant="approve"
         />
-        {request.reviewerNote && request.status !== 'pending' ? (
-          <Text style={styles.previousNote}>Previous note: {request.reviewerNote}</Text>
-        ) : null}
-        <View style={styles.actions}>
-          <PrimaryButton
-            disabled={!canReview || reviewing || !note.trim()}
-            label="Needs more info"
-            onPress={() => onReview(request.id, 'needs_more_info')}
-            variant="outline"
-            compact
-          />
-          <PrimaryButton
-            disabled={!canReview || reviewing || !note.trim()}
-            label="Reject"
-            onPress={() => onReview(request.id, 'rejected')}
-            variant="danger"
-            compact
-          />
-          <PrimaryButton
-            disabled={!canReview || reviewing}
-            icon="verified"
-            label="Approve"
-            loading={reviewing}
-            onPress={() => onReview(request.id, 'approved')}
-            compact
-          />
-        </View>
+        <AdminActionButton
+          disabled={!canReview || reviewing}
+          icon="close"
+          label="Reject"
+          onPress={handleReject}
+          variant="reject"
+        />
       </View>
     </View>
   );
@@ -624,7 +813,11 @@ function IconText({
 
 function StatusPill({ status }: { status: VerificationStatus }) {
   const tone = getStatusTone(status);
-  return <Pill label={formatStatusLabel(status)} tone={tone} />;
+  return (
+    <View style={[styles.statusChip, getStatusChipStyle(tone)]}>
+      <Text style={[styles.statusChipText, getStatusTextStyle(tone)]}>{formatStatusLabel(status)}</Text>
+    </View>
+  );
 }
 
 function parseSubmissionDetails(notes: string | null): SubmissionDetails {
@@ -702,6 +895,27 @@ function formatFileType(value: string) {
     .join(' ');
 }
 
+function formatServicePreview(value: string) {
+  const services = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!services.length) return '';
+
+  const shown = services.slice(0, 3).join(' · ');
+  const hiddenCount = services.length - 3;
+
+  return hiddenCount > 0 ? `${shown} +${hiddenCount}` : shown;
+}
+
+function getSheetOffset(request: VerificationRequestDetail | null, state: ReviewSheetState) {
+  if (!request) return space.xl;
+  if (state === 'full') return 520;
+  if (state === 'half') return 360;
+  return adminContentBottomPadding;
+}
+
 function isImageUrl(value: string) {
   return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(value);
 }
@@ -715,12 +929,28 @@ function getInitials(name: string) {
     .join('');
 }
 
-function getStatusTone(status: VerificationStatus): ComponentProps<typeof Pill>['tone'] {
+function getStatusTone(status: VerificationStatus): StatusTone {
   if (status === 'approved') return 'success';
   if (status === 'pending') return 'warning';
   if (status === 'needs_more_info') return 'warning';
   if (status === 'rejected') return 'danger';
   return 'neutral';
+}
+
+function getStatusChipStyle(tone: StatusTone) {
+  if (tone === 'primary') return styles.primaryStatusChip;
+  if (tone === 'success') return styles.successStatusChip;
+  if (tone === 'warning') return styles.warningStatusChip;
+  if (tone === 'danger') return styles.dangerStatusChip;
+  return styles.neutralStatusChip;
+}
+
+function getStatusTextStyle(tone: StatusTone) {
+  if (tone === 'primary') return styles.primaryStatusText;
+  if (tone === 'success') return styles.successStatusText;
+  if (tone === 'warning') return styles.warningStatusText;
+  if (tone === 'danger') return styles.dangerStatusText;
+  return styles.neutralStatusText;
 }
 
 function formatStatusLabel(status: VerificationStatus) {
@@ -729,28 +959,43 @@ function formatStatusLabel(status: VerificationStatus) {
 }
 
 function getToneColor(tone: 'danger' | 'primary' | 'success' | 'warning') {
-  if (tone === 'danger') return color.danger;
-  if (tone === 'success') return color.success;
-  if (tone === 'warning') return color.warning;
-  return color.primary;
+  if (tone === 'danger') return adminPalette.dangerDeep;
+  if (tone === 'success') return adminPalette.successDeep;
+  if (tone === 'warning') return adminPalette.warningDeep;
+  return adminPalette.trustDeep;
 }
+
+function getFilterBadgeTone(filter: QueueFilter): StatusTone {
+  if (filter === 'pending') return 'warning';
+  if (filter === 'reviewed') return 'success';
+  return 'primary';
+}
+
+function getFilterBadgeLabel(filter: QueueFilter) {
+  if (filter === 'pending') return 'pending';
+  if (filter === 'reviewed') return 'reviewed';
+  return 'all';
+}
+
+const adminContentBottomPadding = 150;
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: color.background,
+    backgroundColor: adminPalette.canvas,
     flex: 1,
   },
   screen: {
-    backgroundColor: color.background,
+    backgroundColor: adminPalette.canvas,
     flex: 1,
   },
   header: {
-    backgroundColor: color.background,
-    borderBottomColor: color.border,
+    backgroundColor: adminPalette.surfaceRaised,
+    borderBottomColor: adminPalette.line,
     borderBottomWidth: 1,
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.lg,
+    gap: 20,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 22,
   },
   headerTop: {
     alignItems: 'center',
@@ -760,11 +1005,11 @@ const styles = StyleSheet.create({
   adminIdentity: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: space.sm,
+    gap: 12,
   },
   adminMark: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
+    backgroundColor: adminPalette.trustSoft,
     borderRadius: radius.pill,
     height: 34,
     justifyContent: 'center',
@@ -775,19 +1020,22 @@ const styles = StyleSheet.create({
     maxWidth: 460,
   },
   eyebrow: {
-    ...typography.captionMedium,
-    color: color.primary,
+    color: adminPalette.trustDeep,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   title: {
-    color: color.text,
+    color: adminPalette.ink,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 30,
+    lineHeight: 36,
   },
   subtitle: {
     ...typography.caption,
-    color: color.textMuted,
+    color: adminPalette.muted,
   },
   headerActions: {
     alignItems: 'center',
@@ -796,82 +1044,104 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
+    backgroundColor: adminPalette.trustSoft,
     borderRadius: radius.pill,
-    height: 40,
+    height: 42,
     justifyContent: 'center',
-    width: 40,
+    width: 42,
   },
   logoutButton: {
     alignItems: 'center',
-    backgroundColor: color.dangerSoft,
+    backgroundColor: adminPalette.dangerSoft,
+    borderColor: '#F8DCDC',
+    borderWidth: 1,
     borderRadius: radius.pill,
     flexDirection: 'row',
     gap: space.xs,
-    minHeight: 40,
-    paddingHorizontal: space.md,
+    minHeight: 42,
+    paddingHorizontal: 14,
   },
   logoutText: {
     ...typography.captionMedium,
     color: color.danger,
   },
   content: {
-    backgroundColor: color.background,
-    gap: space.lg,
-    padding: space.xl,
-    paddingBottom: space['3xl'],
+    backgroundColor: adminPalette.canvas,
+    gap: 16,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: space.sm,
+    gap: 8,
   },
   metricCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
+    backgroundColor: adminPalette.surfaceRaised,
+    borderColor: adminPalette.line,
     borderRadius: radius.md,
     borderWidth: 1,
-    flexBasis: '47%',
+    flexBasis: '46%',
     flexGrow: 1,
-    gap: space.xs,
-    minWidth: 150,
-    padding: space.md,
+    gap: 10,
+    minHeight: 86,
+    minWidth: 144,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    shadowColor: adminPalette.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  metricTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: space.sm,
+    justifyContent: 'space-between',
   },
   metricIcon: {
     alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 34,
+    borderRadius: radius.sm,
+    height: 36,
     justifyContent: 'center',
-    width: 34,
+    width: 36,
   },
   metricValue: {
-    ...typography.screenTitle,
-    color: color.text,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 25,
+    lineHeight: 30,
   },
   metricLabel: {
-    ...typography.caption,
-    color: color.textMuted,
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 15,
   },
   primarySoft: {
-    backgroundColor: color.primarySoft,
+    backgroundColor: adminPalette.trustSoft,
   },
   successSoft: {
-    backgroundColor: color.successSoft,
+    backgroundColor: adminPalette.successSoft,
   },
   warningSoft: {
-    backgroundColor: color.warningSoft,
+    backgroundColor: adminPalette.warningSoft,
   },
   dangerSoft: {
-    backgroundColor: color.dangerSoft,
+    backgroundColor: adminPalette.dangerSoft,
   },
   dashboardGrid: {
-    gap: space.lg,
+    backgroundColor: adminPalette.surfaceRaised,
+    borderColor: adminPalette.line,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: 16,
+    padding: 14,
   },
   queueColumn: {
-    gap: space.md,
-  },
-  reviewColumn: {
-    gap: space.md,
+    gap: 12,
   },
   sectionHeader: {
     alignItems: 'flex-start',
@@ -879,94 +1149,236 @@ const styles = StyleSheet.create({
     gap: space.md,
     justifyContent: 'space-between',
   },
-  sectionTitle: {
-    ...typography.sectionTitle,
-    color: color.text,
+  sectionHeaderCopy: {
+    flex: 1,
+    gap: space.xs,
   },
-  sectionCaption: {
-    ...typography.caption,
-    color: color.textMuted,
-  },
-  segmented: {
-    backgroundColor: color.surfaceAlt,
-    borderRadius: radius.pill,
+  sectionTitleRow: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: space.xs,
-    padding: space.xs,
   },
-  segmentButton: {
+  sectionIcon: {
     alignItems: 'center',
-    borderRadius: radius.pill,
-    flex: 1,
-    minHeight: 34,
+    backgroundColor: adminPalette.trustSoft,
+    borderRadius: radius.sm,
+    height: 36,
     justifyContent: 'center',
-    paddingHorizontal: space.md,
+    width: 36,
   },
-  segmentButtonActive: {
-    backgroundColor: color.background,
-    borderColor: color.border,
+  sectionTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 20,
+    lineHeight: 25,
+  },
+  sectionCaption: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 15,
+  },
+  queueStatusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: radius.pill,
+    borderWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  queueStatusBadgeText: {
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 15,
+    textTransform: 'lowercase',
+  },
+  filterSegment: {
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterChip: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.canvasSoft,
+    borderColor: adminPalette.line,
+    borderRadius: radius.pill,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 30,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  segmentText: {
-    ...typography.captionMedium,
-    color: color.textMuted,
+  filterChipActive: {
+    backgroundColor: adminPalette.trustSoft,
+    borderColor: adminPalette.lineStrong,
+    borderWidth: 1,
+    shadowColor: adminPalette.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
   },
-  segmentTextActive: {
-    color: color.text,
+  filterChipText: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 15,
   },
-  queueList: {
-    gap: space.md,
+  filterChipTextActive: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
   },
-  queueCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
+  selectedBanner: {
+    alignItems: 'center',
+    backgroundColor: '#FBFDFF',
+    borderColor: adminPalette.lineStrong,
     borderRadius: radius.md,
     borderWidth: 1,
-    gap: space.md,
-    padding: space.md,
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  selectedBannerCopy: {
+    flex: 1,
+    gap: space['2xs'],
+  },
+  selectedBannerIcon: {
+    alignItems: 'center',
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  selectedBannerTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  selectedBannerText: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  neutralStatusChip: {
+    backgroundColor: adminPalette.surfaceMuted,
+    borderColor: adminPalette.line,
+  },
+  primaryStatusChip: {
+    backgroundColor: adminPalette.trustSoft,
+    borderColor: adminPalette.lineStrong,
+  },
+  successStatusChip: {
+    backgroundColor: adminPalette.successSoft,
+    borderColor: '#D9EED8',
+  },
+  warningStatusChip: {
+    backgroundColor: adminPalette.warningSoft,
+    borderColor: '#F5E6BC',
+  },
+  dangerStatusChip: {
+    backgroundColor: adminPalette.dangerSoft,
+    borderColor: '#F5D3D3',
+  },
+  statusChipText: {
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 11,
+    lineHeight: 14,
+    textTransform: 'capitalize',
+  },
+  neutralStatusText: {
+    color: adminPalette.muted,
+  },
+  primaryStatusText: {
+    color: adminPalette.trustDeep,
+  },
+  successStatusText: {
+    color: adminPalette.successDeep,
+  },
+  warningStatusText: {
+    color: adminPalette.warningDeep,
+  },
+  dangerStatusText: {
+    color: adminPalette.dangerDeep,
+  },
+  queueList: {
+    gap: 8,
+  },
+  queueCard: {
+    backgroundColor: adminPalette.surfaceRaised,
+    borderColor: adminPalette.line,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
   queueCardActive: {
-    borderColor: color.primary,
+    backgroundColor: '#FBFDFF',
+    borderColor: adminPalette.trust,
     borderWidth: 1.5,
+    shadowColor: adminPalette.trustDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    elevation: 2,
   },
   queueTop: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
-    gap: space.md,
+    gap: space.sm,
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
+    backgroundColor: adminPalette.trustSoft,
     borderRadius: radius.pill,
-    height: 42,
+    height: 48,
     justifyContent: 'center',
-    width: 42,
+    width: 48,
   },
   avatarText: {
-    ...typography.captionMedium,
-    color: color.primary,
+    color: adminPalette.trustDeep,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 18,
   },
   queueCopy: {
     flex: 1,
     gap: space['2xs'],
   },
   queueName: {
-    ...typography.bodyMedium,
-    color: color.text,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 17,
+    lineHeight: 22,
   },
   queueMeta: {
-    ...typography.caption,
-    color: color.textMuted,
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 17,
   },
   queuePurpose: {
-    ...typography.body,
-    color: color.textMuted,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 14,
+    lineHeight: 19,
   },
   queueFooter: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: space.md,
+    gap: space.sm,
+    paddingTop: space['2xs'],
   },
   iconText: {
     alignItems: 'center',
@@ -974,8 +1386,10 @@ const styles = StyleSheet.create({
     gap: space.xs,
   },
   iconTextLabel: {
-    ...typography.caption,
-    color: color.textSubtle,
+    color: adminPalette.faint,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 11,
+    lineHeight: 14,
   },
   emptyCard: {
     alignItems: 'flex-start',
@@ -1012,6 +1426,109 @@ const styles = StyleSheet.create({
     gap: space.lg,
     padding: space.lg,
   },
+  reviewSheet: {
+    backgroundColor: adminPalette.surfaceRaised,
+    borderColor: adminPalette.line,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    bottom: 0,
+    gap: 10,
+    left: 0,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    position: 'absolute',
+    right: 0,
+    shadowColor: adminPalette.shadow,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.09,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  reviewSheetCollapsed: {
+    maxHeight: 154,
+    minHeight: 140,
+  },
+  reviewSheetHalf: {
+    maxHeight: '52%',
+    minHeight: 328,
+  },
+  reviewSheetFull: {
+    maxHeight: '94%',
+    minHeight: '90%',
+  },
+  sheetHandleArea: {
+    alignItems: 'center',
+    paddingBottom: 2,
+    paddingTop: 4,
+  },
+  sheetHandle: {
+    backgroundColor: '#9AA8B8',
+    borderRadius: radius.pill,
+    height: 4,
+    width: 50,
+  },
+  sheetHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+    justifyContent: 'space-between',
+  },
+  sheetResident: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    minWidth: 0,
+  },
+  avatarSmall: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.surfaceMuted,
+    borderColor: adminPalette.line,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  sheetTitleCopy: {
+    flex: 1,
+    gap: space['2xs'],
+    minWidth: 0,
+  },
+  sheetMetaRail: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.surfaceMuted,
+    borderRadius: radius.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  quickActions: {
+    backgroundColor: adminPalette.surfaceRaised,
+    borderTopColor: adminPalette.line,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+    paddingTop: 12,
+  },
+  sheetScroll: {
+    flex: 1,
+  },
+  sheetHint: {
+    backgroundColor: adminPalette.surfaceMuted,
+    borderRadius: radius.sm,
+    marginTop: 10,
+    padding: 8,
+  },
+  sheetHintText: {
+    ...typography.caption,
+    color: color.textMuted,
+    textAlign: 'center',
+  },
   workspaceHeader: {
     alignItems: 'flex-start',
     flexDirection: 'row',
@@ -1019,78 +1536,91 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   workspaceTitle: {
-    ...typography.sectionTitle,
-    color: color.text,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 18,
   },
   workspaceSubtitle: {
-    ...typography.caption,
-    color: color.textMuted,
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 11,
+    lineHeight: 14,
     marginTop: space['2xs'],
   },
   reviewCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
+    backgroundColor: adminPalette.surfaceRaised,
+    borderColor: adminPalette.line,
     borderRadius: radius.md,
     borderWidth: 1,
+    marginTop: 10,
     overflow: 'hidden',
   },
   reviewField: {
-    borderBottomColor: color.border,
+    borderBottomColor: adminPalette.line,
     borderBottomWidth: 1,
-    gap: space['2xs'],
-    padding: space.sm,
+    gap: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   reviewLabel: {
-    color: '#AFAFAF',
-    fontFamily: 'Satoshi-Regular',
+    color: adminPalette.faint,
+    fontFamily: 'Satoshi-Medium',
     fontSize: 10,
-    lineHeight: 12,
+    lineHeight: 13,
   },
   reviewValue: {
-    color: color.text,
+    color: adminPalette.ink,
     fontFamily: 'Satoshi-Regular',
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 18,
   },
   reviewValueMultiline: {
-    minHeight: 56,
+    minHeight: 44,
   },
   infoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.sm,
+    marginTop: space.sm,
   },
   infoTile: {
     alignItems: 'flex-start',
-    backgroundColor: color.surfaceAlt,
+    backgroundColor: adminPalette.surfaceMuted,
     borderRadius: radius.sm,
     flexBasis: '47%',
     flexDirection: 'row',
     flexGrow: 1,
-    gap: space.sm,
+    gap: space.xs,
     minWidth: 145,
-    padding: space.md,
+    padding: 9,
   },
   infoCopy: {
     flex: 1,
     gap: space['2xs'],
   },
   infoLabel: {
-    ...typography.captionMedium,
-    color: color.textSubtle,
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 11,
+    lineHeight: 14,
   },
   infoValue: {
-    ...typography.caption,
-    color: color.text,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
   },
   notePanel: {
-    backgroundColor: color.surfaceAlt,
+    backgroundColor: adminPalette.surfaceMuted,
     borderRadius: radius.sm,
-    gap: space.sm,
-    padding: space.md,
+    gap: 6,
+    marginTop: space.sm,
+    padding: 10,
   },
   filesPanel: {
     gap: space.sm,
+    marginTop: space.sm,
   },
   panelHeader: {
     alignItems: 'center',
@@ -1098,29 +1628,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   detailLabel: {
-    ...typography.captionMedium,
-    color: color.text,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 15,
   },
   files: {
     gap: space.sm,
   },
   fileButton: {
     alignItems: 'center',
-    backgroundColor: color.surfaceAlt,
-    borderColor: color.border,
+    backgroundColor: adminPalette.canvasSoft,
+    borderColor: adminPalette.line,
     borderRadius: radius.sm,
     borderWidth: 1,
     flexDirection: 'row',
     gap: space.sm,
-    padding: space.md,
+    padding: space.sm,
   },
   fileIcon: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
-    borderRadius: radius.pill,
-    height: 32,
+    backgroundColor: adminPalette.trustSoft,
+    borderRadius: radius.sm,
+    height: 30,
     justifyContent: 'center',
-    width: 32,
+    width: 30,
   },
   fileCopy: {
     flex: 1,
@@ -1135,19 +1667,23 @@ const styles = StyleSheet.create({
     color: color.textSubtle,
   },
   decisionPanel: {
-    borderTopColor: color.border,
+    borderTopColor: adminPalette.line,
     borderTopWidth: 1,
-    gap: space.md,
-    paddingTop: space.lg,
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
   },
   input: {
-    ...typography.body,
-    borderColor: color.border,
-    borderRadius: radius.md,
+    backgroundColor: adminPalette.canvasSoft,
+    borderColor: adminPalette.line,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    color: color.text,
-    minHeight: 92,
-    padding: space.md,
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    minHeight: 82,
+    padding: space.sm,
     textAlignVertical: 'top',
   },
   previousNote: {
@@ -1160,9 +1696,44 @@ const styles = StyleSheet.create({
     gap: space.sm,
     justifyContent: 'flex-end',
   },
+  adminAction: {
+    alignItems: 'center',
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.xs,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 112,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  approveAction: {
+    backgroundColor: adminPalette.trustDeep,
+    borderColor: adminPalette.trustDeep,
+  },
+  rejectAction: {
+    backgroundColor: adminPalette.dangerSoft,
+    borderColor: '#F5D3D3',
+  },
+  secondaryAction: {
+    backgroundColor: adminPalette.surfaceMuted,
+    borderColor: adminPalette.line,
+  },
+  adminActionDisabled: {
+    backgroundColor: adminPalette.surfaceMuted,
+    borderColor: adminPalette.line,
+  },
+  adminActionText: {
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 15,
+  },
   body: {
-    ...typography.body,
-    color: color.textMuted,
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 18,
   },
   modalBackdrop: {
     backgroundColor: 'rgba(17, 17, 17, 0.46)',
