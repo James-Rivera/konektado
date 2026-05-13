@@ -13,7 +13,11 @@ import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { listMyJobs } from '@/services/job.service';
-import { isPresenceActive } from '@/services/marketplace.helpers';
+import {
+  formatJobBudget,
+  formatServiceRate,
+  isPresenceActive,
+} from '@/services/marketplace.helpers';
 import {
   getMyProfileCompletion,
 } from '@/services/profile-completion.service';
@@ -42,6 +46,7 @@ export default function ProfileScreen() {
   const isVerified = Boolean(
     completion?.isVerified || profile?.barangay_verified_at || profile?.verified_at,
   );
+  const isSetupIncomplete = Boolean(isVerified && completion?.marketplaceSetupState === 'verified_setup_incomplete');
   const completedCount = [
     completion?.coreComplete,
     completion?.workComplete,
@@ -125,8 +130,14 @@ export default function ProfileScreen() {
                 <View style={styles.profilePills}>
                   <Pill
                     icon={isVerified ? 'verified' : 'warning-amber'}
-                    label={isVerified ? 'Barangay verified' : 'Verification needed'}
-                    tone={isVerified ? 'success' : 'warning'}
+                    label={
+                      isSetupIncomplete
+                        ? 'Verified · Setup incomplete'
+                        : isVerified
+                          ? 'Barangay verified'
+                          : 'Verification needed'
+                    }
+                    tone={isVerified && !isSetupIncomplete ? 'success' : 'warning'}
                   />
                   <Pill label={`${completedCount}/3 profile steps`} tone={completedCount === 3 ? 'success' : 'primary'} />
                 </View>
@@ -136,7 +147,7 @@ export default function ProfileScreen() {
             <NoticeBanner
               message={getTrustMessage({ completion, isVerified })}
               title={getTrustTitle({ completion, isVerified })}
-              variant={isVerified && completedCount === 3 ? 'info' : 'warning'}
+              variant={isVerified && completedCount === 3 && !isSetupIncomplete ? 'info' : 'warning'}
             />
 
             <View style={styles.completionGrid}>
@@ -268,7 +279,10 @@ function WorkProfile({
   const rating = reviews.length
     ? (reviews.reduce((total, review) => total + review.rating, 0) / reviews.length).toFixed(1)
     : '-';
-  const profileServices = completion?.work.offeredServices ?? [];
+  const profileServices = [
+    ...(completion?.work.offeredServices ?? []),
+    ...(completion?.work.customOfferedServices ?? []),
+  ];
 
   return (
     <View style={styles.stack}>
@@ -312,7 +326,7 @@ function WorkProfile({
           <HistoryRow
             key={service.id}
             icon="design-services"
-            meta={service.isActive ? 'active' : 'paused'}
+            meta={formatServiceRate(service)}
             subtitle={service.locationText ?? service.barangay ?? 'Nearby'}
             title={service.title}
           />
@@ -379,7 +393,7 @@ function HiringProfile({
           <HistoryRow
             key={item.id}
             icon="history"
-            meta={item.status}
+            meta={formatJobBudget(item)}
             subtitle={item.locationText ?? item.barangay ?? 'Nearby'}
             title={item.title}
           />
@@ -418,6 +432,9 @@ function getTrustTitle({
   isVerified: boolean;
 }) {
   if (!isVerified) return 'Verification required';
+  if (completion?.marketplaceSetupState === 'verified_setup_incomplete') {
+    return 'Verified · Setup incomplete';
+  }
   if (!completion?.coreComplete) return 'Complete your public basics';
   if (!completion.workComplete || !completion.hiringComplete) return 'Finish role profiles';
   return 'Trust profile ready';
@@ -436,6 +453,10 @@ function getTrustMessage({
 
   if (!completion?.coreComplete) {
     return 'Add your public intro, location, and availability so neighbors have context before conversations begin.';
+  }
+
+  if (completion.marketplaceSetupState === 'verified_setup_incomplete') {
+    return 'You are verified and can browse public content. Complete your Work or Hiring Profile before messaging, hiring, posting, or reviewing.';
   }
 
   if (!completion.workComplete || !completion.hiringComplete) {

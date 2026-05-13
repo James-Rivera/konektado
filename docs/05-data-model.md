@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status.
 
 ## Common Types
 
@@ -14,6 +14,9 @@ Recommended enum values can be implemented as PostgreSQL enums or `text check` c
 | `verification_status` | `pending`, `approved`, `rejected`, `cancelled` |
 | `job_status` | `open`, `reviewing`, `in_progress`, `completed`, `closed`, `cancelled` |
 | `conversation_status` | `active`, `hired`, `declined`, `archived`, `reported` |
+| `rate_type` | `hourly`, `daily`, `per_project`, `negotiable` |
+| `experience_level` | `any`, `beginner`, `intermediate`, `experienced` |
+| `custom_service_review_status` | `none`, `pending`, `approved`, `rejected` |
 | `saved_item_type` | `job`, `provider` |
 | `report_status` | `open`, `reviewing`, `resolved`, `dismissed` |
 
@@ -52,8 +55,13 @@ Purpose: Shared user profile and resident identity details.
 | `full_name` | `text` | Public name fallback built from first and last name. |
 | `birthdate` | `date` | Private or limited visibility. |
 | `barangay` | `text` | Default should be `San Pedro` for MVP. |
+| `purok_sitio` | `text` | Approximate public location if provided. |
+| `street` | `text` | Approximate public location if safe to show. |
+| `block_lot` | `text` | Private/admin-only address detail. |
+| `house_number` | `text` | Private/admin-only address detail. |
 | `street_address` | `text` | Private or limited visibility. |
 | `city` | `text` | City/municipality. |
+| `preferred_contact_method` | `text` | `app_message`, `phone`, or `email`; public contact data still stays private by default. |
 | `phone` | `text` | Private by default; visible only when user chooses or after job acceptance. |
 | `about` | `text` | Public profile summary. |
 | `availability` | `text` | Public availability or response expectation. |
@@ -72,6 +80,7 @@ Important constraints:
 
 - `id` must equal `auth.uid()` for owner writes.
 - Public search should not expose birthdate, full street address, or private phone by default.
+- Public search/cards may show approximate location only: barangay, purok/sitio, and/or street.
 - `barangay_verified_at` should only be written by admin verification actions.
 - Verification selfie, ID files, certificates, and admin notes must never be copied into public profile fields or `avatar_url`.
 
@@ -133,6 +142,11 @@ Purpose: Role-specific public Work Profile completion details.
 | `service_area` | `text` | Public area where the provider can work. |
 | `availability` | `text` | Public work availability. |
 | `rate_text` | `text` | Optional public rate note. |
+| `rate_min` | `numeric` | Optional public minimum rate. |
+| `rate_max` | `numeric` | Optional public maximum rate; must be greater than or equal to `rate_min` when both exist. |
+| `rate_type` | `text` | `hourly`, `daily`, `per_project`, or `negotiable`. |
+| `custom_offered_services` | `text[]` | Free-text "Others / Specify" values, separate from official taxonomy values. |
+| `custom_service_review_status` | `text` | Barangay/admin review status for custom offered services. |
 | `response_time` | `text` | Optional response expectation. |
 | `profile_completed_at` | `timestamptz` | Set when Work Profile required fields are complete. |
 | `created_at` | `timestamptz` | Default `now()`. |
@@ -154,6 +168,7 @@ Purpose: Role-specific public Hiring Profile completion details.
 | `headline` | `text` | Public client headline shown in Profile trust surfaces. |
 | `bio` | `text` | Public client intro. |
 | `needed_services` | `text[]` | Public services the client usually needs. |
+| `custom_needed_services` | `text[]` | Free-text "Others / Specify" values, separate from official taxonomy values. |
 | `preferred_schedule` | `text` | Public schedule or coordination preference. |
 | `budget_preference` | `text` | Optional public budget expectation. |
 | `profile_completed_at` | `timestamptz` | Set when Hiring Profile required fields are complete. |
@@ -180,6 +195,14 @@ Purpose: Provider service profile entries shown in search and provider profiles.
 | `years_experience` | `numeric` | Optional. |
 | `availability_text` | `text` | Example: weekends, afternoon, on call. |
 | `rate_text` | `text` | Optional public text; not an in-app payment record. |
+| `rate_min` | `numeric` | Optional minimum rate. |
+| `rate_max` | `numeric` | Optional maximum rate; constrained so min is not greater than max. |
+| `rate_type` | `text` | `hourly`, `daily`, `per_project`, or `negotiable`. |
+| `experience_level` | `text` | `any`, `beginner`, `intermediate`, or `experienced`. |
+| `certification_available` | `boolean` | Safe public metadata only. Do not expose document URLs. |
+| `certification_note` | `text` | Optional safe public/admin note. |
+| `custom_category` | `text` | Custom "Others / Specify" service text. |
+| `custom_category_review_status` | `text` | Barangay/admin review status for custom service text. |
 | `is_active` | `boolean` | Default `true`. |
 | `created_at` | `timestamptz` | Default `now()`. |
 | `updated_at` | `timestamptz` | Updated on edit. |
@@ -194,6 +217,7 @@ Important constraints:
 - Only verified provider owner with completed Work Profile can create services. Only provider owner can update/delete their services.
 - Public queries should only show active services.
 - `category` and `title` are required. For the taxonomy-only MVP, `category` stores the selected service label rather than a separate category foreign key.
+- Official taxonomy values drive search/filtering. Custom service text must stay separate so filters do not break and admins can review it.
 
 Implementation note:
 
@@ -298,9 +322,17 @@ Purpose: Client-posted work opportunities.
 | `photo_urls` | `text[]` | Optional job photos uploaded from the post builder. Public job cards/details may show the first image. |
 | `barangay` | `text` | Default `San Pedro`. |
 | `location_text` | `text` | Human-readable location. |
-| `budget_amount` | `numeric` | Optional. |
+| `public_location_text` | `text` | Approximate public location shown on cards/details. |
+| `private_location_notes` | `text` | Owner/private coordination notes; do not select for public cards/details. |
+| `budget_amount` | `numeric` | Legacy optional budget amount. |
+| `budget_min` | `numeric` | Optional minimum budget. |
+| `budget_max` | `numeric` | Optional maximum budget; constrained so min is not greater than max. |
+| `rate_type` | `text` | `hourly`, `daily`, `per_project`, or `negotiable`. |
 | `workers_needed` | `integer` | Optional positive worker count. |
 | `schedule_text` | `text` | Optional. |
+| `experience_level` | `text` | Required/preferred experience level. |
+| `certification_required` | `boolean` | Safe requirement metadata. |
+| `certification_note` | `text` | Optional safe certification note. |
 | `allow_messages` | `boolean` | Default `true`; controls whether verified workers can message from the post surface. |
 | `auto_reply_enabled` | `boolean` | Default `false`; stored for the Figma option but no auto-reply behavior in the verified Post slice. |
 | `auto_close_enabled` | `boolean` | Default `false`; stored for the Figma option but no automatic close worker in the verified Post slice. |
@@ -321,6 +353,7 @@ Important constraints:
 - Only client owner can edit own open jobs.
 - New job-interest conversations allowed only when status is `open` or `reviewing`.
 - Budget is informational only; payment is outside the app.
+- Public discovery should exclude the current user's own jobs while owner views still show them.
 - Photos, renewal behavior, auto-reply sending, and auto-close scheduling are deferred beyond the verified Post slice.
 
 ## job_drafts
@@ -339,9 +372,17 @@ Purpose: Private job-post drafts. These let unverified users compose a post befo
 | `photo_urls` | `text[]` | Optional uploaded photo URLs from the job builder. |
 | `barangay` | `text` | Defaults to the user's barangay or `Barangay San Pedro`. |
 | `location_text` | `text` | Human-readable location. |
-| `budget_amount` | `numeric` | Optional. |
+| `public_location_text` | `text` | Approximate public location copied to the published job. |
+| `private_location_notes` | `text` | Private address/coordination notes copied only to the owner/private job row. |
+| `budget_amount` | `numeric` | Legacy optional budget amount. |
+| `budget_min` | `numeric` | Optional minimum budget. |
+| `budget_max` | `numeric` | Optional maximum budget. |
+| `rate_type` | `text` | `hourly`, `daily`, `per_project`, or `negotiable`. |
 | `workers_needed` | `integer` | Optional positive worker count. |
 | `schedule_text` | `text` | Optional. |
+| `experience_level` | `text` | Required/preferred experience level. |
+| `certification_required` | `boolean` | Safe requirement metadata. |
+| `certification_note` | `text` | Optional safe certification note. |
 | `allow_messages` | `boolean` | Draft copy of the listing option. |
 | `auto_reply_enabled` | `boolean` | Draft copy of the listing option. |
 | `auto_close_enabled` | `boolean` | Draft copy of the listing option. |

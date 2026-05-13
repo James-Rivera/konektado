@@ -221,7 +221,7 @@ export async function getAdminProfile(): Promise<ServiceResult<PublicProfileSumm
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, full_name, first_name, last_name, barangay, city, about, avatar_url, availability, verified_at, barangay_verified_at',
+      'id, full_name, first_name, last_name, barangay, purok_sitio, street, city, about, avatar_url, availability, verified_at, barangay_verified_at',
     )
     .eq('id', userId)
     .maybeSingle<ProfileRow>();

@@ -1,10 +1,15 @@
 import type { ServiceResult } from '@/services/auth.service';
-import { compactText, getCurrentUserId } from '@/services/marketplace.helpers';
+import {
+  compactText,
+  getCurrentUserId,
+  normalizeExperienceLevel,
+  normalizeRateType,
+} from '@/services/marketplace.helpers';
 import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
 const JOB_DRAFT_COLUMNS =
-  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_amount, workers_needed, schedule_text, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
+  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_amount, budget_min, budget_max, rate_type, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
 
 type JobDraftRow = {
   id: string;
@@ -18,8 +23,15 @@ type JobDraftRow = {
   barangay: string | null;
   location_text: string | null;
   budget_amount: number | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  rate_type: string | null;
+  private_location_notes: string | null;
   workers_needed: number | null;
   schedule_text: string | null;
+  experience_level: string | null;
+  certification_required: boolean | null;
+  certification_note: string | null;
   allow_messages: boolean | null;
   auto_reply_enabled: boolean | null;
   auto_close_enabled: boolean | null;
@@ -40,8 +52,15 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
     barangay: row.barangay,
     locationText: row.location_text,
     budgetAmount: row.budget_amount,
+    budgetMin: row.budget_min ?? row.budget_amount,
+    budgetMax: row.budget_max ?? row.budget_amount,
+    rateType: normalizeRateType(row.rate_type),
+    privateLocationNotes: row.private_location_notes,
     workersNeeded: row.workers_needed,
     scheduleText: row.schedule_text,
+    experienceLevel: normalizeExperienceLevel(row.experience_level),
+    certificationRequired: row.certification_required ?? false,
+    certificationNote: row.certification_note,
     allowMessages: row.allow_messages ?? true,
     autoReplyEnabled: row.auto_reply_enabled ?? false,
     autoCloseEnabled: row.auto_close_enabled ?? false,
@@ -53,6 +72,8 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
 function normalizeDraftPayload(input: UpsertJobDraftInput) {
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
   const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
+  const budgetMin = input.budgetMin ?? input.budgetAmount ?? null;
+  const budgetMax = input.budgetMax ?? input.budgetAmount ?? null;
 
   return {
     title: compactText(input.title) || null,
@@ -63,9 +84,17 @@ function normalizeDraftPayload(input: UpsertJobDraftInput) {
     photo_urls: photoUrls,
     barangay: compactText(input.barangay) || 'Barangay San Pedro',
     location_text: compactText(input.locationText) || null,
-    budget_amount: input.budgetAmount ?? null,
+    public_location_text: compactText(input.locationText) || compactText(input.barangay) || 'Barangay San Pedro',
+    private_location_notes: compactText(input.privateLocationNotes) || null,
+    budget_amount: budgetMin ?? budgetMax,
+    budget_min: budgetMin,
+    budget_max: budgetMax,
+    rate_type: normalizeRateType(input.rateType),
     workers_needed: input.workersNeeded ?? null,
     schedule_text: compactText(input.scheduleText) || null,
+    experience_level: normalizeExperienceLevel(input.experienceLevel),
+    certification_required: input.certificationRequired ?? false,
+    certification_note: compactText(input.certificationNote) || null,
     allow_messages: input.allowMessages ?? true,
     auto_reply_enabled: input.autoReplyEnabled ?? false,
     auto_close_enabled: input.autoCloseEnabled ?? false,

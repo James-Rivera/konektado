@@ -5,9 +5,12 @@ import {
 import type { ServiceResult } from '@/services/auth.service';
 import {
   compactText,
+  doesRateOverlap,
   loadPublicProfiles,
   getCurrentUserId,
   mapService,
+  normalizeExperienceLevel,
+  normalizeRateType,
   requireVerifiedUser,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
@@ -23,7 +26,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const SERVICE_COLUMNS =
-  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
+  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 
 type ProviderStats = {
   averageRating: number | null;
@@ -112,9 +115,18 @@ export async function createService(
   const category = compactText(input.category);
   const title = compactText(input.title);
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
+  const rateMin = input.rateMin ?? null;
+  const rateMax = input.rateMax ?? null;
+  const rateType = normalizeRateType(input.rateType);
+  const experienceLevel = normalizeExperienceLevel(input.experienceLevel);
+  const customCategory = compactText(input.customCategory) || null;
 
   if (!category || !title) {
     return { data: null, error: 'Enter a service category and title.' };
+  }
+
+  if (rateMin !== null && rateMax !== null && rateMin > rateMax) {
+    return { data: null, error: 'Minimum rate must not be greater than maximum rate.' };
   }
 
   const { data, error } = await supabase
@@ -129,6 +141,14 @@ export async function createService(
       years_experience: input.yearsExperience ?? null,
       availability_text: compactText(input.availabilityText) || null,
       rate_text: compactText(input.rateText) || null,
+      rate_min: rateMin,
+      rate_max: rateMax,
+      rate_type: rateType,
+      experience_level: experienceLevel,
+      certification_available: input.certificationAvailable ?? false,
+      certification_note: compactText(input.certificationNote) || null,
+      custom_category: customCategory,
+      custom_category_review_status: customCategory ? 'pending' : 'none',
       barangay: compactText(input.barangay) || null,
       location_text: compactText(input.locationText) || compactText(input.barangay) || null,
       allow_messages: input.allowMessages ?? true,
@@ -173,6 +193,13 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
 > {
   const text = compactText(filters.text).toLowerCase();
   const limit = normalizeLimit(filters.limit);
+  let excludeUserId = compactText(filters.excludeUserId) || null;
+
+  if (!excludeUserId && filters.excludeCurrentUser !== false) {
+    const currentUser = await getCurrentUserId();
+    excludeUserId = currentUser.data ?? null;
+  }
+
   let query = supabase
     .from('services')
     .select(SERVICE_COLUMNS)
@@ -189,6 +216,22 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
     query = query.ilike('barangay', `%${filters.barangay}%`);
   }
 
+  if (excludeUserId) {
+    query = query.neq('provider_id', excludeUserId);
+  }
+
+  if (filters.rateType && filters.rateType !== 'any') {
+    query = query.eq('rate_type', filters.rateType);
+  }
+
+  if (filters.experienceLevel && filters.experienceLevel !== 'all') {
+    query = query.eq('experience_level', filters.experienceLevel);
+  }
+
+  if (filters.certificationAvailable !== undefined) {
+    query = query.eq('certification_available', filters.certificationAvailable);
+  }
+
   if (text) {
     const escapedText = escapePostgrestFilterValue(text);
     query = query.or(
@@ -196,6 +239,7 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
         `title.ilike.%${escapedText}%`,
         `description.ilike.%${escapedText}%`,
         `category.ilike.%${escapedText}%`,
+        `custom_category.ilike.%${escapedText}%`,
         `availability_text.ilike.%${escapedText}%`,
         `rate_text.ilike.%${escapedText}%`,
         `barangay.ilike.%${escapedText}%`,
@@ -213,11 +257,23 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
   }
 
   const rows = ((data as ServiceRow[] | null) ?? []).filter((row) => {
+    if (excludeUserId && row.provider_id === excludeUserId) return false;
+    if (
+      !doesRateOverlap({
+        itemMin: row.rate_min,
+        itemMax: row.rate_max,
+        filterMin: filters.rateMin,
+        filterMax: filters.rateMax,
+      })
+    ) {
+      return false;
+    }
     if (!text) return true;
     return [
       row.title,
       row.description,
       row.category,
+      row.custom_category,
       row.availability_text,
       row.rate_text,
       row.location_text,
@@ -231,7 +287,13 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
   const stats = await loadProviderStats(rows.map((row) => row.provider_id));
 
   return {
-    data: rows.map((row) => mapServiceSearchResult(row, profiles, stats)),
+    data: rows
+      .map((row) => mapServiceSearchResult(row, profiles, stats))
+      .filter((service) =>
+        filters.verifiedOnly
+          ? Boolean(service.provider?.barangayVerifiedAt || service.provider?.verifiedAt)
+          : true,
+      ),
     error: null,
   };
 }

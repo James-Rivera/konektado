@@ -7,12 +7,12 @@
 | Authentication | Email OTP signup, email/password login, logout, session handling. | Use Supabase Auth. |
 | Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Role intent -> basic identity/location -> service preferences -> review -> complete -> Home. Do not collect certificates, ID documents, or verification uploads here. |
 | Roles | Client, provider, both, and barangay admin. | Both-role users receive client and provider role rows, but one active role is used in the app at a time. |
-| Profiles | Basic identity, address, contact, about, availability, and verification status. | Keep private identity fields protected. |
-| Service Profiles | Provider service categories, selected service labels, descriptions, experience, availability, and optional rate text. | Use "Services" in the UI; avoid abstract "skills" language for low-literacy users. MVP services are limited to the controlled taxonomy. |
+| Profiles | Basic identity, split address, contact method, about, availability, setup status, and verification status. | Public cards show approximate location only; house number, block/lot, IDs, and verification notes stay private/admin-only. |
+| Service Profiles | Provider service categories, selected service labels, custom "Others / Specify" text, descriptions, experience level, availability, certification metadata, and rate ranges. | Use "Services" in the UI; avoid abstract "skills" language. MVP services are limited to the controlled taxonomy, with custom values stored separately for admin review. |
 | Credentials | Upload records for IDs, certificates, or proof of experience. | Store files in Supabase Storage and metadata in PostgreSQL. |
 | Verification | Resident submits required details and documents; admin approves or rejects. | Verification unlocks interaction features and grants the verified badge. |
-| Jobs | Client creates, edits, closes, or cancels a job post. | Payments and agreements remain outside the app. |
-| Job Browsing | Providers browse open jobs. | Search/filter by category, location, status, budget, and date. |
+| Jobs | Client creates, edits, closes, or cancels a job post with service category, hiring requirements, schedule, worker count, public approximate location, private location notes, certification preference, and budget range. | Payments and agreements remain outside the app. Private location notes are never public cards/details. |
+| Job Browsing | Providers browse open jobs. | Discovery hides the current user's own posts and supports filters for category/service, nearby, rate range, experience level, certification metadata, verified-only, and date. |
 | Messages / Interest | Verified users message job posters or workers to show interest and coordinate. | This replaces a formal application flow for MVP. |
 | Hiring Decision | Clients can mark a worker as hired from a job-related conversation. | Keep the decision simple: interested, hired, completed, declined/cancelled. |
 | Reviews | Completed job participants can leave rating and feedback. | One review per reviewer/reviewee/job. |
@@ -28,7 +28,7 @@ The following are intentionally out of scope for MVP:
 - Contract signing.
 - AI-powered matching.
 - National ID API verification.
-- Integration with municipal, provincial, or national government systems.
+- Integration with barangay/LGU, municipal, provincial, or national government systems.
 - Complex scheduling or calendar booking.
 - Advanced analytics.
 - Multi-barangay administration.
@@ -53,6 +53,7 @@ These can be considered after the MVP is stable:
 - Self-hosted backend migration.
 - Public web directory view for approved providers.
 - Structured service taxonomy tables, service type fields, location-required fields, and risk-level fields after the taxonomy-only MVP is stable.
+- Barangay/LGU system integration for future verification handoff or data sync after the standalone barangay-admin flow is stable.
 
 ## Thesis/Demo Priorities
 
@@ -94,6 +95,6 @@ Demo acceptance standard:
 
 ## Current Implementation Limitations
 
-- Home is still mostly demo/static and uses preferences only for ordering and filter defaults.
+- Home and Search use live marketplace queries for jobs/workers, hide own public posts from discovery, and use preferences for ordering and filter defaults.
 - Locked actions now route to a Figma-matched verification intro and users can submit a pending verification request with contact details, ID files, services/purpose, and supporting files.
-- Verified-origin database filtering is pending.
+- Verification and marketplace setup are separate UX states. A verified user can browse, but `Verified · Setup incomplete` blocks messaging, hiring, applying/posting, and reviewing until the required Work/Hiring setup is complete.

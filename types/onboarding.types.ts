@@ -26,6 +26,11 @@ export type OnboardingDraft = {
   streetAddress: string;
   city: string;
   barangay: string;
+  purokSitio: string;
+  street: string;
+  blockLot: string;
+  houseNumber: string;
+  preferredContactMethod: string;
   offeredServices: string[];
   neededServices: string[];
   customOfferedServices: string[];

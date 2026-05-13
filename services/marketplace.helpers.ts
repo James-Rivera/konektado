@@ -2,9 +2,12 @@ import type { ServiceResult } from '@/services/auth.service';
 import type { JobCardProps } from '@/components/JobCard';
 import type { WorkerCardProps } from '@/components/WorkerCard';
 import type {
+    CustomServiceReviewStatus,
+    ExperienceLevel,
     JobSummary,
     ProviderService,
     PublicProfileSummary,
+    RateType,
     ServiceSearchResult,
 } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
@@ -15,6 +18,8 @@ export type ProfileRow = {
   first_name: string | null;
   last_name: string | null;
   barangay: string | null;
+  purok_sitio: string | null;
+  street: string | null;
   city: string | null;
   about: string | null;
   avatar_url: string | null;
@@ -38,8 +43,15 @@ export type JobRow = {
   location_text: string | null;
   budget: number | null;
   budget_amount: number | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  rate_type?: string | null;
+  private_location_notes?: string | null;
   workers_needed: number | null;
   schedule_text: string | null;
+  experience_level?: string | null;
+  certification_required?: boolean | null;
+  certification_note?: string | null;
   status: JobSummary['status'];
   accepted_provider_id: string | null;
   allow_messages: boolean | null;
@@ -61,6 +73,14 @@ export type ServiceRow = {
   years_experience: number | null;
   availability_text: string | null;
   rate_text: string | null;
+  rate_min?: number | null;
+  rate_max?: number | null;
+  rate_type?: string | null;
+  experience_level?: string | null;
+  certification_available?: boolean | null;
+  certification_note?: string | null;
+  custom_category?: string | null;
+  custom_category_review_status?: string | null;
   barangay?: string | null;
   location_text?: string | null;
   allow_messages?: boolean | null;
@@ -73,6 +93,173 @@ export type ServiceRow = {
 
 export function compactText(value: string | null | undefined) {
   return value?.trim() ?? '';
+}
+
+export function normalizeRateType(value: string | null | undefined): RateType {
+  if (value === 'hourly' || value === 'daily' || value === 'per_project' || value === 'negotiable') {
+    return value;
+  }
+
+  return 'negotiable';
+}
+
+export function normalizeExperienceLevel(value: string | null | undefined): ExperienceLevel {
+  if (value === 'beginner' || value === 'intermediate' || value === 'experienced' || value === 'any') {
+    return value;
+  }
+
+  return 'any';
+}
+
+export function normalizeCustomServiceReviewStatus(
+  value: string | null | undefined,
+): CustomServiceReviewStatus {
+  if (value === 'pending' || value === 'approved' || value === 'rejected' || value === 'none') {
+    return value;
+  }
+
+  return 'none';
+}
+
+export function formatApproximateLocation({
+  barangay,
+  purokSitio,
+  street,
+  city,
+}: {
+  barangay?: string | null;
+  purokSitio?: string | null;
+  street?: string | null;
+  city?: string | null;
+}) {
+  const parts = [barangay, purokSitio, street]
+    .map(compactText)
+    .filter(Boolean);
+
+  if (parts.length) return parts.join(', ');
+
+  return compactText(city) || 'Barangay San Pedro';
+}
+
+function normalizeAmount(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function getRateTypeSuffix(rateType: RateType) {
+  if (rateType === 'hourly') return ' / hour';
+  if (rateType === 'daily') return ' / day';
+  if (rateType === 'per_project') return ' / project';
+  return '';
+}
+
+function formatCurrency(value: number) {
+  return `₱${value.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`;
+}
+
+export function formatRateRange({
+  min,
+  max,
+  rateType,
+  fallback = 'Negotiable',
+}: {
+  min?: number | null;
+  max?: number | null;
+  rateType?: RateType | string | null;
+  fallback?: string;
+}) {
+  const normalizedRateType = normalizeRateType(rateType);
+  const normalizedMin = normalizeAmount(min);
+  const normalizedMax = normalizeAmount(max);
+
+  if (normalizedRateType === 'negotiable' && !normalizedMin && !normalizedMax) {
+    return 'Negotiable';
+  }
+
+  if (normalizedMin && normalizedMax) {
+    const orderedMin = Math.min(normalizedMin, normalizedMax);
+    const orderedMax = Math.max(normalizedMin, normalizedMax);
+
+    if (orderedMin === orderedMax) {
+      return `${formatCurrency(orderedMin)}${getRateTypeSuffix(normalizedRateType)}`;
+    }
+
+    return `${formatCurrency(orderedMin)}–${formatCurrency(orderedMax)}${getRateTypeSuffix(normalizedRateType)}`;
+  }
+
+  if (normalizedMin) {
+    return `From ${formatCurrency(normalizedMin)}${getRateTypeSuffix(normalizedRateType)}`;
+  }
+
+  if (normalizedMax) {
+    return `Up to ${formatCurrency(normalizedMax)}${getRateTypeSuffix(normalizedRateType)}`;
+  }
+
+  return fallback;
+}
+
+export function formatJobBudget(job: {
+  budgetAmount?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  rateType?: RateType | string | null;
+}) {
+  return formatRateRange({
+    min: job.budgetMin ?? job.budgetAmount ?? null,
+    max: job.budgetMax ?? job.budgetAmount ?? null,
+    rateType: job.rateType,
+    fallback: 'Budget to coordinate',
+  });
+}
+
+export function formatServiceRate(service: {
+  rateText?: string | null;
+  rateMin?: number | null;
+  rateMax?: number | null;
+  rateType?: RateType | string | null;
+}) {
+  const formattedRange = formatRateRange({
+    min: service.rateMin,
+    max: service.rateMax,
+    rateType: service.rateType,
+    fallback: '',
+  });
+
+  return formattedRange || compactText(service.rateText) || 'Rate to coordinate';
+}
+
+export function doesRateOverlap({
+  itemMin,
+  itemMax,
+  filterMin,
+  filterMax,
+}: {
+  itemMin?: number | null;
+  itemMax?: number | null;
+  filterMin?: number | null;
+  filterMax?: number | null;
+}) {
+  const requestedMin = normalizeAmount(filterMin);
+  const requestedMax = normalizeAmount(filterMax);
+  if (!requestedMin && !requestedMax) return true;
+
+  const normalizedItemMin = normalizeAmount(itemMin);
+  const normalizedItemMax = normalizeAmount(itemMax) ?? normalizedItemMin;
+  if (!normalizedItemMin && !normalizedItemMax) return true;
+
+  const low = normalizedItemMin ?? normalizedItemMax ?? 0;
+  const high = normalizedItemMax ?? normalizedItemMin ?? Number.MAX_SAFE_INTEGER;
+  const filterLow = requestedMin ?? 0;
+  const filterHigh = requestedMax ?? Number.MAX_SAFE_INTEGER;
+
+  return low <= filterHigh && high >= filterLow;
+}
+
+export function getExperienceLabel(value: ExperienceLevel | string | null | undefined) {
+  const level = normalizeExperienceLevel(value);
+  if (level === 'beginner') return 'Beginner friendly';
+  if (level === 'intermediate') return 'Intermediate';
+  if (level === 'experienced') return 'Experienced';
+  return 'Any experience';
 }
 
 type JobPostCue = 'lookingFor' | 'needHelpWith' | 'hiringFor';
@@ -200,7 +387,15 @@ export function mapProfile(row: ProfileRow | null | undefined): PublicProfileSum
     firstName: row.first_name,
     lastName: row.last_name,
     barangay: row.barangay,
+    purokSitio: row.purok_sitio,
+    street: row.street,
     city: row.city,
+    approximateLocation: formatApproximateLocation({
+      barangay: row.barangay,
+      purokSitio: row.purok_sitio,
+      street: row.street,
+      city: row.city,
+    }),
     about: row.about,
     avatarUrl: row.avatar_url,
     availability: row.availability,
@@ -220,7 +415,7 @@ export async function loadPublicProfiles(userIds: string[]) {
   const { data } = await supabase
     .from('profiles')
     .select(
-      'id, full_name, first_name, last_name, barangay, city, about, avatar_url, availability, verified_at, barangay_verified_at',
+      'id, full_name, first_name, last_name, barangay, purok_sitio, street, city, about, avatar_url, availability, verified_at, barangay_verified_at',
     )
     .in('id', ids);
 
@@ -247,8 +442,14 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     barangay: row.barangay,
     locationText: row.location_text ?? row.location,
     budgetAmount: row.budget_amount ?? row.budget,
+    budgetMin: row.budget_min ?? row.budget_amount ?? row.budget,
+    budgetMax: row.budget_max ?? row.budget_amount ?? row.budget,
+    rateType: normalizeRateType(row.rate_type),
     workersNeeded: row.workers_needed ?? null,
     scheduleText: row.schedule_text,
+    experienceLevel: normalizeExperienceLevel(row.experience_level),
+    certificationRequired: row.certification_required ?? false,
+    certificationNote: row.certification_note ?? null,
     status: row.status,
     acceptedProviderId: row.accepted_provider_id,
     allowMessages: row.allow_messages ?? true,
@@ -275,6 +476,14 @@ export function mapService(row: ServiceRow): ProviderService {
     yearsExperience: row.years_experience,
     availabilityText: row.availability_text,
     rateText: row.rate_text,
+    rateMin: row.rate_min ?? null,
+    rateMax: row.rate_max ?? null,
+    rateType: normalizeRateType(row.rate_type),
+    experienceLevel: normalizeExperienceLevel(row.experience_level),
+    certificationAvailable: row.certification_available ?? false,
+    certificationNote: row.certification_note ?? null,
+    customCategory: row.custom_category ?? null,
+    customCategoryReviewStatus: normalizeCustomServiceReviewStatus(row.custom_category_review_status),
     barangay: row.barangay ?? null,
     locationText: row.location_text ?? row.barangay ?? null,
     allowMessages: row.allow_messages ?? true,
@@ -316,12 +525,10 @@ export function formatRelativeMarketplaceDate(value: string) {
 }
 
 export function formatJobSubtitle(job: JobSummary) {
-  const budget = job.budgetAmount
-    ? `Budget PHP ${job.budgetAmount.toLocaleString('en-PH')}`
-    : 'Budget to coordinate';
+  const budget = formatJobBudget(job);
   const schedule = compactText(job.scheduleText) || 'Schedule to coordinate';
 
-  return `${budget} · ${schedule}`;
+  return `${budget} - ${schedule}`;
 }
 
 export function formatServiceRatingText(service: ServiceSearchResult) {
@@ -395,7 +602,7 @@ export function adaptServiceToCardProps(
     statusLine: availability
       ? `${availability} near your barangay`
       : 'Available near your barangay',
-    rateLine: compactText(service.rateText) || 'Rate to coordinate',
+    rateLine: formatServiceRate(service),
     headline: formatServicePostTitle({
       title: service.title,
       category: service.category,

@@ -39,7 +39,12 @@ const emptyCore: CoreProfileInput = {
   firstName: '',
   lastName: '',
   barangay: '',
+  purokSitio: '',
+  street: '',
+  blockLot: '',
+  houseNumber: '',
   city: '',
+  preferredContactMethod: 'app_message',
   about: '',
   availability: '',
 };
@@ -51,12 +56,17 @@ const emptyWork: WorkProfileInput = {
   serviceArea: '',
   availability: '',
   rateText: '',
+  rateMin: '',
+  rateMax: '',
+  rateType: 'per_project',
+  customOfferedServices: [],
 };
 
 const emptyHiring: HiringProfileInput = {
   headline: '',
   bio: '',
   neededServices: [],
+  customNeededServices: [],
   preferredSchedule: '',
   budgetPreference: '',
 };
@@ -118,7 +128,12 @@ export default function CompleteProfileScreen() {
       firstName: nextStatus.core.firstName,
       lastName: nextStatus.core.lastName,
       barangay: nextStatus.core.barangay,
+      purokSitio: nextStatus.core.purokSitio,
+      street: nextStatus.core.street,
+      blockLot: nextStatus.core.blockLot,
+      houseNumber: nextStatus.core.houseNumber,
       city: nextStatus.core.city,
+      preferredContactMethod: nextStatus.core.preferredContactMethod,
       about: nextStatus.core.about,
       availability: nextStatus.core.availability,
     });
@@ -129,16 +144,21 @@ export default function CompleteProfileScreen() {
       serviceArea: nextStatus.work.serviceArea,
       availability: nextStatus.work.availability,
       rateText: nextStatus.work.rateText,
+      rateMin: nextStatus.work.rateMin,
+      rateMax: nextStatus.work.rateMax,
+      rateType: nextStatus.work.rateType,
+      customOfferedServices: nextStatus.work.customOfferedServices,
     });
-    setWorkServicesText(nextStatus.work.offeredServices.join(', '));
+    setWorkServicesText([...nextStatus.work.offeredServices, ...nextStatus.work.customOfferedServices].join(', '));
     setHiring({
       headline: nextStatus.hiring.headline,
       bio: nextStatus.hiring.bio,
       neededServices: nextStatus.hiring.neededServices,
+      customNeededServices: nextStatus.hiring.customNeededServices,
       preferredSchedule: nextStatus.hiring.preferredSchedule,
       budgetPreference: nextStatus.hiring.budgetPreference,
     });
-    setHiringServicesText(nextStatus.hiring.neededServices.join(', '));
+    setHiringServicesText([...nextStatus.hiring.neededServices, ...nextStatus.hiring.customNeededServices].join(', '));
   };
 
   const save = async () => {
@@ -290,10 +310,44 @@ function CoreForm({
         onChangeText={(barangay) => onChange({ ...value, barangay })}
       />
       <Field
+        label="Purok/Sitio"
+        placeholder="Purok 1 or Sitio name"
+        value={value.purokSitio}
+        onChangeText={(purokSitio) => onChange({ ...value, purokSitio })}
+      />
+      <Field
+        label="Street"
+        placeholder="Street name"
+        value={value.street}
+        onChangeText={(street) => onChange({ ...value, street })}
+      />
+      <View style={styles.twoColumn}>
+        <Field
+          compact
+          label="Block/Lot"
+          placeholder="Blk 1 Lot 2"
+          value={value.blockLot}
+          onChangeText={(blockLot) => onChange({ ...value, blockLot })}
+        />
+        <Field
+          compact
+          label="House No."
+          placeholder="123"
+          value={value.houseNumber}
+          onChangeText={(houseNumber) => onChange({ ...value, houseNumber })}
+        />
+      </View>
+      <Field
         label="City or municipality"
         placeholder="San Pedro"
         value={value.city}
         onChangeText={(city) => onChange({ ...value, city })}
+      />
+      <Field
+        label="Preferred contact method"
+        placeholder="app_message, phone, or email"
+        value={value.preferredContactMethod}
+        onChangeText={(preferredContactMethod) => onChange({ ...value, preferredContactMethod })}
       />
       <Field
         label="Public intro"
@@ -365,6 +419,22 @@ function WorkForm({
         value={value.rateText}
         onChangeText={(rateText) => onChange({ ...value, rateText })}
       />
+      <View style={styles.twoColumn}>
+        <Field
+          compact
+          label="Min rate"
+          placeholder="500"
+          value={value.rateMin}
+          onChangeText={(rateMin) => onChange({ ...value, rateMin })}
+        />
+        <Field
+          compact
+          label="Max rate"
+          placeholder="1000"
+          value={value.rateMax}
+          onChangeText={(rateMax) => onChange({ ...value, rateMax })}
+        />
+      </View>
     </View>
   );
 }
@@ -420,12 +490,14 @@ function HiringForm({
 }
 
 function Field({
+  compact,
   label,
   multiline = false,
   onChangeText,
   placeholder,
   value,
 }: {
+  compact?: boolean;
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
@@ -433,7 +505,7 @@ function Field({
   value: string;
 }) {
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, compact && styles.flex]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         multiline={multiline}
@@ -612,6 +684,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: space.lg,
     padding: space.lg,
+  },
+  twoColumn: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  flex: {
+    flex: 1,
   },
   field: {
     gap: space.xs,

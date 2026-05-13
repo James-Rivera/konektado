@@ -1,3 +1,4 @@
+import { splitOfficialAndCustomServices } from "@/constants/service-taxonomy";
 import type { ServiceResult } from "@/services/auth.service";
 import type {
     AppRole,
@@ -18,6 +19,11 @@ export const emptyOnboardingDraft: OnboardingDraft = {
   streetAddress: "",
   city: DEFAULT_CITY,
   barangay: DEFAULT_BARANGAY,
+  purokSitio: "",
+  street: "",
+  blockLot: "",
+  houseNumber: "",
+  preferredContactMethod: "app_message",
   offeredServices: [],
   neededServices: [],
   customOfferedServices: [],
@@ -95,7 +101,7 @@ export async function loadOnboardingDraft(): Promise<
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "first_name, last_name, full_name, birthdate, street_address, city, barangay, role, active_role",
+      "first_name, last_name, full_name, birthdate, street_address, city, barangay, purok_sitio, street, block_lot, house_number, preferred_contact_method, role, active_role",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -143,6 +149,11 @@ export async function loadOnboardingDraft(): Promise<
         streetAddress: profile?.street_address ?? "",
         city: profile?.city || DEFAULT_CITY,
         barangay: profile?.barangay || DEFAULT_BARANGAY,
+        purokSitio: profile?.purok_sitio ?? "",
+        street: profile?.street ?? "",
+        blockLot: profile?.block_lot ?? "",
+        houseNumber: profile?.house_number ?? "",
+        preferredContactMethod: profile?.preferred_contact_method ?? "app_message",
         offeredServices,
         neededServices: preferences?.needed_services ?? [],
         customOfferedServices: preferences?.custom_offered_services ?? [],
@@ -169,14 +180,26 @@ export async function saveOnboardingProfile({
   userId: string;
 }): Promise<ServiceResult<void>> {
   const activeRole = activeRoleForIntent(intent);
-  const offeredServices = compactServices([
+  const offeredSplit = splitOfficialAndCustomServices([
     ...draft.offeredServices,
     ...draft.customOfferedServices,
   ]);
-  const neededServices = compactServices([
+  const neededSplit = splitOfficialAndCustomServices([
     ...draft.neededServices,
     ...draft.customNeededServices,
   ]);
+  const offeredServices = compactServices(offeredSplit.official);
+  const neededServices = compactServices(neededSplit.official);
+  const customOfferedServices = compactServices(offeredSplit.custom);
+  const customNeededServices = compactServices(neededSplit.custom);
+  const privateAddress = compactServices([
+    draft.houseNumber,
+    draft.blockLot,
+    draft.street,
+    draft.purokSitio,
+    draft.barangay,
+    draft.city,
+  ]).join(", ");
 
   const roleError = await saveUserRole({
     activeRole,
@@ -198,9 +221,14 @@ export async function saveOnboardingProfile({
     last_name: draft.lastName.trim(),
     full_name: `${draft.firstName.trim()} ${draft.lastName.trim()}`.trim(),
     birthdate: draft.birthdate ? draft.birthdate : null,
-    street_address: draft.streetAddress.trim() || null,
+    street_address: privateAddress || draft.streetAddress.trim() || null,
     city: draft.city.trim() || DEFAULT_CITY,
     barangay: draft.barangay || DEFAULT_BARANGAY,
+    purok_sitio: draft.purokSitio.trim() || null,
+    street: draft.street.trim() || null,
+    block_lot: draft.blockLot.trim() || null,
+    house_number: draft.houseNumber.trim() || null,
+    preferred_contact_method: draft.preferredContactMethod || "app_message",
   });
 
   if (profileError) {
@@ -214,8 +242,8 @@ export async function saveOnboardingProfile({
       intent,
       offered_services: offeredServices,
       needed_services: neededServices,
-      custom_offered_services: compactServices(draft.customOfferedServices),
-      custom_needed_services: compactServices(draft.customNeededServices),
+      custom_offered_services: customOfferedServices,
+      custom_needed_services: customNeededServices,
       onboarding_completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
@@ -230,6 +258,8 @@ export async function saveOnboardingProfile({
       .upsert({
         user_id: userId,
         service_type: offeredServices.join(", ") || null,
+        custom_offered_services: customOfferedServices,
+        custom_service_review_status: customOfferedServices.length ? "pending" : "none",
         has_certifications: null,
         certification_details: null,
         certification_status: null,

@@ -13,17 +13,21 @@ import { useProfile } from '@/hooks/use-profile';
 import { startServiceConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
+  formatServiceRate,
   formatServiceJobsDoneText,
   formatServiceRatingText,
+  getExperienceLabel,
   getMarketplaceLocation,
 } from '@/services/marketplace.helpers';
 import {
   getCompletionModeForError,
   getCompletionTitleForMode,
+  getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
+import { listProfileReviews } from '@/services/review.service';
 import { getServiceDetail } from '@/services/service-profile.service';
-import type { ProviderService, ServiceDetail } from '@/types/marketplace.types';
+import type { ProviderService, Review, ServiceDetail } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 type DetailVariant = 'default' | 'match';
@@ -50,6 +54,7 @@ export default function ServiceDetailScreen() {
   const serviceId = getParamValue(params.serviceId);
   const variant = getVariant(params.variant);
   const [detail, setDetail] = useState<ServiceDetail | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [messaging, setMessaging] = useState(false);
 
@@ -70,6 +75,13 @@ export default function ServiceDetailScreen() {
         Alert.alert('Worker profile', result.error);
       } else {
         setDetail(result.data);
+        if (result.data?.providerId) {
+          listProfileReviews(result.data.providerId).then((reviewResult) => {
+            if (active && reviewResult.data) {
+              setReviews(reviewResult.data.filter((review) => Boolean(review.comment?.trim())));
+            }
+          });
+        }
       }
 
       setLoading(false);
@@ -106,7 +118,7 @@ export default function ServiceDetailScreen() {
       if (result.error || !result.data) {
         if (isProfileCompletionRequiredError(result.error)) {
           const mode = getCompletionModeForError(result.error) ?? 'hiring';
-          Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+          Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
             { text: 'Later', style: 'cancel' },
             {
               text: 'Complete profile',
@@ -227,7 +239,7 @@ export default function ServiceDetailScreen() {
               </View>
               <View style={styles.ratePill}>
                 <MaterialIcons color={color.primary} name="payments" size={16} />
-                <Text style={styles.ratePillText}>{detail.rateText || 'Rate to coordinate'}</Text>
+                <Text style={styles.ratePillText}>{formatServiceRate(detail)}</Text>
               </View>
             </View>
           </SectionBand>
@@ -236,14 +248,18 @@ export default function ServiceDetailScreen() {
             <Text style={styles.sectionTitle}>Service details</Text>
             <WorkerMetricGrid
               metrics={[
-                { label: 'Rate', value: detail.rateText || 'Rate to coordinate' },
+                { label: 'Rate', value: formatServiceRate(detail) },
                 { label: 'Availability', value: detail.availabilityText || 'Schedule to coordinate' },
                 { label: 'Service area', value: location },
                 {
                   label: 'Experience',
                   value: detail.yearsExperience
                     ? `${detail.yearsExperience} year${detail.yearsExperience === 1 ? '' : 's'}`
-                    : 'Experience to coordinate',
+                    : getExperienceLabel(detail.experienceLevel),
+                },
+                {
+                  label: 'Certification',
+                  value: detail.certificationAvailable ? 'Available' : 'Not listed',
                 },
               ]}
             />
@@ -285,6 +301,14 @@ export default function ServiceDetailScreen() {
               <Text style={styles.reviewBody}>
                 Reviews appear after completed Konektado jobs.
               </Text>
+              {reviews.slice(0, 3).map((review) => (
+                <View key={review.id} style={styles.reviewComment}>
+                  <Text style={styles.reviewCommentMeta}>
+                    {review.reviewer?.fullName ?? 'Konektado resident'} - {review.rating}/5
+                  </Text>
+                  <Text style={styles.reviewCommentBody}>{review.comment}</Text>
+                </View>
+              ))}
             </View>
           </SectionBand>
 
@@ -1081,6 +1105,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   reviewBody: {
+    ...typography.body,
+    color: color.textMuted,
+  },
+  reviewComment: {
+    borderTopColor: color.border,
+    borderTopWidth: 1,
+    gap: 4,
+    paddingTop: 10,
+  },
+  reviewCommentMeta: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  reviewCommentBody: {
     ...typography.body,
     color: color.textMuted,
   },

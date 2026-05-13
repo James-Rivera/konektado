@@ -4,7 +4,12 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import type { DiscoveryGroupKey, MvpServiceOption, SearchWorkType } from '@/constants/service-taxonomy';
+import type {
+  DiscoveryGroupKey,
+  MvpServiceOption,
+  SearchWorkType,
+} from '@/constants/service-taxonomy';
+import type { ExperienceLevel } from '@/types/marketplace.types';
 import { color, radius, space, typography } from '@/constants/theme';
 
 export type SearchDiscoveryFilters = {
@@ -12,6 +17,10 @@ export type SearchDiscoveryFilters = {
   serviceGroup: 'all' | DiscoveryGroupKey;
   service: 'all' | MvpServiceOption;
   locationScope: 'same_barangay' | 'nearby';
+  rateRange: 'any' | 'under_500' | '500_1000' | '1000_plus';
+  experienceLevel: 'all' | ExperienceLevel;
+  certification: 'any' | 'required_or_available';
+  verifiedOnly: boolean;
   sort: 'relevant' | 'newest' | 'nearby';
 };
 
@@ -43,6 +52,25 @@ const WORK_TYPE_OPTIONS: FilterOption<SearchWorkType>[] = [
 const LOCATION_SCOPE_OPTIONS: FilterOption<SearchDiscoveryFilters['locationScope']>[] = [
   { key: 'same_barangay', label: 'Same barangay' },
   { key: 'nearby', label: 'Nearby' },
+];
+
+const RATE_RANGE_OPTIONS: FilterOption<SearchDiscoveryFilters['rateRange']>[] = [
+  { key: 'any', label: 'Any rate' },
+  { key: 'under_500', label: 'Under ₱500' },
+  { key: '500_1000', label: '₱500–₱1,000' },
+  { key: '1000_plus', label: '₱1,000+' },
+];
+
+const EXPERIENCE_OPTIONS: FilterOption<SearchDiscoveryFilters['experienceLevel']>[] = [
+  { key: 'all', label: 'Any level' },
+  { key: 'beginner', label: 'Beginner' },
+  { key: 'intermediate', label: 'Intermediate' },
+  { key: 'experienced', label: 'Experienced' },
+];
+
+const CERTIFICATION_OPTIONS: FilterOption<SearchDiscoveryFilters['certification']>[] = [
+  { key: 'any', label: 'Any' },
+  { key: 'required_or_available', label: 'Certification' },
 ];
 
 const SORT_OPTIONS: FilterOption<SearchDiscoveryFilters['sort']>[] = [
@@ -164,6 +192,50 @@ export function SearchFiltersSheet({
                 onPress={() => onChange('locationScope', option.key)}
               />
             ))}
+          </View>
+        </FilterSection>
+
+        <FilterSection title="Rate range">
+          <View style={styles.chipRow}>
+            {RATE_RANGE_OPTIONS.map((option) => (
+              <ChoiceChip
+                key={option.key}
+                label={option.label}
+                selected={filters.rateRange === option.key}
+                onPress={() => onChange('rateRange', option.key)}
+              />
+            ))}
+          </View>
+        </FilterSection>
+
+        <FilterSection title="Experience">
+          <View style={styles.chipRow}>
+            {EXPERIENCE_OPTIONS.map((option) => (
+              <ChoiceChip
+                key={option.key}
+                label={option.label}
+                selected={filters.experienceLevel === option.key}
+                onPress={() => onChange('experienceLevel', option.key)}
+              />
+            ))}
+          </View>
+        </FilterSection>
+
+        <FilterSection title="Trust">
+          <View style={styles.chipRow}>
+            {CERTIFICATION_OPTIONS.map((option) => (
+              <ChoiceChip
+                key={option.key}
+                label={option.label}
+                selected={filters.certification === option.key}
+                onPress={() => onChange('certification', option.key)}
+              />
+            ))}
+            <ChoiceChip
+              label="Verified only"
+              selected={filters.verifiedOnly}
+              onPress={() => onChange('verifiedOnly', !filters.verifiedOnly)}
+            />
           </View>
         </FilterSection>
 

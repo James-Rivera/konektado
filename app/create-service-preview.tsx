@@ -8,13 +8,19 @@ import { Skeleton } from '@/components/Skeleton';
 import { WorkerCard } from '@/components/WorkerCard';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { formatServicePostTitle, isPresenceActive } from '@/services/marketplace.helpers';
+import {
+  formatServicePostTitle,
+  formatServiceRate,
+  isPresenceActive,
+} from '@/services/marketplace.helpers';
 import {
   getCompletionModeForError,
   getCompletionTitleForMode,
+  getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import { createService } from '@/services/service-profile.service';
+import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 
 type ServiceDraft = {
   allowMessages: boolean;
@@ -22,12 +28,19 @@ type ServiceDraft = {
   autoReplyEnabled: boolean;
   availability: string;
   category: string;
+  customCategory: string;
   description: string;
+  experienceLevel: ExperienceLevel;
+  certificationAvailable: boolean;
+  certificationNote: string;
   serviceGroup?: string | null;
   tags: string[];
   locationText?: string;
   photoUrls?: string[];
   rate: string;
+  rateMin: string;
+  rateMax: string;
+  rateType: RateType;
   title: string;
 };
 
@@ -49,12 +62,19 @@ function parseDraft(value: string | undefined): ServiceDraft | null {
       autoReplyEnabled: parsed.autoReplyEnabled ?? false,
       availability: parsed.availability ?? '',
       category: parsed.category,
+      customCategory: parsed.customCategory ?? '',
       description: parsed.description ?? '',
+      experienceLevel: parsed.experienceLevel ?? 'any',
+      certificationAvailable: parsed.certificationAvailable ?? false,
+      certificationNote: parsed.certificationNote ?? '',
       serviceGroup: parsed.serviceGroup ?? null,
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       locationText: parsed.locationText ?? '',
       photoUrls: Array.isArray(parsed.photoUrls) ? parsed.photoUrls : [],
       rate: parsed.rate ?? '',
+      rateMin: parsed.rateMin ?? '',
+      rateMax: parsed.rateMax ?? '',
+      rateType: parsed.rateType ?? 'per_project',
       title: parsed.title,
     };
   } catch {
@@ -75,9 +95,20 @@ function getStatusLine(draft: ServiceDraft) {
 }
 
 function getRateLine(draft: ServiceDraft) {
-  const rate = draft.rate.trim() || 'Rate to coordinate';
+  const rate = formatServiceRate({
+    rateText: draft.rate,
+    rateMin: parseNumber(draft.rateMin),
+    rateMax: parseNumber(draft.rateMax),
+    rateType: draft.rateType,
+  });
   const availability = draft.availability.trim() || 'Availability to coordinate';
-  return `${rate} · ${availability}`;
+  return `${rate} - ${availability}`;
+}
+
+function parseNumber(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value.replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getPreviewTags(draft: ServiceDraft) {
@@ -109,12 +140,19 @@ export default function CreateServicePreviewScreen() {
     setPublishing(true);
     const result = await createService({
       category: draft.category,
+      customCategory: draft.customCategory,
       title: draft.title,
       description: draft.description,
       tags: getPreviewTags(draft),
       photoUrls: draft.photoUrls,
       availabilityText: draft.availability,
       rateText: draft.rate,
+      rateMin: parseNumber(draft.rateMin),
+      rateMax: parseNumber(draft.rateMax),
+      rateType: draft.rateType,
+      experienceLevel: draft.experienceLevel,
+      certificationAvailable: draft.certificationAvailable,
+      certificationNote: draft.certificationNote,
       barangay: draft.locationText,
       locationText: draft.locationText,
       allowMessages: draft.allowMessages,
@@ -126,7 +164,7 @@ export default function CreateServicePreviewScreen() {
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'work';
-        Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',

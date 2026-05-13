@@ -11,12 +11,14 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { createJob } from '@/services/job.service';
-import { formatJobPostTitle } from '@/services/marketplace.helpers';
+import { formatJobBudget, formatJobPostTitle } from '@/services/marketplace.helpers';
 import {
   getCompletionModeForError,
   getCompletionTitleForMode,
+  getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
+import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 
 type JobDraft = {
   title: string;
@@ -27,9 +29,15 @@ type JobDraft = {
   photoUrls: string[];
   barangay: string;
   locationText: string;
-  budget: string;
+  privateLocationNotes: string;
+  budgetMin: string;
+  budgetMax: string;
+  rateType: RateType;
   workersNeeded: string;
   scheduleText: string;
+  experienceLevel: ExperienceLevel;
+  certificationRequired: boolean;
+  certificationNote: string;
   allowMessages: boolean;
   autoReplyEnabled: boolean;
   autoCloseEnabled: boolean;
@@ -48,6 +56,13 @@ function parseDraft(value: string | undefined): JobDraft | null {
     if (!parsed.title || !parsed.description || !parsed.category || !parsed.serviceNeeded) return null;
     return {
       ...parsed,
+      privateLocationNotes: parsed.privateLocationNotes ?? '',
+      budgetMin: parsed.budgetMin ?? '',
+      budgetMax: parsed.budgetMax ?? '',
+      rateType: parsed.rateType ?? 'per_project',
+      experienceLevel: parsed.experienceLevel ?? 'any',
+      certificationRequired: parsed.certificationRequired ?? false,
+      certificationNote: parsed.certificationNote ?? '',
       serviceNeeded: parsed.serviceNeeded ?? '',
       photoUrls: Array.isArray(parsed.photoUrls) ? parsed.photoUrls : [],
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
@@ -63,11 +78,6 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatBudget(value: number | null) {
-  if (!value) return 'Budget to coordinate';
-  return `Budget PHP ${value.toLocaleString('en-PH')}`;
-}
-
 export default function CreateJobPreviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ draft?: string | string[]; draftId?: string | string[] }>();
@@ -77,7 +87,8 @@ export default function CreateJobPreviewScreen() {
   const draftId = getParamValue(params.draftId);
   const [publishing, setPublishing] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
-  const budgetAmount = draft ? parseNumber(draft.budget) : null;
+  const budgetMin = draft ? parseNumber(draft.budgetMin) : null;
+  const budgetMax = draft ? parseNumber(draft.budgetMax) : null;
   const workersNeeded = draft ? parseNumber(draft.workersNeeded) : null;
 
   const saveCurrentDraft = async () => {
@@ -94,9 +105,15 @@ export default function CreateJobPreviewScreen() {
         photoUrls: draft.photoUrls,
         barangay: draft.barangay,
         locationText: draft.locationText,
-        budgetAmount,
+        privateLocationNotes: draft.privateLocationNotes,
+        budgetMin,
+        budgetMax,
+        rateType: draft.rateType,
         workersNeeded,
         scheduleText: draft.scheduleText,
+        experienceLevel: draft.experienceLevel,
+        certificationRequired: draft.certificationRequired,
+        certificationNote: draft.certificationNote,
         allowMessages: draft.allowMessages,
         autoReplyEnabled: draft.autoReplyEnabled,
         autoCloseEnabled: draft.autoCloseEnabled,
@@ -116,9 +133,15 @@ export default function CreateJobPreviewScreen() {
       photoUrls: draft.photoUrls,
       barangay: draft.barangay,
       locationText: draft.locationText,
-      budgetAmount,
+      privateLocationNotes: draft.privateLocationNotes,
+      budgetMin,
+      budgetMax,
+      rateType: draft.rateType,
       workersNeeded,
       scheduleText: draft.scheduleText,
+      experienceLevel: draft.experienceLevel,
+      certificationRequired: draft.certificationRequired,
+      certificationNote: draft.certificationNote,
       allowMessages: draft.allowMessages,
       autoReplyEnabled: draft.autoReplyEnabled,
       autoCloseEnabled: draft.autoCloseEnabled,
@@ -127,7 +150,7 @@ export default function CreateJobPreviewScreen() {
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'hiring';
-        Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -249,7 +272,11 @@ export default function CreateJobPreviewScreen() {
               location={draft.barangay || 'Barangay San Pedro'}
               postedAt="Posted just now"
               showSaveButton={false}
-              subtitle={`${formatBudget(budgetAmount)} - ${draft.scheduleText || 'Schedule to coordinate'}`}
+              subtitle={`${formatJobBudget({
+                budgetMin,
+                budgetMax,
+                rateType: draft.rateType,
+              })} - ${draft.scheduleText || 'Schedule to coordinate'}`}
               tags={[draft.category, draft.serviceNeeded, ...draft.tags].filter(Boolean).slice(0, 4)}
               title={formatJobPostTitle({
                 title: draft.title,

@@ -5,9 +5,12 @@ import {
 import type { ServiceResult } from '@/services/auth.service';
 import {
     compactText,
+    doesRateOverlap,
     getCurrentUserId,
     loadPublicProfiles,
     mapJob,
+    normalizeExperienceLevel,
+    normalizeRateType,
     requireVerifiedUser,
     type JobRow,
 } from '@/services/marketplace.helpers';
@@ -22,7 +25,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, workers_needed, schedule_text, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 type ClientStats = {
   averageRating: number | null;
@@ -136,6 +139,10 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
   const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
   const workersNeeded = input.workersNeeded ?? null;
   const serviceNeeded = compactText(input.serviceNeeded) || null;
+  const budgetMin = input.budgetMin ?? input.budgetAmount ?? null;
+  const budgetMax = input.budgetMax ?? input.budgetAmount ?? null;
+  const rateType = normalizeRateType(input.rateType);
+  const experienceLevel = normalizeExperienceLevel(input.experienceLevel);
 
   if (!title) {
     return { data: null, error: 'Enter a job title.' };
@@ -157,6 +164,16 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
     return { data: null, error: 'Workers needed must be at least 1.' };
   }
 
+  if (budgetMin !== null && budgetMax !== null && budgetMin > budgetMax) {
+    return { data: null, error: 'Minimum budget must not be greater than maximum budget.' };
+  }
+
+  if (rateType !== 'negotiable' && budgetMin === null && budgetMax === null) {
+    return { data: null, error: 'Add a budget range or set the job as negotiable.' };
+  }
+
+  const publicLocation = compactText(input.locationText) || compactText(input.barangay) || 'Barangay San Pedro';
+
   const { data, error } = await supabase
     .from('jobs')
     .insert({
@@ -169,12 +186,20 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
       tags,
       photo_urls: photoUrls,
       barangay: compactText(input.barangay) || 'Barangay San Pedro',
-      location: compactText(input.locationText) || null,
-      location_text: compactText(input.locationText) || null,
-      budget: input.budgetAmount ?? null,
-      budget_amount: input.budgetAmount ?? null,
+      location: publicLocation,
+      location_text: publicLocation,
+      public_location_text: publicLocation,
+      private_location_notes: compactText(input.privateLocationNotes) || null,
+      budget: budgetMin ?? budgetMax,
+      budget_amount: budgetMin ?? budgetMax,
+      budget_min: budgetMin,
+      budget_max: budgetMax,
+      rate_type: rateType,
       workers_needed: workersNeeded,
       schedule_text: compactText(input.scheduleText) || null,
+      experience_level: experienceLevel,
+      certification_required: input.certificationRequired ?? false,
+      certification_note: compactText(input.certificationNote) || null,
       allow_messages: input.allowMessages ?? true,
       auto_reply_enabled: input.autoReplyEnabled ?? false,
       auto_close_enabled: input.autoCloseEnabled ?? false,
@@ -217,6 +242,13 @@ export async function listMyJobs(): Promise<ServiceResult<JobSummary[]>> {
 export async function searchJobs(filters: JobSearchFilters = {}): Promise<ServiceResult<JobSummary[]>> {
   const text = compactText(filters.text).toLowerCase();
   const limit = normalizeLimit(filters.limit);
+  let excludeUserId = compactText(filters.excludeUserId) || null;
+
+  if (!excludeUserId && filters.excludeCurrentUser !== false) {
+    const currentUser = await getCurrentUserId();
+    excludeUserId = currentUser.data ?? null;
+  }
+
   let query = supabase
     .from('jobs')
     .select(JOB_COLUMNS)
@@ -235,6 +267,22 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
 
   if (filters.barangay) {
     query = query.ilike('barangay', `%${filters.barangay}%`);
+  }
+
+  if (excludeUserId) {
+    query = query.neq('owner_id', excludeUserId);
+  }
+
+  if (filters.rateType && filters.rateType !== 'any') {
+    query = query.eq('rate_type', filters.rateType);
+  }
+
+  if (filters.experienceLevel && filters.experienceLevel !== 'all') {
+    query = query.eq('experience_level', filters.experienceLevel);
+  }
+
+  if (filters.certificationRequired !== undefined) {
+    query = query.eq('certification_required', filters.certificationRequired);
   }
 
   if (text) {
@@ -261,13 +309,30 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   }
 
   const rows = ((data as JobRow[] | null) ?? []).filter((row) => {
+    if (excludeUserId && [row.owner_id, row.client_id].includes(excludeUserId)) return false;
+    if (
+      !doesRateOverlap({
+        itemMin: row.budget_min ?? row.budget_amount ?? row.budget,
+        itemMax: row.budget_max ?? row.budget_amount ?? row.budget,
+        filterMin: filters.budgetMin,
+        filterMax: filters.budgetMax,
+      })
+    ) {
+      return false;
+    }
     if (!text) return true;
     return [row.title, row.description, row.category, row.service_needed, row.barangay, row.location_text, row.location, ...(row.tags ?? [])]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
   const profiles = await loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id));
-  const jobs = rows.map((row) => mapJob(row, profiles));
+  const jobs = rows
+    .map((row) => mapJob(row, profiles))
+    .filter((job) =>
+      filters.verifiedOnly
+        ? Boolean(job.client?.barangayVerifiedAt || job.client?.verifiedAt)
+        : true,
+    );
   const stats = await loadClientStats(jobs.map((job) => job.clientId));
 
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };

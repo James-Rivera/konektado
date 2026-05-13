@@ -33,7 +33,7 @@ Failure states:
 
 1. User registers with email OTP plus password, or logs in with email/password.
 2. User selects intended role: find work or hire someone (2 options only).
-3. App collects basic profile identity and location.
+3. App collects basic profile identity and location: barangay, optional purok/sitio, street, block/lot, house number, and preferred contact method.
 4. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both).
 5. App shows review.
 6. App saves onboarding and shows complete.
@@ -47,6 +47,7 @@ Rules:
 - Do not overload first-time onboarding with all profile, ID, credential, and service details.
 - Do not collect certificates, ID documents, selfie/photo uploads, or verification files during first onboarding.
 - First onboarding is complete when `user_preferences.onboarding_completed_at` is set and the profile has basic identity: first name, last name or full name, city, and barangay.
+- Exact address fields are collected for verification/admin review or private coordination. Public surfaces show only approximate location such as barangay, purok/sitio, or street.
 - The first entry experience should help users understand Konektado quickly.
 - Service preference choices personalize browsing; they are not verification proof.
 - Viewer mode is read-only for user-to-user marketplace interactions.
@@ -95,9 +96,9 @@ Contact details rules:
 ## Public Profile Completion Flow
 
 1. Verified user opens Profile and sees a trust checklist for Core Profile, Work Profile, and Hiring Profile.
-2. Core Profile collects public name, barangay/city, short intro, and availability.
-3. Work Profile collects worker-facing headline, bio, offered services, service area, availability, and optional rate note.
-4. Hiring Profile collects client-facing headline, bio, needed services, preferred schedule, and optional budget preference.
+2. Core Profile collects public name, preferred contact method, approximate location, private block/lot or house-number details, short intro, and availability.
+3. Work Profile collects worker-facing headline, bio, taxonomy services, custom "Others / Specify" text, service area, availability, rate range, and optional rate note.
+4. Hiring Profile collects client-facing headline, bio, taxonomy services needed, custom "Others / Specify" text, preferred schedule, and optional budget preference.
 5. App saves role-profile rows without changing the user's active role.
 6. When a verified user tries to publish or message without the relevant role profile, the app routes them to `/profile/complete`.
 
@@ -105,6 +106,7 @@ Rules:
 
 - Keep first onboarding lightweight; do not force full Work/Hiring completion before Home.
 - Barangay verification and public profile completion are separate trust layers.
+- A verified user with missing Work/Hiring setup stays visibly verified but sees `Verified · Setup incomplete`; they may browse public content but cannot message, hire, apply/post, or review until setup is complete.
 - Verification selfie, ID files, certificate files, and admin notes are private and must never become public profile photos or profile content.
 - A profile photo is recommended but not required for this MVP pass.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
@@ -113,8 +115,8 @@ Rules:
 ## Service Profile Creation Flow
 
 1. Provider opens Work Profile, Post, or provider setup.
-2. Provider selects one or more service categories.
-3. Provider adds service title, description, availability, experience, and optional rate text.
+2. Provider selects work type/service group/specific service from the controlled taxonomy, or uses "Others / Specify" stored as separate custom text for admin review.
+3. Provider adds service title, description, availability, experience level, optional certification metadata, and rate range or negotiable rate text.
 4. Provider may attach credentials related to the service.
 5. App validates required fields.
 6. App checks barangay verification and completed Work Profile.
@@ -133,8 +135,8 @@ Rules:
 
 1. Client opens Post.
 2. Client taps Create a post and chooses "I need help" from the Figma post-type sheet.
-3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, location, optional context tags, budget, workers needed, schedule text, and listing options.
-4. App validates Job Category, Service Needed, title, description, location, and numeric optional fields.
+3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, public approximate location, optional private location notes, optional context tags, budget minimum/maximum or negotiable rate, rate type, workers needed, preferred schedule, experience level, certification requirement, and listing options.
+4. App validates Job Category, Service Needed, title, description, public location, numeric optional fields, and `budget_min <= budget_max`.
 5. App saves a private `job_drafts` row before showing Preview.
 6. App shows the Figma Preview screen with safety reminders.
 7. If the client is not barangay-verified and taps Publish, the app shows the Figma barangay verification gate with Start Verification and Keep Editing Draft actions.
@@ -157,6 +159,8 @@ Rules:
 - Job photos can be selected, uploaded to storage, and shown in preview and job detail. Renewal rules, auto-reply behavior, ranking, hiring, reviews, and advanced search remain out of this slice.
 - Post UI should avoid Apply/Application wording; workers show interest through Messages.
 - Service Needed is structured data saved separately from category. Tags remain short context/condition descriptors, not service names.
+- Public job cards/details must not show house number, block/lot, private location notes, ID files, private contact data, or sensitive verification details.
+- A user's own jobs are hidden from general Home/Search/browsing, but remain visible in My Posts, Manage Posts, and Profile activity.
 
 ## Job Interest and Messaging Flow
 
@@ -186,7 +190,7 @@ Rules:
 2. Client opens the job conversation.
 3. Client can use quick prompts to confirm time, location, payment, and what to bring.
 4. Client taps Mark Hired when a worker is chosen.
-5. App updates the job or conversation with hired worker status.
+5. App checks that the client has completed Hiring Profile setup, then updates the job or conversation with hired worker status.
 6. Job History shows the job as active, worker hired, in progress, or completed.
 7. After completion, both sides can leave feedback if the review flow is enabled.
 
@@ -207,6 +211,7 @@ Admin safety rules:
 - Admins should only access documents for valid verification or moderation work.
 - Admin UI should not expose passwords or Supabase Auth internals.
 - The MVP implementation continues to use `verifications` and `verification_files.verification_id`; renaming to `verification_requests` is deferred until after the demo-critical flow is stable.
+- Barangay/admin is the current handler for profile verification, uploaded credential review, custom "Others" service review, and reported marketplace content where report infrastructure exists. Direct barangay/LGU system integration remains future scope.
 
 ## Ratings/Review Flow
 
@@ -224,3 +229,4 @@ Rules:
 - Reviews require a real job relationship.
 - One reviewer can review the same reviewee for the same job only once.
 - Reviews should not expose private contact or ID document information.
+- Review comments are shown only as controlled completed-interaction feedback. Do not add open public comment threads to job/service posts.

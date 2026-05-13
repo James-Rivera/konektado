@@ -20,12 +20,14 @@ import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
   compactText,
+  formatJobBudget,
   formatClientJobsPostedText,
   formatClientRatingText,
   formatJobPostTitle,
   formatRelativeMarketplaceDate,
   formatServiceJobsDoneText,
   formatServicePostTitle,
+  formatServiceRate,
   formatServiceRatingText,
   getPublicProfileAvatarUrl,
   getMarketplaceLocation,
@@ -66,11 +68,6 @@ type HomeFeedItem = HomeJobFeedItem | HomeWorkerFeedItem;
 
 const HOME_FEED_LIMIT = 30;
 
-function formatBudgetText(amount: number | null) {
-  if (!amount) return 'Budget to coordinate';
-  return `PHP ${amount.toLocaleString('en-PH')}`;
-}
-
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
   const category = compactText(job.category) || 'Job';
   const serviceNeeded = compactText(job.serviceNeeded);
@@ -84,7 +81,7 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
     name: posterName,
     label: 'Posted a job',
     postedAt: formatRelativeMarketplaceDate(job.createdAt).replace(/^Posted /, ''),
-    detailLine: `${formatBudgetText(job.budgetAmount)} - ${schedule}`,
+    detailLine: `${formatJobBudget(job)} - ${schedule}`,
     title: formatJobPostTitle({
       title: job.title,
       serviceNeeded: displayServiceNeeded || job.serviceNeeded,
@@ -123,7 +120,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
     name: providerName,
     label: 'Posted a service',
     postedAt: formatRelativeMarketplaceDate(service.createdAt).replace(/^Posted /, ''),
-    detailLine: `${compactText(service.rateText) || 'Rate to coordinate'} - ${availability}`,
+    detailLine: `${formatServiceRate(service)} - ${availability}`,
     title: formatServicePostTitle({
       title: serviceTitle,
       category: service.category,

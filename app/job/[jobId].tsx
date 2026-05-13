@@ -15,11 +15,14 @@ import { getJobDetail } from '@/services/job.service';
 import {
   formatClientJobsPostedText,
   formatClientRatingText,
+  formatJobBudget,
+  getExperienceLabel,
   getMarketplaceLocation,
 } from '@/services/marketplace.helpers';
 import {
   getCompletionModeForError,
   getCompletionTitleForMode,
+  getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import type { JobDetail } from '@/types/marketplace.types';
@@ -162,7 +165,7 @@ export default function JobDetailScreen() {
       if (result.error || !result.data) {
         if (isProfileCompletionRequiredError(result.error)) {
           const mode = getCompletionModeForError(result.error) ?? 'work';
-          Alert.alert(getCompletionTitleForMode(mode), result.error ?? 'Complete your profile first.', [
+          Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
             { text: 'Later', style: 'cancel' },
             {
               text: 'Complete profile',
@@ -232,7 +235,7 @@ export default function JobDetailScreen() {
               />
               <MetaRow
                 icon="local-offer"
-                text={job.budgetAmount ? formatBudget(job.budgetAmount) : 'Budget to coordinate'}
+                text={formatJobBudget(job)}
                 tint="primary"
               />
             </View>
@@ -246,6 +249,8 @@ export default function JobDetailScreen() {
                 { label: 'Workers needed', value: String(workersNeeded) },
                 { label: 'Worker hired', value: acceptedCount ? 'Yes' : 'No worker hired yet' },
                 { label: 'Service', value: displayServiceNeeded || job.category || 'Service to coordinate' },
+                { label: 'Experience', value: getExperienceLabel(job.experienceLevel) },
+                { label: 'Certification', value: job.certificationRequired ? 'Preferred' : 'Not required' },
               ]}
             />
           </View>
@@ -413,10 +418,6 @@ function JobDetailSkeleton() {
       </View>
     </SafeAreaView>
   );
-}
-
-function formatBudget(value: number) {
-  return `PHP ${value.toLocaleString('en-PH')}`;
 }
 
 function formatDate(value: string) {

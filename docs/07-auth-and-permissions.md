@@ -55,7 +55,7 @@ Current duplicate-email protection:
 - Screens must use an auth/session hook or service, not direct auth logic in every screen.
 - The global splash should appear only for initial app boot/font/session hydration. Auth and onboarding transitions should keep the current screen visible while status reloads, then route when settled.
 - App data must be protected with PostgreSQL Row Level Security.
-- Authentication alone does not grant full marketplace interaction. Barangay verification is required first, and public role-profile completion is required before posting or messaging.
+- Authentication alone does not grant full marketplace interaction. Barangay verification is required first, and public role-profile completion is required before posting, messaging, hiring, applying/expressing interest, or reviewing.
 
 ## Unverified Viewer Mode
 
@@ -110,9 +110,15 @@ Barangay verification proves the account belongs to a real resident. Public prof
 
 Completion layers:
 
-- Core Profile: public name, barangay/city, intro, and availability.
-- Work Profile: worker headline, bio, offered services, service area, availability, and optional rate note.
-- Hiring Profile: client headline, bio, needed services, preferred schedule, and optional budget preference.
+- Core Profile: public name, preferred contact method, barangay/city, approximate address, private house number or block/lot for admin/private coordination, intro, and availability.
+- Work Profile: worker headline, bio, official taxonomy services, separate custom "Others / Specify" services, service area, availability, rate range/type, and optional rate note.
+- Hiring Profile: client headline, bio, official taxonomy services needed, separate custom "Others / Specify" services, preferred schedule, and optional budget preference.
+
+Verified/setup state:
+
+- `Unverified`: may browse public content but cannot interact.
+- `Verified · Setup incomplete`: still shows verified identity status and may browse public content, but gated actions route to Complete Profile.
+- `Ready`: verified plus the relevant Work or Hiring Profile is complete for the attempted action.
 
 Action gates:
 
@@ -121,6 +127,8 @@ Action gates:
 - Publishing services requires barangay verification plus a completed Work Profile.
 - Messaging clients about jobs requires barangay verification plus a completed Work Profile.
 - Sending messages in an existing conversation checks the sender's role in that conversation and applies the matching Work/Hiring Profile gate.
+- Marking a worker hired requires the client to remain verified and Hiring Profile complete.
+- Leaving a review requires verification, relevant role setup, and a completed/confirmed job relationship.
 
 Private verification files, ID uploads, selfie files, certificates, and admin notes must not be copied into public profile fields or used as public profile photos. A public profile photo is recommended, but not required for this MVP gate.
 
@@ -188,7 +196,7 @@ These role permissions apply after the user's barangay verification is approved 
 Public-safe provider fields:
 
 - Display name.
-- Barangay/city level location.
+- Approximate location such as barangay, purok/sitio, or street.
 - Public profile headline and bio.
 - Offered or needed service categories.
 - Service area and preferred schedule text.
@@ -201,13 +209,21 @@ Public-safe provider fields:
 Private or restricted fields:
 
 - Birthdate.
-- Full street address.
+- Full street address, house number, and block/lot.
 - Phone number, unless user chooses to expose it or after accepted job contact flow.
 - ID files.
 - Certificate file URLs.
 - Admin notes.
 - Report details.
 - Raw auth metadata.
+- Private job location notes or meetup/address instructions.
+
+Discovery privacy rules:
+
+- General Home, Search, browsing, and message/apply discovery hide the current user's own public jobs/services.
+- Owner surfaces such as My Posts, Manage Posts, and Profile activity still show the user's own content.
+- Public job/service cards and details must use shared rate-range formatting and approximate location only.
+- Custom "Others / Specify" services are stored separately from official taxonomy values and can be marked for barangay/admin review so taxonomy filters continue to work.
 
 ## Row Level Security Direction
 

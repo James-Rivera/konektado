@@ -8,13 +8,22 @@ export type JobStatus =
 
 export type ConversationStatus = 'active' | 'hired' | 'declined' | 'archived' | 'reported';
 
+export type RateType = 'hourly' | 'daily' | 'per_project' | 'negotiable';
+
+export type ExperienceLevel = 'any' | 'beginner' | 'intermediate' | 'experienced';
+
+export type CustomServiceReviewStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 export type PublicProfileSummary = {
   id: string;
   fullName: string;
   firstName: string | null;
   lastName: string | null;
   barangay: string | null;
+  purokSitio: string | null;
+  street: string | null;
   city: string | null;
+  approximateLocation: string | null;
   about: string | null;
   avatarUrl: string | null;
   availability: string | null;
@@ -34,8 +43,14 @@ export type JobSummary = {
   barangay: string | null;
   locationText: string | null;
   budgetAmount: number | null;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  rateType: RateType;
   workersNeeded: number | null;
   scheduleText: string | null;
+  experienceLevel: ExperienceLevel;
+  certificationRequired: boolean;
+  certificationNote: string | null;
   status: JobStatus;
   acceptedProviderId: string | null;
   allowMessages: boolean;
@@ -62,9 +77,16 @@ export type CreateJobInput = {
   photoUrls?: string[];
   barangay?: string | null;
   locationText?: string | null;
+  privateLocationNotes?: string | null;
   budgetAmount?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  rateType?: RateType;
   workersNeeded?: number | null;
   scheduleText?: string | null;
+  experienceLevel?: ExperienceLevel;
+  certificationRequired?: boolean;
+  certificationNote?: string | null;
   allowMessages?: boolean;
   autoReplyEnabled?: boolean;
   autoCloseEnabled?: boolean;
@@ -82,8 +104,15 @@ export type JobDraftSummary = {
   barangay: string | null;
   locationText: string | null;
   budgetAmount: number | null;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  rateType: RateType;
+  privateLocationNotes: string | null;
   workersNeeded: number | null;
   scheduleText: string | null;
+  experienceLevel: ExperienceLevel;
+  certificationRequired: boolean;
+  certificationNote: string | null;
   allowMessages: boolean;
   autoReplyEnabled: boolean;
   autoCloseEnabled: boolean;
@@ -101,8 +130,15 @@ export type UpsertJobDraftInput = {
   barangay?: string | null;
   locationText?: string | null;
   budgetAmount?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  rateType?: RateType;
+  privateLocationNotes?: string | null;
   workersNeeded?: number | null;
   scheduleText?: string | null;
+  experienceLevel?: ExperienceLevel;
+  certificationRequired?: boolean;
+  certificationNote?: string | null;
   allowMessages?: boolean;
   autoReplyEnabled?: boolean;
   autoCloseEnabled?: boolean;
@@ -114,6 +150,14 @@ export type JobSearchFilters = {
   serviceNeeded?: string;
   serviceNeededIn?: string[];
   barangay?: string;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  rateType?: RateType | 'any';
+  experienceLevel?: ExperienceLevel | 'all';
+  certificationRequired?: boolean;
+  verifiedOnly?: boolean;
+  excludeUserId?: string | null;
+  excludeCurrentUser?: boolean;
   limit?: number;
 };
 
@@ -122,6 +166,14 @@ export type ServiceSearchFilters = {
   category?: string;
   categories?: string[];
   barangay?: string;
+  rateMin?: number | null;
+  rateMax?: number | null;
+  rateType?: RateType | 'any';
+  experienceLevel?: ExperienceLevel | 'all';
+  certificationAvailable?: boolean;
+  verifiedOnly?: boolean;
+  excludeUserId?: string | null;
+  excludeCurrentUser?: boolean;
   limit?: number;
 };
 
@@ -136,6 +188,14 @@ export type ProviderService = {
   yearsExperience: number | null;
   availabilityText: string | null;
   rateText: string | null;
+  rateMin: number | null;
+  rateMax: number | null;
+  rateType: RateType;
+  experienceLevel: ExperienceLevel;
+  certificationAvailable: boolean;
+  certificationNote: string | null;
+  customCategory: string | null;
+  customCategoryReviewStatus: CustomServiceReviewStatus;
   barangay: string | null;
   locationText: string | null;
   allowMessages: boolean;
@@ -166,6 +226,13 @@ export type CreateServiceInput = {
   yearsExperience?: number | null;
   availabilityText?: string | null;
   rateText?: string | null;
+  rateMin?: number | null;
+  rateMax?: number | null;
+  rateType?: RateType;
+  experienceLevel?: ExperienceLevel;
+  certificationAvailable?: boolean;
+  certificationNote?: string | null;
+  customCategory?: string | null;
   barangay?: string | null;
   locationText?: string | null;
   allowMessages?: boolean;

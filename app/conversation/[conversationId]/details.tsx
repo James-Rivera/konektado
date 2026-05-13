@@ -17,7 +17,9 @@ import {
   reportConversation,
 } from '@/services/conversation.service';
 import {
+  formatJobBudget,
   formatJobPostTitle,
+  formatServiceRate,
   formatServicePostTitle,
   getMarketplaceLocation,
   isPresenceActive,
@@ -375,7 +377,7 @@ function DetailsSkeleton() {
 
 function getContextSummary(conversation: ConversationDetail) {
   if (conversation.job) {
-    const budget = conversation.job.budgetAmount ? `PHP ${conversation.job.budgetAmount}` : 'Budget to coordinate';
+    const budget = formatJobBudget(conversation.job);
     return {
       title: formatJobPostTitle({
         title: conversation.job.title,
@@ -393,7 +395,7 @@ function getContextSummary(conversation: ConversationDetail) {
         category: conversation.service.category,
         cue: conversation.service.isActive ? 'availableFor' : 'offers',
       }),
-      subtitle: `Service by ${conversation.provider?.fullName ?? 'Konektado resident'} - ${getMarketplaceLocation(conversation.service)} - ${conversation.service.rateText ?? 'Rate to coordinate'}`,
+      subtitle: `Service by ${conversation.provider?.fullName ?? 'Konektado resident'} - ${getMarketplaceLocation(conversation.service)} - ${formatServiceRate(conversation.service)}`,
     };
   }
 
@@ -406,7 +408,7 @@ function getContextSummary(conversation: ConversationDetail) {
 function getDetailMetrics(conversation: ConversationDetail) {
   if (conversation.job) {
     return [
-      { label: 'Budget', value: conversation.job.budgetAmount ? `PHP ${conversation.job.budgetAmount}` : 'To coordinate' },
+      { label: 'Budget', value: formatJobBudget(conversation.job) },
       { label: 'Location', value: getMarketplaceLocation(conversation.job) },
       { label: 'Schedule', value: conversation.job.scheduleText ?? 'Not yet agreed' },
       { label: 'Job Status', value: formatStatus(conversation.status) },
@@ -415,7 +417,7 @@ function getDetailMetrics(conversation: ConversationDetail) {
 
   if (conversation.service) {
     return [
-      { label: 'Rate', value: conversation.service.rateText ?? 'To coordinate' },
+      { label: 'Rate', value: formatServiceRate(conversation.service) },
       { label: 'Location', value: getMarketplaceLocation(conversation.service) },
       { label: 'Availability', value: conversation.service.availabilityText ?? 'To coordinate' },
       { label: 'Status', value: formatStatus(conversation.status) },

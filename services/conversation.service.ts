@@ -26,9 +26,9 @@ const CONVERSATION_COLUMNS =
   'id, job_id, service_id, client_id, provider_id, started_by, status, hired_at, created_at, updated_at';
 const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, created_at';
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, workers_needed, schedule_text, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 const SERVICE_COLUMNS =
-  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
+  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 
 type ConversationRow = {
   id: string;
@@ -130,7 +130,10 @@ function mapInboxProfile(
     firstName: row[`${role}_first_name`],
     lastName: row[`${role}_last_name`],
     barangay: row[`${role}_barangay`],
+    purokSitio: null,
+    street: null,
     city: row[`${role}_city`],
+    approximateLocation: [row[`${role}_barangay`], row[`${role}_city`]].filter(Boolean).join(', ') || null,
     about: row[`${role}_about`],
     avatarUrl: row[`${role}_avatar_url`],
     availability: row[`${role}_availability`],
@@ -154,8 +157,14 @@ function mapInboxJob(row: ConversationInboxRow): JobSummary | null {
     barangay: null,
     locationText: null,
     budgetAmount: null,
+    budgetMin: null,
+    budgetMax: null,
+    rateType: 'negotiable',
     workersNeeded: null,
     scheduleText: null,
+    experienceLevel: 'any',
+    certificationRequired: false,
+    certificationNote: null,
     status: 'open',
     acceptedProviderId: null,
     allowMessages: true,
@@ -184,6 +193,14 @@ function mapInboxService(row: ConversationInboxRow): ProviderService | null {
     yearsExperience: null,
     availabilityText: null,
     rateText: null,
+    rateMin: null,
+    rateMax: null,
+    rateType: 'negotiable',
+    experienceLevel: 'any',
+    certificationAvailable: false,
+    certificationNote: null,
+    customCategory: null,
+    customCategoryReviewStatus: 'none',
     barangay: null,
     locationText: null,
     allowMessages: true,
@@ -602,7 +619,7 @@ export async function markWorkerHired({
 }: {
   conversationId: string;
 }): Promise<ServiceResult<ConversationDetail>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('client');
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 

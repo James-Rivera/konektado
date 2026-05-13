@@ -15,8 +15,13 @@ export type ProfileRecord = {
   last_name: string | null;
   birthdate: string | null;
   barangay: string | null;
+  purok_sitio: string | null;
+  street: string | null;
+  block_lot: string | null;
+  house_number: string | null;
   street_address: string | null;
   city: string | null;
+  preferred_contact_method: string | null;
   service_type: string | null;
   has_certifications: boolean | null;
   certification_status: string | null;
@@ -100,7 +105,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           const { data, error: profileError } = await supabase
             .from('profiles')
             .select(
-              'id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, street_address, city, phone, about, avatar_url, availability, verified_at, barangay_verified_at',
+              'id, email, role, active_role, full_name, first_name, last_name, birthdate, barangay, purok_sitio, street, block_lot, house_number, street_address, city, preferred_contact_method, phone, about, avatar_url, availability, verified_at, barangay_verified_at',
             )
             .eq('id', userResult.user.id)
             .maybeSingle();

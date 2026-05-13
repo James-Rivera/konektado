@@ -1,12 +1,21 @@
+import type { RateType } from '@/types/marketplace.types';
+
 export type ProfileCompletionMode = 'core' | 'work' | 'hiring';
 
 export type ProfileActionRole = 'provider' | 'client';
+
+export type MarketplaceSetupState = 'unverified' | 'verified_setup_incomplete' | 'ready';
 
 export type CoreProfileInput = {
   firstName: string;
   lastName: string;
   barangay: string;
+  purokSitio: string;
+  street: string;
+  blockLot: string;
+  houseNumber: string;
   city: string;
+  preferredContactMethod: string;
   about: string;
   availability: string;
 };
@@ -18,12 +27,17 @@ export type WorkProfileInput = {
   serviceArea: string;
   availability: string;
   rateText: string;
+  rateMin: string;
+  rateMax: string;
+  rateType: RateType;
+  customOfferedServices: string[];
 };
 
 export type HiringProfileInput = {
   headline: string;
   bio: string;
   neededServices: string[];
+  customNeededServices: string[];
   preferredSchedule: string;
   budgetPreference: string;
 };
@@ -34,6 +48,7 @@ export type ProfileCompletionStatus = {
   coreComplete: boolean;
   workComplete: boolean;
   hiringComplete: boolean;
+  marketplaceSetupState: MarketplaceSetupState;
   photoRecommended: boolean;
   missingCore: string[];
   missingWork: string[];

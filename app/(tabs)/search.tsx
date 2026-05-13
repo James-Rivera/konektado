@@ -39,6 +39,7 @@ import {
   formatClientRatingText,
   formatJobPostTitle,
   formatRelativeMarketplaceDate,
+  formatServiceRate,
   formatServiceJobsDoneText,
   formatServicePostTitle,
   formatServiceRatingText,
@@ -189,6 +190,7 @@ export default function SearchScreen() {
     const structuredServices = getStructuredServiceFilterValues(appliedFilters);
     const barangayFilter =
       appliedFilters.locationScope === 'same_barangay' ? profile?.barangay ?? undefined : undefined;
+    const rateBounds = getRateBounds(appliedFilters.rateRange);
 
     setRefreshingModes((current) => ({ ...current, [mode]: true }));
 
@@ -203,6 +205,12 @@ export default function SearchScreen() {
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
+            budgetMin: rateBounds.min,
+            budgetMax: rateBounds.max,
+            experienceLevel: appliedFilters.experienceLevel,
+            certificationRequired:
+              appliedFilters.certification === 'required_or_available' ? true : undefined,
+            verifiedOnly: appliedFilters.verifiedOnly,
             limit: SEARCH_LIMIT,
           }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
@@ -217,6 +225,12 @@ export default function SearchScreen() {
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
+            rateMin: rateBounds.min,
+            rateMax: rateBounds.max,
+            experienceLevel: appliedFilters.experienceLevel,
+            certificationAvailable:
+              appliedFilters.certification === 'required_or_available' ? true : undefined,
+            verifiedOnly: appliedFilters.verifiedOnly,
             limit: SEARCH_LIMIT,
           }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
@@ -456,7 +470,7 @@ export default function SearchScreen() {
         }
 
         if (key === 'service' && value !== 'all') {
-          next.serviceGroup = getDiscoveryGroupForService(value) ?? current.serviceGroup;
+          next.serviceGroup = getDiscoveryGroupForService(value as MvpServiceOption) ?? current.serviceGroup;
         }
 
         return next;
@@ -694,6 +708,10 @@ function buildDefaultFilters(): SearchDiscoveryFilters {
     serviceGroup: 'all',
     service: 'all',
     locationScope: 'nearby',
+    rateRange: 'any',
+    experienceLevel: 'all',
+    certification: 'any',
+    verifiedOnly: false,
     sort: 'relevant',
   };
 }
@@ -725,6 +743,13 @@ function getStructuredServiceFilterValues(filters: SearchDiscoveryFilters) {
   }
 
   return getServicesForDiscoveryGroupAndWorkType(filters.serviceGroup, filters.workType);
+}
+
+function getRateBounds(rateRange: SearchDiscoveryFilters['rateRange']) {
+  if (rateRange === 'under_500') return { min: null, max: 500 };
+  if (rateRange === '500_1000') return { min: 500, max: 1000 };
+  if (rateRange === '1000_plus') return { min: 1000, max: null };
+  return { min: null, max: null };
 }
 
 function prioritizeSelectedService(
@@ -1011,7 +1036,7 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
     name: service.provider?.fullName || 'Konektado resident',
     avatarUrl: getPublicProfileAvatarUrl(service.provider),
     statusLine: formatWorkerAvailability(service.availabilityText),
-    rateLine: service.rateText || 'Rate to coordinate',
+    rateLine: formatServiceRate(service),
     headline: formatServicePostTitle({
       title: headlineTitle,
       category,

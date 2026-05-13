@@ -9,7 +9,10 @@ import {
     OnboardingTextInput,
     onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
-import { MVP_SERVICE_OPTIONS } from '@/constants/service-taxonomy';
+import {
+  MVP_SERVICE_CATEGORIES,
+  MVP_SERVICES_BY_CATEGORY,
+} from '@/constants/service-taxonomy';
 
 import { useOnboarding } from './onboarding-context';
 
@@ -138,23 +141,28 @@ function ServiceSection({
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.chipContainer}>
-        {MVP_SERVICE_OPTIONS.map((service) => {
-          const isSelected = selected.includes(service);
-          return (
-            <Pressable
-              key={service}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              onPress={() => onToggle(service)}
-              style={[styles.chip, isSelected ? styles.chipSelected : undefined]}>
-              <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : undefined]}>
-                {service}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {MVP_SERVICE_CATEGORIES.map((category) => (
+        <View key={category} style={styles.categoryBlock}>
+          <Text style={styles.categoryTitle}>{category}</Text>
+          <View style={styles.chipContainer}>
+            {MVP_SERVICES_BY_CATEGORY[category].map((service) => {
+              const isSelected = selected.includes(service);
+              return (
+                <Pressable
+                  key={service}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => onToggle(service)}
+                  style={[styles.chip, isSelected ? styles.chipSelected : undefined]}>
+                  <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : undefined]}>
+                    {service}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
 
       <OnboardingTextInput
         onChangeText={onCustomChange}
@@ -178,6 +186,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 15,
     lineHeight: 20,
+  },
+  categoryBlock: {
+    gap: 8,
+  },
+  categoryTitle: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
   },
   chipContainer: {
     flexDirection: 'row',

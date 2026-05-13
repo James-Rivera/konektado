@@ -15,22 +15,43 @@ import { useOnboarding } from './onboarding-context';
 export default function LocationStep() {
   const router = useRouter();
   const { draft, role, updateDraft } = useOnboarding();
-  const [street, setStreet] = useState(draft.streetAddress);
+  const [purokSitio, setPurokSitio] = useState(draft.purokSitio);
+  const [street, setStreet] = useState(draft.street);
+  const [blockLot, setBlockLot] = useState(draft.blockLot);
+  const [houseNumber, setHouseNumber] = useState(draft.houseNumber);
+  const [preferredContactMethod, setPreferredContactMethod] = useState(
+    draft.preferredContactMethod || 'app_message',
+  );
   const [city, setCity] = useState(draft.city);
   const [barangay, setBarangay] = useState(draft.barangay);
 
   const next = () => {
-    if (!city.trim() || !barangay.trim()) {
-      Alert.alert('Add your address', 'City and barangay are required.');
+    if (!city.trim() || !barangay.trim() || !street.trim()) {
+      Alert.alert('Add your address', 'City, barangay, and street are required.');
       return;
     }
 
-    const needsTasteSetup = role === 'provider' || role === 'client' || role === 'both';
+    if (!blockLot.trim() && !houseNumber.trim()) {
+      Alert.alert('Add your address', 'Block/lot or house number is needed for verification review.');
+      return;
+    }
+
+    const privateAddress = [houseNumber, blockLot, street, purokSitio, barangay, city]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(', ');
+
+    const needsTasteSetup = role === 'provider' || role === 'client';
 
     updateDraft({
       barangay: barangay.trim(),
       city: city.trim(),
-      streetAddress: street,
+      streetAddress: privateAddress,
+      purokSitio: purokSitio.trim(),
+      street: street.trim(),
+      blockLot: blockLot.trim(),
+      houseNumber: houseNumber.trim(),
+      preferredContactMethod: preferredContactMethod.trim() || 'app_message',
       certificationDetails: '',
       hasCertifications: null,
       serviceType: '',
@@ -48,17 +69,21 @@ export default function LocationStep() {
       <OnboardingFormScaffold
         currentStep={3}
         footer={<OnboardingButton label="Next" onPress={next} />}
-        helper="Please input your address"
+        helper="Only your approximate location is shown publicly. House number and block/lot stay private."
         onBack={() => router.back()}
         title="Add your address">
         <ReadonlyField label="Province" value="Batangas" />
         <OnboardingTextInput autoCapitalize="words" onChangeText={setCity} placeholder="City" value={city} />
         <OnboardingTextInput autoCapitalize="words" onChangeText={setBarangay} placeholder="Barangay" value={barangay} />
+        <OnboardingTextInput autoCapitalize="words" onChangeText={setPurokSitio} placeholder="Purok/Sitio" value={purokSitio} />
+        <OnboardingTextInput autoCapitalize="words" onChangeText={setStreet} placeholder="Street" value={street} />
+        <OnboardingTextInput autoCapitalize="words" onChangeText={setBlockLot} placeholder="Block/Lot" value={blockLot} />
+        <OnboardingTextInput autoCapitalize="words" onChangeText={setHouseNumber} placeholder="House number" value={houseNumber} />
         <OnboardingTextInput
-          autoCapitalize="words"
-          onChangeText={setStreet}
-          placeholder="Address line"
-          value={street}
+          autoCapitalize="none"
+          onChangeText={setPreferredContactMethod}
+          placeholder="Preferred contact method"
+          value={preferredContactMethod}
         />
       </OnboardingFormScaffold>
     </>

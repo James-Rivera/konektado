@@ -1,9 +1,10 @@
 import type { ServiceResult } from '@/services/auth.service';
 import {
   compactText,
+  getCurrentUserId,
   loadPublicProfiles,
-  requireVerifiedUser,
 } from '@/services/marketplace.helpers';
+import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import type { CreateReviewInput, Review } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -38,9 +39,6 @@ async function mapReviewRows(rows: ReviewRow[]): Promise<Review[]> {
 }
 
 export async function createReview(input: CreateReviewInput): Promise<ServiceResult<Review>> {
-  const user = await requireVerifiedUser();
-  if (user.error) return user;
-
   if (!input.jobId || !input.revieweeId) {
     return { data: null, error: 'Choose a completed job and profile to review.' };
   }
@@ -48,6 +46,39 @@ export async function createReview(input: CreateReviewInput): Promise<ServiceRes
   if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
     return { data: null, error: 'Choose a rating from 1 to 5.' };
   }
+
+  const currentUser = await getCurrentUserId();
+  if (currentUser.error) return currentUser;
+  if (!currentUser.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const { data: job, error: jobError } = await supabase
+    .from('jobs')
+    .select('owner_id, client_id, accepted_provider_id, status')
+    .eq('id', input.jobId)
+    .maybeSingle<{
+      owner_id: string;
+      client_id: string | null;
+      accepted_provider_id: string | null;
+      status: string;
+    }>();
+
+  if (jobError) return { data: null, error: jobError.message };
+  if (!job) return { data: null, error: 'Choose a completed job and profile to review.' };
+
+  const clientId = job.client_id ?? job.owner_id;
+  const reviewerRole =
+    currentUser.data === clientId
+      ? 'client'
+      : currentUser.data === job.accepted_provider_id
+        ? 'provider'
+        : null;
+
+  if (!reviewerRole || job.status !== 'completed') {
+    return { data: null, error: 'Reviews are available only after a confirmed completed interaction.' };
+  }
+
+  const user = await requireVerifiedCompleteProfile(reviewerRole);
+  if (user.error) return user;
 
   const { data, error } = await supabase
     .from('reviews')

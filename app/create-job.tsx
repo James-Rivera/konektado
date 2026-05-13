@@ -32,9 +32,28 @@ import { useProfile } from '@/hooks/use-profile';
 import { isPresenceActive } from '@/services/marketplace.helpers';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { type JobPhotoAsset, uploadJobPhotos } from '@/services/job-photo.service';
-import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.types';
+import type {
+  ExperienceLevel,
+  JobDraftSummary,
+  RateType,
+  UpsertJobDraftInput,
+} from '@/types/marketplace.types';
 
 const MAX_JOB_PHOTOS = 10;
+
+const RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
+  { value: 'per_project', label: 'Per project' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'negotiable', label: 'Negotiable' },
+];
+
+const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
+  { value: 'any', label: 'Any level' },
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'experienced', label: 'Experienced' },
+];
 
 type JobDraft = {
   title: string;
@@ -45,9 +64,15 @@ type JobDraft = {
   photoUrls: string[];
   barangay: string;
   locationText: string;
-  budget: string;
+  privateLocationNotes: string;
+  budgetMin: string;
+  budgetMax: string;
+  rateType: RateType;
   workersNeeded: string;
   scheduleText: string;
+  experienceLevel: ExperienceLevel;
+  certificationRequired: boolean;
+  certificationNote: string;
   allowMessages: boolean;
   autoReplyEnabled: boolean;
   autoCloseEnabled: boolean;
@@ -94,8 +119,16 @@ function validateDraft(draft: JobDraft) {
   }
   if (!draft.locationText.trim()) errors.locationText = 'Choose a barangay.';
 
-  const budget = parsePositiveNumber(draft.budget);
-  if (Number.isNaN(budget)) errors.budget = 'Enter a valid budget or leave it blank.';
+  const budgetMin = parsePositiveNumber(draft.budgetMin);
+  const budgetMax = parsePositiveNumber(draft.budgetMax);
+  if (Number.isNaN(budgetMin)) errors.budgetMin = 'Enter a valid minimum budget or leave it blank.';
+  if (Number.isNaN(budgetMax)) errors.budgetMax = 'Enter a valid maximum budget or leave it blank.';
+  if (budgetMin !== null && budgetMax !== null && !Number.isNaN(budgetMin) && !Number.isNaN(budgetMax) && budgetMin > budgetMax) {
+    errors.budgetMax = 'Maximum budget must be at least the minimum.';
+  }
+  if (draft.rateType !== 'negotiable' && budgetMin === null && budgetMax === null) {
+    errors.budgetMin = 'Add a budget range or choose negotiable.';
+  }
 
   const workersNeeded = parsePositiveNumber(draft.workersNeeded);
   if (Number.isNaN(workersNeeded)) {
@@ -111,7 +144,8 @@ function getParamValue(value: string | string[] | undefined) {
 }
 
 function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
-  const budgetAmount = parsePositiveNumber(draft.budget);
+  const budgetMin = parsePositiveNumber(draft.budgetMin);
+  const budgetMax = parsePositiveNumber(draft.budgetMax);
   const workersNeeded = parsePositiveNumber(draft.workersNeeded);
 
   return {
@@ -123,9 +157,15 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
     photoUrls: draft.photoUrls,
     barangay: draft.barangay,
     locationText: draft.locationText,
-    budgetAmount: Number.isNaN(budgetAmount) ? null : budgetAmount,
+    privateLocationNotes: draft.privateLocationNotes,
+    budgetMin: Number.isNaN(budgetMin) ? null : budgetMin,
+    budgetMax: Number.isNaN(budgetMax) ? null : budgetMax,
+    rateType: draft.rateType,
     workersNeeded: Number.isNaN(workersNeeded) ? null : workersNeeded,
     scheduleText: draft.scheduleText,
+    experienceLevel: draft.experienceLevel,
+    certificationRequired: draft.certificationRequired,
+    certificationNote: draft.certificationNote,
     allowMessages: draft.allowMessages,
     autoReplyEnabled: draft.autoReplyEnabled,
     autoCloseEnabled: draft.autoCloseEnabled,
@@ -144,9 +184,15 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
     photoUrls: record.photoUrls ?? [],
     barangay: record.barangay ?? '',
     locationText: record.locationText ?? '',
-    budget: record.budgetAmount ? String(record.budgetAmount) : '',
+    privateLocationNotes: record.privateLocationNotes ?? '',
+    budgetMin: record.budgetMin ? String(record.budgetMin) : '',
+    budgetMax: record.budgetMax ? String(record.budgetMax) : '',
+    rateType: record.rateType,
     workersNeeded: record.workersNeeded ? String(record.workersNeeded) : '',
     scheduleText: record.scheduleText ?? '',
+    experienceLevel: record.experienceLevel,
+    certificationRequired: record.certificationRequired,
+    certificationNote: record.certificationNote ?? '',
     allowMessages: record.allowMessages,
     autoReplyEnabled: record.autoReplyEnabled,
     autoCloseEnabled: record.autoCloseEnabled,
@@ -179,9 +225,15 @@ export default function CreateJobScreen() {
     photoUrls: [],
     barangay: '',
     locationText: '',
-    budget: '',
+    privateLocationNotes: '',
+    budgetMin: '',
+    budgetMax: '',
+    rateType: 'per_project',
     workersNeeded: '',
     scheduleText: '',
+    experienceLevel: 'any',
+    certificationRequired: false,
+    certificationNote: '',
     allowMessages: true,
     autoReplyEnabled: false,
     autoCloseEnabled: false,
@@ -536,13 +588,30 @@ export default function CreateJobScreen() {
             />
             <View style={styles.twoColumn}>
               <FormInput
-                error={errors.budget}
+                error={errors.budgetMin}
                 keyboardType="numeric"
-                onChangeText={(value) => updateDraft('budget', value)}
-                placeholder="Budget"
+                onChangeText={(value) => updateDraft('budgetMin', value)}
+                placeholder="Min budget"
                 style={styles.halfInput}
-                value={draft.budget}
+                value={draft.budgetMin}
               />
+              <FormInput
+                error={errors.budgetMax}
+                keyboardType="numeric"
+                onChangeText={(value) => updateDraft('budgetMax', value)}
+                placeholder="Max budget"
+                style={styles.halfInput}
+                value={draft.budgetMax}
+              />
+            </View>
+            <ChipWrap
+              items={RATE_TYPE_OPTIONS.map((option) => option.label)}
+              selected={[RATE_TYPE_OPTIONS.find((option) => option.value === draft.rateType)?.label ?? 'Per project']}
+              onPress={(label) =>
+                updateDraft('rateType', RATE_TYPE_OPTIONS.find((option) => option.label === label)?.value ?? 'per_project')
+              }
+            />
+            <View style={styles.twoColumn}>
               <FormInput
                 error={errors.workersNeeded}
                 keyboardType="numeric"
@@ -552,11 +621,32 @@ export default function CreateJobScreen() {
                 value={draft.workersNeeded}
               />
             </View>
+            <Text style={styles.smallHelper}>Preferred experience</Text>
+            <ChipWrap
+              items={EXPERIENCE_OPTIONS.map((option) => option.label)}
+              selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
+              onPress={(label) =>
+                updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
+              }
+            />
             <FormInput
               onChangeText={(value) => updateDraft('scheduleText', value)}
-              placeholder="Start time"
+              placeholder="Preferred schedule"
               value={draft.scheduleText}
             />
+            <ToggleRow
+              description="Show that a certificate is preferred or required for this job."
+              label="Certification preferred"
+              onValueChange={(value) => updateDraft('certificationRequired', value)}
+              value={draft.certificationRequired}
+            />
+            {draft.certificationRequired ? (
+              <FormInput
+                onChangeText={(value) => updateDraft('certificationNote', value)}
+                placeholder="Certification note"
+                value={draft.certificationNote}
+              />
+            ) : null}
             <FormInput
               error={errors.description}
               multiline
@@ -592,6 +682,12 @@ export default function CreateJobScreen() {
               <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
             </Pressable>
             <FieldError message={errors.locationText} />
+            <FormInput
+              multiline
+              onChangeText={(value) => updateDraft('privateLocationNotes', value)}
+              placeholder="Private address notes for accepted worker"
+              value={draft.privateLocationNotes}
+            />
             <LocationMapPreview />
           </View>
 

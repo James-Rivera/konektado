@@ -19,18 +19,46 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { isPresenceActive } from '@/services/marketplace.helpers';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
+import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 
 const MAX_SERVICE_PHOTOS = 10;
+
+const RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
+  { value: 'per_project', label: 'Per project' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'negotiable', label: 'Negotiable' },
+];
+
+const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
+  { value: 'any', label: 'Any level' },
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'experienced', label: 'Experienced' },
+];
+
+function parsePositiveNumber(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value.replace(/,/g, ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
 
 export default function CreateServiceScreen() {
   const router = useRouter();
   const { profile } = useProfile();
   const [category, setCategory] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [availability, setAvailability] = useState('');
   const [rate, setRate] = useState('');
+  const [rateMin, setRateMin] = useState('');
+  const [rateMax, setRateMax] = useState('');
+  const [rateType, setRateType] = useState<RateType>('per_project');
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('any');
+  const [certificationAvailable, setCertificationAvailable] = useState(false);
+  const [certificationNote, setCertificationNote] = useState('');
   const [allowMessages, setAllowMessages] = useState(true);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [autoPauseEnabled, setAutoPauseEnabled] = useState(false);
@@ -52,6 +80,7 @@ export default function CreateServiceScreen() {
 
   const selectCategory = (value: string) => {
     setCategory(value);
+    setCustomCategory('');
     setTags([]);
   };
 
@@ -72,12 +101,26 @@ export default function CreateServiceScreen() {
       Alert.alert('Choose a service', 'Pick one service category for this listing.');
       return;
     }
+    if (category === 'Other service' && !customCategory.trim()) {
+      Alert.alert('Specify service', 'Describe the service so barangay admins can review it.');
+      return;
+    }
     if (!title.trim()) {
       Alert.alert('Add a title', 'Enter a short title for this service listing.');
       return;
     }
     if (!description.trim()) {
       Alert.alert('Add service details', 'Describe what clients can expect from this service.');
+      return;
+    }
+    const parsedRateMin = parsePositiveNumber(rateMin);
+    const parsedRateMax = parsePositiveNumber(rateMax);
+    if (Number.isNaN(parsedRateMin) || Number.isNaN(parsedRateMax)) {
+      Alert.alert('Rate range', 'Enter a valid rate range or leave it blank.');
+      return;
+    }
+    if (parsedRateMin !== null && parsedRateMax !== null && parsedRateMin > parsedRateMax) {
+      Alert.alert('Rate range', 'Minimum rate must not be greater than maximum rate.');
       return;
     }
 
@@ -90,12 +133,19 @@ export default function CreateServiceScreen() {
           autoReplyEnabled,
           availability,
           category,
+          customCategory: customCategory.trim(),
           description,
           serviceGroup,
+          experienceLevel,
+          certificationAvailable,
+          certificationNote,
           tags,
           locationText,
           photoUrls,
           rate,
+          rateMin,
+          rateMax,
+          rateType,
           title,
         }),
       },
@@ -147,6 +197,26 @@ export default function CreateServiceScreen() {
             </Pressable>
             <Text style={styles.helperText}>One service per post. You can create another post for a different service.</Text>
             {serviceGroup ? <Text style={styles.helperText}>Category: {serviceGroup}</Text> : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => selectCategory('Other service')}
+              style={({ pressed }) => [
+                styles.chip,
+                category === 'Other service' && styles.chipActive,
+                pressed && styles.pressed,
+              ]}>
+              <Text style={[styles.chipText, category === 'Other service' && styles.chipTextActive]}>
+                Others / Specify
+              </Text>
+            </Pressable>
+            {category === 'Other service' ? (
+              <Field
+                label="Specify service"
+                onChangeText={setCustomCategory}
+                placeholder="Example: Bicycle repair"
+                value={customCategory}
+              />
+            ) : null}
           </View>
 
           <View style={styles.fieldGroup}>
@@ -255,7 +325,86 @@ export default function CreateServiceScreen() {
           placeholder="e.g. Weekends, afternoons"
           value={availability}
         />
-          <Field label="Rate" onChangeText={setRate} placeholder="e.g. Starts at PHP 500" value={rate} />
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Rate range</Text>
+            <View style={styles.twoColumn}>
+              <Field
+                compact
+                keyboardType="numeric"
+                label="Minimum"
+                onChangeText={setRateMin}
+                placeholder="500"
+                value={rateMin}
+              />
+              <Field
+                compact
+                keyboardType="numeric"
+                label="Maximum"
+                onChangeText={setRateMax}
+                placeholder="1000"
+                value={rateMax}
+              />
+            </View>
+            <View style={styles.chipWrap}>
+              {RATE_TYPE_OPTIONS.map((option) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: rateType === option.value }}
+                  key={option.value}
+                  onPress={() => setRateType(option.value)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    rateType === option.value && styles.chipActive,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text style={[styles.chipText, rateType === option.value && styles.chipTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Field
+              label="Rate note"
+              onChangeText={setRate}
+              placeholder="Optional note, e.g. supplies included"
+              value={rate}
+            />
+          </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Experience level</Text>
+            <View style={styles.chipWrap}>
+              {EXPERIENCE_OPTIONS.map((option) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: experienceLevel === option.value }}
+                  key={option.value}
+                  onPress={() => setExperienceLevel(option.value)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    experienceLevel === option.value && styles.chipActive,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text style={[styles.chipText, experienceLevel === option.value && styles.chipTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          <ToggleRow
+            description="Only safe certificate metadata is shown publicly. Uploaded documents stay private."
+            label="Certification available"
+            onValueChange={setCertificationAvailable}
+            value={certificationAvailable}
+          />
+          {certificationAvailable ? (
+            <Field
+              label="Certification note"
+              onChangeText={setCertificationNote}
+              placeholder="Example: TESDA certificate available for admin review"
+              value={certificationNote}
+            />
+          ) : null}
 
           <View style={styles.sectionBand}>
             <View style={styles.rowBetween}>
@@ -335,12 +484,16 @@ export default function CreateServiceScreen() {
 }
 
 function Field({
+  compact,
+  keyboardType,
   label,
   multiline,
   onChangeText,
   placeholder,
   value,
 }: {
+  compact?: boolean;
+  keyboardType?: 'default' | 'numeric';
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
@@ -348,14 +501,15 @@ function Field({
   value: string;
 }) {
   return (
-    <View style={styles.fieldGroup}>
+    <View style={[styles.fieldGroup, compact && styles.flex]}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        keyboardType={keyboardType}
         multiline={multiline}
         onChangeText={onChangeText}
         placeholderTextColor="#AFAFAF"
         placeholder={placeholder}
-        style={[styles.input, multiline && styles.multiline]}
+        style={[styles.input, compact && styles.compactInput, multiline && styles.multiline]}
         value={value}
       />
     </View>
@@ -526,6 +680,10 @@ const styles = StyleSheet.create({
     color: color.textMuted,
   },
   fieldGroup: {
+    gap: space.sm,
+  },
+  twoColumn: {
+    flexDirection: 'row',
     gap: space.sm,
   },
   label: {
@@ -711,6 +869,9 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: space.md,
     paddingVertical: space.md,
+  },
+  compactInput: {
+    minWidth: 0,
   },
   multiline: {
     minHeight: 100,

@@ -44,6 +44,10 @@ export const MVP_SERVICE_OPTIONS = MVP_SERVICE_CATEGORIES.flatMap(
 
 export type MvpServiceOption = (typeof MVP_SERVICE_OPTIONS)[number];
 
+export const OTHER_SERVICE_OPTION = 'Others / Specify' as const;
+
+export type ServiceSelectionValue = MvpServiceOption | typeof OTHER_SERVICE_OPTION;
+
 export type SearchWorkType = 'physical' | 'digital' | 'either';
 
 export const SEARCH_DISCOVERY_GROUPS = [
@@ -228,6 +232,12 @@ export function isMvpServiceOption(value: string | null | undefined): value is M
   return MVP_SERVICE_OPTIONS.includes(value as MvpServiceOption);
 }
 
+export function isOtherServiceOption(
+  value: string | null | undefined,
+): value is typeof OTHER_SERVICE_OPTION {
+  return value === OTHER_SERVICE_OPTION;
+}
+
 export function isDiscoveryGroupKey(value: string | null | undefined): value is DiscoveryGroupKey {
   return SEARCH_DISCOVERY_GROUPS.includes(value as DiscoveryGroupKey);
 }
@@ -240,6 +250,29 @@ export function getStoredMvpServiceOption(value: string | null | undefined): Mvp
   if (isMvpServiceOption(value)) return value;
 
   return NORMALIZED_MVP_SERVICE_LOOKUP.get(normalizeServiceLookupKey(value)) ?? null;
+}
+
+export function splitOfficialAndCustomServices(values: Array<string | null | undefined>) {
+  const official = new Set<MvpServiceOption>();
+  const custom = new Set<string>();
+
+  values.forEach((value) => {
+    const cleanValue = value?.trim();
+    if (!cleanValue || isOtherServiceOption(cleanValue)) return;
+
+    const storedValue = getStoredMvpServiceOption(cleanValue);
+    if (storedValue) {
+      official.add(storedValue);
+      return;
+    }
+
+    custom.add(cleanValue);
+  });
+
+  return {
+    official: [...official],
+    custom: [...custom],
+  };
 }
 
 export function getServiceSearchValues(value: string | null | undefined) {
