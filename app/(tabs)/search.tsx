@@ -207,6 +207,7 @@ export default function SearchScreen() {
             barangay: barangayFilter,
             budgetMin: rateBounds.min,
             budgetMax: rateBounds.max,
+            includeNegotiable: appliedFilters.includeNegotiable,
             experienceLevel: appliedFilters.experienceLevel,
             certificationRequired:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -227,6 +228,7 @@ export default function SearchScreen() {
             barangay: barangayFilter,
             rateMin: rateBounds.min,
             rateMax: rateBounds.max,
+            includeNegotiable: appliedFilters.includeNegotiable,
             experienceLevel: appliedFilters.experienceLevel,
             certificationAvailable:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -473,6 +475,10 @@ export default function SearchScreen() {
           next.serviceGroup = getDiscoveryGroupForService(value as MvpServiceOption) ?? current.serviceGroup;
         }
 
+        if (key === 'rateRange' && value === 'any') {
+          next.includeNegotiable = false;
+        }
+
         return next;
       });
     },
@@ -709,6 +715,7 @@ function buildDefaultFilters(): SearchDiscoveryFilters {
     service: 'all',
     locationScope: 'nearby',
     rateRange: 'any',
+    includeNegotiable: false,
     experienceLevel: 'all',
     certification: 'any',
     verifiedOnly: false,
@@ -748,7 +755,8 @@ function getStructuredServiceFilterValues(filters: SearchDiscoveryFilters) {
 function getRateBounds(rateRange: SearchDiscoveryFilters['rateRange']) {
   if (rateRange === 'under_500') return { min: null, max: 500 };
   if (rateRange === '500_1000') return { min: 500, max: 1000 };
-  if (rateRange === '1000_plus') return { min: 1000, max: null };
+  if (rateRange === '1000_2000') return { min: 1000, max: 2000 };
+  if (rateRange === '2000_plus') return { min: 2000, max: null };
   return { min: null, max: null };
 }
 

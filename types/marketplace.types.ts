@@ -22,6 +22,7 @@ export type PublicProfileSummary = {
   barangay: string | null;
   purokSitio: string | null;
   street: string | null;
+  subdivisionArea: string | null;
   city: string | null;
   approximateLocation: string | null;
   about: string | null;
@@ -153,6 +154,7 @@ export type JobSearchFilters = {
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType | 'any';
+  includeNegotiable?: boolean;
   experienceLevel?: ExperienceLevel | 'all';
   certificationRequired?: boolean;
   verifiedOnly?: boolean;
@@ -169,6 +171,7 @@ export type ServiceSearchFilters = {
   rateMin?: number | null;
   rateMax?: number | null;
   rateType?: RateType | 'any';
+  includeNegotiable?: boolean;
   experienceLevel?: ExperienceLevel | 'all';
   certificationAvailable?: boolean;
   verifiedOnly?: boolean;

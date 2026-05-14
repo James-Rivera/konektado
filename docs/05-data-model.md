@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values.
 
 ## Common Types
 
@@ -54,13 +54,16 @@ Purpose: Shared user profile and resident identity details.
 | `last_name` | `text` | Required after onboarding. |
 | `full_name` | `text` | Public name fallback built from first and last name. |
 | `birthdate` | `date` | Private or limited visibility. |
-| `barangay` | `text` | Default should be `San Pedro` for MVP. |
-| `purok_sitio` | `text` | Approximate public location if provided. |
-| `street` | `text` | Approximate public location if safe to show. |
+| `province` | `text` | Fixed to `Batangas` for the current service area. |
+| `barangay` | `text` | Fixed raw value `San Pedro` for MVP; display as `Brgy. San Pedro`. |
+| `purok_sitio` | `text` | Legacy optional field kept for backward compatibility; no longer collected in address setup. |
+| `street` | `text` | Public approximate street/road if provided. |
+| `subdivision_area` | `text` | Public approximate subdivision/area if provided. |
 | `block_lot` | `text` | Private/admin-only address detail. |
-| `house_number` | `text` | Private/admin-only address detail. |
+| `house_number` | `text` | Private/admin-only house number or building name. |
+| `landmark_note` | `text` | Private/admin-only landmark or note. |
 | `street_address` | `text` | Private or limited visibility. |
-| `city` | `text` | City/municipality. |
+| `city` | `text` | Fixed to `Santo Tomas` for the current service area. |
 | `preferred_contact_method` | `text` | `app_message`, `phone`, or `email`; public contact data still stays private by default. |
 | `phone` | `text` | Private by default; visible only when user chooses or after job acceptance. |
 | `about` | `text` | Public profile summary. |
@@ -79,8 +82,8 @@ Relationships:
 Important constraints:
 
 - `id` must equal `auth.uid()` for owner writes.
-- Public search should not expose birthdate, full street address, or private phone by default.
-- Public search/cards may show approximate location only: barangay, purok/sitio, and/or street.
+- Public search should not expose birthdate, full street address, house number, block/lot, landmark/address note, private phone/contact data, ID URLs, credential URLs, or verification document fields.
+- Public search/cards may show approximate location only: barangay/city, street/road plus barangay, or subdivision/area plus barangay.
 - `barangay_verified_at` should only be written by admin verification actions.
 - Verification selfie, ID files, certificates, and admin notes must never be copied into public profile fields or `avatar_url`.
 
@@ -114,6 +117,7 @@ Purpose: Lightweight onboarding preferences used to personalize viewer-mode brow
 | --- | --- | --- |
 | `user_id` | `uuid` | Primary key. References `profiles(id)` on delete cascade. |
 | `intent` | `text` | `client`, `provider`, or `both`. |
+| `offered_delivery_mode` | `text` | Nullable provider work setup: `on_site`, `online`, or `both`. |
 | `offered_services` | `text[]` | Services a worker can offer. |
 | `needed_services` | `text[]` | Help a client may need nearby. |
 | `custom_offered_services` | `text[]` | Free-text offered services from onboarding. |
@@ -127,6 +131,7 @@ Important constraints:
 - One row per user.
 - Owner can select, insert, and update only their own preferences.
 - These preferences are first-party personalization data, not verification proof.
+- Provider work setup is separate from service taxonomy values. It filters category/service selection but must not be mixed into `offered_services`.
 - For provider and both-role users, `provider_profiles.service_type` is seeded from offered services until the future `services` table is fully built.
 
 ## provider_profiles

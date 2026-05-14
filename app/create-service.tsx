@@ -123,6 +123,10 @@ export default function CreateServiceScreen() {
       Alert.alert('Rate range', 'Minimum rate must not be greater than maximum rate.');
       return;
     }
+    if (rateType !== 'negotiable' && parsedRateMin === null && parsedRateMax === null) {
+      Alert.alert('Rate range', 'Add a rate range or choose negotiable.');
+      return;
+    }
 
     router.push({
       pathname: '/create-service-preview',
@@ -327,6 +331,7 @@ export default function CreateServiceScreen() {
         />
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Rate range</Text>
+            <Text style={styles.helperText}>Use a range so clients know what to expect.</Text>
             <View style={styles.twoColumn}>
               <Field
                 compact

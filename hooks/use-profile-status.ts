@@ -5,7 +5,7 @@ import { supabase } from '@/utils/supabase';
 
 function isOnboardingIntent(role: string | null | undefined) {
   const normalized = (role ?? '').toLowerCase();
-  return normalized === 'client' || normalized === 'provider' || normalized === 'both';
+  return normalized === 'client' || normalized === 'provider';
 }
 
 function isAdminRole(role: string | null | undefined) {
@@ -104,12 +104,18 @@ export function useProfileStatus(): ProfileStatus {
       const metadataRole = user.user_metadata?.role as string | null | undefined;
       const needsSignupPassword = user.user_metadata?.signup_password_required === true;
       const userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
-      const candidateRoleSource =
-        profile?.active_role || profile?.role || userRolesRole || activeRoleFromIntent(metadataRole);
-      const candidateRole = candidateRoleSource ? String(candidateRoleSource).toLowerCase() : null;
-      const intentSource = preferences?.intent || metadataRole || candidateRole;
-      const needsRole = !candidateRole;
-      const isAdmin = isAdminRole(candidateRole);
+      const roleSources = [
+        preferences?.intent,
+        metadataRole,
+        profile?.active_role,
+        profile?.role,
+        userRolesRole,
+        activeRoleFromIntent(metadataRole),
+      ];
+      const candidateRole =
+        roleSources.find((role) => isOnboardingIntent(role))?.toLowerCase() ?? null;
+      const isAdmin = roleSources.some((role) => isAdminRole(role));
+      const needsRole = !isAdmin && !candidateRole;
       const hasName = Boolean(
         profile?.full_name?.trim() ||
           (profile?.first_name?.trim() && profile?.last_name?.trim()),
@@ -117,7 +123,7 @@ export function useProfileStatus(): ProfileStatus {
       const hasCompletedTasteSetup = Boolean(preferences?.onboarding_completed_at);
 
       const needsProfile =
-        !isAdmin && (!hasName || !hasCompletedTasteSetup || !isOnboardingIntent(intentSource));
+        !isAdmin && (!hasName || !hasCompletedTasteSetup || !candidateRole);
 
       hasLoadedStatusRef.current = true;
       setState({

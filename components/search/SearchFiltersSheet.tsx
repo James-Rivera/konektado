@@ -17,7 +17,8 @@ export type SearchDiscoveryFilters = {
   serviceGroup: 'all' | DiscoveryGroupKey;
   service: 'all' | MvpServiceOption;
   locationScope: 'same_barangay' | 'nearby';
-  rateRange: 'any' | 'under_500' | '500_1000' | '1000_plus';
+  rateRange: 'any' | 'under_500' | '500_1000' | '1000_2000' | '2000_plus';
+  includeNegotiable: boolean;
   experienceLevel: 'all' | ExperienceLevel;
   certification: 'any' | 'required_or_available';
   verifiedOnly: boolean;
@@ -51,14 +52,15 @@ const WORK_TYPE_OPTIONS: FilterOption<SearchWorkType>[] = [
 
 const LOCATION_SCOPE_OPTIONS: FilterOption<SearchDiscoveryFilters['locationScope']>[] = [
   { key: 'same_barangay', label: 'Same barangay' },
-  { key: 'nearby', label: 'Nearby' },
+  { key: 'nearby', label: 'Nearby area' },
 ];
 
 const RATE_RANGE_OPTIONS: FilterOption<SearchDiscoveryFilters['rateRange']>[] = [
   { key: 'any', label: 'Any rate' },
   { key: 'under_500', label: 'Under ₱500' },
   { key: '500_1000', label: '₱500–₱1,000' },
-  { key: '1000_plus', label: '₱1,000+' },
+  { key: '1000_2000', label: '₱1,000–₱2,000' },
+  { key: '2000_plus', label: '₱2,000+' },
 ];
 
 const EXPERIENCE_OPTIONS: FilterOption<SearchDiscoveryFilters['experienceLevel']>[] = [
@@ -205,6 +207,13 @@ export function SearchFiltersSheet({
                 onPress={() => onChange('rateRange', option.key)}
               />
             ))}
+            {filters.rateRange !== 'any' ? (
+              <ChoiceChip
+                label="Include negotiable"
+                selected={filters.includeNegotiable}
+                onPress={() => onChange('includeNegotiable', !filters.includeNegotiable)}
+              />
+            ) : null}
           </View>
         </FilterSection>
 

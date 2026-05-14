@@ -30,6 +30,21 @@ export async function saveUserRole({
     return profileError;
   }
 
+  const { error: preferencesError } = await supabase
+    .from("user_preferences")
+    .upsert(
+      {
+        user_id: userId,
+        intent: role,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+
+  if (preferencesError) {
+    return preferencesError;
+  }
+
   for (const nextRole of roles) {
     const { error: rolesError } = await supabase
       .from("user_roles")

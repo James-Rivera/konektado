@@ -48,6 +48,22 @@ export const OTHER_SERVICE_OPTION = 'Others / Specify' as const;
 
 export type ServiceSelectionValue = MvpServiceOption | typeof OTHER_SERVICE_OPTION;
 
+export const OFFERED_DELIVERY_MODES = ['on_site', 'online', 'both'] as const;
+
+export type OfferedDeliveryMode = (typeof OFFERED_DELIVERY_MODES)[number];
+
+export const OFFERED_DELIVERY_MODE_LABELS: Record<OfferedDeliveryMode, string> = {
+  on_site: 'On-site',
+  online: 'Online',
+  both: 'Both',
+};
+
+export const OFFERED_DELIVERY_MODE_HELPERS: Record<OfferedDeliveryMode, string> = {
+  on_site: 'Help in person within nearby areas.',
+  online: 'Help remotely through chat, call, or files.',
+  both: 'Offer both on-site and online services.',
+};
+
 export type SearchWorkType = 'physical' | 'digital' | 'either';
 
 export const SEARCH_DISCOVERY_GROUPS = [
@@ -238,6 +254,10 @@ export function isOtherServiceOption(
   return value === OTHER_SERVICE_OPTION;
 }
 
+export function isOfferedDeliveryMode(value: string | null | undefined): value is OfferedDeliveryMode {
+  return OFFERED_DELIVERY_MODES.includes(value as OfferedDeliveryMode);
+}
+
 export function isDiscoveryGroupKey(value: string | null | undefined): value is DiscoveryGroupKey {
   return SEARCH_DISCOVERY_GROUPS.includes(value as DiscoveryGroupKey);
 }
@@ -313,6 +333,10 @@ export function getServicesForMvpCategory(category: string | null | undefined) {
   return isMvpServiceCategory(category) ? MVP_SERVICES_BY_CATEGORY[category] : [];
 }
 
+export function getDisplayLabelForOfferedDeliveryMode(value: string | null | undefined) {
+  return isOfferedDeliveryMode(value) ? OFFERED_DELIVERY_MODE_LABELS[value] : '';
+}
+
 export function getTagsForMvpCategory(category: string | null | undefined) {
   return isMvpServiceCategory(category) ? MVP_CATEGORY_CONTEXT_TAGS[category] : [];
 }
@@ -363,6 +387,40 @@ export function doesServiceMatchWorkType(
 
   const mappedType = SEARCH_WORK_TYPE_BY_SERVICE[storedService];
   return mappedType === workType || mappedType === 'either';
+}
+
+function getSearchWorkTypeForOfferedDeliveryMode(mode: OfferedDeliveryMode): SearchWorkType {
+  if (mode === 'on_site') return 'physical';
+  if (mode === 'online') return 'digital';
+  return 'either';
+}
+
+export function doesServiceMatchOfferedDeliveryMode(
+  service: string | null | undefined,
+  mode: OfferedDeliveryMode,
+) {
+  return doesServiceMatchWorkType(service, getSearchWorkTypeForOfferedDeliveryMode(mode));
+}
+
+export function getAllowedServicesForOfferedDeliveryMode(mode: OfferedDeliveryMode) {
+  return MVP_SERVICE_OPTIONS.filter((service) => doesServiceMatchOfferedDeliveryMode(service, mode));
+}
+
+export function getMvpCategoriesForOfferedDeliveryMode(mode: OfferedDeliveryMode) {
+  return MVP_SERVICE_CATEGORIES.filter((category) =>
+    MVP_SERVICES_BY_CATEGORY[category].some((service) =>
+      doesServiceMatchOfferedDeliveryMode(service, mode),
+    ),
+  );
+}
+
+export function getServicesForMvpCategoryAndOfferedDeliveryMode(
+  category: string | null | undefined,
+  mode: OfferedDeliveryMode,
+) {
+  return getServicesForMvpCategory(category).filter((service) =>
+    doesServiceMatchOfferedDeliveryMode(service, mode),
+  );
 }
 
 export function getAllowedServicesForSearchWorkType(workType: SearchWorkType) {

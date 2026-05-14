@@ -1,3 +1,5 @@
+import type { OfferedDeliveryMode } from '@/constants/service-taxonomy';
+
 export type AppRole = "client" | "provider";
 
 export type OnboardingIntent = AppRole;
@@ -7,6 +9,7 @@ export type UserPreferences = {
   customOfferedServices: string[];
   intent: OnboardingIntent;
   neededServices: string[];
+  offeredDeliveryMode: OfferedDeliveryMode | null;
   offeredServices: string[];
   onboardingCompletedAt: string | null;
 };
@@ -24,13 +27,17 @@ export type OnboardingDraft = {
   lastName: string;
   birthdate: string;
   streetAddress: string;
+  province: string;
   city: string;
   barangay: string;
   purokSitio: string;
   street: string;
+  subdivisionArea: string;
   blockLot: string;
   houseNumber: string;
+  landmarkNote: string;
   preferredContactMethod: string;
+  offeredDeliveryMode: OfferedDeliveryMode | null;
   offeredServices: string[];
   neededServices: string[];
   customOfferedServices: string[];

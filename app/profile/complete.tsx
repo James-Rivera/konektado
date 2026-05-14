@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Skeleton } from '@/components/Skeleton';
@@ -35,16 +37,26 @@ import type {
 
 type FormMode = ProfileCompletionMode;
 
+const RATE_TYPE_OPTIONS: { value: WorkProfileInput['rateType']; label: string }[] = [
+  { value: 'per_project', label: 'Per project' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'negotiable', label: 'Negotiable' },
+];
+
 const emptyCore: CoreProfileInput = {
   firstName: '',
   lastName: '',
-  barangay: '',
+  province: 'Batangas',
+  barangay: 'San Pedro',
   purokSitio: '',
   street: '',
+  subdivisionArea: '',
   blockLot: '',
   houseNumber: '',
-  city: '',
-  preferredContactMethod: 'app_message',
+  landmarkNote: '',
+  city: 'Santo Tomas',
+  preferredContactMethod: '',
   about: '',
   availability: '',
 };
@@ -127,11 +139,14 @@ export default function CompleteProfileScreen() {
     setCore({
       firstName: nextStatus.core.firstName,
       lastName: nextStatus.core.lastName,
+      province: nextStatus.core.province,
       barangay: nextStatus.core.barangay,
       purokSitio: nextStatus.core.purokSitio,
       street: nextStatus.core.street,
+      subdivisionArea: nextStatus.core.subdivisionArea,
       blockLot: nextStatus.core.blockLot,
       houseNumber: nextStatus.core.houseNumber,
+      landmarkNote: nextStatus.core.landmarkNote,
       city: nextStatus.core.city,
       preferredContactMethod: nextStatus.core.preferredContactMethod,
       about: nextStatus.core.about,
@@ -289,81 +304,175 @@ function CoreForm({
   value: CoreProfileInput;
   onChange: (value: CoreProfileInput) => void;
 }) {
+  const [areaSheetVisible, setAreaSheetVisible] = useState(false);
+
   return (
-    <View style={styles.formCard}>
-      <Field
-        label="First name"
-        placeholder="Juan"
-        value={value.firstName}
-        onChangeText={(firstName) => onChange({ ...value, firstName })}
-      />
-      <Field
-        label="Last name"
-        placeholder="Dela Cruz"
-        value={value.lastName}
-        onChangeText={(lastName) => onChange({ ...value, lastName })}
-      />
-      <Field
-        label="Barangay"
-        placeholder="Barangay San Pedro"
-        value={value.barangay}
-        onChangeText={(barangay) => onChange({ ...value, barangay })}
-      />
-      <Field
-        label="Purok/Sitio"
-        placeholder="Purok 1 or Sitio name"
-        value={value.purokSitio}
-        onChangeText={(purokSitio) => onChange({ ...value, purokSitio })}
-      />
-      <Field
-        label="Street"
-        placeholder="Street name"
-        value={value.street}
-        onChangeText={(street) => onChange({ ...value, street })}
-      />
-      <View style={styles.twoColumn}>
-        <Field
-          compact
-          label="Block/Lot"
-          placeholder="Blk 1 Lot 2"
-          value={value.blockLot}
-          onChangeText={(blockLot) => onChange({ ...value, blockLot })}
-        />
-        <Field
-          compact
-          label="House No."
-          placeholder="123"
-          value={value.houseNumber}
-          onChangeText={(houseNumber) => onChange({ ...value, houseNumber })}
-        />
+    <>
+      <View style={styles.formCard}>
+        <AddressSection
+          helper="These details identify your account."
+          title="Profile basics">
+          <Field
+            label="First name"
+            placeholder="Juan"
+            value={value.firstName}
+            onChangeText={(firstName) => onChange({ ...value, firstName })}
+          />
+          <Field
+            label="Last name"
+            placeholder="Dela Cruz"
+            value={value.lastName}
+            onChangeText={(lastName) => onChange({ ...value, lastName })}
+          />
+        </AddressSection>
+
+        <CurrentAreaCard onChange={() => setAreaSheetVisible(true)} />
+
+        <AddressSection
+          helper="Shown on your profile and posts."
+          title="Public location">
+          <Field
+            label="Street / Road"
+            placeholder="e.g. Governor Carpio Avenue"
+            value={value.street}
+            onChangeText={(street) => onChange({ ...value, street })}
+          />
+          <Field
+            label="Subdivision / Area optional"
+            placeholder="e.g. San Pedro Subdivision"
+            value={value.subdivisionArea}
+            onChangeText={(subdivisionArea) => onChange({ ...value, subdivisionArea })}
+          />
+        </AddressSection>
+
+        <AddressSection
+          helper="Used only for verification and coordination."
+          title="Private address">
+          <View style={styles.twoColumn}>
+            <Field
+              compact
+              label="Block / Lot optional"
+              placeholder="e.g. Block 4 Lot 12"
+              value={value.blockLot}
+              onChangeText={(blockLot) => onChange({ ...value, blockLot })}
+            />
+            <Field
+              compact
+              label="House Number / Building Name optional"
+              placeholder="e.g. 125 or Building A"
+              value={value.houseNumber}
+              onChangeText={(houseNumber) => onChange({ ...value, houseNumber })}
+            />
+          </View>
+          <Field
+            label="Landmark / Note optional"
+            placeholder="e.g. Near the chapel"
+            value={value.landmarkNote}
+            onChangeText={(landmarkNote) => onChange({ ...value, landmarkNote })}
+          />
+        </AddressSection>
+
+        <AddressSection
+          helper="Public context neighbors see before messaging."
+          title="Profile details">
+          <Field
+            label="Public intro"
+            multiline
+            placeholder="A short, friendly intro that helps neighbors feel safe starting a conversation."
+            value={value.about}
+            onChangeText={(about) => onChange({ ...value, about })}
+          />
+          <Field
+            label="Availability"
+            multiline
+            placeholder="Example: Weekdays after 5 PM, weekends by request"
+            value={value.availability}
+            onChangeText={(availability) => onChange({ ...value, availability })}
+          />
+        </AddressSection>
       </View>
-      <Field
-        label="City or municipality"
-        placeholder="San Pedro"
-        value={value.city}
-        onChangeText={(city) => onChange({ ...value, city })}
+
+      <ServiceAreaSheet
+        onClose={() => setAreaSheetVisible(false)}
+        visible={areaSheetVisible}
       />
-      <Field
-        label="Preferred contact method"
-        placeholder="app_message, phone, or email"
-        value={value.preferredContactMethod}
-        onChangeText={(preferredContactMethod) => onChange({ ...value, preferredContactMethod })}
-      />
-      <Field
-        label="Public intro"
-        multiline
-        placeholder="A short, friendly intro that helps neighbors feel safe starting a conversation."
-        value={value.about}
-        onChangeText={(about) => onChange({ ...value, about })}
-      />
-      <Field
-        label="Availability"
-        multiline
-        placeholder="Example: Weekdays after 5 PM, weekends by request"
-        value={value.availability}
-        onChangeText={(availability) => onChange({ ...value, availability })}
-      />
+    </>
+  );
+}
+
+function CurrentAreaCard({ onChange }: { onChange: () => void }) {
+  return (
+    <View style={styles.areaCard}>
+      <View style={styles.areaCopy}>
+        <Text style={styles.areaLabel}>Current area</Text>
+        <Text style={styles.areaValue}>Brgy. San Pedro, Santo Tomas, Batangas</Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onChange}
+        style={({ pressed }) => [styles.areaAction, pressed && styles.pressed]}>
+        <Text style={styles.areaActionText}>Change</Text>
+      </Pressable>
     </View>
+  );
+}
+
+function AddressSection({
+  children,
+  helper,
+  title,
+}: {
+  children: ReactNode;
+  helper: string;
+  title: string;
+}) {
+  return (
+    <View style={styles.addressSection}>
+      <View style={styles.addressSectionHeader}>
+        <Text style={styles.addressSectionTitle}>{title}</Text>
+        <Text style={styles.addressSectionHelper}>{helper}</Text>
+      </View>
+      <View style={styles.addressSectionFields}>{children}</View>
+    </View>
+  );
+}
+
+function ServiceAreaSheet({
+  onClose,
+  visible,
+}: {
+  onClose: () => void;
+  visible: boolean;
+}) {
+  return (
+    <BottomSheet visible={visible} onClose={onClose} maxHeight="72%">
+      <View style={styles.sheetHeader}>
+        <Text style={styles.sheetTitle}>Choose service area</Text>
+        <Pressable accessibilityLabel="Close service area chooser" accessibilityRole="button" onPress={onClose}>
+          <MaterialIcons color={color.text} name="close" size={24} />
+        </Pressable>
+      </View>
+
+      <View style={styles.sheetSection}>
+        <Text style={styles.sheetSectionTitle}>Available now</Text>
+        <View style={styles.sheetOptionSelected}>
+          <View style={styles.sheetCheck}>
+            <MaterialIcons color={color.primary} name="check" size={16} />
+          </View>
+          <Text style={styles.sheetOptionText}>Brgy. San Pedro, Santo Tomas, Batangas</Text>
+        </View>
+      </View>
+
+      <View style={styles.sheetSection}>
+        <Text style={styles.sheetSectionTitle}>Coming soon</Text>
+        <View style={styles.sheetOptionDisabled}>
+          <Text style={styles.sheetOptionTextMuted}>Other barangays in Santo Tomas</Text>
+        </View>
+        <Text style={styles.sheetHelper}>Konektado is currently available only in selected service areas.</Text>
+      </View>
+
+      <PrimaryButton label="Done" onPress={onClose} />
+    </BottomSheet>
   );
 }
 
@@ -415,10 +524,11 @@ function WorkForm({
       />
       <Field
         label="Rate note"
-        placeholder="Optional: Starts at PHP 500"
+        placeholder="Optional: supplies included"
         value={value.rateText}
         onChangeText={(rateText) => onChange({ ...value, rateText })}
       />
+      <Text style={styles.fieldHelper}>Use a range so clients know what to expect.</Text>
       <View style={styles.twoColumn}>
         <Field
           compact
@@ -434,6 +544,28 @@ function WorkForm({
           value={value.rateMax}
           onChangeText={(rateMax) => onChange({ ...value, rateMax })}
         />
+      </View>
+      <View style={styles.chipRow}>
+        {RATE_TYPE_OPTIONS.map((option) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: value.rateType === option.value }}
+            key={option.value}
+            onPress={() => onChange({ ...value, rateType: option.value })}
+            style={({ pressed }) => [
+              styles.rateChip,
+              value.rateType === option.value && styles.rateChipSelected,
+              pressed && styles.pressed,
+            ]}>
+            <Text
+              style={[
+                styles.rateChipText,
+                value.rateType === option.value && styles.rateChipTextSelected,
+              ]}>
+              {option.label}
+            </Text>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
@@ -685,6 +817,60 @@ const styles = StyleSheet.create({
     gap: space.lg,
     padding: space.lg,
   },
+  areaCard: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+  },
+  areaCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  areaLabel: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  areaValue: {
+    ...typography.bodyMedium,
+    color: color.text,
+    flexShrink: 1,
+  },
+  areaAction: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    minHeight: 34,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+  },
+  areaActionText: {
+    ...typography.captionMedium,
+    color: color.primary,
+  },
+  addressSection: {
+    gap: space.md,
+  },
+  addressSectionHeader: {
+    gap: 2,
+  },
+  addressSectionTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+  },
+  addressSectionHelper: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  addressSectionFields: {
+    gap: space.md,
+  },
   twoColumn: {
     flexDirection: 'row',
     gap: space.sm,
@@ -698,6 +884,10 @@ const styles = StyleSheet.create({
   fieldLabel: {
     ...typography.captionMedium,
     color: color.text,
+  },
+  fieldHelper: {
+    ...typography.caption,
+    color: color.textMuted,
   },
   input: {
     backgroundColor: color.surfaceAlt,
@@ -714,6 +904,94 @@ const styles = StyleSheet.create({
   },
   multilineInput: {
     minHeight: 104,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  rateChip: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+  },
+  rateChipSelected: {
+    backgroundColor: color.primary,
+    borderColor: color.primary,
+  },
+  rateChipText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  rateChipTextSelected: {
+    color: color.white,
+  },
+  sheetHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sheetTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  sheetSection: {
+    gap: space.sm,
+  },
+  sheetSectionTitle: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+    textTransform: 'uppercase',
+  },
+  sheetOptionSelected: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    minHeight: 48,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  sheetCheck: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderRadius: radius.pill,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  sheetOptionDisabled: {
+    backgroundColor: color.surfaceAlt,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  sheetOptionText: {
+    ...typography.bodyMedium,
+    color: color.text,
+    flex: 1,
+  },
+  sheetOptionTextMuted: {
+    ...typography.bodyMedium,
+    color: color.textMuted,
+  },
+  sheetHelper: {
+    ...typography.caption,
+    color: color.textMuted,
   },
   footerCard: {
     backgroundColor: color.cardTint,

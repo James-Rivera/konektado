@@ -21,6 +21,22 @@ export default function OnboardingLayout() {
     return <Redirect href="/admin/verifications" />;
   }
 
+  if (status.needsRole) {
+    const currentPath =
+      segments[0] === '(onboarding)' && segments[1]
+        ? `/(onboarding)/${segments[1]}`
+        : '/(onboarding)';
+
+    return (
+      <Redirect
+        href={{
+          pathname: '/(auth)/role',
+          params: { returnTo: currentPath },
+        }}
+      />
+    );
+  }
+
   if (!status.needsRole && !status.needsProfile && !isCompleteRoute) {
     return <Redirect href="/(tabs)" />;
   }

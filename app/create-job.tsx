@@ -586,6 +586,7 @@ export default function CreateJobScreen() {
               placeholder="Job Title"
               value={draft.title}
             />
+            <Text style={styles.smallHelper}>Use a range so workers know what to expect.</Text>
             <View style={styles.twoColumn}>
               <FormInput
                 error={errors.budgetMin}

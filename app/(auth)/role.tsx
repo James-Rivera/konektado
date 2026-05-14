@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
@@ -21,6 +21,7 @@ import {
     RoleChoiceStack,
     type RoleChoiceOption,
 } from '@/components/onboarding/FigmaOnboarding';
+import { useProfile } from '@/hooks/use-profile';
 import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 import { supabase } from '@/utils/supabase';
 
@@ -53,10 +54,33 @@ const roleChoices: RoleChoiceOption<OnboardingIntent>[] = [
   },
 ];
 
+function getSafeReturnTo(value: string | string[] | undefined) {
+  const returnTo = Array.isArray(value) ? value[0] : value;
+
+  if (
+    returnTo === '/(onboarding)' ||
+    returnTo === '/(onboarding)/location' ||
+    returnTo === '/(onboarding)/job' ||
+    returnTo === '/(onboarding)/review'
+  ) {
+    return returnTo;
+  }
+
+  return '/(onboarding)';
+}
+
 export default function RoleScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const {
+    authenticated,
+    loading: profileLoading,
+    refresh: refreshProfile,
+    user,
+  } = useProfile();
   const [selectedRole, setSelectedRole] = useState<OnboardingIntent | null>(null);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -67,13 +91,16 @@ export default function RoleScreen() {
     let active = true;
 
     supabase.auth.getUser().then(({ data }) => {
-      if (!active || !data.user) return;
-      setSessionUser({ id: data.user.id, email: data.user.email ?? null });
+      if (!active) return;
+
+      setSessionUser(data.user ? { id: data.user.id, email: data.user.email ?? null } : null);
+      setCheckingSession(false);
     });
 
     return () => {
       active = false;
     };
+
   }, []);
 
   const selectRole = (role: OnboardingIntent) => {
@@ -102,16 +129,27 @@ export default function RoleScreen() {
       return;
     }
 
-    if (!sessionUser) {
+    if (profileLoading || checkingSession) {
+      return;
+    }
+
+    const recoveredUser = user ? { id: user.id, email: user.email ?? null } : sessionUser;
+
+    if (!authenticated && !recoveredUser) {
       router.push(`/(auth)/register?role=${selectedRole}`);
+      return;
+    }
+
+    if (!recoveredUser) {
+      Alert.alert('Session still loading', 'Please wait a moment, then try again.');
       return;
     }
 
     setSubmitting(true);
     const saveError = await saveUserRole({
-      email: sessionUser.email,
+      email: recoveredUser.email,
       role: selectedRole,
-      userId: sessionUser.id,
+      userId: recoveredUser.id,
     });
 
     if (saveError) {
@@ -130,7 +168,8 @@ export default function RoleScreen() {
       Alert.alert('Role saved', 'Role was saved, but account metadata sync failed. You can continue.');
     }
 
-    router.replace('/(onboarding)');
+    await refreshProfile();
+    router.replace(getSafeReturnTo(params.returnTo));
   };
 
   const goToLogin = () => {
@@ -138,6 +177,8 @@ export default function RoleScreen() {
   };
 
   const backgroundSource = selectedRole ? roleBackgrounds[selectedRole] : roleBackgrounds.default;
+  const hasResolvedSignedInUser = authenticated || Boolean(sessionUser);
+  const primaryLabel = profileLoading || checkingSession || hasResolvedSignedInUser ? 'Continue' : 'Create Account';
 
   return (
     <View style={styles.screen}>
@@ -158,16 +199,18 @@ export default function RoleScreen() {
           <View style={styles.footer}>
             <OnboardingButton
               disabled={!selectedRole}
-              label={sessionUser ? 'Continue' : 'Create Account'}
+              label={primaryLabel}
               loading={submitting}
               onPress={continueWithRole}
               variant="yellow"
             />
-            <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
-              <Text style={styles.loginText}>
-                Already have an account? <Text style={styles.loginTextBold}>Login</Text>
-              </Text>
-            </Pressable>
+            {!hasResolvedSignedInUser ? (
+              <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
+                <Text style={styles.loginText}>
+                  Already have an account? <Text style={styles.loginTextBold}>Login</Text>
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </GradientImageScreen>

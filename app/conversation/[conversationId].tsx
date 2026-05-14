@@ -28,7 +28,9 @@ import {
 } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
+  formatJobBudget,
   formatJobPostTitle,
+  formatServiceRate,
   formatServicePostTitle,
   getMarketplaceLocation,
   isPresenceActive,
@@ -746,7 +748,7 @@ function ConversationUnavailableScreen({
 
 function getContextSummary(conversation: ConversationDetail) {
   if (conversation.job) {
-    const budget = conversation.job.budgetAmount ? `PHP ${conversation.job.budgetAmount}` : 'Budget to coordinate';
+    const budget = formatJobBudget(conversation.job);
     return {
       title: formatJobPostTitle({
         title: conversation.job.title,
@@ -754,7 +756,7 @@ function getContextSummary(conversation: ConversationDetail) {
         category: conversation.job.category,
       }),
       subtitle: `Job by ${conversation.client?.fullName ?? 'Konektado resident'}`,
-      meta: `${getMarketplaceLocation(conversation.job)} · ${conversation.job.scheduleText ?? 'Schedule to coordinate'} · ${budget}`,
+      meta: `${getMarketplaceLocation(conversation.job)} - ${conversation.job.scheduleText ?? 'Schedule to coordinate'} - ${budget}`,
     };
   }
 
@@ -766,7 +768,7 @@ function getContextSummary(conversation: ConversationDetail) {
         cue: conversation.service.isActive ? 'availableFor' : 'offers',
       }),
       subtitle: `Service by ${conversation.provider?.fullName ?? 'Konektado resident'}`,
-      meta: `${getMarketplaceLocation(conversation.service)} · ${conversation.service.rateText ?? 'Rate to coordinate'}`,
+      meta: `${getMarketplaceLocation(conversation.service)} - ${formatServiceRate(conversation.service)}`,
     };
   }
 
@@ -1208,3 +1210,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+

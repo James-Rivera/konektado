@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
+import { useRouter, useSegments } from 'expo-router';
 
+import { AppSplashScreen } from '@/components/app-splash-screen';
 import {
   emptyOnboardingDraft,
   loadOnboardingDraft,
@@ -25,12 +27,15 @@ export type OnboardingContextValue = {
 const OnboardingContext = createContext<OnboardingContextValue | undefined>(undefined);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const segments = useSegments();
   const { refresh: refreshProfile } = useProfile();
   const [draft, setDraft] = useState<OnboardingDraft>(emptyOnboardingDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userMeta, setUserMeta] = useState<{ id: string; email: string | null } | null>(null);
   const [cachedRole, setCachedRole] = useState<OnboardingIntent | null>(null);
+  const [needsRoleRecovery, setNeedsRoleRecovery] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -49,6 +54,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setDraft(result.data.draft);
       setUserMeta({ id: result.data.userId, email: result.data.email });
       setCachedRole(result.data.intent);
+      setNeedsRoleRecovery(!result.data.intent);
       setLoading(false);
     };
 
@@ -58,6 +64,20 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (loading || !needsRoleRecovery) return;
+
+    const currentPath =
+      segments[0] === '(onboarding)' && segments[1]
+        ? `/(onboarding)/${segments[1]}`
+        : '/(onboarding)';
+
+    router.replace({
+      pathname: '/(auth)/role',
+      params: { returnTo: currentPath },
+    });
+  }, [loading, needsRoleRecovery, router, segments]);
 
   const updateDraft = useCallback((patch: Partial<OnboardingDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -107,6 +127,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }),
     [cachedRole, draft, loading, saving, saveProfile, setVerificationFiles, updateDraft],
   );
+
+  if (loading || needsRoleRecovery) {
+    return <AppSplashScreen />;
+  }
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
 }

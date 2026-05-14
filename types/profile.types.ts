@@ -9,11 +9,14 @@ export type MarketplaceSetupState = 'unverified' | 'verified_setup_incomplete' |
 export type CoreProfileInput = {
   firstName: string;
   lastName: string;
+  province: string;
   barangay: string;
   purokSitio: string;
   street: string;
+  subdivisionArea: string;
   blockLot: string;
   houseNumber: string;
+  landmarkNote: string;
   city: string;
   preferredContactMethod: string;
   about: string;

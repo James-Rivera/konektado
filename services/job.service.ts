@@ -316,6 +316,7 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
         itemMax: row.budget_max ?? row.budget_amount ?? row.budget,
         filterMin: filters.budgetMin,
         filterMax: filters.budgetMax,
+        includeNegotiable: filters.includeNegotiable,
       })
     ) {
       return false;

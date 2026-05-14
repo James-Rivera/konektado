@@ -20,6 +20,7 @@ export type ProfileRow = {
   barangay: string | null;
   purok_sitio: string | null;
   street: string | null;
+  subdivision_area: string | null;
   city: string | null;
   about: string | null;
   avatar_url: string | null;
@@ -95,6 +96,17 @@ export function compactText(value: string | null | undefined) {
   return value?.trim() ?? '';
 }
 
+function normalizeBarangayName(value: string | null | undefined) {
+  return compactText(value)
+    .replace(/^(barangay|brgy\.?)\s+/i, '')
+    .trim();
+}
+
+export function formatBarangayDisplay(value: string | null | undefined) {
+  const barangay = normalizeBarangayName(value);
+  return barangay ? `Brgy. ${barangay}` : '';
+}
+
 export function normalizeRateType(value: string | null | undefined): RateType {
   if (value === 'hourly' || value === 'daily' || value === 'per_project' || value === 'negotiable') {
     return value;
@@ -123,22 +135,77 @@ export function normalizeCustomServiceReviewStatus(
 
 export function formatApproximateLocation({
   barangay,
-  purokSitio,
   street,
+  subdivisionArea,
   city,
 }: {
   barangay?: string | null;
   purokSitio?: string | null;
   street?: string | null;
+  subdivisionArea?: string | null;
   city?: string | null;
 }) {
-  const parts = [barangay, purokSitio, street]
+  return formatPublicLocation({ barangay, street, subdivisionArea, city });
+}
+
+export function formatPublicLocation({
+  barangay,
+  street,
+  subdivisionArea,
+  city,
+}: {
+  barangay?: string | null;
+  street?: string | null;
+  subdivisionArea?: string | null;
+  city?: string | null;
+}) {
+  const barangayText = formatBarangayDisplay(barangay);
+  const cityText = compactText(city);
+  const publicDetail = compactText(street) || compactText(subdivisionArea);
+
+  if (publicDetail && barangayText) return `${publicDetail}, ${barangayText}`;
+  if (publicDetail) return publicDetail;
+  if (barangayText && cityText) return `${barangayText}, ${cityText}`;
+  if (barangayText) return barangayText;
+
+  return cityText || 'Brgy. San Pedro, Santo Tomas';
+}
+
+export function formatPrivateLocation({
+  province,
+  city,
+  barangay,
+  street,
+  subdivisionArea,
+  blockLot,
+  houseNumber,
+  landmarkNote,
+}: {
+  province?: string | null;
+  city?: string | null;
+  barangay?: string | null;
+  street?: string | null;
+  subdivisionArea?: string | null;
+  blockLot?: string | null;
+  houseNumber?: string | null;
+  landmarkNote?: string | null;
+}) {
+  const parts = [
+    houseNumber,
+    blockLot,
+    street,
+    subdivisionArea,
+    landmarkNote,
+    formatBarangayDisplay(barangay),
+    city,
+    province,
+  ]
     .map(compactText)
     .filter(Boolean);
 
   if (parts.length) return parts.join(', ');
 
-  return compactText(city) || 'Barangay San Pedro';
+  return '';
 }
 
 function normalizeAmount(value: number | null | undefined) {
@@ -156,22 +223,101 @@ function formatCurrency(value: number) {
   return `₱${value.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`;
 }
 
-export function formatRateRange({
+function parseLegacyRateText(value: string | null | undefined) {
+  const text = compactText(value);
+  if (!text) return { min: null, max: null };
+
+  const phpRangeMatch = text.match(
+    /(?:php|₱)?\s*([0-9][0-9,]*)\s*(?:-|–|to)\s*(?:php|₱)?\s*([0-9][0-9,]*)/i,
+  );
+  if (phpRangeMatch) {
+    const min = Number(phpRangeMatch[1].replace(/,/g, ''));
+    const max = Number(phpRangeMatch[2].replace(/,/g, ''));
+    return {
+      min: normalizeAmount(min),
+      max: normalizeAmount(max),
+    };
+  }
+
+  const singleAmountMatch = text.match(/(?:php|₱)?\s*([0-9][0-9,]*)\s*(?:php)?/i);
+  if (singleAmountMatch) {
+    const amount = Number(singleAmountMatch[1].replace(/,/g, ''));
+    const normalizedAmount = normalizeAmount(amount);
+    return {
+      min: normalizedAmount,
+      max: normalizedAmount,
+    };
+  }
+
+  return { min: null, max: null };
+}
+
+function getDisplayRateType({
+  rateType,
+  hasAmount,
+}: {
+  rateType?: RateType | string | null;
+  hasAmount: boolean;
+}) {
+  const normalizedRateType = normalizeRateType(rateType);
+  if (hasAmount && normalizedRateType === 'negotiable') return 'per_project';
+  return normalizedRateType;
+}
+
+function getNormalizedRateBounds({
   min,
   max,
-  rateType,
-  fallback = 'Negotiable',
+  amount,
+  legacyText,
 }: {
   min?: number | null;
   max?: number | null;
+  amount?: number | null;
+  legacyText?: string | null;
+}) {
+  const normalizedAmount = normalizeAmount(amount);
+  const normalizedMin = normalizeAmount(min) ?? normalizedAmount;
+  const normalizedMax = normalizeAmount(max) ?? normalizedAmount;
+
+  if (normalizedMin || normalizedMax) {
+    return {
+      min: normalizedMin,
+      max: normalizedMax,
+      source: 'structured' as const,
+    };
+  }
+
+  const legacyBounds = parseLegacyRateText(legacyText);
+  return {
+    ...legacyBounds,
+    source: legacyBounds.min || legacyBounds.max ? ('legacy' as const) : ('missing' as const),
+  };
+}
+
+export function formatRateRange({
+  min,
+  max,
+  amount,
+  rateType,
+  negotiable,
+  legacyText,
+  fallback = 'Rate not specified',
+}: {
+  min?: number | null;
+  max?: number | null;
+  amount?: number | null;
   rateType?: RateType | string | null;
+  negotiable?: boolean | null;
+  legacyText?: string | null;
   fallback?: string;
 }) {
-  const normalizedRateType = normalizeRateType(rateType);
-  const normalizedMin = normalizeAmount(min);
-  const normalizedMax = normalizeAmount(max);
+  const bounds = getNormalizedRateBounds({ min, max, amount, legacyText });
+  const normalizedMin = bounds.min;
+  const normalizedMax = bounds.max;
+  const hasAmount = Boolean(normalizedMin || normalizedMax);
+  const normalizedRateType = getDisplayRateType({ rateType, hasAmount });
 
-  if (normalizedRateType === 'negotiable' && !normalizedMin && !normalizedMax) {
+  if ((negotiable || normalizedRateType === 'negotiable') && !hasAmount) {
     return 'Negotiable';
   }
 
@@ -206,6 +352,7 @@ export function formatJobBudget(job: {
   return formatRateRange({
     min: job.budgetMin ?? job.budgetAmount ?? null,
     max: job.budgetMax ?? job.budgetAmount ?? null,
+    amount: job.budgetAmount,
     rateType: job.rateType,
     fallback: 'Budget to coordinate',
   });
@@ -221,10 +368,11 @@ export function formatServiceRate(service: {
     min: service.rateMin,
     max: service.rateMax,
     rateType: service.rateType,
+    legacyText: service.rateText,
     fallback: '',
   });
 
-  return formattedRange || compactText(service.rateText) || 'Rate to coordinate';
+  return formattedRange || compactText(service.rateText) || 'Rate not specified';
 }
 
 export function doesRateOverlap({
@@ -232,19 +380,24 @@ export function doesRateOverlap({
   itemMax,
   filterMin,
   filterMax,
+  includeNegotiable = false,
+  itemText,
 }: {
   itemMin?: number | null;
   itemMax?: number | null;
   filterMin?: number | null;
   filterMax?: number | null;
+  includeNegotiable?: boolean;
+  itemText?: string | null;
 }) {
   const requestedMin = normalizeAmount(filterMin);
   const requestedMax = normalizeAmount(filterMax);
   if (!requestedMin && !requestedMax) return true;
 
-  const normalizedItemMin = normalizeAmount(itemMin);
-  const normalizedItemMax = normalizeAmount(itemMax) ?? normalizedItemMin;
-  if (!normalizedItemMin && !normalizedItemMax) return true;
+  const bounds = getNormalizedRateBounds({ min: itemMin, max: itemMax, legacyText: itemText });
+  const normalizedItemMin = bounds.min;
+  const normalizedItemMax = bounds.max ?? normalizedItemMin;
+  if (!normalizedItemMin && !normalizedItemMax) return includeNegotiable;
 
   const low = normalizedItemMin ?? normalizedItemMax ?? 0;
   const high = normalizedItemMax ?? normalizedItemMin ?? Number.MAX_SAFE_INTEGER;
@@ -389,11 +542,13 @@ export function mapProfile(row: ProfileRow | null | undefined): PublicProfileSum
     barangay: row.barangay,
     purokSitio: row.purok_sitio,
     street: row.street,
+    subdivisionArea: row.subdivision_area,
     city: row.city,
     approximateLocation: formatApproximateLocation({
       barangay: row.barangay,
       purokSitio: row.purok_sitio,
       street: row.street,
+      subdivisionArea: row.subdivision_area,
       city: row.city,
     }),
     about: row.about,
@@ -415,7 +570,7 @@ export async function loadPublicProfiles(userIds: string[]) {
   const { data } = await supabase
     .from('profiles')
     .select(
-      'id, full_name, first_name, last_name, barangay, purok_sitio, street, city, about, avatar_url, availability, verified_at, barangay_verified_at',
+      'id, full_name, first_name, last_name, barangay, purok_sitio, street, subdivision_area, city, about, avatar_url, availability, verified_at, barangay_verified_at',
     )
     .in('id', ids);
 

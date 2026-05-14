@@ -33,23 +33,26 @@ Failure states:
 
 1. User registers with email OTP plus password, or logs in with email/password.
 2. User selects intended role: find work or hire someone (2 options only).
-3. App collects basic profile identity and location: barangay, optional purok/sitio, street, block/lot, house number, and preferred contact method.
-4. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both).
-5. App shows review.
-6. App saves onboarding and shows complete.
-7. App lets the user enter Home in viewer mode.
-8. Viewer can browse jobs, workers, service posts, and educational prompts.
-9. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
-10. When the viewer taps a locked action, app shows a verification prompt or routes to verification.
+3. App collects basic profile identity.
+4. App collects current area as a separate selector step: fixed supported area `Brgy. San Pedro, Santo Tomas, Batangas`.
+5. App collects specific address details separately: public street/road or subdivision/area, and optional private block/lot, house number/building name, and landmark/note.
+6. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both). Provider service setup uses one clean screen with selector rows for work setup, categories, services, and optional custom service; detailed choices happen in bottom sheets.
+7. App shows review.
+8. App saves onboarding and shows complete.
+9. App lets the user enter Home in viewer mode.
+10. Viewer can browse jobs, workers, service posts, and educational prompts.
+11. Viewer sees locked actions for posting, messaging, saving, reviewing, and creating public service posts.
+12. When the viewer taps a locked action, app shows a verification prompt or routes to verification.
 
 Rules:
 
 - Do not overload first-time onboarding with all profile, ID, credential, and service details.
 - Do not collect certificates, ID documents, selfie/photo uploads, or verification files during first onboarding.
 - First onboarding is complete when `user_preferences.onboarding_completed_at` is set and the profile has basic identity: first name, last name or full name, city, and barangay.
-- Exact address fields are collected for verification/admin review or private coordination. Public surfaces show only approximate location such as barangay, purok/sitio, or street.
+- Exact address fields are collected for verification/admin review or private coordination. Public surfaces show only approximate location such as `Brgy. San Pedro, Santo Tomas`, street/road plus barangay, or subdivision/area plus barangay. House number, block/lot, landmark/address notes, private contact data, and verification document URLs are never shown publicly.
 - The first entry experience should help users understand Konektado quickly.
 - Service preference choices personalize browsing; they are not verification proof.
+- Provider work setup is stored separately as `on_site`, `online`, or `both`. Official service choices stay in taxonomy service arrays, while custom service text stays in custom service arrays for admin review.
 - Viewer mode is read-only for user-to-user marketplace interactions.
 - Viewer mode still requires a lightweight authenticated account; it is not anonymous public browsing.
 - Provider intent opens Home on Jobs, client intent opens Home on Workers.

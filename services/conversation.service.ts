@@ -2,6 +2,7 @@ import type { ServiceResult } from '@/services/auth.service';
 import { getJobDetail } from '@/services/job.service';
 import {
   compactText,
+  formatPublicLocation,
   getCurrentUserId,
   loadPublicProfiles,
   mapJob,
@@ -132,8 +133,12 @@ function mapInboxProfile(
     barangay: row[`${role}_barangay`],
     purokSitio: null,
     street: null,
+    subdivisionArea: null,
     city: row[`${role}_city`],
-    approximateLocation: [row[`${role}_barangay`], row[`${role}_city`]].filter(Boolean).join(', ') || null,
+    approximateLocation: formatPublicLocation({
+      barangay: row[`${role}_barangay`],
+      city: row[`${role}_city`],
+    }),
     about: row[`${role}_about`],
     avatarUrl: row[`${role}_avatar_url`],
     availability: row[`${role}_availability`],

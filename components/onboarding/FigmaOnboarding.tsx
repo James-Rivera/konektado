@@ -19,6 +19,7 @@ import {
     type ImageSourcePropType,
     type ImageStyle,
     type StyleProp,
+    type TextStyle,
     type TextInputProps,
     type ViewStyle
 } from 'react-native';
@@ -195,20 +196,24 @@ export function ProgressBars({ current, total = 3, compact = false, style }: Pro
 
 type OnboardingButtonProps = {
   label: string;
+  onDisabledPress?: () => void;
   onPress?: () => void;
   variant?: 'blue' | 'yellow' | 'outline';
   disabled?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 };
 
 export function OnboardingButton({
   label,
+  onDisabledPress,
   onPress,
   variant = 'blue',
   disabled = false,
   loading = false,
   style,
+  textStyle,
 }: OnboardingButtonProps) {
   const isDisabled = disabled || loading;
   const isYellow = variant === 'yellow';
@@ -219,8 +224,8 @@ export function OnboardingButton({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading }}
-      disabled={isDisabled}
-      onPress={onPress}
+      disabled={isDisabled && !onDisabledPress}
+      onPress={isDisabled ? onDisabledPress : onPress}
       style={({ pressed }) => [
         styles.actionButton,
         isYellow ? styles.actionButtonYellow : isOutline ? styles.actionButtonOutline : styles.actionButtonBlue,
@@ -228,7 +233,7 @@ export function OnboardingButton({
         pressed && !isDisabled && styles.actionButtonPressed,
         style,
       ]}>
-      {loading ? <ActivityIndicator color={foreground} size="small" /> : <Text style={[styles.actionButtonText, { color: foreground }]}>{label}</Text>}
+      {loading ? <ActivityIndicator color={foreground} size="small" /> : <Text style={[styles.actionButtonText, { color: foreground }, textStyle]}>{label}</Text>}
     </Pressable>
   );
 }

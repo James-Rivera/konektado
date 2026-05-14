@@ -21,9 +21,9 @@ import type {
 type VerificationFormState = CreateVerificationRequestInput;
 
 const emptyForm: VerificationFormState = {
-  barangay: 'Barangay San Pedro',
+  barangay: 'San Pedro',
   birthdate: '',
-  city: 'Sto. Tomas',
+  city: 'Santo Tomas',
   email: null,
   files: [],
   firstName: '',

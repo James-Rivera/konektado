@@ -1,6 +1,7 @@
 import { splitOfficialAndCustomServices } from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
-import { compactText } from '@/services/marketplace.helpers';
+import { compactText, formatPrivateLocation } from '@/services/marketplace.helpers';
+import { DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_PROVINCE } from '@/services/onboarding.service';
 import type {
   CoreProfileInput,
   HiringProfileInput,
@@ -28,11 +29,14 @@ type ProfileRow = {
   last_name: string | null;
   phone: string | null;
   preferred_contact_method: string | null;
+  province: string | null;
   barangay: string | null;
   purok_sitio: string | null;
   street: string | null;
+  subdivision_area: string | null;
   block_lot: string | null;
   house_number: string | null;
+  landmark_note: string | null;
   city: string | null;
   about: string | null;
   avatar_url: string | null;
@@ -74,7 +78,7 @@ type PreferencesRow = {
 };
 
 const PROFILE_SELECT =
-  'id, email, full_name, first_name, last_name, phone, preferred_contact_method, barangay, purok_sitio, street, block_lot, house_number, city, about, avatar_url, availability, verified_at, barangay_verified_at';
+  'id, email, full_name, first_name, last_name, phone, preferred_contact_method, province, barangay, purok_sitio, street, subdivision_area, block_lot, house_number, landmark_note, city, about, avatar_url, availability, verified_at, barangay_verified_at';
 const PROVIDER_PROFILE_SELECT =
   'service_type, headline, bio, service_area, availability, rate_text, rate_min, rate_max, rate_type, custom_offered_services, custom_service_review_status, profile_completed_at';
 const CLIENT_PROFILE_SELECT =
@@ -158,28 +162,20 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
     return { data: null, error: 'Enter your first and last name.' };
   }
 
-  if (!compactText(input.barangay) || !compactText(input.city) || !compactText(input.street)) {
-    return { data: null, error: 'Enter your barangay, city, and street.' };
+  if (!compactText(input.street) && !compactText(input.subdivisionArea)) {
+    return { data: null, error: 'Enter your street or subdivision/area.' };
   }
 
-  if (!compactText(input.blockLot) && !compactText(input.houseNumber)) {
-    return { data: null, error: 'Enter your block/lot or house number for verification.' };
-  }
-
-  if (!compactText(input.preferredContactMethod)) {
-    return { data: null, error: 'Choose a preferred contact method.' };
-  }
-
-  const privateAddress = [
-    compactText(input.houseNumber),
-    compactText(input.blockLot),
-    compactText(input.street),
-    compactText(input.purokSitio),
-    compactText(input.barangay),
-    compactText(input.city),
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const privateAddress = formatPrivateLocation({
+    province: DEFAULT_PROVINCE,
+    city: DEFAULT_CITY,
+    barangay: DEFAULT_BARANGAY,
+    street: input.street,
+    subdivisionArea: input.subdivisionArea,
+    blockLot: input.blockLot,
+    houseNumber: input.houseNumber,
+    landmarkNote: input.landmarkNote,
+  });
 
   const { error } = await supabase
     .from('profiles')
@@ -187,13 +183,14 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
       first_name: firstName,
       last_name: lastName,
       full_name: fullName,
-      barangay: compactText(input.barangay) || null,
-      purok_sitio: compactText(input.purokSitio) || null,
+      province: DEFAULT_PROVINCE,
+      barangay: DEFAULT_BARANGAY,
       street: compactText(input.street) || null,
+      subdivision_area: compactText(input.subdivisionArea) || null,
       block_lot: compactText(input.blockLot) || null,
       house_number: compactText(input.houseNumber) || null,
-      city: compactText(input.city) || null,
-      preferred_contact_method: compactText(input.preferredContactMethod) || 'app_message',
+      landmark_note: compactText(input.landmarkNote) || null,
+      city: DEFAULT_CITY,
       street_address: privateAddress || null,
       about: compactText(input.about) || null,
       availability: compactText(input.availability) || null,
@@ -223,6 +220,10 @@ export async function saveWorkProfile(input: WorkProfileInput): Promise<ServiceR
 
   if (rateMin !== null && rateMax !== null && rateMin > rateMax) {
     return { data: null, error: 'Minimum rate must not be greater than maximum rate.' };
+  }
+
+  if (input.rateType !== 'negotiable' && rateMin === null && rateMax === null) {
+    return { data: null, error: 'Add a rate range or choose negotiable.' };
   }
 
   const payload = {
@@ -389,12 +390,15 @@ function buildCompletionStatus({
   const core: ProfileCompletionStatus['core'] = {
     firstName,
     lastName,
-    barangay: compactText(profile.barangay),
+    province: compactText(profile.province) || DEFAULT_PROVINCE,
+    barangay: compactText(profile.barangay) || DEFAULT_BARANGAY,
     purokSitio: compactText(profile.purok_sitio),
     street: compactText(profile.street),
+    subdivisionArea: compactText(profile.subdivision_area),
     blockLot: compactText(profile.block_lot),
     houseNumber: compactText(profile.house_number),
-    city: compactText(profile.city),
+    landmarkNote: compactText(profile.landmark_note),
+    city: compactText(profile.city) || DEFAULT_CITY,
     preferredContactMethod:
       compactText(profile.preferred_contact_method) || (compactText(profile.phone) ? 'phone' : 'app_message'),
     about: compactText(profile.about),
@@ -430,10 +434,8 @@ function buildCompletionStatus({
   const missingCore = [
     !name ? 'Display name' : null,
     !core.barangay ? 'Barangay' : null,
-    !core.street ? 'Street' : null,
-    !core.blockLot && !core.houseNumber ? 'Block/Lot or house number' : null,
+    !core.street && !core.subdivisionArea ? 'Street or subdivision/area' : null,
     !core.city ? 'City' : null,
-    !core.preferredContactMethod ? 'Preferred contact method' : null,
     !core.about ? 'Short public intro' : null,
     !core.availability ? 'Availability' : null,
   ].filter((value): value is string => Boolean(value));

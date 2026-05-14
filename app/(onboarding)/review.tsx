@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import {
@@ -10,6 +10,7 @@ import {
     ReviewField,
     onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
+import { getDisplayLabelForOfferedDeliveryMode } from '@/constants/service-taxonomy';
 
 import { useOnboarding } from './onboarding-context';
 
@@ -20,8 +21,30 @@ export default function ReviewStep() {
   const [confirmedInfo, setConfirmedInfo] = useState(false);
   const offeredServices = [...draft.offeredServices, ...draft.customOfferedServices].join(', ');
   const neededServices = [...draft.neededServices, ...draft.customNeededServices].join(', ');
+  const offeredDeliveryMode = getDisplayLabelForOfferedDeliveryMode(draft.offeredDeliveryMode);
+
+  useEffect(() => {
+    if (role === 'provider' || role === 'client') return;
+
+    router.replace({
+      pathname: '/(auth)/role',
+      params: { returnTo: '/(onboarding)/job' },
+    });
+  }, [role, router]);
 
   const submit = async () => {
+    if (role !== 'provider' && role !== 'client') {
+      Alert.alert(
+        'Choose how you will use Konektado',
+        'Select whether you want to find work or hire someone before reviewing your details.',
+      );
+      router.replace({
+        pathname: '/(auth)/role',
+        params: { returnTo: '/(onboarding)/job' },
+      });
+      return;
+    }
+
     if (!acceptedTerms || !confirmedInfo) {
       Alert.alert('Confirm your details', 'Please agree to the terms and confirm your information is correct.');
       return;
@@ -56,7 +79,10 @@ export default function ReviewStep() {
           <ReviewField label="Address" multiline value={address || 'Not provided'} />
           <ReviewField label="Birthdate" value={draft.birthdate || 'Not provided'} />
           {role === 'provider' ? (
-            <ReviewField label="Offered services" value={offeredServices || 'Not provided'} />
+            <>
+              <ReviewField label="Work setup" value={offeredDeliveryMode || 'Not provided'} />
+              <ReviewField label="Offered services" value={offeredServices || 'Not provided'} />
+            </>
           ) : null}
           {role === 'client' ? (
             <ReviewField label="Needed services" value={neededServices || 'Not provided'} />
