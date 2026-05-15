@@ -5,6 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { JobCard } from '@/components/JobCard';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
@@ -33,6 +34,7 @@ type JobDraft = {
   budgetMin: string;
   budgetMax: string;
   rateType: RateType;
+  budgetNegotiable: boolean;
   workersNeeded: string;
   scheduleText: string;
   experienceLevel: ExperienceLevel;
@@ -60,6 +62,7 @@ function parseDraft(value: string | undefined): JobDraft | null {
       budgetMin: parsed.budgetMin ?? '',
       budgetMax: parsed.budgetMax ?? '',
       rateType: parsed.rateType ?? 'per_project',
+      budgetNegotiable: parsed.budgetNegotiable ?? false,
       experienceLevel: parsed.experienceLevel ?? 'any',
       certificationRequired: parsed.certificationRequired ?? false,
       certificationNote: parsed.certificationNote ?? '',
@@ -80,11 +83,17 @@ function parseNumber(value: string) {
 
 export default function CreateJobPreviewScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ draft?: string | string[]; draftId?: string | string[] }>();
-  const { profile, loading } = useProfile();
+  const { showSuccessToast } = useFeedback();
+  const params = useLocalSearchParams<{
+    draft?: string | string[];
+    draftId?: string | string[];
+    returnTo?: string | string[];
+  }>();
+  const { profile, loading, refresh } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
   const draftId = getParamValue(params.draftId);
+  const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
   const budgetMin = draft ? parseNumber(draft.budgetMin) : null;
@@ -109,6 +118,7 @@ export default function CreateJobPreviewScreen() {
         budgetMin,
         budgetMax,
         rateType: draft.rateType,
+        budgetNegotiable: draft.budgetNegotiable,
         workersNeeded,
         scheduleText: draft.scheduleText,
         experienceLevel: draft.experienceLevel,
@@ -137,6 +147,7 @@ export default function CreateJobPreviewScreen() {
       budgetMin,
       budgetMax,
       rateType: draft.rateType,
+      budgetNegotiable: draft.budgetNegotiable,
       workersNeeded,
       scheduleText: draft.scheduleText,
       experienceLevel: draft.experienceLevel,
@@ -164,10 +175,16 @@ export default function CreateJobPreviewScreen() {
       return;
     }
 
-    Alert.alert('Post published', 'Your job post is now visible to verified workers.');
+    showSuccessToast('Job posted');
     if (draftId) {
       await deleteJobDraft(draftId);
     }
+    await refresh();
+    if (returnTo === 'profile') {
+      router.replace('/(tabs)/profile');
+      return;
+    }
+
     router.replace({
       pathname: '/job/[jobId]',
       params: { jobId: result.data.id },
@@ -276,6 +293,7 @@ export default function CreateJobPreviewScreen() {
                 budgetMin,
                 budgetMax,
                 rateType: draft.rateType,
+                budgetNegotiable: draft.budgetNegotiable,
               })} - ${draft.scheduleText || 'Schedule to coordinate'}`}
               tags={[draft.category, draft.serviceNeeded, ...draft.tags].filter(Boolean).slice(0, 4)}
               title={formatJobPostTitle({

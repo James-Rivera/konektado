@@ -9,7 +9,7 @@ import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.t
 import { supabase } from '@/utils/supabase';
 
 const JOB_DRAFT_COLUMNS =
-  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_amount, budget_min, budget_max, rate_type, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
+  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_amount, budget_min, budget_max, rate_type, budget_negotiable, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
 
 type JobDraftRow = {
   id: string;
@@ -26,6 +26,7 @@ type JobDraftRow = {
   budget_min: number | null;
   budget_max: number | null;
   rate_type: string | null;
+  budget_negotiable: boolean | null;
   private_location_notes: string | null;
   workers_needed: number | null;
   schedule_text: string | null;
@@ -55,6 +56,7 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
     budgetMin: row.budget_min ?? row.budget_amount,
     budgetMax: row.budget_max ?? row.budget_amount,
     rateType: normalizeRateType(row.rate_type),
+    budgetNegotiable: row.budget_negotiable ?? (row.rate_type === 'negotiable'),
     privateLocationNotes: row.private_location_notes,
     workersNeeded: row.workers_needed,
     scheduleText: row.schedule_text,
@@ -90,6 +92,7 @@ function normalizeDraftPayload(input: UpsertJobDraftInput) {
     budget_min: budgetMin,
     budget_max: budgetMax,
     rate_type: normalizeRateType(input.rateType),
+    budget_negotiable: input.budgetNegotiable ?? false,
     workers_needed: input.workersNeeded ?? null,
     schedule_text: compactText(input.scheduleText) || null,
     experience_level: normalizeExperienceLevel(input.experienceLevel),

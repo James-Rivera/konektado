@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { Animated, Easing, Modal, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { color, radius, shadow, space } from '@/constants/theme';
@@ -82,6 +82,7 @@ export function BottomSheet({ children, maxHeight = '82%', onClose, visible }: B
               transform: [{ translateY: sheetTranslateY }],
             } as ViewStyle,
           ]}>
+          <View style={styles.handle} />
           {children}
         </Animated.View>
       </Animated.View>
@@ -91,7 +92,7 @@ export function BottomSheet({ children, maxHeight = '82%', onClose, visible }: B
 
 const styles = StyleSheet.create({
   overlay: {
-    backgroundColor: 'rgba(58,58,58,0.5)',
+    backgroundColor: 'rgba(17,17,17,0.34)',
     flex: 1,
     justifyContent: 'flex-end',
   },
@@ -100,13 +101,21 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: color.background,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     gap: space.lg,
     alignSelf: 'stretch',
     overflow: 'hidden',
-    padding: space.lg,
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
     width: '100%',
     ...shadow.modal,
+  },
+  handle: {
+    alignSelf: 'center',
+    backgroundColor: '#D6DCE5',
+    borderRadius: radius.pill,
+    height: 4,
+    width: 44,
   },
 });

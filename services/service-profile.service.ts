@@ -12,9 +12,9 @@ import {
   normalizeExperienceLevel,
   normalizeRateType,
   requireVerifiedUser,
+  validateRateRange,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
-import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import type {
   CreateServiceInput,
   ProviderService,
@@ -26,7 +26,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const SERVICE_COLUMNS =
-  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
+  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 
 type ProviderStats = {
   averageRating: number | null;
@@ -109,7 +109,7 @@ function mapServiceSearchResult(
 export async function createService(
   input: CreateServiceInput,
 ): Promise<ServiceResult<ProviderService>> {
-  const user = await requireVerifiedCompleteProfile('provider');
+  const user = await requireVerifiedUser();
   if (user.error) return user;
 
   const category = compactText(input.category);
@@ -118,6 +118,7 @@ export async function createService(
   const rateMin = input.rateMin ?? null;
   const rateMax = input.rateMax ?? null;
   const rateType = normalizeRateType(input.rateType);
+  const rateRange = validateRateRange({ min: rateMin, max: rateMax, rateType });
   const experienceLevel = normalizeExperienceLevel(input.experienceLevel);
   const customCategory = compactText(input.customCategory) || null;
 
@@ -125,8 +126,8 @@ export async function createService(
     return { data: null, error: 'Enter a service category and title.' };
   }
 
-  if (rateMin !== null && rateMax !== null && rateMin > rateMax) {
-    return { data: null, error: 'Minimum rate must not be greater than maximum rate.' };
+  if (!rateRange.valid) {
+    return { data: null, error: `Rate range: ${rateRange.error ?? 'Enter a valid rate range.'}` };
   }
 
   const { data, error } = await supabase
@@ -141,9 +142,10 @@ export async function createService(
       years_experience: input.yearsExperience ?? null,
       availability_text: compactText(input.availabilityText) || null,
       rate_text: compactText(input.rateText) || null,
-      rate_min: rateMin,
-      rate_max: rateMax,
-      rate_type: rateType,
+      rate_min: rateRange.min,
+      rate_max: rateRange.max,
+      rate_type: rateRange.rateType,
+      rate_negotiable: input.rateNegotiable ?? false,
       experience_level: experienceLevel,
       certification_available: input.certificationAvailable ?? false,
       certification_note: compactText(input.certificationNote) || null,
@@ -166,6 +168,101 @@ export async function createService(
         ? 'Complete barangay verification before creating services.'
         : error.message,
     };
+  }
+
+  return { data: mapService(data), error: null };
+}
+
+export async function getMyService(serviceId: string): Promise<ServiceResult<ProviderService>> {
+  const user = await getCurrentUserId();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const { data, error } = await supabase
+    .from('services')
+    .select(SERVICE_COLUMNS)
+    .eq('id', serviceId)
+    .eq('provider_id', user.data)
+    .maybeSingle<ServiceRow>();
+
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: 'Service not found.' };
+
+  return { data: mapService(data), error: null };
+}
+
+export async function updateService({
+  serviceId,
+  input,
+}: {
+  serviceId: string;
+  input: CreateServiceInput;
+}): Promise<ServiceResult<ProviderService>> {
+  const user = await requireVerifiedUser();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const category = compactText(input.category);
+  const title = compactText(input.title);
+  const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
+  const rateType = normalizeRateType(input.rateType);
+  const rateRange = validateRateRange({
+    min: input.rateMin ?? null,
+    max: input.rateMax ?? null,
+    rateType,
+  });
+  const customCategory = compactText(input.customCategory) || null;
+
+  if (!category || !title) {
+    return { data: null, error: 'Enter a service category and title.' };
+  }
+
+  if (!rateRange.valid) {
+    return { data: null, error: `Rate range: ${rateRange.error ?? 'Enter a valid rate range.'}` };
+  }
+
+  const { data, error } = await supabase
+    .from('services')
+    .update({
+      category,
+      title,
+      description: compactText(input.description) || null,
+      tags,
+      photo_urls: input.photoUrls ?? [],
+      years_experience: input.yearsExperience ?? null,
+      availability_text: compactText(input.availabilityText) || null,
+      rate_text: compactText(input.rateText) || null,
+      rate_min: rateRange.min,
+      rate_max: rateRange.max,
+      rate_type: rateRange.rateType,
+      rate_negotiable: input.rateNegotiable ?? false,
+      experience_level: normalizeExperienceLevel(input.experienceLevel),
+      certification_available: input.certificationAvailable ?? false,
+      certification_note: compactText(input.certificationNote) || null,
+      custom_category: customCategory,
+      custom_category_review_status: customCategory ? 'pending' : 'none',
+      barangay: compactText(input.barangay) || null,
+      location_text: compactText(input.locationText) || compactText(input.barangay) || null,
+      allow_messages: input.allowMessages ?? true,
+      auto_reply_enabled: input.autoReplyEnabled ?? false,
+      auto_pause_enabled: input.autoPauseEnabled ?? false,
+    })
+    .eq('id', serviceId)
+    .eq('provider_id', user.data)
+    .select(SERVICE_COLUMNS)
+    .maybeSingle<ServiceRow>();
+
+  if (error) {
+    return {
+      data: null,
+      error: error.message.toLowerCase().includes('row-level security')
+        ? 'Complete barangay verification before changing services.'
+        : error.message,
+    };
+  }
+
+  if (!data) {
+    return { data: null, error: 'Service not found.' };
   }
 
   return { data: mapService(data), error: null };

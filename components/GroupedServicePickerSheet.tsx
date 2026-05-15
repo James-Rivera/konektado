@@ -3,44 +3,59 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import { color, radius, space, typography } from '@/constants/theme';
 
 type GroupedServicePickerSheetProps = {
-  categories: string[];
+  categories: readonly string[];
   description: string;
+  mode?: 'single' | 'multi';
   searchPlaceholder: string;
   selectedCategory?: string | null;
   selectedService?: string | null;
-  servicesByCategory: Record<string, string[]>;
+  selectedServices?: string[];
+  selectedCustomServices?: string[];
+  servicesByCategory: Record<string, readonly string[]>;
   title: string;
   visible: boolean;
   onClose: () => void;
-  onSelect: (value: string) => void;
+  onSelect?: (value: string) => void;
+  onApplyMulti?: (value: { selectedServices: string[]; customServices: string[] }) => void;
 };
 
 export function GroupedServicePickerSheet({
   categories,
   description,
+  mode = 'single',
   searchPlaceholder,
   selectedCategory,
   selectedService,
+  selectedServices = [],
+  selectedCustomServices = [],
   servicesByCategory,
   title,
   visible,
   onClose,
   onSelect,
+  onApplyMulti,
 }: GroupedServicePickerSheetProps) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>(selectedCategory ?? categories[0] ?? '');
+  const [draftServices, setDraftServices] = useState<string[]>(selectedServices);
+  const [draftCustomServices, setDraftCustomServices] = useState<string[]>(selectedCustomServices);
+  const [customServiceText, setCustomServiceText] = useState('');
 
   useEffect(() => {
     if (!visible) {
       setQuery('');
+      setCustomServiceText('');
       return;
     }
 
     setActiveCategory(selectedCategory ?? categories[0] ?? '');
-  }, [categories, selectedCategory, visible]);
+    setDraftServices(selectedServices);
+    setDraftCustomServices(selectedCustomServices);
+  }, [categories, selectedCategory, selectedCustomServices, selectedServices, visible]);
 
   const visibleServices = useMemo(() => {
     const categoryServices = servicesByCategory[activeCategory] ?? [];
@@ -52,9 +67,43 @@ export function GroupedServicePickerSheet({
   }, [activeCategory, query, servicesByCategory]);
 
   const selectService = (service: string) => {
-    onSelect(service);
+    if (mode === 'multi') {
+      setDraftServices((current) =>
+        current.includes(service) ? current.filter((item) => item !== service) : [...current, service],
+      );
+      return;
+    }
+
+    onSelect?.(service);
     onClose();
   };
+
+  const addCustomService = () => {
+    const cleanValue = customServiceText.trim();
+    if (!cleanValue) return;
+
+    setDraftCustomServices((current) =>
+      current.some((item) => item.toLowerCase() === cleanValue.toLowerCase())
+        ? current
+        : [...current, cleanValue],
+    );
+    setCustomServiceText('');
+  };
+
+  const removeCustomService = (service: string) => {
+    setDraftCustomServices((current) => current.filter((item) => item !== service));
+  };
+
+  const applyMultiSelection = () => {
+    onApplyMulti?.({
+      selectedServices: draftServices,
+      customServices: draftCustomServices,
+    });
+    onClose();
+  };
+
+  const selectedCount = draftServices.length + draftCustomServices.length;
+  const isMulti = mode === 'multi';
 
   return (
     <BottomSheet maxHeight="76%" onClose={onClose} visible={visible}>
@@ -111,7 +160,9 @@ export function GroupedServicePickerSheet({
 
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>Services in {activeCategory}</Text>
-        <Text style={styles.listHint}>Choose one service for this post.</Text>
+        <Text style={styles.listHint}>
+          {isMulti ? `${selectedCount} selected` : 'Choose one service for this post.'}
+        </Text>
       </View>
 
       <View style={styles.listShell}>
@@ -121,12 +172,12 @@ export function GroupedServicePickerSheet({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator>
           {visibleServices.map((service, index) => {
-            const active = service === selectedService;
+            const active = isMulti ? draftServices.includes(service) : service === selectedService;
 
             return (
               <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
+                accessibilityRole={isMulti ? 'checkbox' : 'button'}
+                accessibilityState={isMulti ? { checked: active } : { selected: active }}
                 key={service}
                 onPress={() => selectService(service)}
                 style={({ pressed }) => [
@@ -139,6 +190,8 @@ export function GroupedServicePickerSheet({
                 </Text>
                 {active ? (
                   <MaterialIcons color={color.primary} name="check" size={20} />
+                ) : isMulti ? (
+                  <MaterialIcons color={color.textSubtle} name="add-circle-outline" size={20} />
                 ) : null}
               </Pressable>
             );
@@ -149,6 +202,61 @@ export function GroupedServicePickerSheet({
         </ScrollView>
         <View pointerEvents="none" style={styles.listFade} />
       </View>
+
+      {isMulti ? (
+        <>
+          <View style={styles.customBlock}>
+            <View style={styles.customHeader}>
+              <Text style={styles.sectionTitle}>Other service</Text>
+              <Text style={styles.listHint}>Use this only when it is not listed above.</Text>
+            </View>
+            {draftCustomServices.length ? (
+              <View style={styles.selectedRow}>
+                {draftCustomServices.map((service) => (
+                  <Pressable
+                    accessibilityLabel={`Remove ${service}`}
+                    accessibilityRole="button"
+                    key={service}
+                    onPress={() => removeCustomService(service)}
+                    style={({ pressed }) => [styles.customPill, pressed && styles.pressed]}>
+                    <Text style={styles.customPillText}>{service}</Text>
+                    <MaterialIcons color={color.primary} name="close" size={15} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.customInputRow}>
+              <TextInput
+                onChangeText={setCustomServiceText}
+                onSubmitEditing={addCustomService}
+                placeholder="Add other service"
+                placeholderTextColor={color.textSubtle}
+                returnKeyType="done"
+                style={styles.customInput}
+                value={customServiceText}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={addCustomService}
+                style={({ pressed }) => [styles.customAddButton, pressed && styles.pressed]}>
+                <Text style={styles.customAddText}>Add</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.sheetActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onClose}
+              style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}>
+              <Text style={styles.secondaryActionText}>Cancel</Text>
+            </Pressable>
+            <View style={styles.primaryAction}>
+              <PrimaryButton label="Apply services" onPress={applyMultiSelection} />
+            </View>
+          </View>
+        </>
+      ) : null}
     </BottomSheet>
   );
 }
@@ -273,6 +381,81 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: color.primary,
     fontFamily: 'Satoshi-Bold',
+  },
+  customBlock: {
+    gap: space.sm,
+  },
+  customHeader: {
+    gap: space.xs,
+  },
+  selectedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  customPill: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.xs,
+    minHeight: 32,
+    paddingHorizontal: space.md,
+  },
+  customPillText: {
+    ...typography.captionMedium,
+    color: color.primary,
+  },
+  customInputRow: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 44,
+    paddingLeft: space.md,
+    paddingRight: space.xs,
+  },
+  customInput: {
+    ...typography.body,
+    color: color.text,
+    flex: 1,
+    minHeight: 42,
+  },
+  customAddButton: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: space.md,
+  },
+  customAddText: {
+    ...typography.captionMedium,
+    color: color.primary,
+  },
+  sheetActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  secondaryAction: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: space.lg,
+  },
+  secondaryActionText: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  primaryAction: {
+    flex: 1,
   },
   emptyText: {
     ...typography.body,

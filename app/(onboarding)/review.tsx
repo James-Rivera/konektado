@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import {
     CheckRow,
@@ -19,6 +19,7 @@ export default function ReviewStep() {
   const { draft, role, saveProfile, saving } = useOnboarding();
   const [acceptedTerms, setAcceptedTerms] = useState(true);
   const [confirmedInfo, setConfirmedInfo] = useState(false);
+  const [confirmationError, setConfirmationError] = useState<string | null>(null);
   const offeredServices = [...draft.offeredServices, ...draft.customOfferedServices].join(', ');
   const neededServices = [...draft.neededServices, ...draft.customNeededServices].join(', ');
   const offeredDeliveryMode = getDisplayLabelForOfferedDeliveryMode(draft.offeredDeliveryMode);
@@ -46,10 +47,11 @@ export default function ReviewStep() {
     }
 
     if (!acceptedTerms || !confirmedInfo) {
-      Alert.alert('Confirm your details', 'Please agree to the terms and confirm your information is correct.');
+      setConfirmationError('Please agree to the terms and confirm your information is correct.');
       return;
     }
 
+    setConfirmationError(null);
     const saved = await saveProfile();
     if (saved) {
       router.replace('/(onboarding)/complete');
@@ -90,12 +92,23 @@ export default function ReviewStep() {
         </View>
 
         <View style={styles.checks}>
-          <CheckRow checked={acceptedTerms} onPress={() => setAcceptedTerms((value) => !value)}>
+          <CheckRow
+            checked={acceptedTerms}
+            onPress={() => {
+              setAcceptedTerms((value) => !value);
+              if (confirmationError) setConfirmationError(null);
+            }}>
             I agree to the Terms of Use and Privacy Policy
           </CheckRow>
-          <CheckRow checked={confirmedInfo} onPress={() => setConfirmedInfo((value) => !value)}>
+          <CheckRow
+            checked={confirmedInfo}
+            onPress={() => {
+              setConfirmedInfo((value) => !value);
+              if (confirmationError) setConfirmationError(null);
+            }}>
             I confirm that the information I provided is correct
           </CheckRow>
+          {confirmationError ? <Text style={styles.errorText}>{confirmationError}</Text> : null}
         </View>
       </OnboardingFormScaffold>
     </>
@@ -112,5 +125,11 @@ const styles = StyleSheet.create({
   checks: {
     gap: 7,
     marginTop: 2,
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

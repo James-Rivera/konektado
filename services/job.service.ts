@@ -12,6 +12,7 @@ import {
     normalizeExperienceLevel,
     normalizeRateType,
     requireVerifiedUser,
+    validateRateRange,
     type JobRow,
 } from '@/services/marketplace.helpers';
 import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
@@ -25,7 +26,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 type ClientStats = {
   averageRating: number | null;
@@ -142,6 +143,7 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
   const budgetMin = input.budgetMin ?? input.budgetAmount ?? null;
   const budgetMax = input.budgetMax ?? input.budgetAmount ?? null;
   const rateType = normalizeRateType(input.rateType);
+  const budgetRange = validateRateRange({ min: budgetMin, max: budgetMax, rateType });
   const experienceLevel = normalizeExperienceLevel(input.experienceLevel);
 
   if (!title) {
@@ -164,12 +166,8 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
     return { data: null, error: 'Workers needed must be at least 1.' };
   }
 
-  if (budgetMin !== null && budgetMax !== null && budgetMin > budgetMax) {
-    return { data: null, error: 'Minimum budget must not be greater than maximum budget.' };
-  }
-
-  if (rateType !== 'negotiable' && budgetMin === null && budgetMax === null) {
-    return { data: null, error: 'Add a budget range or set the job as negotiable.' };
+  if (!budgetRange.valid) {
+    return { data: null, error: `Budget range: ${budgetRange.error ?? 'Enter a valid budget range.'}` };
   }
 
   const publicLocation = compactText(input.locationText) || compactText(input.barangay) || 'Barangay San Pedro';
@@ -190,11 +188,12 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
       location_text: publicLocation,
       public_location_text: publicLocation,
       private_location_notes: compactText(input.privateLocationNotes) || null,
-      budget: budgetMin ?? budgetMax,
-      budget_amount: budgetMin ?? budgetMax,
-      budget_min: budgetMin,
-      budget_max: budgetMax,
-      rate_type: rateType,
+      budget: budgetRange.min,
+      budget_amount: budgetRange.min,
+      budget_min: budgetRange.min,
+      budget_max: budgetRange.max,
+      rate_type: budgetRange.rateType,
+      budget_negotiable: input.budgetNegotiable ?? false,
       workers_needed: workersNeeded,
       schedule_text: compactText(input.scheduleText) || null,
       experience_level: experienceLevel,

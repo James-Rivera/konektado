@@ -130,7 +130,7 @@ Action gates:
 - Marking a worker hired requires the client to remain verified and Hiring Profile complete.
 - Leaving a review requires verification, relevant role setup, and a completed/confirmed job relationship.
 
-Private verification files, ID uploads, selfie files, certificates, and admin notes must not be copied into public profile fields or used as public profile photos. A public profile photo is recommended, but not required for this MVP gate.
+Private verification files, ID uploads, selfie files, certificates, and admin notes must not be copied into public profile fields or used as public profile photos. A public profile photo is strongly recommended for recognition and trust, but remains optional and does not gate MVP actions.
 
 ## Role-Based Permissions
 

@@ -1,13 +1,21 @@
 import { splitOfficialAndCustomServices } from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
-import { compactText, formatPrivateLocation } from '@/services/marketplace.helpers';
+import {
+  compactText,
+  formatPrivateLocation,
+  normalizeRateType,
+  validateRateRange,
+} from '@/services/marketplace.helpers';
 import { DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_PROVINCE } from '@/services/onboarding.service';
 import type {
   CoreProfileInput,
   HiringProfileInput,
   ProfileActionRole,
+  ProfileCompletionAction,
   ProfileCompletionMode,
   ProfileCompletionStatus,
+  ProfileModeCompletion,
+  ProfileVerificationStatus,
   WorkProfileInput,
 } from '@/types/profile.types';
 import { supabase } from '@/utils/supabase';
@@ -55,6 +63,7 @@ type ProviderProfileRow = {
   rate_min: number | null;
   rate_max: number | null;
   rate_type: string | null;
+  rate_negotiable?: boolean | null;
   custom_offered_services: string[] | null;
   custom_service_review_status: string | null;
   profile_completed_at: string | null;
@@ -77,14 +86,62 @@ type PreferencesRow = {
   custom_needed_services: string[] | null;
 };
 
+type ServiceReadinessRow = {
+  id: string;
+  category: string | null;
+  title: string | null;
+  availability_text: string | null;
+  rate_min: number | null;
+  rate_max: number | null;
+  rate_type: string | null;
+  barangay: string | null;
+  location_text: string | null;
+  is_active: boolean | null;
+};
+
+type JobReadinessRow = {
+  id: string;
+  status: string | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  budget_amount: number | null;
+  rate_type: string | null;
+};
+
+type CredentialReadinessRow = {
+  id: string;
+  status: string | null;
+};
+
+type VerificationRow = {
+  status: string;
+  reviewer_note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type RequiredItem = {
+  id: string;
+  label: string;
+  complete: boolean;
+  action: ProfileCompletionAction;
+};
+
 const PROFILE_SELECT =
   'id, email, full_name, first_name, last_name, phone, preferred_contact_method, province, barangay, purok_sitio, street, subdivision_area, block_lot, house_number, landmark_note, city, about, avatar_url, availability, verified_at, barangay_verified_at';
 const PROVIDER_PROFILE_SELECT =
-  'service_type, headline, bio, service_area, availability, rate_text, rate_min, rate_max, rate_type, custom_offered_services, custom_service_review_status, profile_completed_at';
+  'service_type, headline, bio, service_area, availability, rate_text, rate_min, rate_max, rate_type, rate_negotiable, custom_offered_services, custom_service_review_status, profile_completed_at';
 const CLIENT_PROFILE_SELECT =
   'headline, bio, needed_services, custom_needed_services, preferred_schedule, budget_preference, profile_completed_at';
 const PREFERENCES_SELECT =
   'offered_services, needed_services, custom_offered_services, custom_needed_services';
+const SERVICE_READINESS_SELECT =
+  'id, category, title, availability_text, rate_min, rate_max, rate_type, barangay, location_text, is_active';
+const JOB_READINESS_SELECT =
+  'id, status, budget_min, budget_max, budget_amount, rate_type';
+const VERIFICATION_SELECT =
+  'status, reviewer_note, reviewed_at, created_at, updated_at';
 
 export function isProfileCompletionRequiredError(error: string | null | undefined) {
   return error === WORK_PROFILE_REQUIRED_MESSAGE || error === HIRING_PROFILE_REQUIRED_MESSAGE;
@@ -110,25 +167,55 @@ export async function getMyProfileCompletion(): Promise<ServiceResult<ProfileCom
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
   const userId = user.data.id;
-  const [{ data: profile, error: profileError }, { data: provider }, { data: client }, { data: prefs }] =
-    await Promise.all([
-      supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle<ProfileRow>(),
-      supabase
-        .from('provider_profiles')
-        .select(PROVIDER_PROFILE_SELECT)
-        .eq('user_id', userId)
-        .maybeSingle<ProviderProfileRow>(),
-      supabase
-        .from('client_profiles')
-        .select(CLIENT_PROFILE_SELECT)
-        .eq('user_id', userId)
-        .maybeSingle<ClientProfileRow>(),
-      supabase
-        .from('user_preferences')
-        .select(PREFERENCES_SELECT)
-        .eq('user_id', userId)
-        .maybeSingle<PreferencesRow>(),
-    ]);
+  const [
+    { data: profile, error: profileError },
+    { data: provider },
+    { data: client },
+    { data: prefs },
+    { data: services },
+    { data: jobs },
+    { data: credentials },
+    { data: latestVerification },
+  ] = await Promise.all([
+    supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle<ProfileRow>(),
+    supabase
+      .from('provider_profiles')
+      .select(PROVIDER_PROFILE_SELECT)
+      .eq('user_id', userId)
+      .maybeSingle<ProviderProfileRow>(),
+    supabase
+      .from('client_profiles')
+      .select(CLIENT_PROFILE_SELECT)
+      .eq('user_id', userId)
+      .maybeSingle<ClientProfileRow>(),
+    supabase
+      .from('user_preferences')
+      .select(PREFERENCES_SELECT)
+      .eq('user_id', userId)
+      .maybeSingle<PreferencesRow>(),
+    supabase
+      .from('services')
+      .select(SERVICE_READINESS_SELECT)
+      .eq('provider_id', userId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('jobs')
+      .select(JOB_READINESS_SELECT)
+      .or(`owner_id.eq.${userId},client_id.eq.${userId}`)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('credentials')
+      .select('id, status')
+      .eq('provider_id', userId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('verifications')
+      .select(VERIFICATION_SELECT)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<VerificationRow>(),
+  ]);
 
   if (profileError) {
     return { data: null, error: profileError.message };
@@ -144,6 +231,10 @@ export async function getMyProfileCompletion(): Promise<ServiceResult<ProfileCom
       provider: provider ?? null,
       client: client ?? null,
       prefs: prefs ?? null,
+      services: (services as ServiceReadinessRow[] | null) ?? [],
+      jobs: (jobs as JobReadinessRow[] | null) ?? [],
+      credentials: (credentials as CredentialReadinessRow[] | null) ?? [],
+      latestVerification: latestVerification ?? null,
     }),
     error: null,
   };
@@ -164,6 +255,10 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
 
   if (!compactText(input.street) && !compactText(input.subdivisionArea)) {
     return { data: null, error: 'Enter your street or subdivision/area.' };
+  }
+
+  if (!compactText(input.preferredContactMethod)) {
+    return { data: null, error: 'Choose a contact preference.' };
   }
 
   const privateAddress = formatPrivateLocation({
@@ -192,6 +287,7 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
       landmark_note: compactText(input.landmarkNote) || null,
       city: DEFAULT_CITY,
       street_address: privateAddress || null,
+      preferred_contact_method: compactText(input.preferredContactMethod),
       about: compactText(input.about) || null,
       availability: compactText(input.availability) || null,
     })
@@ -217,26 +313,27 @@ export async function saveWorkProfile(input: WorkProfileInput): Promise<ServiceR
   const customOfferedServices = uniqueList(splitServices.custom);
   const rateMin = parseRateAmount(input.rateMin);
   const rateMax = parseRateAmount(input.rateMax);
+  const hasRateInput = Boolean(compactText(input.rateMin) || compactText(input.rateMax));
+  const rateValidation = validateRateRange({ min: rateMin, max: rateMax, rateType: input.rateType });
 
-  if (rateMin !== null && rateMax !== null && rateMin > rateMax) {
-    return { data: null, error: 'Minimum rate must not be greater than maximum rate.' };
-  }
-
-  if (input.rateType !== 'negotiable' && rateMin === null && rateMax === null) {
-    return { data: null, error: 'Add a rate range or choose negotiable.' };
+  if (hasRateInput && !rateValidation.valid) {
+    return { data: null, error: rateValidation.error ?? 'Enter a valid rate range.' };
   }
 
   const payload = {
     user_id: user.data.id,
+    // UI state is structured; provider_profiles.service_type is still legacy comma text.
+    // Keep this boundary conversion until the database has a normalized profile service table.
     service_type: offeredServices.join(', '),
     headline: compactText(input.headline) || null,
     bio: compactText(input.bio) || null,
     service_area: compactText(input.serviceArea) || null,
     availability: compactText(input.availability) || null,
     rate_text: compactText(input.rateText) || null,
-    rate_min: rateMin,
-    rate_max: rateMax,
-    rate_type: input.rateType,
+    rate_min: rateValidation.valid ? rateValidation.min : null,
+    rate_max: rateValidation.valid ? rateValidation.max : null,
+    rate_type: normalizeRateType(input.rateType),
+    rate_negotiable: input.rateNegotiable,
     custom_offered_services: customOfferedServices,
     custom_service_review_status: customOfferedServices.length ? 'pending' : 'none',
     profile_completed_at: isWorkProfileInputComplete({
@@ -275,6 +372,7 @@ export async function saveHiringProfile(input: HiringProfileInput): Promise<Serv
   const customNeededServices = uniqueList(splitServices.custom);
   const payload = {
     user_id: user.data.id,
+    // UI state is structured; client profile arrays remain the current persistence boundary.
     headline: compactText(input.headline) || null,
     bio: compactText(input.bio) || null,
     needed_services: neededServices,
@@ -361,31 +459,39 @@ function buildCompletionStatus({
   provider,
   client,
   prefs,
+  services,
+  jobs,
+  credentials,
+  latestVerification,
 }: {
   profile: ProfileRow;
   provider: ProviderProfileRow | null;
   client: ClientProfileRow | null;
   prefs: PreferencesRow | null;
+  services: ServiceReadinessRow[];
+  jobs: JobReadinessRow[];
+  credentials: CredentialReadinessRow[];
+  latestVerification: VerificationRow | null;
 }): ProfileCompletionStatus {
   const firstName = compactText(profile.first_name);
   const lastName = compactText(profile.last_name);
   const name = compactText(profile.full_name) || `${firstName} ${lastName}`.trim();
-  const offeredServices = uniqueList([
+  const offeredServiceSplit = splitOfficialAndCustomServices([
     ...splitServices(provider?.service_type),
     ...(prefs?.offered_services ?? []),
-  ]);
-  const customOfferedServices = uniqueList([
     ...(provider?.custom_offered_services ?? []),
     ...(prefs?.custom_offered_services ?? []),
   ]);
-  const neededServices = uniqueList([
+  const offeredServices = uniqueList(offeredServiceSplit.official);
+  const customOfferedServices = uniqueList(offeredServiceSplit.custom);
+  const neededServiceSplit = splitOfficialAndCustomServices([
     ...(client?.needed_services ?? []),
     ...(prefs?.needed_services ?? []),
-  ]);
-  const customNeededServices = uniqueList([
     ...(client?.custom_needed_services ?? []),
     ...(prefs?.custom_needed_services ?? []),
   ]);
+  const neededServices = uniqueList(neededServiceSplit.official);
+  const customNeededServices = uniqueList(neededServiceSplit.custom);
 
   const core: ProfileCompletionStatus['core'] = {
     firstName,
@@ -399,8 +505,7 @@ function buildCompletionStatus({
     houseNumber: compactText(profile.house_number),
     landmarkNote: compactText(profile.landmark_note),
     city: compactText(profile.city) || DEFAULT_CITY,
-    preferredContactMethod:
-      compactText(profile.preferred_contact_method) || (compactText(profile.phone) ? 'phone' : 'app_message'),
+    preferredContactMethod: compactText(profile.preferred_contact_method),
     about: compactText(profile.about),
     availability: compactText(profile.availability),
     avatarUrl: compactText(profile.avatar_url) || null,
@@ -415,14 +520,13 @@ function buildCompletionStatus({
     rateText: compactText(provider?.rate_text),
     rateMin: provider?.rate_min ? String(provider.rate_min) : '',
     rateMax: provider?.rate_max ? String(provider.rate_max) : '',
-    rateType: provider?.rate_type === 'hourly' || provider?.rate_type === 'daily' || provider?.rate_type === 'per_project'
-      ? provider.rate_type
-      : 'negotiable',
+    rateType: normalizeRateType(provider?.rate_type),
+    rateNegotiable: provider?.rate_negotiable ?? (provider?.rate_type === 'negotiable'),
     customOfferedServices,
     completedAt: provider?.profile_completed_at ?? null,
   };
   const hiring: ProfileCompletionStatus['hiring'] = {
-    headline: compactText(client?.headline) || 'Hiring local help',
+    headline: compactText(client?.headline),
     bio: compactText(client?.bio) || compactText(profile.about),
     neededServices,
     customNeededServices,
@@ -431,34 +535,34 @@ function buildCompletionStatus({
     completedAt: client?.profile_completed_at ?? null,
   };
 
-  const missingCore = [
-    !name ? 'Display name' : null,
-    !core.barangay ? 'Barangay' : null,
-    !core.street && !core.subdivisionArea ? 'Street or subdivision/area' : null,
-    !core.city ? 'City' : null,
-    !core.about ? 'Short public intro' : null,
-    !core.availability ? 'Availability' : null,
-  ].filter((value): value is string => Boolean(value));
-  const coreComplete = missingCore.length === 0;
-  const missingWork = [
-    ...(!coreComplete ? ['Core Profile'] : []),
-    !work.headline ? 'Work headline' : null,
-    !work.bio ? 'Work bio' : null,
-    !work.offeredServices.length && !work.customOfferedServices.length ? 'Services offered' : null,
-    !work.serviceArea ? 'Service area' : null,
-    !work.availability ? 'Work availability' : null,
-  ].filter((value): value is string => Boolean(value));
-  const missingHiring = [
-    ...(!coreComplete ? ['Core Profile'] : []),
-    !hiring.headline ? 'Hiring headline' : null,
-    !hiring.bio ? 'Hiring intro' : null,
-    !hiring.neededServices.length && !hiring.customNeededServices.length ? 'Services needed' : null,
-    !hiring.preferredSchedule ? 'Preferred schedule' : null,
-  ].filter((value): value is string => Boolean(value));
+  const isVerified = Boolean(
+    profile.barangay_verified_at ||
+      profile.verified_at ||
+      latestVerification?.status === 'approved',
+  );
+  const verification = buildVerificationStatus({
+    isVerified,
+    latestVerification,
+  });
+  const coreCompletion = buildCoreCompletion({ core, name });
+  const coreComplete = coreCompletion.state === 'ready';
+  const missingCore = coreCompletion.missingItems.map((item) => item.label);
 
-  const isVerified = Boolean(profile.barangay_verified_at || profile.verified_at);
-  const workComplete = missingWork.length === 0;
-  const hiringComplete = missingHiring.length === 0;
+  const workCompletion = buildWorkCompletion({
+    core,
+    work,
+    services,
+    credentials,
+    isVerified,
+  });
+  const hiringCompletion = buildHiringCompletion({
+    core,
+    hiring,
+    jobs,
+    isVerified,
+  });
+  const workComplete = coreComplete && isVerified && workCompletion.state === 'ready';
+  const hiringComplete = coreComplete && isVerified && hiringCompletion.state === 'ready';
   const marketplaceSetupState = !isVerified
     ? 'unverified'
     : workComplete || hiringComplete
@@ -472,23 +576,507 @@ function buildCompletionStatus({
     workComplete,
     hiringComplete,
     marketplaceSetupState,
+    coreCompletion,
+    workCompletion,
+    hiringCompletion,
+    verification,
     photoRecommended: !core.avatarUrl,
     missingCore,
-    missingWork,
-    missingHiring,
+    missingWork: workCompletion.missingItems.map((item) => item.label),
+    missingHiring: hiringCompletion.missingItems.map((item) => item.label),
     core,
     work,
     hiring,
   };
 }
 
+function buildCoreCompletion({
+  core,
+  name,
+}: {
+  core: ProfileCompletionStatus['core'];
+  name: string;
+}): ProfileModeCompletion {
+  const hasName = Boolean(name);
+  const hasBarangayLocation = Boolean(core.barangay && core.city);
+  const hasPublicAddress = Boolean(compactText(core.street) || compactText(core.subdivisionArea));
+  const hasContactPreference = Boolean(core.preferredContactMethod);
+  const setupStarted = Boolean(
+    hasName ||
+      hasBarangayLocation ||
+      hasPublicAddress ||
+      hasContactPreference ||
+      compactText(core.about) ||
+      compactText(core.availability) ||
+      core.avatarUrl,
+  );
+  const requiredItems: RequiredItem[] = [
+    {
+      id: 'shared-identity',
+      label: 'Complete shared identity',
+      complete: hasName,
+      action: completionAction({
+        id: 'shared-identity',
+        kind: 'edit_shared_profile',
+        label: 'Complete shared identity',
+        description: 'Add your name once for both Work and Hiring profiles.',
+        mode: 'core',
+      }),
+    },
+    {
+      id: 'barangay-location',
+      label: 'Add barangay/location',
+      complete: hasBarangayLocation && hasPublicAddress,
+      action: completionAction({
+        id: 'barangay-location',
+        kind: 'edit_shared_profile',
+        label: 'Add barangay/location',
+        description: 'Add your public location so neighbors know who they are connecting with.',
+        mode: 'core',
+      }),
+    },
+    {
+      id: 'contact-preference',
+      label: 'Set contact preference',
+      complete: hasContactPreference,
+      action: completionAction({
+        id: 'contact-preference',
+        kind: 'edit_contact_preference',
+        label: 'Set contact preference',
+        description: 'Choose how people should contact you in Konektado.',
+        mode: 'core',
+      }),
+    },
+  ];
+
+  return buildModeCompletion({
+    mode: 'core',
+    setupStarted,
+    isVerified: true,
+    requiredItems,
+    optionalItems: getSharedOptionalActions(core),
+  });
+}
+
+function buildWorkCompletion({
+  core,
+  work,
+  services,
+  credentials,
+  isVerified,
+}: {
+  core: ProfileCompletionStatus['core'];
+  work: ProfileCompletionStatus['work'];
+  services: ServiceReadinessRow[];
+  credentials: CredentialReadinessRow[];
+  isVerified: boolean;
+}): ProfileModeCompletion {
+  const activeServices = services.filter((service) => service.is_active !== false);
+  const firstInvalidRateService = activeServices.find(
+    (service) =>
+      !validateRateRange({
+        min: service.rate_min,
+        max: service.rate_max,
+        rateType: service.rate_type,
+      }).valid,
+  );
+  const hasAnyService = Boolean(
+    activeServices.length ||
+      work.offeredServices.length ||
+      work.customOfferedServices.length,
+  );
+  const hasValidRate = Boolean(
+    activeServices.some((service) =>
+      validateRateRange({
+        min: service.rate_min,
+        max: service.rate_max,
+        rateType: service.rate_type,
+      }).valid,
+    ) ||
+      validateRateRange({
+        min: parseRateAmount(work.rateMin),
+        max: parseRateAmount(work.rateMax),
+        rateType: work.rateType,
+      }).valid,
+  );
+  const hasAvailability = Boolean(
+    compactText(work.availability) ||
+      activeServices.some((service) => compactText(service.availability_text)),
+  );
+  const hasServiceArea = Boolean(
+    compactText(work.serviceArea) ||
+      activeServices.some((service) => compactText(service.location_text) || compactText(service.barangay)),
+  );
+  const setupStarted = Boolean(
+    providerTextStarted(work) ||
+      hasAnyService ||
+      hasValidRate ||
+      hasAvailability ||
+      hasServiceArea,
+  );
+  const requiredItems: RequiredItem[] = [
+    {
+      id: 'service',
+      label: 'Add your first service',
+      complete: hasAnyService,
+      action: {
+        id: 'service',
+        kind: 'create_service',
+        label: 'Add your first service',
+        description: 'Create one public service so nearby residents can find you.',
+        mode: 'work',
+      },
+    },
+    {
+      id: 'rate-range',
+      label: 'Set your rate range',
+      complete: hasValidRate,
+      action: completionAction({
+        id: 'rate-range',
+        kind: 'edit_service_rate',
+        label: 'Set your rate range',
+        description: 'Add minimum and maximum rates so clients know what to expect.',
+        mode: 'work',
+        targetId: firstInvalidRateService?.id ?? null,
+      }),
+    },
+    {
+      id: 'availability',
+      label: 'Set availability',
+      complete: hasAvailability,
+      action: completionAction({
+        id: 'availability',
+        kind: 'edit_availability',
+        label: 'Set availability',
+        description: 'Tell clients when you are usually available.',
+        mode: 'work',
+      }),
+    },
+    {
+      id: 'service-area',
+      label: 'Set service area',
+      complete: hasServiceArea,
+      action: completionAction({
+        id: 'service-area',
+        kind: 'edit_service_area',
+        label: 'Set service area',
+        description: 'Show where you can serve clients.',
+        mode: 'work',
+      }),
+    },
+  ];
+
+  const optionalItems: ProfileCompletionAction[] = credentials.length
+    ? getSharedOptionalActions(core)
+    : [
+        ...getSharedOptionalActions(core),
+        {
+          id: 'credentials',
+          kind: 'add_credential',
+          label: 'Optional: Add credentials to build more trust',
+          description: 'Add certificates, training proof, or portfolio proof when you have them.',
+          mode: 'work',
+          optional: true,
+        },
+      ];
+
+  return buildModeCompletion({
+    mode: 'work',
+    setupStarted,
+    isVerified,
+    requiredItems,
+    optionalItems,
+  });
+}
+
+function buildHiringCompletion({
+  core,
+  hiring,
+  jobs,
+  isVerified,
+}: {
+  core: ProfileCompletionStatus['core'];
+  hiring: ProfileCompletionStatus['hiring'];
+  jobs: JobReadinessRow[];
+  isVerified: boolean;
+}): ProfileModeCompletion {
+  const hasIntro = Boolean(compactText(hiring.headline) || compactText(hiring.bio));
+  const hasNeededServices = Boolean(hiring.neededServices.length || hiring.customNeededServices.length);
+  const hasPreferredSchedule = Boolean(compactText(hiring.preferredSchedule));
+  const hasPostReadyHistory = jobs.some((job) =>
+    validateRateRange({
+      min: job.budget_min ?? job.budget_amount,
+      max: job.budget_max ?? job.budget_amount,
+      rateType: job.rate_type,
+    }).valid,
+  );
+  const setupStarted = Boolean(
+    hasIntro ||
+      hasNeededServices ||
+      hasPreferredSchedule ||
+      compactText(hiring.budgetPreference) ||
+      jobs.length,
+  );
+  const requiredItems: RequiredItem[] = [
+    {
+      id: 'hiring-intro',
+      label: 'Add a hiring intro',
+      complete: hasIntro,
+      action: completionAction({
+        id: 'hiring-intro',
+        kind: 'edit_hiring_preferences',
+        label: 'Add a hiring intro',
+        description: 'Tell workers what kind of help you usually need.',
+        mode: 'hiring',
+      }),
+    },
+    {
+      id: 'needed-services',
+      label: 'Add services you need',
+      complete: hasNeededServices,
+      action: completionAction({
+        id: 'needed-services',
+        kind: 'edit_hiring_preferences',
+        label: 'Add services you need',
+        description: 'Pick service categories so worker discovery can be more relevant.',
+        mode: 'hiring',
+      }),
+    },
+    {
+      id: 'preferred-schedule',
+      label: 'Set preferred schedule',
+      complete: hasPreferredSchedule,
+      action: completionAction({
+        id: 'preferred-schedule',
+        kind: 'edit_hiring_preferences',
+        label: 'Set preferred schedule',
+        description: 'Set when you usually hire help.',
+        mode: 'hiring',
+      }),
+    },
+  ];
+
+  const optionalItems: ProfileCompletionAction[] = hasPostReadyHistory
+    ? getSharedOptionalActions(core)
+    : [
+        ...getSharedOptionalActions(core),
+        {
+          id: 'post-ready-budget',
+          kind: 'create_job',
+          label: 'Optional: Draft a job with a budget range',
+          description: 'Job posts require a minimum and maximum budget before publishing.',
+          mode: 'hiring',
+          optional: true,
+        },
+      ];
+
+  return buildModeCompletion({
+    mode: 'hiring',
+    setupStarted,
+    isVerified,
+    requiredItems,
+    optionalItems,
+  });
+}
+
+function buildModeCompletion({
+  mode,
+  setupStarted,
+  isVerified,
+  requiredItems,
+  optionalItems,
+}: {
+  mode: ProfileCompletionMode;
+  setupStarted: boolean;
+  isVerified: boolean;
+  requiredItems: RequiredItem[];
+  optionalItems: ProfileCompletionAction[];
+}): ProfileModeCompletion {
+  const completedSteps = requiredItems.filter((item) => item.complete).length;
+  const totalSteps = requiredItems.length;
+  const missingItems = requiredItems.filter((item) => !item.complete).map((item) => item.action);
+  const requiredReady = totalSteps > 0 && completedSteps === totalSteps;
+  const state = !setupStarted ? 'not_set_up' : requiredReady ? 'ready' : 'incomplete';
+  const percent = totalSteps ? Math.round((completedSteps / totalSteps) * 100) : 0;
+  const baseLabel =
+    mode === 'core' ? 'Core Profile' : mode === 'work' ? 'Work Profile' : 'Hiring Profile';
+  const firstMissing = missingItems[0]?.label;
+  const statusLabel = state === 'not_set_up'
+    ? 'Not set up'
+    : requiredReady && !isVerified
+      ? 'Ready after barangay verification'
+      : state === 'ready'
+        ? 'Ready'
+        : firstMissing
+          ? `Needs ${firstMissing.toLowerCase()}`
+          : `${baseLabel} incomplete`;
+
+  return {
+    state,
+    statusLabel,
+    percent,
+    completedSteps,
+    totalSteps,
+    missingItems,
+    optionalItems,
+    nextRecommendedAction: missingItems[0] ?? optionalItems[0] ?? null,
+  };
+}
+
+function buildVerificationStatus({
+  isVerified,
+  latestVerification,
+}: {
+  isVerified: boolean;
+  latestVerification: VerificationRow | null;
+}): ProfileVerificationStatus {
+  if (isVerified) {
+    return {
+      status: 'approved',
+      label: 'Barangay Verified',
+      description: 'Your official barangay verification is approved.',
+      reviewerNote: latestVerification?.reviewer_note ?? null,
+      submittedAt: latestVerification?.created_at ?? null,
+      reviewedAt: latestVerification?.reviewed_at ?? latestVerification?.updated_at ?? null,
+      action: null,
+    };
+  }
+
+  const status = latestVerification?.status;
+  if (status === 'pending') {
+    return {
+      status: 'pending',
+      label: 'Verification pending',
+      description: 'Your barangay verification request is under review.',
+      reviewerNote: latestVerification?.reviewer_note ?? null,
+      submittedAt: latestVerification?.created_at ?? null,
+      reviewedAt: latestVerification?.reviewed_at ?? null,
+      action: {
+        id: 'verification',
+        kind: 'open_verification',
+        label: 'View status',
+        description: 'See your current barangay verification status.',
+        mode: 'core',
+      },
+    };
+  }
+
+  if (status === 'needs_more_info') {
+    return {
+      status: 'needs_more_info',
+      label: 'Needs more information',
+      description: latestVerification?.reviewer_note || 'Barangay staff need updated details before approval.',
+      reviewerNote: latestVerification?.reviewer_note ?? null,
+      submittedAt: latestVerification?.created_at ?? null,
+      reviewedAt: latestVerification?.reviewed_at ?? latestVerification?.updated_at ?? null,
+      action: {
+        id: 'verification',
+        kind: 'open_verification',
+        label: 'Update verification',
+        description: 'Send the missing information for barangay review.',
+        mode: 'core',
+      },
+    };
+  }
+
+  if (status === 'rejected') {
+    return {
+      status: 'rejected',
+      label: 'Verification rejected',
+      description: latestVerification?.reviewer_note || 'Review the reason and submit corrected details.',
+      reviewerNote: latestVerification?.reviewer_note ?? null,
+      submittedAt: latestVerification?.created_at ?? null,
+      reviewedAt: latestVerification?.reviewed_at ?? latestVerification?.updated_at ?? null,
+      action: {
+        id: 'verification',
+        kind: 'open_verification',
+        label: 'Resubmit verification',
+        description: 'Submit corrected details for barangay review.',
+        mode: 'core',
+      },
+    };
+  }
+
+  return {
+    status: 'unverified',
+    label: 'Verification needed',
+    description: 'Barangay verification is required before publishing, messaging, saving, or reviewing.',
+    reviewerNote: null,
+    submittedAt: null,
+    reviewedAt: null,
+    action: {
+      id: 'verification',
+      kind: 'open_verification',
+      label: 'Start barangay verification',
+      description: 'Submit your verification request to unlock trusted marketplace actions.',
+      mode: 'core',
+    },
+  };
+}
+
+function completionAction({
+  id,
+  kind,
+  label,
+  description,
+  mode,
+  targetId,
+}: {
+  id: string;
+  kind: ProfileCompletionAction['kind'];
+  label: string;
+  description: string;
+  mode: ProfileCompletionMode;
+  targetId?: string | null;
+}): ProfileCompletionAction {
+  return {
+    id,
+    kind,
+    label,
+    description,
+    mode,
+    targetId: targetId ?? null,
+  };
+}
+
+function providerTextStarted(work: ProfileCompletionStatus['work']) {
+  return Boolean(
+    compactText(work.headline) ||
+      compactText(work.bio) ||
+      compactText(work.rateText) ||
+      compactText(work.serviceArea),
+  );
+}
+
+function getSharedOptionalActions(core: ProfileCompletionStatus['core']) {
+  if (core.avatarUrl) return [];
+
+  return [
+    {
+      id: 'profile-photo',
+      kind: 'add_profile_photo' as const,
+      label: 'Optional: Add a clear profile photo',
+      description: 'Help neighbors recognize and trust who they are talking to.',
+      mode: 'core' as const,
+      optional: true,
+    },
+  ];
+}
+
 function isWorkProfileInputComplete(input: WorkProfileInput) {
+  const rateValidation = validateRateRange({
+    min: parseRateAmount(input.rateMin),
+    max: parseRateAmount(input.rateMax),
+    rateType: input.rateType,
+  });
+
   return Boolean(
     compactText(input.headline) &&
       compactText(input.bio) &&
       (uniqueList(input.offeredServices).length || uniqueList(input.customOfferedServices).length) &&
       compactText(input.serviceArea) &&
-      compactText(input.availability),
+      compactText(input.availability) &&
+      rateValidation.valid,
   );
 }
 
@@ -506,7 +1094,7 @@ function parseRateAmount(value: string | null | undefined) {
   if (!cleanValue) return null;
 
   const parsed = Number(cleanValue);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function splitServices(value: string | null | undefined) {

@@ -155,6 +155,7 @@ export default function HomeScreen() {
     workers: [],
   });
   const [feedLoading, setFeedLoading] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState<
@@ -233,12 +234,20 @@ export default function HomeScreen() {
     const requestId = feedRequestRef.current + 1;
     feedRequestRef.current = requestId;
     setFeedLoading(true);
+    setFeedError(null);
 
     Promise.all([
       searchJobs({ limit: HOME_FEED_LIMIT }),
       searchServices({ limit: HOME_FEED_LIMIT }),
     ]).then(([jobsResult, servicesResult]) => {
       if (!active || requestId !== feedRequestRef.current) return;
+
+      if (jobsResult.error || servicesResult.error) {
+        setFeedSources({ jobs: [], workers: [] });
+        setFeedError(jobsResult.error ?? servicesResult.error ?? 'Could not load posts right now.');
+        setFeedLoading(false);
+        return;
+      }
 
       const jobs =
         jobsResult.data?.map((job) => ({
@@ -264,6 +273,7 @@ export default function HomeScreen() {
       setFeedLoading(false);
     }).catch(() => {
       if (!active || requestId !== feedRequestRef.current) return;
+      setFeedError('Could not load posts right now.');
       setFeedLoading(false);
     });
 
@@ -403,10 +413,11 @@ export default function HomeScreen() {
             {selectedFilter === 'For you' ? <HomeFeedCardSkeleton kind="worker" loadingImage /> : null}
           </View>
         ) : null}
-        {!feedLoading && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
+        {!feedLoading && feedError ? <Text style={styles.emptyText}>{feedError}</Text> : null}
+        {!feedLoading && !feedError && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
       </>
     ),
-    [feed.length, feedLoading, selectedFilter],
+    [feed.length, feedError, feedLoading, selectedFilter],
   );
 
   return (

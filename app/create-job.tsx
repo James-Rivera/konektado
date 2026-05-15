@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -20,6 +20,7 @@ import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { PresenceDot } from '@/components/PresenceDot';
+import { RateRangeInput } from '@/components/RateRangeInput';
 import { Skeleton } from '@/components/Skeleton';
 import {
   getContextTagsForCategory,
@@ -29,7 +30,7 @@ import {
 } from '@/constants/job-post-options';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { isPresenceActive } from '@/services/marketplace.helpers';
+import { isPresenceActive, validateRateRange } from '@/services/marketplace.helpers';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { type JobPhotoAsset, uploadJobPhotos } from '@/services/job-photo.service';
 import type {
@@ -40,13 +41,6 @@ import type {
 } from '@/types/marketplace.types';
 
 const MAX_JOB_PHOTOS = 10;
-
-const RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
-  { value: 'per_project', label: 'Per project' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'hourly', label: 'Hourly' },
-  { value: 'negotiable', label: 'Negotiable' },
-];
 
 const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'any', label: 'Any level' },
@@ -68,6 +62,7 @@ type JobDraft = {
   budgetMin: string;
   budgetMax: string;
   rateType: RateType;
+  budgetNegotiable: boolean;
   workersNeeded: string;
   scheduleText: string;
   experienceLevel: ExperienceLevel;
@@ -121,13 +116,13 @@ function validateDraft(draft: JobDraft) {
 
   const budgetMin = parsePositiveNumber(draft.budgetMin);
   const budgetMax = parsePositiveNumber(draft.budgetMax);
-  if (Number.isNaN(budgetMin)) errors.budgetMin = 'Enter a valid minimum budget or leave it blank.';
-  if (Number.isNaN(budgetMax)) errors.budgetMax = 'Enter a valid maximum budget or leave it blank.';
-  if (budgetMin !== null && budgetMax !== null && !Number.isNaN(budgetMin) && !Number.isNaN(budgetMax) && budgetMin > budgetMax) {
-    errors.budgetMax = 'Maximum budget must be at least the minimum.';
-  }
-  if (draft.rateType !== 'negotiable' && budgetMin === null && budgetMax === null) {
-    errors.budgetMin = 'Add a budget range or choose negotiable.';
+  const budgetRange = validateRateRange({
+    min: Number.isNaN(budgetMin) ? null : budgetMin,
+    max: Number.isNaN(budgetMax) ? null : budgetMax,
+    rateType: draft.rateType,
+  });
+  if (!budgetRange.valid) {
+    errors.budgetMin = budgetRange.error ?? 'Enter a valid budget range.';
   }
 
   const workersNeeded = parsePositiveNumber(draft.workersNeeded);
@@ -161,6 +156,7 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
     budgetMin: Number.isNaN(budgetMin) ? null : budgetMin,
     budgetMax: Number.isNaN(budgetMax) ? null : budgetMax,
     rateType: draft.rateType,
+    budgetNegotiable: draft.budgetNegotiable,
     workersNeeded: Number.isNaN(workersNeeded) ? null : workersNeeded,
     scheduleText: draft.scheduleText,
     experienceLevel: draft.experienceLevel,
@@ -188,6 +184,7 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
     budgetMin: record.budgetMin ? String(record.budgetMin) : '',
     budgetMax: record.budgetMax ? String(record.budgetMax) : '',
     rateType: record.rateType,
+    budgetNegotiable: record.budgetNegotiable,
     workersNeeded: record.workersNeeded ? String(record.workersNeeded) : '',
     scheduleText: record.scheduleText ?? '',
     experienceLevel: record.experienceLevel,
@@ -201,8 +198,17 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
 
 export default function CreateJobScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ draftId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    draftId?: string | string[];
+    returnTo?: string | string[];
+    focus?: string | string[];
+  }>();
   const initialDraftId = getParamValue(params.draftId);
+  const returnTo = getParamValue(params.returnTo);
+  const focusTarget = getParamValue(params.focus);
+  const scrollRef = useRef<ScrollView>(null);
+  const budgetRangeOffsetRef = useRef<number | null>(null);
+  const handledFocusRef = useRef(false);
   const { profile, loading } = useProfile();
   const profileId = profile?.id ?? null;
   const profileBarangay = profile?.barangay ?? null;
@@ -229,6 +235,7 @@ export default function CreateJobScreen() {
     budgetMin: '',
     budgetMax: '',
     rateType: 'per_project',
+    budgetNegotiable: false,
     workersNeeded: '',
     scheduleText: '',
     experienceLevel: 'any',
@@ -285,6 +292,27 @@ export default function CreateJobScreen() {
   const selectedTagsText = useMemo(() => draft.tags.join(', '), [draft.tags]);
   const tagOptions = useMemo(() => getContextTagsForCategory(draft.category), [draft.category]);
   const serviceOptions = useMemo(() => getServicesForCategory(draft.category), [draft.category]);
+
+  const scrollToBudgetRange = useCallback(() => {
+    if (loading || loadingDraft || focusTarget !== 'budget-range' || handledFocusRef.current) return;
+    if (budgetRangeOffsetRef.current === null) return;
+
+    handledFocusRef.current = true;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(budgetRangeOffsetRef.current! - space.md, 0),
+      });
+    });
+  }, [focusTarget, loading, loadingDraft]);
+
+  useEffect(() => {
+    handledFocusRef.current = false;
+  }, [focusTarget]);
+
+  useEffect(() => {
+    scrollToBudgetRange();
+  }, [scrollToBudgetRange]);
 
   const updateDraft = <Key extends keyof JobDraft>(key: Key, value: JobDraft[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -401,6 +429,7 @@ export default function CreateJobScreen() {
       params: {
         draft: JSON.stringify(draft),
         draftId: saved.data.id,
+        returnTo,
       },
     });
   };
@@ -447,6 +476,7 @@ export default function CreateJobScreen() {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
@@ -578,7 +608,12 @@ export default function CreateJobScreen() {
             <Text style={styles.smallHelper}>{selectedTagsText || 'No tags selected'}</Text>
           </View>
 
-          <View style={styles.group}>
+          <View
+            onLayout={(event) => {
+              budgetRangeOffsetRef.current = event.nativeEvent.layout.y;
+              scrollToBudgetRange();
+            }}
+            style={styles.group}>
             <Text style={styles.label}>Job Information</Text>
             <FormInput
               error={errors.title}
@@ -587,30 +622,19 @@ export default function CreateJobScreen() {
               value={draft.title}
             />
             <Text style={styles.smallHelper}>Use a range so workers know what to expect.</Text>
-            <View style={styles.twoColumn}>
-              <FormInput
-                error={errors.budgetMin}
-                keyboardType="numeric"
-                onChangeText={(value) => updateDraft('budgetMin', value)}
-                placeholder="Min budget"
-                style={styles.halfInput}
-                value={draft.budgetMin}
-              />
-              <FormInput
-                error={errors.budgetMax}
-                keyboardType="numeric"
-                onChangeText={(value) => updateDraft('budgetMax', value)}
-                placeholder="Max budget"
-                style={styles.halfInput}
-                value={draft.budgetMax}
-              />
-            </View>
-            <ChipWrap
-              items={RATE_TYPE_OPTIONS.map((option) => option.label)}
-              selected={[RATE_TYPE_OPTIONS.find((option) => option.value === draft.rateType)?.label ?? 'Per project']}
-              onPress={(label) =>
-                updateDraft('rateType', RATE_TYPE_OPTIONS.find((option) => option.label === label)?.value ?? 'per_project')
-              }
+            <RateRangeInput
+              error={errors.budgetMin}
+              label="Budget range"
+              maxValue={draft.budgetMax}
+              minLabel="Minimum budget"
+              minValue={draft.budgetMin}
+              negotiable={draft.budgetNegotiable}
+              onMaxChange={(value) => updateDraft('budgetMax', value)}
+              onMinChange={(value) => updateDraft('budgetMin', value)}
+              onNegotiableChange={(value) => updateDraft('budgetNegotiable', value)}
+              onRateTypeChange={(value) => updateDraft('rateType', value)}
+              previewPrefix="Budget"
+              rateType={draft.rateType}
             />
             <View style={styles.twoColumn}>
               <FormInput

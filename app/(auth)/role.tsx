@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
+import { useFeedback } from '@/components/FeedbackProvider';
 import {
     GradientImageScreen,
     OnboardingButton,
@@ -71,6 +72,7 @@ function getSafeReturnTo(value: string | string[] | undefined) {
 
 export default function RoleScreen() {
   const router = useRouter();
+  const { showInfoToast } = useFeedback();
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
   const {
     authenticated,
@@ -165,7 +167,7 @@ export default function RoleScreen() {
     setSubmitting(false);
 
     if (metaError) {
-      Alert.alert('Role saved', 'Role was saved, but account metadata sync failed. You can continue.');
+      showInfoToast('Role saved. Account sync will retry later.');
     }
 
     await refreshProfile();

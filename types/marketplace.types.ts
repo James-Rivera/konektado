@@ -8,7 +8,7 @@ export type JobStatus =
 
 export type ConversationStatus = 'active' | 'hired' | 'declined' | 'archived' | 'reported';
 
-export type RateType = 'hourly' | 'daily' | 'per_project' | 'negotiable';
+export type RateType = 'per_service' | 'hourly' | 'daily' | 'weekly' | 'per_project';
 
 export type ExperienceLevel = 'any' | 'beginner' | 'intermediate' | 'experienced';
 
@@ -47,6 +47,7 @@ export type JobSummary = {
   budgetMin: number | null;
   budgetMax: number | null;
   rateType: RateType;
+  budgetNegotiable: boolean;
   workersNeeded: number | null;
   scheduleText: string | null;
   experienceLevel: ExperienceLevel;
@@ -83,6 +84,7 @@ export type CreateJobInput = {
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType;
+  budgetNegotiable?: boolean;
   workersNeeded?: number | null;
   scheduleText?: string | null;
   experienceLevel?: ExperienceLevel;
@@ -108,6 +110,7 @@ export type JobDraftSummary = {
   budgetMin: number | null;
   budgetMax: number | null;
   rateType: RateType;
+  budgetNegotiable: boolean;
   privateLocationNotes: string | null;
   workersNeeded: number | null;
   scheduleText: string | null;
@@ -134,6 +137,7 @@ export type UpsertJobDraftInput = {
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType;
+  budgetNegotiable?: boolean;
   privateLocationNotes?: string | null;
   workersNeeded?: number | null;
   scheduleText?: string | null;
@@ -194,6 +198,7 @@ export type ProviderService = {
   rateMin: number | null;
   rateMax: number | null;
   rateType: RateType;
+  rateNegotiable: boolean;
   experienceLevel: ExperienceLevel;
   certificationAvailable: boolean;
   certificationNote: string | null;
@@ -232,6 +237,7 @@ export type CreateServiceInput = {
   rateMin?: number | null;
   rateMax?: number | null;
   rateType?: RateType;
+  rateNegotiable?: boolean;
   experienceLevel?: ExperienceLevel;
   certificationAvailable?: boolean;
   certificationNote?: string | null;
@@ -290,4 +296,41 @@ export type CreateReviewInput = {
   revieweeId: string;
   rating: number;
   comment?: string | null;
+};
+
+export type CredentialStatus = 'pending' | 'approved' | 'rejected';
+
+export type CredentialType =
+  | 'tesda'
+  | 'training_certificate'
+  | 'barangay_certificate'
+  | 'work_proof'
+  | 'portfolio'
+  | 'other';
+
+export type CredentialSummary = {
+  id: string;
+  providerId: string;
+  serviceId: string | null;
+  type: CredentialType;
+  title: string;
+  issuer: string | null;
+  issuedAt: string | null;
+  status: CredentialStatus;
+  reviewerNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateCredentialInput = {
+  serviceId?: string | null;
+  type: CredentialType;
+  title: string;
+  issuer?: string | null;
+  issuedAt?: string | null;
+  file?: {
+    uri: string;
+    name?: string | null;
+    mimeType?: string | null;
+  } | null;
 };

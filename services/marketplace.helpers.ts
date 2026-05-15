@@ -47,6 +47,7 @@ export type JobRow = {
   budget_min?: number | null;
   budget_max?: number | null;
   rate_type?: string | null;
+  budget_negotiable?: boolean | null;
   private_location_notes?: string | null;
   workers_needed: number | null;
   schedule_text: string | null;
@@ -77,6 +78,7 @@ export type ServiceRow = {
   rate_min?: number | null;
   rate_max?: number | null;
   rate_type?: string | null;
+  rate_negotiable?: boolean | null;
   experience_level?: string | null;
   certification_available?: boolean | null;
   certification_note?: string | null;
@@ -108,11 +110,19 @@ export function formatBarangayDisplay(value: string | null | undefined) {
 }
 
 export function normalizeRateType(value: string | null | undefined): RateType {
-  if (value === 'hourly' || value === 'daily' || value === 'per_project' || value === 'negotiable') {
+  if (
+    value === 'per_service' ||
+    value === 'hourly' ||
+    value === 'daily' ||
+    value === 'weekly' ||
+    value === 'per_project'
+  ) {
     return value;
   }
 
-  return 'negotiable';
+  if (value === 'per_visit' || value === 'service') return 'per_service';
+
+  return 'per_project';
 }
 
 export function normalizeExperienceLevel(value: string | null | undefined): ExperienceLevel {
@@ -213,8 +223,10 @@ function normalizeAmount(value: number | null | undefined) {
 }
 
 function getRateTypeSuffix(rateType: RateType) {
+  if (rateType === 'per_service') return ' / service';
   if (rateType === 'hourly') return ' / hour';
   if (rateType === 'daily') return ' / day';
+  if (rateType === 'weekly') return ' / week';
   if (rateType === 'per_project') return ' / project';
   return '';
 }
@@ -254,13 +266,10 @@ function parseLegacyRateText(value: string | null | undefined) {
 
 function getDisplayRateType({
   rateType,
-  hasAmount,
 }: {
   rateType?: RateType | string | null;
-  hasAmount: boolean;
 }) {
   const normalizedRateType = normalizeRateType(rateType);
-  if (hasAmount && normalizedRateType === 'negotiable') return 'per_project';
   return normalizedRateType;
 }
 
@@ -299,7 +308,6 @@ export function formatRateRange({
   max,
   amount,
   rateType,
-  negotiable,
   legacyText,
   fallback = 'Rate not specified',
 }: {
@@ -314,12 +322,7 @@ export function formatRateRange({
   const bounds = getNormalizedRateBounds({ min, max, amount, legacyText });
   const normalizedMin = bounds.min;
   const normalizedMax = bounds.max;
-  const hasAmount = Boolean(normalizedMin || normalizedMax);
-  const normalizedRateType = getDisplayRateType({ rateType, hasAmount });
-
-  if ((negotiable || normalizedRateType === 'negotiable') && !hasAmount) {
-    return 'Negotiable';
-  }
+  const normalizedRateType = getDisplayRateType({ rateType });
 
   if (normalizedMin && normalizedMax) {
     const orderedMin = Math.min(normalizedMin, normalizedMax);
@@ -348,6 +351,7 @@ export function formatJobBudget(job: {
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType | string | null;
+  budgetNegotiable?: boolean | null;
 }) {
   return formatRateRange({
     min: job.budgetMin ?? job.budgetAmount ?? null,
@@ -363,6 +367,7 @@ export function formatServiceRate(service: {
   rateMin?: number | null;
   rateMax?: number | null;
   rateType?: RateType | string | null;
+  rateNegotiable?: boolean | null;
 }) {
   const formattedRange = formatRateRange({
     min: service.rateMin,
@@ -404,7 +409,70 @@ export function doesRateOverlap({
   const filterLow = requestedMin ?? 0;
   const filterHigh = requestedMax ?? Number.MAX_SAFE_INTEGER;
 
-  return low <= filterHigh && high >= filterLow;
+  return rangesOverlap({ min: low, max: high }, { min: filterLow, max: filterHigh });
+}
+
+export const MARKETPLACE_RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
+  { value: 'per_service', label: 'Per service' },
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'per_project', label: 'Project-based' },
+];
+
+export function rangesOverlap(
+  rangeA: { min?: number | null; max?: number | null },
+  rangeB: { min?: number | null; max?: number | null },
+) {
+  const aMin = normalizeAmount(rangeA.min);
+  const aMax = normalizeAmount(rangeA.max);
+  const bMin = normalizeAmount(rangeB.min);
+  const bMax = normalizeAmount(rangeB.max);
+
+  if (!aMin || !aMax || !bMin || !bMax) return false;
+  return aMin <= bMax && aMax >= bMin;
+}
+
+export function validateRateRange({
+  min,
+  max,
+  rateType,
+}: {
+  min?: number | null;
+  max?: number | null;
+  rateType?: RateType | string | null;
+}) {
+  const normalizedMin = normalizeAmount(min);
+  const normalizedMax = normalizeAmount(max);
+  const normalizedRateType = normalizeRateType(rateType);
+
+  if (!normalizedMin || !normalizedMax) {
+    return {
+      valid: false,
+      error: 'Enter both minimum and maximum amounts.',
+      min: normalizedMin,
+      max: normalizedMax,
+      rateType: normalizedRateType,
+    };
+  }
+
+  if (normalizedMax < normalizedMin) {
+    return {
+      valid: false,
+      error: 'Maximum amount must be at least the minimum.',
+      min: normalizedMin,
+      max: normalizedMax,
+      rateType: normalizedRateType,
+    };
+  }
+
+  return {
+    valid: true,
+    error: null,
+    min: normalizedMin,
+    max: normalizedMax,
+    rateType: normalizedRateType,
+  };
 }
 
 export function getExperienceLabel(value: ExperienceLevel | string | null | undefined) {
@@ -600,6 +668,7 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     budgetMin: row.budget_min ?? row.budget_amount ?? row.budget,
     budgetMax: row.budget_max ?? row.budget_amount ?? row.budget,
     rateType: normalizeRateType(row.rate_type),
+    budgetNegotiable: row.budget_negotiable ?? (row.rate_type === 'negotiable'),
     workersNeeded: row.workers_needed ?? null,
     scheduleText: row.schedule_text,
     experienceLevel: normalizeExperienceLevel(row.experience_level),
@@ -634,6 +703,7 @@ export function mapService(row: ServiceRow): ProviderService {
     rateMin: row.rate_min ?? null,
     rateMax: row.rate_max ?? null,
     rateType: normalizeRateType(row.rate_type),
+    rateNegotiable: row.rate_negotiable ?? (row.rate_type === 'negotiable'),
     experienceLevel: normalizeExperienceLevel(row.experience_level),
     certificationAvailable: row.certification_available ?? false,
     certificationNote: row.certification_note ?? null,

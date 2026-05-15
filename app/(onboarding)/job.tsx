@@ -76,6 +76,7 @@ export default function JobStep() {
   const [activeSheet, setActiveSheet] = useState<ProviderSheet>(null);
   const [showCustomServiceInput, setShowCustomServiceInput] = useState(false);
   const [inlineHelper, setInlineHelper] = useState<string | null>(null);
+  const [neededHelper, setNeededHelper] = useState<string | null>(null);
 
   useEffect(() => {
     if (collectsOffered || collectsNeeded) return;
@@ -139,6 +140,7 @@ export default function JobStep() {
   };
 
   const toggleNeeded = (service: string) => {
+    setNeededHelper(null);
     setNeededServices((prev) =>
       prev.includes(service) ? prev.filter((value) => value !== service) : [...prev, service],
     );
@@ -173,7 +175,7 @@ export default function JobStep() {
     }
 
     if (collectsNeeded && !finalNeeded.length) {
-      Alert.alert('Add what you need', 'Select one or more types of help you may need nearby.');
+      setNeededHelper('Select one or more types of help you may need nearby.');
       return;
     }
 
@@ -248,7 +250,11 @@ export default function JobStep() {
           <ClientServiceSection
             customLabel="Other help you need (optional)"
             customValue={customNeeded}
-            onCustomChange={setCustomNeeded}
+            helper={neededHelper}
+            onCustomChange={(value) => {
+              setCustomNeeded(value);
+              setNeededHelper(null);
+            }}
             onToggle={toggleNeeded}
             selected={neededServices}
             title="What help do you need nearby?"
@@ -650,6 +656,7 @@ function SelectionMark({ selected }: { selected: boolean }) {
 function ClientServiceSection({
   customLabel,
   customValue,
+  helper,
   onCustomChange,
   onToggle,
   selected,
@@ -657,6 +664,7 @@ function ClientServiceSection({
 }: {
   customLabel: string;
   customValue: string;
+  helper: string | null;
   onCustomChange: (value: string) => void;
   onToggle: (service: string) => void;
   selected: string[];
@@ -693,6 +701,7 @@ function ClientServiceSection({
         placeholder={customLabel}
         value={customValue}
       />
+      {helper ? <Text style={styles.inlineHelper}>{helper}</Text> : null}
     </View>
   );
 }

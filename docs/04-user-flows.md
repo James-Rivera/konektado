@@ -111,7 +111,7 @@ Rules:
 - Barangay verification and public profile completion are separate trust layers.
 - A verified user with missing Work/Hiring setup stays visibly verified but sees `Verified · Setup incomplete`; they may browse public content but cannot message, hire, apply/post, or review until setup is complete.
 - Verification selfie, ID files, certificate files, and admin notes are private and must never become public profile photos or profile content.
-- A profile photo is recommended but not required for this MVP pass.
+- A public profile photo is strongly recommended for recognition and trust, but remains optional and must not block completion or marketplace access.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
 - Publishing services and messaging clients about jobs require a completed Work Profile.
 

@@ -121,6 +121,7 @@ export default function SearchScreen() {
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [workers, setWorkers] = useState<ServiceSearchResult[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [loadedModes, setLoadedModes] = useState<Record<SearchMode, boolean>>({
     jobs: false,
     workers: false,
@@ -193,6 +194,7 @@ export default function SearchScreen() {
     const rateBounds = getRateBounds(appliedFilters.rateRange);
 
     setRefreshingModes((current) => ({ ...current, [mode]: true }));
+    setSearchError(null);
 
     const searchPromise =
       mode === 'jobs'
@@ -215,6 +217,10 @@ export default function SearchScreen() {
             limit: SEARCH_LIMIT,
           }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
+            if (result.error) {
+              setSearchError(result.error);
+              return;
+            }
             if (result.data) setJobs(result.data);
           })
         : searchServices({
@@ -236,11 +242,18 @@ export default function SearchScreen() {
             limit: SEARCH_LIMIT,
           }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
+            if (result.error) {
+              setSearchError(result.error);
+              return;
+            }
             if (result.data) setWorkers(result.data);
           });
 
     searchPromise
-      .catch(() => undefined)
+      .catch(() => {
+        if (!active || requestId !== searchRequestRef.current) return;
+        setSearchError('Could not load search results right now.');
+      })
       .finally(() => {
         if (!active || requestId !== searchRequestRef.current) return;
         setLoadedModes((current) => ({ ...current, [mode]: true }));
@@ -541,7 +554,7 @@ export default function SearchScreen() {
       );
     }
 
-    if (!activeResultCount && !showInitialSkeleton && !activeModeRefreshing) {
+    if ((searchError || !activeResultCount) && !showInitialSkeleton && !activeModeRefreshing) {
       rows.push({ key: 'empty', type: 'empty' });
     }
 
@@ -555,6 +568,7 @@ export default function SearchScreen() {
     activeResultCount,
     isVerified,
     mode,
+    searchError,
     showInitialSkeleton,
     showRefreshIndicator,
     verificationKnown,
@@ -653,10 +667,14 @@ export default function SearchScreen() {
           <View style={[rowStyle, styles.emptyCard]}>
             <EmptyState
               actionLabel="Clear search"
-              description="Try a different service or remove the current search terms."
+              description={
+                searchError
+                  ? searchError
+                  : 'Try a different service or remove the current search terms.'
+              }
               icon="search-off"
               onActionPress={clearSearch}
-              title="No matching results yet"
+              title={searchError ? 'Could not load results' : 'No matching results yet'}
             />
           </View>
         );
@@ -670,7 +688,7 @@ export default function SearchScreen() {
         </View>
       );
     },
-    [clearSearch, handleOpenFilters, openJob, openService, resultHeading],
+    [clearSearch, handleOpenFilters, openJob, openService, resultHeading, searchError],
   );
 
   return (

@@ -28,6 +28,7 @@ import {
   ProgressBars,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
+import { useFeedback } from '@/components/FeedbackProvider';
 import {
   requestPasswordResetEmailOtp,
   resendPasswordResetEmailOtp,
@@ -50,6 +51,7 @@ function hasSpecialCharacter(value: string) {
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const { height } = useWindowDimensions();
   const compactHeight = height < 760;
@@ -175,17 +177,8 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    Alert.alert(
-      'Password updated',
-      'You can now sign in with your new password.',
-      [
-        {
-          text: 'Go to Log In',
-          onPress: goToLogin,
-        },
-      ],
-      { cancelable: false },
-    );
+    showSuccessToast('Password updated');
+    goToLogin();
   };
 
   const goBack = () => {

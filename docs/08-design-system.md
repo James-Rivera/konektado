@@ -195,6 +195,25 @@ Rules:
 - Use concise copy.
 - Avoid long forms inside small modals.
 
+### Feedback
+
+Use feedback with the lightest interaction cost that still protects the user:
+
+- Use inline helper text or note cards before an action when the user needs guidance while deciding what to do.
+- Use toast/snackbar feedback after routine success such as saving, posting, uploading, or completing a lightweight update.
+- Use inline field errors beside the affected input when a value needs correction.
+- Reserve modal alerts for destructive confirmation, legal/privacy acknowledgment, permission decisions, profile/verification gates, or serious errors that truly require interruption.
+
+Examples:
+
+- Inline: `Add a clear photo so neighbors can recognize you.`
+- Toast/snackbar: `Profile saved`, `Credential added`, `Job posted`
+- Modal: delete account, discard draft, logout confirmation, verification-required publish gate
+
+Onboarding should feel guided rather than stop-start. Successful onboarding transitions should move the user forward visually; do not interrupt normal progress with success modals such as "Welcome" or "Onboarding complete".
+
+Remediation prompts should deep-link to the part of the flow that resolves them. If a card says `Set your rate range`, the action should open the correct screen and scroll to the rate range section rather than leaving the user at the top of a long form.
+
 ### Bottom Sheet
 
 Location: `components/BottomSheet.tsx`

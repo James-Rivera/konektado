@@ -1,81 +1,134 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { ComponentProps } from 'react';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
+import type { ComponentProps } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppHeader } from '@/components/AppHeader';
-import { NoticeBanner } from '@/components/NoticeBanner';
-import { Pill } from '@/components/Pill';
-import { PresenceDot } from '@/components/PresenceDot';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { Skeleton } from '@/components/Skeleton';
-import { color, radius, space, typography } from '@/constants/theme';
+import { BottomSheet } from '@/components/BottomSheet';
+import {
+  EmptyProfilePanel,
+  HistoryFilterTabs,
+  MetricStrip,
+  ProfileCompletionCard,
+  ProfileHero,
+  ProfileHistoryCard,
+  ProfileLoadingSkeleton,
+  ProfilePillRow,
+  ProfileSection,
+  ProfileSegmentedControl,
+  ProfileTopBar,
+  ReviewCard,
+  VerificationStatusPanel,
+  type MetricItem,
+  type ProfileMode,
+} from '@/components/profile/ProfilePrimitives';
+import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
+import { listMyCredentials } from '@/services/credential.service';
 import { listMyJobs } from '@/services/job.service';
 import {
   formatJobBudget,
+  formatJobPostTitle,
+  formatServicePostTitle,
   formatServiceRate,
   isPresenceActive,
 } from '@/services/marketplace.helpers';
-import {
-  getMyProfileCompletion,
-} from '@/services/profile-completion.service';
+import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
+import { getMyProfileCompletion } from '@/services/profile-completion.service';
 import { listProfileReviews } from '@/services/review.service';
 import { listMyServices } from '@/services/service-profile.service';
-import type { JobSummary, ProviderService, Review } from '@/types/marketplace.types';
-import type { ProfileCompletionMode, ProfileCompletionStatus } from '@/types/profile.types';
-import { supabase } from '@/utils/supabase';
+import type { CredentialSummary, JobSummary, ProviderService, Review } from '@/types/marketplace.types';
+import type {
+  ProfileCompletionAction,
+  ProfileCompletionMode,
+  ProfileCompletionStatus,
+} from '@/types/profile.types';
 
-type ProfileMode = 'work' | 'hiring';
-type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
+type JobHistoryFilter = 'active' | 'completed';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
+  const topInset = useSafeTopInset();
   const [mode, setMode] = useState<ProfileMode>('work');
+  const [jobFilter, setJobFilter] = useState<JobHistoryFilter>('active');
   const { profile, loading: profileLoading, version } = useProfile();
   const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
-  const [completionLoading, setCompletionLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [services, setServices] = useState<ProviderService[]>([]);
+  const [credentials, setCredentials] = useState<CredentialSummary[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const displayName =
-    profile?.full_name ||
-    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
-    'Konektado resident';
-  const isVerified = Boolean(
-    completion?.isVerified || profile?.barangay_verified_at || profile?.verified_at,
-  );
-  const isSetupIncomplete = Boolean(isVerified && completion?.marketplaceSetupState === 'verified_setup_incomplete');
-  const completedCount = [
-    completion?.coreComplete,
-    completion?.workComplete,
-    completion?.hiringComplete,
-  ].filter(Boolean).length;
+  const [quickActionsVisible, setQuickActionsVisible] = useState(false);
+  const hasLoadedProfileDataRef = useRef(false);
 
   useEffect(() => {
-    let active = true;
+    if (profileLoading || !isFocused) return undefined;
 
-    setCompletionLoading(true);
+    let active = true;
+    const showBlockingLoader = !hasLoadedProfileDataRef.current;
+
+    if (showBlockingLoader) {
+      setDataLoading(true);
+    }
+    setLoadError(null);
+
     Promise.all([
       getMyProfileCompletion(),
       listMyJobs(),
       listMyServices(),
+      listMyCredentials(),
       profile?.id ? listProfileReviews(profile.id) : Promise.resolve({ data: [], error: null } as const),
-    ]).then(([completionResult, jobResult, serviceResult, reviewResult]) => {
-      if (!active) return;
+    ])
+      .then(([completionResult, jobResult, serviceResult, credentialResult, reviewResult]) => {
+        if (!active) return;
 
-      if (!completionResult.error && completionResult.data) setCompletion(completionResult.data);
-      if (!jobResult.error && jobResult.data) setJobs(jobResult.data);
-      if (!serviceResult.error && serviceResult.data) setServices(serviceResult.data);
-      if (!reviewResult.error && reviewResult.data) setReviews([...reviewResult.data]);
-      setCompletionLoading(false);
-    });
+        if (completionResult.error || !completionResult.data) {
+          setCompletion(null);
+          setLoadError(completionResult.error ?? 'Could not load your profile details.');
+        } else {
+          setCompletion(completionResult.data);
+        }
+
+        setJobs(jobResult.error || !jobResult.data ? [] : jobResult.data);
+        setServices(serviceResult.error || !serviceResult.data ? [] : serviceResult.data);
+        setCredentials(credentialResult.error || !credentialResult.data ? [] : credentialResult.data);
+        setReviews(reviewResult.error || !reviewResult.data ? [] : [...reviewResult.data]);
+      })
+      .catch(() => {
+        if (active) {
+          setLoadError('Could not refresh your profile right now.');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          hasLoadedProfileDataRef.current = true;
+          if (showBlockingLoader) {
+            setDataLoading(false);
+          }
+        }
+      });
 
     return () => {
       active = false;
     };
-  }, [profile?.id, version]);
+  }, [isFocused, profile?.id, profileLoading, version]);
+
+  const displayName =
+    profile?.full_name ||
+    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
+    'Konektado resident';
+  const publicLocation = [profile?.barangay, profile?.city].filter(Boolean).join(', ') || 'Location not set';
+  const isVerified = Boolean(completion?.isVerified || profile?.barangay_verified_at || profile?.verified_at);
+  const activeCompletion = mode === 'work' ? completion?.workCompletion : completion?.hiringCompletion;
+  const heroCompletion = completion && !completion.coreComplete ? completion.coreCompletion : activeCompletion;
+  const metrics = mode === 'work'
+    ? getWorkMetrics({ completion, reviews, services })
+    : getHiringMetrics({ jobs, reviews });
+  const isLoading = profileLoading || dataLoading;
 
   const openCompletion = (nextMode: ProfileCompletionMode) => {
     router.push({
@@ -84,386 +137,504 @@ export default function ProfileScreen() {
     });
   };
 
-  const handleLogout = () => {
-    Alert.alert('Log out', 'End this session on this device?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          const { error } = await supabase.auth.signOut();
-          if (error) {
-            Alert.alert('Log out', error.message);
-            return;
-          }
-          router.replace('/(auth)');
-        },
-      },
-    ]);
+  const openProfileAction = (action: ProfileCompletionAction) => {
+    const destination = getProfileCompletionDestination(action);
+
+    if (destination.type === 'message') {
+      Alert.alert(destination.title, destination.message);
+      return;
+    }
+
+    router.push({
+      pathname: destination.pathname as never,
+      params: destination.params,
+    });
   };
 
   return (
     <View style={styles.screen}>
-      <AppHeader
-        actionIcon="settings"
-        actionLabel="Profile settings"
-        eyebrow="Trust center"
-        title="Profile"
-        subtitle="Verification proves identity. Profile completion builds trust."
-      />
-
+      <ProfileTopBar onSettings={() => router.push('/profile/settings')} topInset={topInset} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {profileLoading || completionLoading ? (
-          <ProfileSkeleton />
+        {isLoading ? (
+          <ProfileLoadingSkeleton />
         ) : (
           <>
-            <View style={styles.profileCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
-                <PresenceDot active={isPresenceActive(profile?.availability)} size={13} style={styles.avatarDot} />
-              </View>
-              <View style={styles.profileCopy}>
-                <Text style={styles.name}>{displayName}</Text>
-                <Text style={styles.location}>
-                  {[profile?.barangay, profile?.city].filter(Boolean).join(', ') || 'Location not set'}
-                </Text>
-                <View style={styles.profilePills}>
-                  <Pill
-                    icon={isVerified ? 'verified' : 'warning-amber'}
-                    label={
-                      isSetupIncomplete
-                        ? 'Verified · Setup incomplete'
-                        : isVerified
-                          ? 'Barangay verified'
-                          : 'Verification needed'
-                    }
-                    tone={isVerified && !isSetupIncomplete ? 'success' : 'warning'}
-                  />
-                  <Pill label={`${completedCount}/3 profile steps`} tone={completedCount === 3 ? 'success' : 'primary'} />
-                </View>
-              </View>
-            </View>
+            <ProfileSegmentedControl mode={mode} onChange={setMode} />
 
-            <NoticeBanner
-              message={getTrustMessage({ completion, isVerified })}
-              title={getTrustTitle({ completion, isVerified })}
-              variant={isVerified && completedCount === 3 && !isSetupIncomplete ? 'info' : 'warning'}
-            />
+            {loadError ? (
+              <View style={styles.errorBand}>
+                <MaterialIcons color={color.warning} name="warning-amber" size={18} />
+                <Text style={styles.errorText}>{loadError}</Text>
+              </View>
+            ) : null}
 
-            <View style={styles.completionGrid}>
-              <CompletionCard
-                body="Your name, location, intro, and availability. Shared by Work and Hiring."
-                complete={Boolean(completion?.coreComplete)}
-                icon="badge"
-                missing={completion?.missingCore ?? []}
-                title="Core Profile"
-                onPress={() => openCompletion('core')}
+            <ProfileHero
+              avatarUrl={completion?.core.avatarUrl ?? profile?.avatar_url}
+              badgeIcon={getVerificationBadgeIcon(completion)}
+              badgeLabel={completion?.verification.label ?? (isVerified ? 'Barangay Verified' : 'Verification needed')}
+              badgeTone={isVerified ? 'success' : 'warning'}
+              initials={getInitials(displayName)}
+              location={publicLocation}
+              name={displayName}
+              onAddPhoto={() =>
+                openProfileAction({
+                  id: 'profile-photo',
+                  kind: 'add_profile_photo',
+                  label: 'Add profile photo',
+                  mode: 'core',
+                  optional: true,
+                })
+              }
+              onEdit={() => setQuickActionsVisible(true)}
+              photoRecommended={Boolean(completion?.photoRecommended ?? !profile?.avatar_url)}
+              presenceActive={isPresenceActive(profile?.availability)}
+              stepsLabel={getModeStepsLabel(heroCompletion)}>
+              <MetricStrip items={metrics} />
+            </ProfileHero>
+
+            {mode === 'work' ? (
+              <WorkProfileContent
+                completion={completion}
+                credentials={credentials}
+                onAction={openProfileAction}
+                reviews={reviews}
+                services={services}
+                onAddCredential={() =>
+                  openProfileAction({
+                    id: 'credentials',
+                    kind: 'add_credential',
+                    label: 'Add credential',
+                    mode: 'work',
+                    optional: true,
+                  })
+                }
+                onCreateService={() =>
+                  openProfileAction({
+                    id: 'service',
+                    kind: 'create_service',
+                    label: 'Add your first service',
+                    mode: 'work',
+                  })
+                }
+                onManageServices={() => router.push('/post/active')}
+                onOpenService={(serviceId) =>
+                  router.push({ pathname: '/services/[serviceId]', params: { serviceId } })
+                }
               />
-              <CompletionCard
-                body="What clients see before messaging you or viewing your service posts."
-                complete={Boolean(completion?.workComplete)}
-                icon="handyman"
-                missing={completion?.missingWork ?? []}
-                title="Work Profile"
-                onPress={() => openCompletion('work')}
+            ) : (
+              <HiringProfileContent
+                completion={completion}
+                jobFilter={jobFilter}
+                jobs={jobs}
+                onAction={openProfileAction}
+                reviews={reviews}
+                onChangeJobFilter={setJobFilter}
+                onCompleteHiring={() => openCompletion('hiring')}
+                onManagePosts={() => router.push('/post/active')}
+                onOpenJob={(jobId) => router.push({ pathname: '/job/[jobId]', params: { jobId } })}
               />
-              <CompletionCard
-                body="What workers see before responding to your job posts."
-                complete={Boolean(completion?.hiringComplete)}
-                icon="assignment-ind"
-                missing={completion?.missingHiring ?? []}
-                title="Hiring Profile"
-                onPress={() => openCompletion('hiring')}
-              />
-            </View>
+            )}
           </>
         )}
-
-        <View style={styles.segmented}>
-          <PrimaryButton
-            label="Work Profile"
-            onPress={() => setMode('work')}
-            variant={mode === 'work' ? 'primary' : 'ghost'}
-          />
-          <PrimaryButton
-            label="Hiring Profile"
-            onPress={() => setMode('hiring')}
-            variant={mode === 'hiring' ? 'primary' : 'ghost'}
-          />
-        </View>
-
-        {mode === 'work' ? (
-          <WorkProfile
-            completion={completion}
-            reviews={reviews}
-            services={services}
-            onComplete={() => openCompletion('work')}
-          />
-        ) : (
-          <HiringProfile
-            completion={completion}
-            jobs={jobs}
-            reviews={reviews}
-            onComplete={() => openCompletion('hiring')}
-          />
-        )}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Log out"
-          onPress={handleLogout}
-          style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}>
-          <MaterialIcons color={color.danger} name="logout" size={18} />
-          <Text style={styles.logoutText}>Log out</Text>
-        </Pressable>
       </ScrollView>
+      <ProfileQuickActionsSheet
+        hasPublicProfile={services.length > 0}
+        onClose={() => setQuickActionsVisible(false)}
+        onSettings={() => {
+          setQuickActionsVisible(false);
+          router.push('/profile/settings');
+        }}
+        onUpdatePhoto={() => {
+          setQuickActionsVisible(false);
+          openProfileAction({
+            id: 'profile-photo',
+            kind: 'add_profile_photo',
+            label: 'Update profile picture',
+            mode: 'core',
+            optional: true,
+          });
+        }}
+        onViewPublicProfile={() => {
+          setQuickActionsVisible(false);
+          if (services[0]) {
+            router.push({ pathname: '/services/[serviceId]', params: { serviceId: services[0].id } });
+            return;
+          }
+
+          Alert.alert(
+            'Public profile',
+            'Create a service post first so neighbors have a public Work Profile to view.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Add service',
+                onPress: () =>
+                  openProfileAction({
+                    id: 'service',
+                    kind: 'create_service',
+                    label: 'Add your first service',
+                    mode: 'work',
+                  }),
+              },
+            ],
+          );
+        }}
+        visible={quickActionsVisible}
+      />
     </View>
   );
 }
 
-function CompletionCard({
-  body,
-  complete,
-  icon,
-  missing,
-  onPress,
-  title,
+function ProfileQuickActionsSheet({
+  hasPublicProfile,
+  onClose,
+  onSettings,
+  onUpdatePhoto,
+  onViewPublicProfile,
+  visible,
 }: {
-  body: string;
-  complete: boolean;
-  icon: MaterialIconName;
-  missing: string[];
+  hasPublicProfile: boolean;
+  onClose: () => void;
+  onSettings: () => void;
+  onUpdatePhoto: () => void;
+  onViewPublicProfile: () => void;
+  visible: boolean;
+}) {
+  return (
+    <BottomSheet maxHeight="46%" onClose={onClose} visible={visible}>
+      <View style={styles.quickSheetHeader}>
+        <Text style={styles.quickSheetTitle}>Profile actions</Text>
+        <Text style={styles.quickSheetSubtitle}>Update how neighbors see your public profile.</Text>
+      </View>
+      <View style={styles.quickActionList}>
+        <QuickActionRow
+          icon="photo-camera"
+          label="Update profile picture"
+          subtitle="Use a clear public photo"
+          onPress={onUpdatePhoto}
+        />
+        <QuickActionRow
+          icon="visibility"
+          label="View public profile"
+          subtitle={hasPublicProfile ? 'Open your public service profile' : 'Create a service post first'}
+          onPress={onViewPublicProfile}
+        />
+        <QuickActionRow
+          icon="settings"
+          label="Settings"
+          subtitle="Account, setup, credentials, and logout"
+          onPress={onSettings}
+        />
+      </View>
+    </BottomSheet>
+  );
+}
+
+function QuickActionRow({
+  icon,
+  label,
+  onPress,
+  subtitle,
+}: {
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  label: string;
   onPress: () => void;
-  title: string;
+  subtitle: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.completionCard, pressed && styles.pressed]}>
-      <View style={styles.completionHeader}>
-        <View style={[styles.completionIcon, complete && styles.completionIconDone]}>
-          <MaterialIcons color={complete ? color.success : color.primary} name={icon} size={19} />
-        </View>
-        <View style={styles.completionCopy}>
-          <Text style={styles.completionTitle}>{title}</Text>
-          <Text style={styles.completionBody}>{body}</Text>
-        </View>
-        <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
+      style={({ pressed }) => [styles.quickActionRow, pressed && styles.pressed]}>
+      <View style={styles.quickActionIcon}>
+        <MaterialIcons color={color.verificationBlue} name={icon} size={21} />
       </View>
-      <View style={styles.completionFooter}>
-        <Pill
-          icon={complete ? 'check-circle' : 'error-outline'}
-          label={complete ? 'Complete' : 'Needs info'}
-          tone={complete ? 'success' : 'warning'}
-        />
-        {!complete && missing.length ? (
-          <Text style={styles.missingText}>Missing: {missing.slice(0, 3).join(', ')}</Text>
-        ) : null}
+      <View style={styles.quickActionCopy}>
+        <Text style={styles.quickActionLabel}>{label}</Text>
+        <Text style={styles.quickActionSubtitle}>{subtitle}</Text>
       </View>
+      <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
     </Pressable>
   );
 }
 
-function WorkProfile({
+function WorkProfileContent({
   completion,
-  onComplete,
+  credentials,
+  onAction,
+  onAddCredential,
+  onCreateService,
+  onManageServices,
+  onOpenService,
   reviews,
   services,
 }: {
   completion: ProfileCompletionStatus | null;
-  onComplete: () => void;
+  credentials: CredentialSummary[];
+  onAction: (action: ProfileCompletionAction) => void;
+  onAddCredential: () => void;
+  onCreateService: () => void;
+  onManageServices: () => void;
+  onOpenService: (serviceId: string) => void;
   reviews: Review[];
   services: ProviderService[];
 }) {
-  const rating = reviews.length
-    ? (reviews.reduce((total, review) => total + review.rating, 0) / reviews.length).toFixed(1)
-    : '-';
-  const profileServices = [
+  const serviceLabels = uniqueList([
     ...(completion?.work.offeredServices ?? []),
     ...(completion?.work.customOfferedServices ?? []),
-  ];
+    ...services.map((service) => service.category),
+  ]);
 
   return (
-    <View style={styles.stack}>
-      <View style={styles.metricRow}>
-        <Metric icon="star" label="Worker rating" value={rating} />
-        <Metric icon="check-circle" label="Reviews" value={String(reviews.length)} />
-        <Metric icon="handyman" label="Services" value={String(services.length)} />
-      </View>
+    <>
+      <ProfileSection title="Profile Builder">
+        {completion?.verification ? (
+          <VerificationStatusPanel status={completion.verification} onAction={onAction} />
+        ) : null}
+        {completion && !completion.coreComplete ? (
+          <ProfileCompletionCard completion={completion.coreCompletion} mode="core" onAction={onAction} />
+        ) : completion?.workCompletion ? (
+          <ProfileCompletionCard completion={completion.workCompletion} mode="work" onAction={onAction} />
+        ) : null}
+      </ProfileSection>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Work trust profile</Text>
-          <PrimaryButton compact label={completion?.workComplete ? 'Edit' : 'Complete'} onPress={onComplete} variant="secondary" />
-        </View>
-        <Text style={styles.profileHeadline}>
-          {completion?.work.headline || 'Add a headline for clients.'}
-        </Text>
-        <Text style={styles.body}>
-          {completion?.work.bio || 'Tell clients what you can help with before they message.'}
-        </Text>
-        <View style={styles.detailRows}>
-          <DetailRow icon="location-on" label="Service area" value={completion?.work.serviceArea || 'Not set'} />
-          <DetailRow icon="schedule" label="Availability" value={completion?.work.availability || 'Not set'} />
-          <DetailRow icon="payments" label="Rate note" value={completion?.work.rateText || 'Optional'} />
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Services offered</Text>
-        <View style={styles.pillWrap}>
-          {profileServices.map((service) => (
-            <Pill key={service} label={service} />
-          ))}
-          {!profileServices.length ? <Text style={styles.body}>Add services so clients know what to ask about.</Text> : null}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Posted services</Text>
-        {services.slice(0, 4).map((service) => (
-          <HistoryRow
-            key={service.id}
-            icon="design-services"
-            meta={formatServiceRate(service)}
-            subtitle={service.locationText ?? service.barangay ?? 'Nearby'}
-            title={service.title}
+      <ProfileSection title="Services" onAdd={onCreateService} onEdit={onManageServices}>
+        {services.length ? (
+          services.slice(0, 4).map((service) => (
+            <ProfileHistoryCard
+              description={service.description || service.availabilityText}
+              footerLeft={service.locationText ?? service.barangay ?? 'Location to coordinate'}
+              footerRight={service.isActive ? 'Active' : 'Paused'}
+              key={service.id}
+              meta={formatServiceRate(service)}
+              onPress={() => onOpenService(service.id)}
+              rightLabel={formatShortDate(service.createdAt)}
+              title={formatServicePostTitle({
+                title: service.title,
+                category: service.category,
+              })}
+            />
+          ))
+        ) : serviceLabels.length ? (
+          <ProfilePillRow values={serviceLabels} />
+        ) : (
+          <EmptyProfilePanel
+            icon="handyman"
+            message="Add your first service so nearby residents can find you."
+            title="No services yet"
           />
-        ))}
-        {!services.length ? <Text style={styles.body}>Service posts appear here after publishing.</Text> : null}
-      </View>
-    </View>
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Credentials" onAdd={onAddCredential}>
+        {credentials.length ? (
+          credentials.slice(0, 3).map((credential) => (
+            <ProfileHistoryCard
+              description={credential.issuer ? `Issued by ${credential.issuer}` : 'Optional trust proof'}
+              footerRight={formatCredentialStatus(credential.status)}
+              key={credential.id}
+              meta="Optional credential"
+              rightLabel={formatShortDate(credential.createdAt)}
+              title={credential.title}
+            />
+          ))
+        ) : (
+          <EmptyProfilePanel
+            icon="workspace-premium"
+            message="Optional: add certificates or proof of training to build more trust."
+            title="No credentials yet"
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Work History">
+        <EmptyProfilePanel
+          icon="work-history"
+          message="No work history yet. Completed jobs will appear here."
+          title="No completed work yet"
+        />
+      </ProfileSection>
+
+      <ProfileSection title="Reviews from Clients">
+        {reviews.length ? (
+          reviews.slice(0, 3).map((review) => (
+            <ReviewCard
+              author={review.reviewer?.fullName ?? 'Resident'}
+              body={review.comment || 'No written feedback.'}
+              dateLabel={formatShortDate(review.createdAt)}
+              key={review.id}
+              rating={review.rating.toFixed(1)}
+              title="Resident feedback"
+            />
+          ))
+        ) : (
+          <EmptyProfilePanel
+            icon="rate-review"
+            message="Reviews appear after completed marketplace interactions."
+            title="No client reviews yet"
+          />
+        )}
+      </ProfileSection>
+    </>
   );
 }
 
-function HiringProfile({
+function HiringProfileContent({
   completion,
+  jobFilter,
   jobs,
-  onComplete,
+  onAction,
+  onChangeJobFilter,
+  onCompleteHiring,
+  onManagePosts,
+  onOpenJob,
   reviews,
 }: {
   completion: ProfileCompletionStatus | null;
+  jobFilter: JobHistoryFilter;
   jobs: JobSummary[];
-  onComplete: () => void;
+  onAction: (action: ProfileCompletionAction) => void;
+  onChangeJobFilter: (value: JobHistoryFilter) => void;
+  onCompleteHiring: () => void;
+  onManagePosts: () => void;
+  onOpenJob: (jobId: string) => void;
   reviews: Review[];
 }) {
-  const openJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
-  const neededServices = completion?.hiring.neededServices ?? [];
+  const neededServices = uniqueList([
+    ...(completion?.hiring.neededServices ?? []),
+    ...(completion?.hiring.customNeededServices ?? []),
+  ]);
+  const activeJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
+  const completedJobs = jobs.filter((job) => ['completed', 'closed'].includes(job.status));
+  const visibleJobs = jobFilter === 'active' ? activeJobs : completedJobs;
 
   return (
-    <View style={styles.stack}>
-      <View style={styles.metricRow}>
-        <Metric icon="star" label="Client reviews" value={String(reviews.length)} />
-        <Metric icon="person-add-alt" label="Workers hired" value={String(jobs.filter((job) => job.acceptedProviderId).length)} />
-        <Metric icon="assignment" label="Jobs posted" value={String(jobs.length)} />
-      </View>
+    <>
+      <ProfileSection title="Profile Builder">
+        {completion?.verification ? (
+          <VerificationStatusPanel status={completion.verification} onAction={onAction} />
+        ) : null}
+        {completion && !completion.coreComplete ? (
+          <ProfileCompletionCard completion={completion.coreCompletion} mode="core" onAction={onAction} />
+        ) : completion?.hiringCompletion ? (
+          <ProfileCompletionCard completion={completion.hiringCompletion} mode="hiring" onAction={onAction} />
+        ) : null}
+      </ProfileSection>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Hiring trust profile</Text>
-          <PrimaryButton compact label={completion?.hiringComplete ? 'Edit' : 'Complete'} onPress={onComplete} variant="secondary" />
-        </View>
-        <Text style={styles.profileHeadline}>
-          {completion?.hiring.headline || 'Add a headline for workers.'}
-        </Text>
-        <Text style={styles.body}>
-          {completion?.hiring.bio || 'Tell workers what kind of help you usually need.'}
-        </Text>
-        <View style={styles.detailRows}>
-          <DetailRow icon="schedule" label="Preferred schedule" value={completion?.hiring.preferredSchedule || 'Not set'} />
-          <DetailRow icon="payments" label="Budget preference" value={completion?.hiring.budgetPreference || 'Optional'} />
-          <DetailRow icon="assignment" label="Open jobs" value={`${openJobs.length} active`} />
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Services needed</Text>
-        <View style={styles.pillWrap}>
-          {neededServices.map((service) => (
-            <Pill key={service} label={service} />
-          ))}
-          {!neededServices.length ? <Text style={styles.body}>Add needed services so workers understand your usual requests.</Text> : null}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Job history</Text>
-        {jobs.slice(0, 4).map((item) => (
-          <HistoryRow
-            key={item.id}
-            icon="history"
-            meta={formatJobBudget(item)}
-            subtitle={item.locationText ?? item.barangay ?? 'Nearby'}
-            title={item.title}
+      <ProfileSection title="Services Needed" onEdit={onCompleteHiring}>
+        {neededServices.length ? (
+          <ProfilePillRow values={neededServices} />
+        ) : (
+          <EmptyProfilePanel
+            icon="assignment"
+            message="Add needed services so workers understand your usual requests."
+            title="No services needed yet"
           />
-        ))}
-        {!jobs.length ? <Text style={styles.body}>No jobs posted yet.</Text> : null}
-      </View>
-    </View>
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Job History" onEdit={onManagePosts}>
+        <HistoryFilterTabs active={jobFilter} onChange={onChangeJobFilter} />
+        {visibleJobs.length ? (
+          visibleJobs.slice(0, 4).map((job) => (
+            <ProfileHistoryCard
+              description={job.description}
+              footerLeft={job.locationText ?? job.barangay ?? 'Location to coordinate'}
+              footerRight={job.acceptedProviderId ? 'Worker hired' : formatWorkersNeeded(job)}
+              key={job.id}
+              meta={`${formatJobStatus(job.status)} - ${formatJobBudget(job)}`}
+              onPress={() => onOpenJob(job.id)}
+              rightLabel={formatShortDate(job.createdAt)}
+              title={formatJobPostTitle({
+                title: job.title,
+                serviceNeeded: job.serviceNeeded,
+                category: job.category,
+              })}
+            />
+          ))
+        ) : (
+          <EmptyProfilePanel
+            icon="history"
+            message={jobFilter === 'active' ? 'No active job posts right now.' : 'Completed jobs will appear here.'}
+            title={jobFilter === 'active' ? 'No active jobs' : 'No completed jobs'}
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Reviews from Workers">
+        {reviews.length ? (
+          reviews.slice(0, 3).map((review) => (
+            <ReviewCard
+              author={review.reviewer?.fullName ?? 'Resident'}
+              body={review.comment || 'No written feedback.'}
+              dateLabel={formatShortDate(review.createdAt)}
+              key={review.id}
+              rating={review.rating.toFixed(1)}
+              title="Resident feedback"
+            />
+          ))
+        ) : (
+          <EmptyProfilePanel
+            icon="rate-review"
+            message="Worker reviews appear after completed marketplace interactions."
+            title="No worker reviews yet"
+          />
+        )}
+      </ProfileSection>
+    </>
   );
 }
 
-function DetailRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: MaterialIconName;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.detailRow}>
-      <MaterialIcons color={color.primary} name={icon} size={17} />
-      <View style={styles.detailCopy}>
-        <Text style={styles.detailLabel}>{label}</Text>
-        <Text style={styles.detailValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
-function getTrustTitle({
+function getWorkMetrics({
   completion,
-  isVerified,
+  reviews,
+  services,
 }: {
   completion: ProfileCompletionStatus | null;
-  isVerified: boolean;
-}) {
-  if (!isVerified) return 'Verification required';
-  if (completion?.marketplaceSetupState === 'verified_setup_incomplete') {
-    return 'Verified · Setup incomplete';
-  }
-  if (!completion?.coreComplete) return 'Complete your public basics';
-  if (!completion.workComplete || !completion.hiringComplete) return 'Finish role profiles';
-  return 'Trust profile ready';
+  reviews: Review[];
+  services: ProviderService[];
+}): MetricItem[] {
+  return [
+    { icon: 'star', label: 'Rating', value: formatAverageRating(reviews) },
+    { icon: 'rate-review', label: 'Reviews', value: String(reviews.length) },
+    { icon: 'handyman', label: 'Services', value: String(services.length) },
+    { icon: 'schedule', label: 'Availability', value: shortMetricText(completion?.work.availability) },
+  ];
 }
 
-function getTrustMessage({
-  completion,
-  isVerified,
+function getHiringMetrics({
+  jobs,
+  reviews,
 }: {
-  completion: ProfileCompletionStatus | null;
-  isVerified: boolean;
-}) {
-  if (!isVerified) {
-    return 'Complete barangay verification first. After approval, finish Work or Hiring details before posting or messaging.';
-  }
+  jobs: JobSummary[];
+  reviews: Review[];
+}): MetricItem[] {
+  const openJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
 
-  if (!completion?.coreComplete) {
-    return 'Add your public intro, location, and availability so neighbors have context before conversations begin.';
-  }
+  return [
+    { icon: 'star', label: 'Client rating', value: formatAverageRating(reviews) },
+    { icon: 'groups', label: 'Hired', value: String(jobs.filter((job) => job.acceptedProviderId).length) },
+    { icon: 'business-center', label: 'Jobs posted', value: String(jobs.length) },
+    { icon: 'assignment', label: 'Open jobs', value: String(openJobs.length) },
+  ];
+}
 
-  if (completion.marketplaceSetupState === 'verified_setup_incomplete') {
-    return 'You are verified and can browse public content. Complete your Work or Hiring Profile before messaging, hiring, posting, or reviewing.';
-  }
+function getVerificationBadgeIcon(completion: ProfileCompletionStatus | null) {
+  if (completion?.verification.status === 'approved') return 'verified';
+  if (completion?.verification.status === 'pending') return 'schedule';
+  return 'warning-amber';
+}
 
-  if (!completion.workComplete || !completion.hiringComplete) {
-    return 'You are verified. Finish the role profile you want to use before publishing or messaging.';
-  }
+function getModeStepsLabel(completion: ProfileCompletionStatus['workCompletion'] | undefined) {
+  if (!completion) return 'Not set up';
+  if (completion.state === 'not_set_up') return 'Not set up';
+  return `${completion.completedSteps}/${completion.totalSteps}`;
+}
 
-  return 'You can publish, message, and manage marketplace activity with a complete public trust profile.';
+function formatCredentialStatus(status: CredentialSummary['status']) {
+  if (status === 'approved') return 'Approved';
+  if (status === 'rejected') return 'Needs update';
+  return 'Pending review';
 }
 
 function getInitials(name: string) {
@@ -477,319 +648,125 @@ function getInitials(name: string) {
   return initials || 'K';
 }
 
-function Metric({
-  icon,
-  label,
-  value,
-}: {
-  icon: MaterialIconName;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.metricCard}>
-      <MaterialIcons color={color.primary} name={icon} size={18} />
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
+function formatAverageRating(reviews: Review[]) {
+  if (!reviews.length) return '-';
+  return (reviews.reduce((total, review) => total + review.rating, 0) / reviews.length).toFixed(1);
 }
 
-function ProfileSkeleton() {
-  return (
-    <>
-      <View style={styles.profileCard}>
-        <Skeleton height={60} width={60} borderRadius={radius.pill} />
-        <View style={styles.profileCopy}>
-          <Skeleton height={20} width="62%" />
-          <Skeleton height={14} width="48%" />
-          <View style={styles.profilePills}>
-            <Skeleton height={26} width={134} borderRadius={radius.pill} />
-            <Skeleton height={26} width={118} borderRadius={radius.pill} />
-          </View>
-        </View>
-      </View>
-      <View style={styles.noticeSkeleton}>
-        <Skeleton height={16} width="48%" />
-        <Skeleton height={13} width="92%" />
-        <Skeleton height={13} width="70%" />
-      </View>
-    </>
-  );
+function formatShortDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Today';
+
+  const today = new Date();
+  if (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  ) {
+    return 'Today';
+  }
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function HistoryRow({
-  icon,
-  title,
-  subtitle,
-  meta,
-}: {
-  icon: MaterialIconName;
-  title: string;
-  subtitle: string;
-  meta: string;
-}) {
-  return (
-    <View style={styles.historyRow}>
-      <View style={styles.historyIcon}>
-        <MaterialIcons color={color.textMuted} name={icon} size={18} />
-      </View>
-      <View style={styles.historyCopy}>
-        <Text style={styles.historyTitle}>{title}</Text>
-        <Text style={styles.historySubtitle}>{subtitle}</Text>
-      </View>
-      <Text style={styles.historyMeta}>{meta}</Text>
-    </View>
+function formatJobStatus(status: JobSummary['status']) {
+  return status
+    .split('_')
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatWorkersNeeded(job: JobSummary) {
+  if (!job.workersNeeded) return 'Open';
+  return `${job.workersNeeded} ${job.workersNeeded === 1 ? 'worker' : 'workers'}`;
+}
+
+function shortMetricText(value: string | null | undefined) {
+  const cleanValue = value?.trim();
+  if (!cleanValue) return '-';
+  if (cleanValue.length <= 10) return cleanValue;
+  return 'Set';
+}
+
+function uniqueList(values: (string | null | undefined)[]) {
+  return Array.from(
+    new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))),
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   content: {
-    gap: space.lg,
-    padding: space.xl,
+    backgroundColor: color.background,
+    gap: 3,
     paddingBottom: space['3xl'],
   },
-  profileCard: {
-    alignItems: 'center',
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: space.md,
-    padding: space.lg,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: color.primarySoft,
-    borderRadius: radius.pill,
-    height: 60,
-    justifyContent: 'center',
-    position: 'relative',
-    width: 60,
-  },
-  avatarDot: {
-    bottom: 1,
-    right: 1,
-  },
-  avatarText: {
-    ...typography.sectionTitle,
-    color: color.primary,
-  },
-  profileCopy: {
-    flex: 1,
-    gap: space.xs,
-  },
-  name: {
-    ...typography.screenTitle,
-    color: color.text,
-  },
-  location: {
-    ...typography.body,
-    color: color.textMuted,
-  },
-  profilePills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-  },
-  noticeSkeleton: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    gap: space.sm,
-    padding: space.lg,
-  },
-  completionGrid: {
-    gap: space.md,
-  },
-  completionCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: space.md,
-    padding: space.lg,
-  },
-  completionHeader: {
+  errorBand: {
     alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: space.md,
-  },
-  completionIcon: {
-    alignItems: 'center',
-    backgroundColor: color.primarySoft,
-    borderRadius: radius.pill,
-    height: 38,
-    justifyContent: 'center',
-    width: 38,
-  },
-  completionIconDone: {
-    backgroundColor: color.successSoft,
-  },
-  completionCopy: {
-    flex: 1,
-    gap: space.xs,
-  },
-  completionTitle: {
-    ...typography.bodyMedium,
-    color: color.text,
-  },
-  completionBody: {
-    ...typography.caption,
-    color: color.textMuted,
-  },
-  completionFooter: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-  },
-  missingText: {
-    ...typography.caption,
-    color: color.textMuted,
-    flexShrink: 1,
-  },
-  segmented: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    backgroundColor: color.warningSoft,
     flexDirection: 'row',
     gap: space.sm,
-    padding: space.xs,
-  },
-  stack: {
-    gap: space.lg,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: space.sm,
-  },
-  metricCard: {
-    alignItems: 'flex-start',
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flex: 1,
-    gap: space['2xs'],
+    marginHorizontal: space.xl,
     padding: space.md,
   },
-  metricValue: {
+  errorText: {
+    ...typography.caption,
+    color: color.warning,
+    flex: 1,
+  },
+  quickSheetHeader: {
+    gap: space.xs,
+  },
+  quickSheetTitle: {
     ...typography.sectionTitle,
     color: color.text,
+    fontSize: 18,
+    lineHeight: 24,
   },
-  metricLabel: {
+  quickSheetSubtitle: {
     ...typography.caption,
     color: color.textMuted,
   },
-  section: {
+  quickActionList: {
+    gap: space.sm,
+  },
+  quickActionRow: {
+    alignItems: 'center',
     backgroundColor: color.background,
     borderColor: color.border,
-    borderRadius: radius.md,
+    borderRadius: 14,
     borderWidth: 1,
-    gap: space.md,
-    padding: space.lg,
-  },
-  sectionHeader: {
-    alignItems: 'center',
     flexDirection: 'row',
     gap: space.md,
-    justifyContent: 'space-between',
+    minHeight: 64,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
   },
-  sectionTitle: {
-    ...typography.sectionTitle,
-    color: color.text,
+  quickActionIcon: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: 14,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  quickActionCopy: {
     flex: 1,
+    gap: 2,
+    minWidth: 0,
   },
-  profileHeadline: {
+  quickActionLabel: {
     ...typography.bodyMedium,
     color: color.text,
   },
-  body: {
-    ...typography.body,
-    color: color.textMuted,
-  },
-  detailRows: {
-    gap: space.sm,
-  },
-  detailRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: space.sm,
-  },
-  detailCopy: {
-    flex: 1,
-    gap: space['2xs'],
-  },
-  detailLabel: {
-    ...typography.captionMedium,
-    color: color.text,
-  },
-  detailValue: {
+  quickActionSubtitle: {
     ...typography.caption,
     color: color.textMuted,
-  },
-  pillWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-  },
-  historyRow: {
-    alignItems: 'flex-start',
-    borderTopColor: color.border,
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    gap: space.md,
-    paddingTop: space.md,
-  },
-  historyIcon: {
-    alignItems: 'center',
-    backgroundColor: color.surfaceAlt,
-    borderRadius: radius.pill,
-    height: 34,
-    justifyContent: 'center',
-    width: 34,
-  },
-  historyCopy: {
-    flex: 1,
-    gap: space['2xs'],
-  },
-  historyTitle: {
-    ...typography.bodyMedium,
-    color: color.text,
-  },
-  historySubtitle: {
-    ...typography.caption,
-    color: color.textMuted,
-  },
-  historyMeta: {
-    ...typography.captionMedium,
-    color: color.primary,
-  },
-  logoutButton: {
-    alignItems: 'center',
-    backgroundColor: color.background,
-    borderColor: color.danger,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: space.sm,
-    justifyContent: 'center',
-    marginTop: space.sm,
-    minHeight: 46,
   },
   pressed: {
     opacity: 0.72,
-  },
-  logoutText: {
-    ...typography.bodyMedium,
-    color: color.danger,
   },
 });

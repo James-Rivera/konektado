@@ -1,14 +1,16 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { PresenceDot } from '@/components/PresenceDot';
+import { RateRangeInput } from '@/components/RateRangeInput';
 import {
   getServiceTagsForCategory,
   SERVICE_POST_CATEGORIES,
@@ -17,18 +19,12 @@ import {
 import { getCategoryForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { isPresenceActive } from '@/services/marketplace.helpers';
+import { isPresenceActive, validateRateRange } from '@/services/marketplace.helpers';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
-import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
+import { getMyService, updateService } from '@/services/service-profile.service';
+import type { ExperienceLevel, ProviderService, RateType } from '@/types/marketplace.types';
 
 const MAX_SERVICE_PHOTOS = 10;
-
-const RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
-  { value: 'per_project', label: 'Per project' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'hourly', label: 'Hourly' },
-  { value: 'negotiable', label: 'Negotiable' },
-];
 
 const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'any', label: 'Any level' },
@@ -45,7 +41,19 @@ function parsePositiveNumber(value: string) {
 
 export default function CreateServiceScreen() {
   const router = useRouter();
-  const { profile } = useProfile();
+  const { showSuccessToast } = useFeedback();
+  const params = useLocalSearchParams<{
+    serviceId?: string | string[];
+    returnTo?: string | string[];
+    focus?: string | string[];
+  }>();
+  const serviceId = getParamValue(params.serviceId);
+  const returnTo = getParamValue(params.returnTo);
+  const focusTarget = getParamValue(params.focus);
+  const scrollRef = useRef<ScrollView>(null);
+  const rateRangeOffsetRef = useRef<number | null>(null);
+  const handledFocusRef = useRef(false);
+  const { profile, refresh } = useProfile();
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [title, setTitle] = useState('');
@@ -55,7 +63,8 @@ export default function CreateServiceScreen() {
   const [rate, setRate] = useState('');
   const [rateMin, setRateMin] = useState('');
   const [rateMax, setRateMax] = useState('');
-  const [rateType, setRateType] = useState<RateType>('per_project');
+  const [rateType, setRateType] = useState<RateType>('per_service');
+  const [rateNegotiable, setRateNegotiable] = useState(false);
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('any');
   const [certificationAvailable, setCertificationAvailable] = useState(false);
   const [certificationNote, setCertificationNote] = useState('');
@@ -66,17 +75,83 @@ export default function CreateServiceScreen() {
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
+  const [loadingService, setLoadingService] = useState(Boolean(serviceId));
+  const [savingService, setSavingService] = useState(false);
   const [photoFolderId] = useState(() => `service-draft-${Date.now()}`);
   const [locationBarangay, setLocationBarangay] = useState('Barangay San Pedro');
   const locationText = locationBarangay;
   const tagOptions = getServiceTagsForCategory(category);
   const serviceGroup = getCategoryForMvpService(category);
 
+  const scrollToRateRange = useCallback(() => {
+    if (loadingService || focusTarget !== 'rate-range' || handledFocusRef.current) return;
+    if (rateRangeOffsetRef.current === null) return;
+
+    handledFocusRef.current = true;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(rateRangeOffsetRef.current! - space.md, 0),
+      });
+    });
+  }, [focusTarget, loadingService]);
+
+  useEffect(() => {
+    handledFocusRef.current = false;
+  }, [focusTarget]);
+
+  useEffect(() => {
+    scrollToRateRange();
+  }, [scrollToRateRange]);
+
   useEffect(() => {
     if (profile?.barangay) {
       setLocationBarangay(profile.barangay);
     }
   }, [profile?.barangay]);
+
+  useEffect(() => {
+    if (!serviceId) return;
+    let active = true;
+
+    setLoadingService(true);
+    getMyService(serviceId).then((result) => {
+      if (!active) return;
+
+      if (result.error || !result.data) {
+        Alert.alert('Service', result.error ?? 'Could not load this service.');
+        router.back();
+        return;
+      }
+
+      hydrateService(result.data, {
+        setAllowMessages,
+        setAutoPauseEnabled,
+        setAutoReplyEnabled,
+        setAvailability,
+        setCategory,
+        setCertificationAvailable,
+        setCertificationNote,
+        setCustomCategory,
+        setDescription,
+        setExperienceLevel,
+        setLocationBarangay,
+        setPhotoUrls,
+        setRate,
+        setRateMax,
+        setRateMin,
+        setRateNegotiable,
+        setRateType,
+        setTags,
+        setTitle,
+      });
+      setLoadingService(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [router, serviceId]);
 
   const selectCategory = (value: string) => {
     setCategory(value);
@@ -92,7 +167,37 @@ export default function CreateServiceScreen() {
     });
   };
 
-  const onNext = () => {
+  const buildServiceInput = () => {
+    const parsedRateMin = parsePositiveNumber(rateMin);
+    const parsedRateMax = parsePositiveNumber(rateMax);
+
+    return {
+      category,
+      customCategory: customCategory.trim(),
+      title,
+      description,
+      tags: Array.from(
+        new Set([serviceGroup, category, ...tags].filter((value): value is string => Boolean(value))),
+      ),
+      photoUrls,
+      availabilityText: availability,
+      rateText: rate,
+      rateMin: Number.isNaN(parsedRateMin) ? null : parsedRateMin,
+      rateMax: Number.isNaN(parsedRateMax) ? null : parsedRateMax,
+      rateType,
+      rateNegotiable,
+      experienceLevel,
+      certificationAvailable,
+      certificationNote,
+      barangay: locationText,
+      locationText,
+      allowMessages,
+      autoReplyEnabled,
+      autoPauseEnabled,
+    };
+  };
+
+  const onNext = async () => {
     if (uploadingPhotos) {
       Alert.alert('Add Photos', 'Wait for the photos to finish uploading.');
       return;
@@ -113,24 +218,45 @@ export default function CreateServiceScreen() {
       Alert.alert('Add service details', 'Describe what clients can expect from this service.');
       return;
     }
-    const parsedRateMin = parsePositiveNumber(rateMin);
-    const parsedRateMax = parsePositiveNumber(rateMax);
-    if (Number.isNaN(parsedRateMin) || Number.isNaN(parsedRateMax)) {
-      Alert.alert('Rate range', 'Enter a valid rate range or leave it blank.');
+    const serviceInput = buildServiceInput();
+    const rateRange = validateRateRange({
+      min: serviceInput.rateMin,
+      max: serviceInput.rateMax,
+      rateType,
+    });
+    if (!rateRange.valid) {
+      Alert.alert('Rate range', rateRange.error ?? 'Enter a valid rate range.');
       return;
     }
-    if (parsedRateMin !== null && parsedRateMax !== null && parsedRateMin > parsedRateMax) {
-      Alert.alert('Rate range', 'Minimum rate must not be greater than maximum rate.');
-      return;
-    }
-    if (rateType !== 'negotiable' && parsedRateMin === null && parsedRateMax === null) {
-      Alert.alert('Rate range', 'Add a rate range or choose negotiable.');
+
+    if (serviceId) {
+      setSavingService(true);
+      const result = await updateService({
+        serviceId,
+        input: serviceInput,
+      });
+      setSavingService(false);
+
+      if (result.error || !result.data) {
+        Alert.alert('Service', result.error ?? 'Could not save this service.');
+        return;
+      }
+
+      await refresh();
+      showSuccessToast('Service saved');
+      if (returnTo === 'profile') {
+        router.replace('/(tabs)/profile');
+        return;
+      }
+
+      router.back();
       return;
     }
 
     router.push({
       pathname: '/create-service-preview',
       params: {
+        returnTo,
         draft: JSON.stringify({
           allowMessages,
           autoPauseEnabled,
@@ -150,11 +276,22 @@ export default function CreateServiceScreen() {
           rateMin,
           rateMax,
           rateType,
+          rateNegotiable,
           title,
         }),
       },
     });
   };
+
+  if (loadingService) {
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+        <View style={styles.loadingWrap}>
+          <Text style={styles.loadingText}>Loading service...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -167,16 +304,19 @@ export default function CreateServiceScreen() {
             style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
             <MaterialIcons color={color.text} name="chevron-left" size={30} />
           </Pressable>
-          <Text style={styles.headerTitle}>New service post</Text>
+          <Text style={styles.headerTitle}>{serviceId ? 'Edit service' : 'New service post'}</Text>
           <Pressable
             accessibilityRole="button"
+            disabled={savingService}
             onPress={onNext}
-            style={({ pressed }) => [pressed && styles.pressed]}>
-            <Text style={styles.headerAction}>Next</Text>
+            style={({ pressed }) => [savingService && styles.disabled, pressed && !savingService && styles.pressed]}>
+            <Text style={styles.headerAction}>
+              {savingService ? 'Saving...' : serviceId ? 'Save' : 'Next'}
+            </Text>
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.userRow}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(getDisplayName(profile))}</Text>
@@ -184,7 +324,7 @@ export default function CreateServiceScreen() {
             </View>
             <View style={styles.userCopy}>
               <Text style={styles.userName}>{getDisplayName(profile)}</Text>
-              <Text style={styles.userMeta}>Creating a service post</Text>
+              <Text style={styles.userMeta}>{serviceId ? 'Editing a service post' : 'Creating a service post'}</Text>
             </View>
           </View>
 
@@ -329,52 +469,30 @@ export default function CreateServiceScreen() {
           placeholder="e.g. Weekends, afternoons"
           value={availability}
         />
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Rate range</Text>
-            <Text style={styles.helperText}>Use a range so clients know what to expect.</Text>
-            <View style={styles.twoColumn}>
-              <Field
-                compact
-                keyboardType="numeric"
-                label="Minimum"
-                onChangeText={setRateMin}
-                placeholder="500"
-                value={rateMin}
-              />
-              <Field
-                compact
-                keyboardType="numeric"
-                label="Maximum"
-                onChangeText={setRateMax}
-                placeholder="1000"
-                value={rateMax}
-              />
-            </View>
-            <View style={styles.chipWrap}>
-              {RATE_TYPE_OPTIONS.map((option) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: rateType === option.value }}
-                  key={option.value}
-                  onPress={() => setRateType(option.value)}
-                  style={({ pressed }) => [
-                    styles.chip,
-                    rateType === option.value && styles.chipActive,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text style={[styles.chipText, rateType === option.value && styles.chipTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Field
-              label="Rate note"
-              onChangeText={setRate}
-              placeholder="Optional note, e.g. supplies included"
-              value={rate}
+          <View
+            onLayout={(event) => {
+              rateRangeOffsetRef.current = event.nativeEvent.layout.y;
+              scrollToRateRange();
+            }}>
+            <RateRangeInput
+              label="Rate range"
+              maxValue={rateMax}
+              minValue={rateMin}
+              negotiable={rateNegotiable}
+              onMaxChange={setRateMax}
+              onMinChange={setRateMin}
+              onNegotiableChange={setRateNegotiable}
+              onRateTypeChange={setRateType}
+              previewPrefix="Service rate"
+              rateType={rateType}
             />
           </View>
+          <Field
+            label="Rate note"
+            onChangeText={setRate}
+            placeholder="Optional note, e.g. supplies included"
+            value={rate}
+          />
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Experience level</Text>
             <View style={styles.chipWrap}>
@@ -486,6 +604,56 @@ export default function CreateServiceScreen() {
       />
     </SafeAreaView>
   );
+}
+
+function getParamValue(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function hydrateService(
+  service: ProviderService,
+  setters: {
+    setAllowMessages: (value: boolean) => void;
+    setAutoPauseEnabled: (value: boolean) => void;
+    setAutoReplyEnabled: (value: boolean) => void;
+    setAvailability: (value: string) => void;
+    setCategory: (value: string) => void;
+    setCertificationAvailable: (value: boolean) => void;
+    setCertificationNote: (value: string) => void;
+    setCustomCategory: (value: string) => void;
+    setDescription: (value: string) => void;
+    setExperienceLevel: (value: ExperienceLevel) => void;
+    setLocationBarangay: (value: string) => void;
+    setPhotoUrls: (value: string[]) => void;
+    setRate: (value: string) => void;
+    setRateMax: (value: string) => void;
+    setRateMin: (value: string) => void;
+    setRateNegotiable: (value: boolean) => void;
+    setRateType: (value: RateType) => void;
+    setTags: (value: string[]) => void;
+    setTitle: (value: string) => void;
+  },
+) {
+  setters.setCategory(service.category);
+  setters.setCustomCategory(service.customCategory ?? '');
+  setters.setTitle(service.title);
+  setters.setDescription(service.description ?? '');
+  setters.setTags(service.tags);
+  setters.setAvailability(service.availabilityText ?? '');
+  setters.setRate(service.rateText ?? '');
+  setters.setRateMin(service.rateMin ? String(service.rateMin) : '');
+  setters.setRateMax(service.rateMax ? String(service.rateMax) : '');
+  setters.setRateType(service.rateType);
+  setters.setRateNegotiable(service.rateNegotiable);
+  setters.setExperienceLevel(service.experienceLevel);
+  setters.setCertificationAvailable(service.certificationAvailable);
+  setters.setCertificationNote(service.certificationNote ?? '');
+  setters.setAllowMessages(service.allowMessages);
+  setters.setAutoReplyEnabled(service.autoReplyEnabled);
+  setters.setAutoPauseEnabled(service.autoPauseEnabled);
+  setters.setPhotoUrls(service.photoUrls);
+  setters.setLocationBarangay(service.locationText ?? service.barangay ?? 'Barangay San Pedro');
 }
 
 function Field({
@@ -967,5 +1135,14 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.6,
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  loadingText: {
+    ...typography.body,
+    color: color.textMuted,
   },
 });

@@ -3,7 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import {
   OnboardingButton,
@@ -21,6 +21,7 @@ export default function VerificationStep() {
   const [wantsVerification, setWantsVerification] = useState(draft.wantsBarangayVerification ?? true);
   const [verificationNote, setVerificationNote] = useState(draft.verificationNote);
   const [files, setFiles] = useState<VerificationUpload[]>(draft.verificationFiles ?? []);
+  const [idError, setIdError] = useState<string | null>(null);
 
   useEffect(() => {
     if (role === 'client') {
@@ -44,6 +45,7 @@ export default function VerificationStep() {
     setFiles((prev) => {
       const updated = [...prev, next];
       setVerificationFiles(updated);
+      setIdError(null);
       return updated;
     });
   };
@@ -62,11 +64,12 @@ export default function VerificationStep() {
       const hasIdBack = files.some((file) => file.fileType === 'id_back');
 
       if (!hasIdFront || !hasIdBack) {
-        Alert.alert('ID required for verification', 'Please upload both ID front and ID back.');
+        setIdError('Please upload both ID front and ID back.');
         return;
       }
     }
 
+    setIdError(null);
     updateDraft({
       verificationFiles: files,
       verificationNote,
@@ -115,6 +118,7 @@ export default function VerificationStep() {
                 <FileButton label="ID front" onPress={() => pickFile('id_front')} />
                 <FileButton label="ID back" onPress={() => pickFile('id_back')} />
               </View>
+              {idError ? <Text style={styles.errorText}>{idError}</Text> : null}
             </View>
 
             <View style={styles.section}>
@@ -259,6 +263,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 12,
     lineHeight: 16,
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 17,
   },
   skipCard: {
     backgroundColor: '#F8FAFC',

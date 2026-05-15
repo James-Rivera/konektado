@@ -3,7 +3,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import {
   FloatingOnboardingInput,
@@ -21,6 +21,7 @@ export default function BasicsStep() {
   const [localLast, setLocalLast] = useState(draft.lastName);
   const [localBirthdate, setLocalBirthdate] = useState(draft.birthdate);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const selectedDate = localBirthdate ? new Date(localBirthdate) : new Date('2000-01-01');
 
@@ -31,14 +32,16 @@ export default function BasicsStep() {
     const month = `${date.getMonth() + 1}`.padStart(2, '0');
     const day = `${date.getDate()}`.padStart(2, '0');
     setLocalBirthdate(`${year}-${month}-${day}`);
+    if (error) setError(null);
   };
 
   const next = () => {
     if (!localFirst.trim() || !localLast.trim() || !localBirthdate.trim()) {
-      Alert.alert('Add your details', 'First name, last name, and date of birth are required.');
+      setError('First name, last name, and date of birth are required.');
       return;
     }
 
+    setError(null);
     updateDraft({
       birthdate: localBirthdate,
       firstName: localFirst,
@@ -59,14 +62,20 @@ export default function BasicsStep() {
         <FloatingOnboardingInput
           autoCapitalize="words"
           label="First Name"
-          onChangeText={setLocalFirst}
+          onChangeText={(value) => {
+            setLocalFirst(value);
+            if (error) setError(null);
+          }}
           textContentType="givenName"
           value={localFirst}
         />
         <FloatingOnboardingInput
           autoCapitalize="words"
           label="Last Name"
-          onChangeText={setLocalLast}
+          onChangeText={(value) => {
+            setLocalLast(value);
+            if (error) setError(null);
+          }}
           textContentType="familyName"
           value={localLast}
         />
@@ -79,6 +88,7 @@ export default function BasicsStep() {
           <Text style={[styles.dateText, !localBirthdate ? styles.placeholder : undefined]}>{localBirthdate || 'Date of Birth'}</Text>
           <MaterialIcons color={onboardingColors.placeholder} name="calendar-today" size={22} />
         </Pressable>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         {showDatePicker ? (
           <DateTimePicker
@@ -132,5 +142,11 @@ const styles = StyleSheet.create({
   placeholder: {
     color: onboardingColors.placeholder,
     paddingTop: 0,
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

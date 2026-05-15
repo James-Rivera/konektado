@@ -6,6 +6,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton } from '@/components/Skeleton';
 import { color } from '@/constants/theme';
@@ -46,6 +47,7 @@ function getParamValue(value: string | string[] | undefined) {
 
 export default function ConversationDetailsScreen() {
   const router = useRouter();
+  const { showSuccessToast } = useFeedback();
   const { profile } = useProfile();
   const params = useLocalSearchParams<{ conversationId?: string | string[] }>();
   const conversationId = getParamValue(params.conversationId);
@@ -118,7 +120,7 @@ export default function ConversationDetailsScreen() {
 
     setConversation(result.data);
     setReportVisible(false);
-    Alert.alert('Report submitted', `Thanks for the report. Reason: ${reason}`);
+    showSuccessToast('Report submitted');
   };
 
   const onDelete = async () => {

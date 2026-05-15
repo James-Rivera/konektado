@@ -5,6 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Skeleton } from '@/components/Skeleton';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { WorkerCard } from '@/components/WorkerCard';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -41,6 +42,7 @@ type ServiceDraft = {
   rateMin: string;
   rateMax: string;
   rateType: RateType;
+  rateNegotiable: boolean;
   title: string;
 };
 
@@ -75,6 +77,7 @@ function parseDraft(value: string | undefined): ServiceDraft | null {
       rateMin: parsed.rateMin ?? '',
       rateMax: parsed.rateMax ?? '',
       rateType: parsed.rateType ?? 'per_project',
+      rateNegotiable: parsed.rateNegotiable ?? false,
       title: parsed.title,
     };
   } catch {
@@ -100,6 +103,7 @@ function getRateLine(draft: ServiceDraft) {
     rateMin: parseNumber(draft.rateMin),
     rateMax: parseNumber(draft.rateMax),
     rateType: draft.rateType,
+    rateNegotiable: draft.rateNegotiable,
   });
   const availability = draft.availability.trim() || 'Availability to coordinate';
   return `${rate} - ${availability}`;
@@ -123,9 +127,14 @@ function getPreviewTags(draft: ServiceDraft) {
 
 export default function CreateServicePreviewScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ draft?: string | string[] }>();
-  const { profile, loading } = useProfile();
+  const { showSuccessToast } = useFeedback();
+  const params = useLocalSearchParams<{
+    draft?: string | string[];
+    returnTo?: string | string[];
+  }>();
+  const { profile, loading, refresh } = useProfile();
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
+  const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
@@ -150,6 +159,7 @@ export default function CreateServicePreviewScreen() {
       rateMin: parseNumber(draft.rateMin),
       rateMax: parseNumber(draft.rateMax),
       rateType: draft.rateType,
+      rateNegotiable: draft.rateNegotiable,
       experienceLevel: draft.experienceLevel,
       certificationAvailable: draft.certificationAvailable,
       certificationNote: draft.certificationNote,
@@ -178,8 +188,9 @@ export default function CreateServicePreviewScreen() {
       return;
     }
 
-    Alert.alert('Service posted', 'Your service is now visible to nearby residents.');
-    router.replace('/(tabs)/post');
+    showSuccessToast('Service posted');
+    await refresh();
+    router.replace(returnTo === 'profile' ? '/(tabs)/profile' : '/(tabs)/post');
   };
 
   if (loading) {
