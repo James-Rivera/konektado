@@ -322,11 +322,13 @@ export function VerificationStatusPanel({
 
   return (
     <View style={styles.verificationPanel}>
-      <View style={styles.verificationIcon}>
-        <MaterialIcons color={color.verificationBlue} name={icon} size={20} />
-      </View>
-      <View style={styles.verificationCopy}>
+      <View style={styles.verificationHeader}>
+        <View style={styles.verificationIcon}>
+          <MaterialIcons color={color.verificationBlue} name={icon} size={20} />
+        </View>
         <Text style={styles.verificationTitle}>{status.label}</Text>
+      </View>
+      <View style={styles.verificationBody}>
         <Text style={styles.verificationDescription}>{status.description}</Text>
         {status.reviewerNote && status.status !== 'approved' ? (
           <Text style={styles.verificationNote}>Reviewer note: {status.reviewerNote}</Text>
@@ -1130,14 +1132,18 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   verificationPanel: {
-    alignItems: 'flex-start',
     backgroundColor: color.surfaceAlt,
     borderColor: color.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    flexDirection: 'row',
-    gap: space.md,
+    gap: space.sm,
     padding: space.lg,
+  },
+  verificationHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+    minWidth: 0,
   },
   verificationIcon: {
     alignItems: 'center',
@@ -1147,13 +1153,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 34,
   },
-  verificationCopy: {
-    flex: 1,
-    gap: space['2xs'],
+  verificationBody: {
+    gap: space.xs,
   },
   verificationTitle: {
     ...typography.bodyMedium,
     color: color.text,
+    flex: 1,
+    minWidth: 0,
   },
   verificationDescription: {
     ...typography.caption,
@@ -1165,16 +1172,18 @@ const styles = StyleSheet.create({
   },
   verificationAction: {
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: color.background,
-    borderRadius: radius.md,
+    alignSelf: 'stretch',
+    backgroundColor: color.verificationBlue,
+    borderRadius: radius.pill,
     justifyContent: 'center',
-    minHeight: 30,
+    minHeight: 40,
     paddingHorizontal: space.md,
+    paddingVertical: space.sm,
   },
   verificationActionText: {
-    ...typography.captionMedium,
-    color: color.verificationBlue,
+    ...typography.bodyMedium,
+    color: color.white,
+    textAlign: 'center',
   },
   actionRail: {
     gap: space.sm,

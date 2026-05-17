@@ -8,7 +8,7 @@ import {
     HomeFilterPill,
     HomeFilterTabs,
     HomeSectionHeader,
-    HomeSetupChecklist,
+    HomeSetupNudge,
     HomeTopHeader,
 } from '@/components/home/HomeDashboardUI';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
@@ -36,15 +36,22 @@ import {
 import { searchJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
 import { searchServices } from '@/services/service-profile.service';
-import { getMyVerificationPrefill } from '@/services/verification.service';
 import {
   buildHomeForYouFeed,
   getDefaultHomeFilter,
   rankHomeFeedJobs,
   rankHomeFeedWorkers,
+  resolveHomeFeedMode,
 } from '@/services/home-feed.service';
+import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
+import { getMyProfileCompletion } from '@/services/profile-completion.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
+import type {
+  ProfileCompletionAction,
+  ProfileCompletionMode,
+  ProfileCompletionStatus,
+} from '@/types/profile.types';
 
 type HomeJobFeedItem = {
   key: string;
@@ -146,7 +153,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
 export default function HomeScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { profile, loading: profileLoading } = useProfile();
+  const { profile, loading: profileLoading, version } = useProfile();
   const topInset = useSafeTopInset();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
@@ -156,14 +163,10 @@ export default function HomeScreen() {
   });
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [optionalSetupDismissed, setOptionalSetupDismissed] = useState(false);
+  const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
+  const [completionLoading, setCompletionLoading] = useState(true);
   const [headerHeight, setHeaderHeight] = useState(0);
-  const [verificationStatus, setVerificationStatus] = useState<
-    'none' | 'pending' | 'rejected' | 'needs_more_info' | 'approved'
-  >('none');
-  const [verificationNote, setVerificationNote] = useState<string | null>(null);
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
-  const verificationKnown = !profileLoading;
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
   const headerVisibleRef = useRef(true);
@@ -192,35 +195,29 @@ export default function HomeScreen() {
   useEffect(() => {
     let active = true;
 
-    getMyVerificationPrefill().then((result) => {
-      if (!active || result.error || !result.data) return;
+    if (profileLoading || !isFocused) {
+      return () => {
+        active = false;
+      };
+    }
 
-      const latest = result.data.latestRequest;
-      if (!latest) {
-        setVerificationStatus('none');
-        setVerificationNote(null);
-        return;
-      }
-
-      if (
-        latest.status === 'pending' ||
-        latest.status === 'approved' ||
-        latest.status === 'rejected' ||
-        latest.status === 'needs_more_info'
-      ) {
-        setVerificationStatus(latest.status);
-      } else {
-        setVerificationStatus('none');
-      }
-      setVerificationNote(latest.reviewerNote ?? null);
-    });
+    setCompletionLoading(true);
+    getMyProfileCompletion()
+      .then((result) => {
+        if (!active) return;
+        setCompletion(result.error ? null : result.data);
+      })
+      .catch(() => {
+        if (active) setCompletion(null);
+      })
+      .finally(() => {
+        if (active) setCompletionLoading(false);
+      });
 
     return () => {
       active = false;
     };
-  }, [isVerified]);
-
-  const showSetupBanner = verificationKnown && !isVerified && verificationStatus !== 'approved' && !bannerDismissed;
+  }, [isFocused, profileLoading, version]);
 
   useEffect(() => {
     let active = true;
@@ -306,6 +303,17 @@ export default function HomeScreen() {
   }, [feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
+  const setupNudge = useMemo(
+    () =>
+      getHomeSetupNudge({
+        activeRole: profile?.active_role,
+        completion,
+        optionalSetupDismissed,
+        preferences,
+        selectedFilter,
+      }),
+    [completion, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
+  );
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -345,8 +353,21 @@ export default function HomeScreen() {
     lastScrollOffset.current = offset;
   };
 
-  const openVerification = useCallback(() => {
-    router.push('/verification');
+  const openSetupAction = useCallback((action: ProfileCompletionAction) => {
+    const destination = getProfileCompletionDestination(action);
+
+    if (destination.type === 'route') {
+      router.push({
+        pathname: destination.pathname as never,
+        params: destination.params,
+      });
+      return;
+    }
+
+    router.push({
+      pathname: '/profile/complete' as never,
+      params: { mode: action.mode },
+    });
   }, [router]);
 
   const openJob = useCallback((jobId: string) => {
@@ -378,28 +399,26 @@ export default function HomeScreen() {
   const renderListHeader = useCallback(
     () => (
       <>
-        {!verificationKnown ? (
+        {completionLoading ? (
           <VerificationBannerSkeleton />
-        ) : showSetupBanner ? (
-          <HomeSetupChecklist
-            status={verificationStatus}
-            note={verificationNote}
-            onAddPhoto={() => showPlaceholder('Add photo')}
-            onAddServices={() => showPlaceholder('Add services')}
-            onDismiss={() => setBannerDismissed(true)}
-            onVerify={openVerification}
+        ) : setupNudge ? (
+          <HomeSetupNudge
+            actionLabel={setupNudge.actionLabel}
+            body={setupNudge.body}
+            optional={setupNudge.optional}
+            onAction={() => openSetupAction(setupNudge.action)}
+            onDismiss={setupNudge.optional ? () => setOptionalSetupDismissed(true) : undefined}
+            title={setupNudge.title}
           />
         ) : null}
         <HomeSectionHeader onFilterPress={() => showPlaceholder('Filters')} />
       </>
     ),
     [
-      openVerification,
+      completionLoading,
+      openSetupAction,
+      setupNudge,
       showPlaceholder,
-      showSetupBanner,
-      verificationKnown,
-      verificationNote,
-      verificationStatus,
     ],
   );
 
@@ -489,6 +508,164 @@ const FeedCard = memo(function FeedCard({
     />
   );
 });
+
+type HomeSetupNudgeModel = {
+  action: ProfileCompletionAction;
+  actionLabel: string;
+  body: string;
+  optional?: boolean;
+  title: string;
+};
+
+function getHomeSetupNudge({
+  activeRole,
+  completion,
+  optionalSetupDismissed,
+  preferences,
+  selectedFilter,
+}: {
+  activeRole?: string | null;
+  completion: ProfileCompletionStatus | null;
+  optionalSetupDismissed: boolean;
+  preferences: UserPreferences | null;
+  selectedFilter: HomeFilter;
+}): HomeSetupNudgeModel | null {
+  if (!completion) return null;
+
+  if (!completion.coreComplete) {
+    return {
+      action: completion.coreCompletion.nextRecommendedAction ?? fallbackProfileAction('core'),
+      actionLabel: 'Continue setup',
+      title: 'Finish your Core Profile',
+      body: 'Add your basic details so neighbors know who they are connecting with.',
+    };
+  }
+
+  if (completion.verification.status === 'unverified') {
+    return {
+      action: completion.verification.action ?? fallbackVerificationAction(),
+      actionLabel: 'Start verification',
+      title: 'Verify your barangay identity',
+      body: 'Verification helps unlock posting, messaging, saving, and reviews.',
+    };
+  }
+
+  if (completion.verification.status === 'pending') {
+    return {
+      action: completion.verification.action ?? fallbackVerificationAction(),
+      actionLabel: 'View status',
+      title: 'Verification pending',
+      body: 'Your barangay verification is under review.',
+    };
+  }
+
+  if (completion.verification.status === 'needs_more_info' || completion.verification.status === 'rejected') {
+    return {
+      action: completion.verification.action ?? fallbackVerificationAction(),
+      actionLabel: 'Review verification',
+      title: 'Verification needs attention',
+      body: 'Review the reason and update your submission.',
+    };
+  }
+
+  const contextMode = getHomeSetupContext({ activeRole, preferences, selectedFilter });
+  const wantsToOffer =
+    contextMode === 'provider' ||
+    Boolean(
+      preferences?.offeredDeliveryMode ||
+        preferences?.offeredServices.length ||
+        preferences?.customOfferedServices.length,
+    );
+  const wantsToHire =
+    contextMode === 'client' ||
+    Boolean(preferences?.neededServices.length || preferences?.customNeededServices.length);
+
+  if (wantsToOffer && completion.workCompletion.state !== 'ready') {
+    return {
+      action: completion.workCompletion.nextRecommendedAction ?? fallbackProfileAction('work'),
+      actionLabel: 'Complete Work Profile',
+      title: 'Set up your Work Profile',
+      body: 'Add your services, rates, and availability so clients can find you.',
+    };
+  }
+
+  if (wantsToHire && completion.hiringCompletion.state !== 'ready') {
+    return {
+      action: completion.hiringCompletion.nextRecommendedAction ?? fallbackProfileAction('hiring'),
+      actionLabel: 'Complete Hiring Profile',
+      title: 'Set up your Hiring Profile',
+      body: 'Add your preferences so Konektado can recommend better workers.',
+    };
+  }
+
+  if (completion.photoRecommended && !optionalSetupDismissed) {
+    return {
+      action: {
+        id: 'profile-photo',
+        kind: 'add_profile_photo',
+        label: 'Add photo',
+        mode: 'core',
+        optional: true,
+      },
+      actionLabel: 'Add photo',
+      body: 'Optional: help neighbors recognize you more easily.',
+      optional: true,
+      title: 'Add a profile photo',
+    };
+  }
+
+  return null;
+}
+
+function getHomeSetupContext({
+  activeRole,
+  preferences,
+  selectedFilter,
+}: {
+  activeRole?: string | null;
+  preferences: UserPreferences | null;
+  selectedFilter: HomeFilter;
+}) {
+  if (selectedFilter === 'Jobs') return 'provider';
+  if (selectedFilter === 'Workers') return 'client';
+  return resolveHomeFeedMode({ activeRole, preferences });
+}
+
+function fallbackProfileAction(mode: ProfileCompletionMode): ProfileCompletionAction {
+  if (mode === 'hiring') {
+    return {
+      id: 'home-hiring-profile',
+      kind: 'edit_hiring_preferences',
+      label: 'Complete Hiring Profile',
+      mode,
+    };
+  }
+
+  if (mode === 'work') {
+    return {
+      id: 'home-work-profile',
+      kind: 'edit_availability',
+      label: 'Complete Work Profile',
+      mode,
+    };
+  }
+
+  return {
+    id: 'home-core-profile',
+    kind: 'edit_shared_profile',
+    label: 'Continue setup',
+    mode,
+  };
+}
+
+function fallbackVerificationAction(): ProfileCompletionAction {
+  return {
+    id: 'verification',
+    kind: 'open_verification',
+    label: 'Start verification',
+    mode: 'core',
+  };
+}
 
 function VerificationBannerSkeleton() {
   return (

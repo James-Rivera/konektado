@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -173,15 +174,7 @@ export default function PostScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.composer}>
-          <View style={styles.composerRow}>
-            <View style={styles.composerAvatar}>
-              <MaterialIcons color={color.verificationBlue} name="person" size={22} />
-            </View>
-            <View style={styles.composerCopy}>
-              <Text style={styles.composerTitle}>What do you want to post?</Text>
-              <Text style={styles.composerText}>Choose whether you need help or want to offer a service.</Text>
-            </View>
-          </View>
+          <CurrentUserIdentityRow subtitle="Choose whether you need help or want to offer a service." />
           <Pressable
             accessibilityRole="button"
             onPress={openCreateSheet}
@@ -604,29 +597,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: space.sm,
   },
-  composerAvatar: {
-    alignItems: 'center',
-    backgroundColor: color.cardTint,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 46,
-    justifyContent: 'center',
-    width: 46,
-  },
   composerCopy: {
     flex: 1,
     gap: space['2xs'],
-  },
-  composerTitle: {
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 21,
-    color: color.text,
-  },
-  composerText: {
-    ...typography.caption,
-    color: color.textMuted,
   },
   verificationNotice: {
     alignItems: 'flex-start',

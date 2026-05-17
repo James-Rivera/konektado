@@ -14,6 +14,7 @@ export type WorkerCardProps = {
   ratingText: string;
   jobsDoneText: string;
   location: string;
+  avatarUrl?: string | null;
   imageUrl?: string;
   isActive?: boolean;
   onPress?: () => void;
@@ -30,6 +31,7 @@ export function WorkerCard({
   ratingText,
   jobsDoneText,
   location,
+  avatarUrl,
   imageUrl,
   isActive = true,
   onPress,
@@ -46,7 +48,11 @@ export function WorkerCard({
         <View style={styles.headerRow}>
           <View style={styles.identityRow}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(name)}</Text>
+              {avatarUrl ? (
+                <Image resizeMode="cover" source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{getInitials(name)}</Text>
+              )}
               <PresenceDot active={isActive} size={10} style={styles.statusDot} />
             </View>
             <View style={styles.titleWrap}>
@@ -193,8 +199,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     height: 44,
     justifyContent: 'center',
+    overflow: 'visible',
     position: 'relative',
     width: 44,
+  },
+  avatarImage: {
+    borderRadius: radius.pill,
+    height: '100%',
+    width: '100%',
   },
   avatarText: {
     color: color.text,

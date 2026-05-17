@@ -218,7 +218,13 @@ export function OnboardingButton({
   const isDisabled = disabled || loading;
   const isYellow = variant === 'yellow';
   const isOutline = variant === 'outline';
-  const foreground = isYellow ? onboardingColors.textMuted : isOutline ? onboardingColors.text : onboardingColors.white;
+  const foreground = isDisabled
+    ? onboardingColors.textMuted
+    : isYellow
+      ? onboardingColors.textMuted
+      : isOutline
+        ? onboardingColors.text
+        : onboardingColors.white;
 
   return (
     <Pressable
@@ -772,7 +778,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   actionButtonDisabled: {
-    backgroundColor: onboardingColors.brandYellowMuted,
+    backgroundColor: '#E5EAF1',
   },
   actionButtonPressed: {
     opacity: 0.82,

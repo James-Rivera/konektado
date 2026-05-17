@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
-import { PresenceDot } from '@/components/PresenceDot';
+import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
 import { RateRangeInput } from '@/components/RateRangeInput';
 import { Skeleton } from '@/components/Skeleton';
 import {
@@ -30,7 +30,7 @@ import {
 } from '@/constants/job-post-options';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { isPresenceActive, validateRateRange } from '@/services/marketplace.helpers';
+import { validateRateRange } from '@/services/marketplace.helpers';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { type JobPhotoAsset, uploadJobPhotos } from '@/services/job-photo.service';
 import type {
@@ -74,24 +74,6 @@ type JobDraft = {
 };
 
 type JobDraftErrors = Partial<Record<keyof JobDraft, string>>;
-
-function getDisplayName(profile: ReturnType<typeof useProfile>['profile']) {
-  return (
-    profile?.full_name?.trim() ||
-    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
-    'Konektado resident'
-  );
-}
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 function parsePositiveNumber(value: string) {
   if (!value.trim()) return null;
@@ -212,7 +194,6 @@ export default function CreateJobScreen() {
   const { profile, loading } = useProfile();
   const profileId = profile?.id ?? null;
   const profileBarangay = profile?.barangay ?? null;
-  const displayName = getDisplayName(profile);
   const [errors, setErrors] = useState<JobDraftErrors>({});
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(initialDraftId));
@@ -480,16 +461,7 @@ export default function CreateJobScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.userRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
-              <PresenceDot active={isPresenceActive(profile?.availability)} size={12} style={styles.avatarDot} />
-            </View>
-            <View style={styles.userCopy}>
-              <Text style={styles.userName}>{displayName}</Text>
-              <Text style={styles.userMeta}>Creating a job post</Text>
-            </View>
-          </View>
+          <CurrentUserIdentityRow subtitle="Creating a job post" />
 
           {draft.photoUrls.length ? (
             <View style={[styles.photoCard, uploadingPhotos && styles.disabled]}>
@@ -1017,37 +989,9 @@ const styles = StyleSheet.create({
     gap: space.md,
     marginBottom: space.lg,
   },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: color.cardTint,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 46,
-    justifyContent: 'center',
-    position: 'relative',
-    width: 46,
-  },
-  avatarText: {
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    color: color.text,
-  },
-  avatarDot: {
-    bottom: 0,
-    right: 0,
-  },
   userCopy: {
     flex: 1,
     gap: space['2xs'],
-  },
-  userName: {
-    ...typography.sectionTitle,
-    color: color.text,
-  },
-  userMeta: {
-    ...typography.caption,
-    color: color.textMuted,
   },
   photoCard: {
     borderColor: color.border,

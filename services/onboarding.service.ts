@@ -272,10 +272,14 @@ export async function saveOnboardingProfile({
     province: DEFAULT_PROVINCE,
     city: DEFAULT_CITY,
     barangay: DEFAULT_BARANGAY,
+    // Legacy DB names remain: street stores Area / Street / Purok / Sitio,
+    // subdivision_area stores optional Additional area details.
     street: draft.street.trim() || null,
     subdivision_area: draft.subdivisionArea.trim() || null,
+    // Legacy split fields remain; onboarding stores the combined exact detail in house_number.
     block_lot: draft.blockLot.trim() || null,
     house_number: draft.houseNumber.trim() || null,
+    // Legacy landmark_note is now the private note for finding the resident.
     landmark_note: draft.landmarkNote.trim() || null,
     preferred_contact_method: draft.preferredContactMethod || "app_message",
   });

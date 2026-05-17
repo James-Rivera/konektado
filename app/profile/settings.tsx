@@ -4,6 +4,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CurrentUserIdentityRow, getProfileDisplayName } from '@/components/profile/CurrentUserIdentity';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { supabase } from '@/utils/supabase';
@@ -14,11 +15,7 @@ export default function ProfileSettingsScreen() {
   const router = useRouter();
   const { profile } = useProfile();
 
-  const displayName =
-    profile?.full_name ||
-    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
-    'Konektado resident';
-  const email = profile?.email ?? 'Signed in account';
+  const displayName = getProfileDisplayName(profile);
 
   const confirmLogout = () => {
     Alert.alert('Log out', 'End this session on this device?', [
@@ -55,15 +52,7 @@ export default function ProfileSettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.accountCard}>
-          <View style={styles.accountAvatar}>
-            <Text style={styles.accountInitials}>{getInitials(displayName)}</Text>
-          </View>
-          <View style={styles.accountCopy}>
-            <Text numberOfLines={1} style={styles.accountName}>{displayName}</Text>
-            <Text numberOfLines={1} style={styles.accountEmail}>{email}</Text>
-          </View>
-        </View>
+        <CurrentUserIdentityRow showEmail showPresence={false} size="lg" style={styles.accountCard} />
 
         <SettingsSection title="Profile setup">
           <SettingsRow
@@ -160,15 +149,6 @@ function SettingsRow({
   );
 }
 
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('') || 'K';
-}
-
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: color.screenBackground,
@@ -214,35 +194,6 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingHorizontal: space.xl,
     paddingVertical: space.lg,
-  },
-  accountAvatar: {
-    alignItems: 'center',
-    backgroundColor: color.primarySoft,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 54,
-    justifyContent: 'center',
-    width: 54,
-  },
-  accountInitials: {
-    color: color.verificationBlue,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  accountCopy: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0,
-  },
-  accountName: {
-    ...typography.bodyMedium,
-    color: color.text,
-  },
-  accountEmail: {
-    ...typography.caption,
-    color: color.textMuted,
   },
   section: {
     backgroundColor: color.background,

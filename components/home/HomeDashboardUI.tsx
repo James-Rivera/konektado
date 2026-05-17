@@ -41,56 +41,52 @@ export function HomeSearchBar({ onPress }: { onPress: () => void }) {
   );
 }
 
-export function HomeSetupChecklist({
-  status,
-  note,
+export function HomeSetupNudge({
+  actionLabel,
+  body,
+  optional = false,
+  onAction,
   onDismiss,
-  onVerify,
-  onAddServices,
-  onAddPhoto,
+  title,
 }: {
-  status: 'none' | 'pending' | 'rejected' | 'needs_more_info' | 'approved';
-  note: string | null;
-  onDismiss: () => void;
-  onVerify: () => void;
-  onAddServices: () => void;
-  onAddPhoto: () => void;
+  actionLabel: string;
+  body: string;
+  optional?: boolean;
+  onAction: () => void;
+  onDismiss?: () => void;
+  title: string;
 }) {
-  const title =
-    status === 'pending'
-      ? 'Verification pending'
-      : status === 'rejected' || status === 'needs_more_info'
-        ? 'Verification needs updates'
-        : 'Finish your Konektado setup';
-
-  const body =
-    status === 'pending'
-      ? 'Your barangay verification has been submitted and is currently being reviewed.'
-      : status === 'rejected' || status === 'needs_more_info'
-        ? note ?? 'Your barangay verification was reviewed and needs updates before you can publish.'
-        : 'Verify your account to unlock posting, messaging, saving, and reviews.';
-
-  const primaryLabel = status === 'none' ? 'Verify yourself' : 'View status';
-
   return (
     <View style={styles.bannerBand}>
       <View style={styles.bannerCard}>
         <View style={styles.bannerHeader}>
-          <Text style={styles.bannerTitle}>{title}</Text>
-          <Pressable
-            accessibilityLabel="Dismiss setup card"
-            accessibilityRole="button"
-            onPress={onDismiss}
-            style={({ pressed }) => [styles.bannerDismiss, pressed && styles.pressed]}>
-            <Text style={styles.bannerDismissText}>×</Text>
-          </Pressable>
+          <View style={styles.bannerTitleRow}>
+            <View style={[styles.bannerIcon, optional && styles.bannerIconOptional]}>
+              <MaterialIcons
+                color={optional ? color.textSubtle : color.verificationBlue}
+                name={optional ? 'person-add-alt' : 'task-alt'}
+                size={18}
+              />
+            </View>
+            <Text style={styles.bannerTitle}>{title}</Text>
+          </View>
+          {optional && onDismiss ? (
+            <Pressable
+              accessibilityLabel="Dismiss setup suggestion"
+              accessibilityRole="button"
+              onPress={onDismiss}
+              style={({ pressed }) => [styles.bannerDismiss, pressed && styles.pressed]}>
+              <MaterialIcons color={color.textSubtle} name="close" size={18} />
+            </Pressable>
+          ) : null}
         </View>
         <Text style={styles.bannerBody}>{body}</Text>
-        <View style={styles.bannerActions}>
-          <BannerPill label={primaryLabel} onPress={onVerify} selected />
-          <BannerPill label="Add services" onPress={onAddServices} />
-          <BannerPill label="Add photo" onPress={onAddPhoto} />
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onAction}
+          style={({ pressed }) => [styles.bannerPrimaryAction, pressed && styles.pressed]}>
+          <Text style={styles.bannerPrimaryText}>{actionLabel}</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -143,29 +139,6 @@ export function HomeSectionHeader({ onFilterPress }: { onFilterPress: () => void
   );
 }
 
-function BannerPill({
-  label,
-  onPress,
-  selected = false,
-}: {
-  label: string;
-  onPress: () => void;
-  selected?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.bannerPill,
-        selected && styles.bannerPillSelected,
-        pressed && styles.pressed,
-      ]}>
-      <Text style={[styles.bannerPillText, selected && styles.bannerPillTextSelected]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   topHeader: {
     alignItems: 'center',
@@ -215,15 +188,33 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     borderRadius: radius.lg,
     borderWidth: 1,
-    gap: 8,
+    gap: 10,
     overflow: 'hidden',
     padding: 16,
   },
   bannerHeader: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'space-between',
+  },
+  bannerTitleRow: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minWidth: 0,
+  },
+  bannerIcon: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  bannerIconOptional: {
+    backgroundColor: color.surfaceAlt,
   },
   bannerTitle: {
     color: '#050505',
@@ -234,52 +225,32 @@ const styles = StyleSheet.create({
   },
   bannerDismiss: {
     alignItems: 'center',
-    backgroundColor: color.primary,
     borderRadius: radius.pill,
-    height: 25,
+    height: 32,
     justifyContent: 'center',
-    width: 25,
-  },
-  bannerDismissText: {
-    color: color.white,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 18,
+    width: 32,
   },
   bannerBody: {
     color: color.textMuted,
     fontFamily: 'Satoshi-Regular',
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: 12,
+    lineHeight: 18,
   },
-  bannerActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  bannerPill: {
+  bannerPrimaryAction: {
     alignItems: 'center',
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: 13,
-    borderWidth: 1,
+    backgroundColor: color.verificationBlue,
+    borderRadius: radius.pill,
     justifyContent: 'center',
-    minHeight: 26,
-    paddingHorizontal: 11,
-    paddingVertical: 1,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  bannerPillSelected: {
-    backgroundColor: color.primarySoft,
-    borderColor: color.primary,
-  },
-  bannerPillText: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 11,
-    lineHeight: 14,
-  },
-  bannerPillTextSelected: {
-    color: color.primary,
+  bannerPrimaryText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 17,
+    textAlign: 'center',
   },
   filterBand: {
     backgroundColor: color.background,

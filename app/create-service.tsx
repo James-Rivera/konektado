@@ -9,7 +9,7 @@ import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
-import { PresenceDot } from '@/components/PresenceDot';
+import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
 import { RateRangeInput } from '@/components/RateRangeInput';
 import {
   getServiceTagsForCategory,
@@ -19,7 +19,7 @@ import {
 import { getCategoryForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { isPresenceActive, validateRateRange } from '@/services/marketplace.helpers';
+import { validateRateRange } from '@/services/marketplace.helpers';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
 import { getMyService, updateService } from '@/services/service-profile.service';
 import type { ExperienceLevel, ProviderService, RateType } from '@/types/marketplace.types';
@@ -317,16 +317,7 @@ export default function CreateServiceScreen() {
         </View>
 
         <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.userRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(getDisplayName(profile))}</Text>
-              <PresenceDot active={isPresenceActive(profile?.availability)} size={12} style={styles.avatarDot} />
-            </View>
-            <View style={styles.userCopy}>
-              <Text style={styles.userName}>{getDisplayName(profile)}</Text>
-              <Text style={styles.userMeta}>{serviceId ? 'Editing a service post' : 'Creating a service post'}</Text>
-            </View>
-          </View>
+          <CurrentUserIdentityRow subtitle={serviceId ? 'Editing a service post' : 'Creating a service post'} />
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Service</Text>
@@ -717,24 +708,6 @@ function ToggleRow({
   );
 }
 
-function getDisplayName(profile: ReturnType<typeof useProfile>['profile']) {
-  return (
-    profile?.full_name?.trim() ||
-    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
-    'Konektado resident'
-  );
-}
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 async function addPhotos(
   currentPhotos: string[],
   setPhotoUrls: (value: string[] | ((current: string[]) => string[])) => void,
@@ -813,44 +786,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     paddingTop: space.md,
     paddingBottom: space['3xl'],
-  },
-  userRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: space.md,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: color.cardTint,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    height: 46,
-    justifyContent: 'center',
-    position: 'relative',
-    width: 46,
-  },
-  avatarText: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  avatarDot: {
-    bottom: 0,
-    right: 0,
-  },
-  userCopy: {
-    flex: 1,
-    gap: space['2xs'],
-  },
-  userName: {
-    ...typography.sectionTitle,
-    color: color.text,
-  },
-  userMeta: {
-    ...typography.caption,
-    color: color.textMuted,
   },
   fieldGroup: {
     gap: space.sm,

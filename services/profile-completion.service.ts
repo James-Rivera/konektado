@@ -253,8 +253,8 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
     return { data: null, error: 'Enter your first and last name.' };
   }
 
-  if (!compactText(input.street) && !compactText(input.subdivisionArea)) {
-    return { data: null, error: 'Enter your street or subdivision/area.' };
+  if (!compactText(input.street)) {
+    return { data: null, error: 'Add your area, street, purok, or sitio.' };
   }
 
   if (!compactText(input.preferredContactMethod)) {
@@ -280,10 +280,14 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
       full_name: fullName,
       province: DEFAULT_PROVINCE,
       barangay: DEFAULT_BARANGAY,
+      // Legacy DB names remain: street stores Area / Street / Purok / Sitio,
+      // subdivision_area stores optional Additional area details.
       street: compactText(input.street) || null,
       subdivision_area: compactText(input.subdivisionArea) || null,
+      // Legacy split fields remain; profile edit may store the combined exact detail in house_number.
       block_lot: compactText(input.blockLot) || null,
       house_number: compactText(input.houseNumber) || null,
+      // Legacy landmark_note is now the private note for finding the resident.
       landmark_note: compactText(input.landmarkNote) || null,
       city: DEFAULT_CITY,
       street_address: privateAddress || null,
@@ -599,7 +603,7 @@ function buildCoreCompletion({
 }): ProfileModeCompletion {
   const hasName = Boolean(name);
   const hasBarangayLocation = Boolean(core.barangay && core.city);
-  const hasPublicAddress = Boolean(compactText(core.street) || compactText(core.subdivisionArea));
+  const hasPublicAddress = Boolean(compactText(core.street));
   const hasContactPreference = Boolean(core.preferredContactMethod);
   const setupStarted = Boolean(
     hasName ||
@@ -947,14 +951,14 @@ function buildVerificationStatus({
     return {
       status: 'pending',
       label: 'Verification pending',
-      description: 'Your barangay verification request is under review.',
+      description: 'Your barangay verification is under review.',
       reviewerNote: latestVerification?.reviewer_note ?? null,
       submittedAt: latestVerification?.created_at ?? null,
       reviewedAt: latestVerification?.reviewed_at ?? null,
       action: {
         id: 'verification',
         kind: 'open_verification',
-        label: 'View status',
+        label: 'View verification status',
         description: 'See your current barangay verification status.',
         mode: 'core',
       },
@@ -1000,7 +1004,7 @@ function buildVerificationStatus({
   return {
     status: 'unverified',
     label: 'Verification needed',
-    description: 'Barangay verification is required before publishing, messaging, saving, or reviewing.',
+    description: 'Barangay verification is required before publishing services, messaging, and applying to jobs.',
     reviewerNote: null,
     submittedAt: null,
     reviewedAt: null,

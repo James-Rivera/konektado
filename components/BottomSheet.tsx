@@ -78,7 +78,7 @@ export function BottomSheet({ children, maxHeight = '82%', onClose, visible }: B
             styles.sheet,
             {
               maxHeight: maxHeight as any,
-              paddingBottom: Math.max(insets.bottom, space.lg) + space.md,
+              paddingBottom: Math.max(insets.bottom + space.sm, space.lg),
               transform: [{ translateY: sheetTranslateY }],
             } as ViewStyle,
           ]}>

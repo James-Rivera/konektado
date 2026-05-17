@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import {
@@ -51,6 +52,7 @@ type JobHistoryFilter = 'active' | 'completed';
 export default function ProfileScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
   const topInset = useSafeTopInset();
   const [mode, setMode] = useState<ProfileMode>('work');
   const [jobFilter, setJobFilter] = useState<JobHistoryFilter>('active');
@@ -154,7 +156,9 @@ export default function ProfileScreen() {
   return (
     <View style={styles.screen}>
       <ProfileTopBar onSettings={() => router.push('/profile/settings')} topInset={topInset} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, space.sm) + 96 }]}
+        showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <ProfileLoadingSkeleton />
         ) : (
@@ -388,7 +392,7 @@ function WorkProfileContent({
   return (
     <>
       <ProfileSection title="Profile Builder">
-        {completion?.verification ? (
+        {shouldShowVerificationPanel(completion) ? (
           <VerificationStatusPanel status={completion.verification} onAction={onAction} />
         ) : null}
         {completion && !completion.coreComplete ? (
@@ -511,7 +515,7 @@ function HiringProfileContent({
   return (
     <>
       <ProfileSection title="Profile Builder">
-        {completion?.verification ? (
+        {shouldShowVerificationPanel(completion) ? (
           <VerificationStatusPanel status={completion.verification} onAction={onAction} />
         ) : null}
         {completion && !completion.coreComplete ? (
@@ -625,6 +629,10 @@ function getVerificationBadgeIcon(completion: ProfileCompletionStatus | null) {
   return 'warning-amber';
 }
 
+function shouldShowVerificationPanel(completion: ProfileCompletionStatus | null): completion is ProfileCompletionStatus {
+  return Boolean(completion?.verification && completion.verification.status !== 'approved');
+}
+
 function getModeStepsLabel(completion: ProfileCompletionStatus['workCompletion'] | undefined) {
   if (!completion) return 'Not set up';
   if (completion.state === 'not_set_up') return 'Not set up';
@@ -702,7 +710,6 @@ const styles = StyleSheet.create({
   content: {
     backgroundColor: color.background,
     gap: 3,
-    paddingBottom: space['3xl'],
   },
   errorBand: {
     alignItems: 'flex-start',

@@ -135,6 +135,10 @@ function normalizeFocusTarget(value: string | string[] | undefined): ProfileFocu
   return null;
 }
 
+function combineAddressDetails(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).join(', ');
+}
+
 export default function CompleteProfileScreen() {
   const router = useRouter();
   const { showSuccessToast } = useFeedback();
@@ -324,6 +328,7 @@ export default function CompleteProfileScreen() {
 
   const currentMeta = getModeMeta(mode);
   const roleLockedByCore = mode !== 'core' && status && !status.coreComplete;
+  const saveDisabled = mode === 'core' && !core.street.trim();
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -420,6 +425,7 @@ export default function CompleteProfileScreen() {
                       Verification says this is a real resident. Profile completion gives the other person enough public context before they message, hire, or accept work.
                     </Text>
                     <PrimaryButton
+                      disabled={saveDisabled}
                       icon="check-circle"
                       label={saving ? 'Saving...' : currentMeta.buttonLabel}
                       loading={saving}
@@ -452,6 +458,7 @@ function CoreForm({
   onPickAvatar: () => void;
 }) {
   const [areaSheetVisible, setAreaSheetVisible] = useState(false);
+  const exactAddressDetail = combineAddressDetails([value.houseNumber, value.blockLot]);
 
   return (
     <>
@@ -484,22 +491,31 @@ function CoreForm({
       </SetupSection>
 
       <SetupSection>
-        <CurrentAreaCard onChange={() => setAreaSheetVisible(true)} />
+        <View style={styles.addressIntroBlock}>
+          <CurrentAreaCard onChange={() => setAreaSheetVisible(true)} />
+          <Text style={styles.addressIntroText}>
+            Only your general area is shown publicly. Exact address details stay private.
+          </Text>
+        </View>
       </SetupSection>
 
       <SetupSection>
         <AddressSection
-          helper="Shown on your profile and posts."
-          title="Public location">
+          badge="Required"
+          helper="Shown on your profile and posts. Do not include your exact house number."
+          title="General location">
+          {/* Legacy field: profiles.street now stores Area / Street / Purok / Sitio. */}
           <Field
-            label="Street / Road"
-            placeholder="e.g. Governor Carpio Avenue"
+            label="Area / Street / Purok / Sitio"
+            placeholder="e.g. Gov. Carpio Ave, Purok 3, Sitio Maligaya"
             value={value.street}
             onChangeText={(street) => onChange({ ...value, street })}
           />
+          {/* Legacy field: profiles.subdivision_area now stores optional additional area details. */}
           <Field
-            label="Subdivision / Area optional"
-            placeholder="e.g. San Pedro Subdivision"
+            badge="Optional"
+            label="Additional area details"
+            placeholder="e.g. San Pedro Subdivision, Phase 2, near barangay hall"
             value={value.subdivisionArea}
             onChangeText={(subdivisionArea) => onChange({ ...value, subdivisionArea })}
           />
@@ -508,23 +524,20 @@ function CoreForm({
 
       <SetupSection>
         <AddressSection
-          helper="Used only for verification and coordination."
-          title="Private address">
+          badge="Optional"
+          helper="Kept private. Used only for verification and coordination."
+          title="Exact address details">
+          {/* Legacy fields: house_number/block_lot are shown as one private exact-detail input. */}
           <Field
-            label="Block / Lot optional"
-            placeholder="e.g. Block 4 Lot 12"
-            value={value.blockLot}
-            onChangeText={(blockLot) => onChange({ ...value, blockLot })}
+            label="House / Building / Block / Lot"
+            placeholder="e.g. House 125, Block 4 Lot 12, Unit 2B"
+            value={exactAddressDetail}
+            onChangeText={(houseNumber) => onChange({ ...value, houseNumber, blockLot: '' })}
           />
+          {/* Legacy field: landmark_note now means private note for finding the resident. */}
           <Field
-            label="House / Building optional"
-            placeholder="e.g. 125 or Building A"
-            value={value.houseNumber}
-            onChangeText={(houseNumber) => onChange({ ...value, houseNumber })}
-          />
-          <Field
-            label="Landmark / Note optional"
-            placeholder="e.g. Near the chapel"
+            label="Private note for finding you"
+            placeholder="e.g. blue gate beside the sari-sari store"
             value={value.landmarkNote}
             onChangeText={(landmarkNote) => onChange({ ...value, landmarkNote })}
           />
@@ -665,18 +678,31 @@ function CurrentAreaCard({ onChange }: { onChange: () => void }) {
 }
 
 function AddressSection({
+  badge,
   children,
   helper,
   title,
 }: {
+  badge?: 'Required' | 'Optional';
   children: ReactNode;
   helper: string;
   title: string;
 }) {
+  const isRequired = badge === 'Required';
+
   return (
     <View style={styles.addressSection}>
       <View style={styles.addressSectionHeader}>
-        <Text style={styles.addressSectionTitle}>{title}</Text>
+        <View style={styles.addressTitleRow}>
+          <Text style={styles.addressSectionTitle}>{title}</Text>
+          {badge ? (
+            <View style={[styles.sectionBadge, isRequired ? styles.sectionBadgeRequired : styles.sectionBadgeOptional]}>
+              <Text style={[styles.sectionBadgeText, isRequired ? styles.sectionBadgeTextRequired : undefined]}>
+                {badge}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.addressSectionHelper}>{helper}</Text>
       </View>
       <View style={styles.addressSectionFields}>{children}</View>
@@ -1012,12 +1038,14 @@ function SetupSection({
 }
 
 function Field({
+  badge,
   label,
   multiline = false,
   onChangeText,
   placeholder,
   value,
 }: {
+  badge?: 'Optional';
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
@@ -1028,7 +1056,14 @@ function Field({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldLabelRow}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {badge ? (
+          <View style={styles.fieldBadge}>
+            <Text style={styles.fieldBadgeText}>{badge}</Text>
+          </View>
+        ) : null}
+      </View>
       <TextInput
         multiline={multiline}
         onBlur={() => setFocused(false)}
@@ -1302,15 +1337,48 @@ const styles = StyleSheet.create({
     ...typography.captionMedium,
     color: color.primary,
   },
+  addressIntroBlock: {
+    gap: space.sm,
+  },
+  addressIntroText: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
   addressSection: {
     gap: space.md,
   },
   addressSectionHeader: {
     gap: 2,
   },
+  addressTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+  },
   addressSectionTitle: {
     ...typography.sectionTitle,
     color: color.text,
+  },
+  sectionBadge: {
+    borderRadius: radius.pill,
+    paddingHorizontal: space.sm,
+    paddingVertical: 3,
+  },
+  sectionBadgeRequired: {
+    backgroundColor: color.primarySoft,
+  },
+  sectionBadgeOptional: {
+    backgroundColor: color.surfaceAlt,
+  },
+  sectionBadgeText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  sectionBadgeTextRequired: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
   },
   addressSectionHelper: {
     ...typography.caption,
@@ -1322,9 +1390,26 @@ const styles = StyleSheet.create({
   field: {
     gap: space.xs,
   },
+  fieldLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+  },
   fieldLabel: {
     ...typography.captionMedium,
     color: color.text,
+  },
+  fieldBadge: {
+    backgroundColor: color.surfaceAlt,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+  },
+  fieldBadgeText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+    fontSize: 10,
+    lineHeight: 12,
   },
   fieldHelper: {
     ...typography.caption,

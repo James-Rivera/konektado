@@ -37,10 +37,7 @@ export default function LocationStep() {
   const [areaSheetVisible, setAreaSheetVisible] = useState(false);
 
   const hasSupportedArea = true;
-  const hasPublicLocation = useMemo(
-    () => Boolean(street.trim() || subdivisionArea.trim()),
-    [street, subdivisionArea],
-  );
+  const hasPublicLocation = useMemo(() => Boolean(street.trim()), [street]);
 
   const saveCurrentArea = () => {
     updateDraft({
@@ -143,7 +140,7 @@ export default function LocationStep() {
         helper={
           step === 'area'
             ? 'Choose the area where you live or usually offer services.'
-            : 'Only your general area is shown publicly. Exact house details stay private.'
+            : 'Only your general area is shown publicly. Exact address details stay private.'
         }
         onBack={onBack}
         title={step === 'area' ? 'Set your current area' : 'Add your address'}>
@@ -152,55 +149,54 @@ export default function LocationStep() {
         ) : (
           <SpecificAddressEntry onChangeArea={() => setStep('area')}>
             <AddressSection title="Address details">
-              <AddressFieldGroup
-                badge="Required"
+              <AddressInputField
+                autoCapitalize="words"
                 error={
                   generalLocationTouched && !hasPublicLocation
-                    ? 'Add at least a street/road or subdivision/area.'
+                    ? 'Add your area, street, purok, or sitio.'
                     : undefined
                 }
-                helper="Add a street/road or subdivision/area."
-                title="General location">
-                <LabeledAddressInput
-                  autoCapitalize="words"
-                  label="Street / Road"
-                  onBlur={() => setGeneralLocationTouched(true)}
-                  onChangeText={(value) => {
-                    setStreet(value);
-                    if (!generalLocationTouched) setGeneralLocationTouched(true);
-                  }}
-                  placeholder="e.g. Governor Carpio Avenue"
-                  value={street}
-                />
-                <LabeledAddressInput
-                  autoCapitalize="words"
-                  label="Subdivision / Area"
-                  onBlur={() => setGeneralLocationTouched(true)}
-                  onChangeText={(value) => {
-                    setSubdivisionArea(value);
-                    if (!generalLocationTouched) setGeneralLocationTouched(true);
-                  }}
-                  placeholder="e.g. San Pedro Subdivision"
-                  value={subdivisionArea}
-                />
-              </AddressFieldGroup>
+                helper="Shown publicly. Do not include your house number."
+                label="Area / Street / Purok / Sitio"
+                onBlur={() => setGeneralLocationTouched(true)}
+                onChangeText={(value) => {
+                  setStreet(value);
+                  if (!generalLocationTouched) setGeneralLocationTouched(true);
+                }}
+                placeholder="e.g. Purok 3 or Gov. Carpio Ave"
+                value={street}
+              />
+              <AddressInputField
+                autoCapitalize="words"
+                label="Additional area details"
+                optional
+                onBlur={() => setGeneralLocationTouched(true)}
+                onChangeText={(value) => {
+                  setSubdivisionArea(value);
+                  if (!generalLocationTouched) setGeneralLocationTouched(true);
+                }}
+                placeholder="e.g. Phase 2 or San Pedro Subdivision"
+                value={subdivisionArea}
+              />
+            </AddressSection>
 
-              <AddressFieldGroup badge="Optional" helper="Kept private." title="Exact details">
-                <LabeledAddressInput
-                  autoCapitalize="words"
-                  label="House / Building / Block / Lot"
-                  onChangeText={setExactAddressDetail}
-                  placeholder="e.g. House 125, Block 4 Lot 12"
-                  value={exactAddressDetail}
-                />
-                <LabeledAddressInput
-                  autoCapitalize="sentences"
-                  label="Landmark / Note"
-                  onChangeText={setLandmarkNote}
-                  placeholder="e.g. Near the chapel"
-                  value={landmarkNote}
-                />
-              </AddressFieldGroup>
+            <AddressSection helper="Kept private for verification and coordination." title="Private details">
+              <AddressInputField
+                autoCapitalize="words"
+                label="House / Building / Block / Lot"
+                optional
+                onChangeText={setExactAddressDetail}
+                placeholder="e.g. House 125, Block 4 Lot 12"
+                value={exactAddressDetail}
+              />
+              <AddressInputField
+                autoCapitalize="sentences"
+                label="Private note"
+                optional
+                onChangeText={setLandmarkNote}
+                placeholder="e.g. blue gate near chapel"
+                value={landmarkNote}
+              />
             </AddressSection>
           </SpecificAddressEntry>
         )}
@@ -286,64 +282,56 @@ function CurrentAreaCard({ onChange }: { onChange: () => void }) {
 
 function AddressSection({
   children,
+  helper,
   title,
 }: {
   children: ReactNode;
+  helper?: string;
   title: string;
 }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>{title}</Text>
+        {helper ? <Text style={styles.sectionHelper}>{helper}</Text> : null}
       </View>
       <View style={styles.sectionFields}>{children}</View>
     </View>
   );
 }
 
-function AddressFieldGroup({
-  badge,
-  children,
+function AddressInputField({
   error,
   helper,
-  title,
-}: {
-  badge: 'Required' | 'Optional';
-  children: ReactNode;
-  error?: string;
-  helper: string;
-  title: string;
-}) {
-  const isRequired = badge === 'Required';
-
-  return (
-    <View style={styles.fieldGroup}>
-      <View style={styles.fieldGroupHeader}>
-        <Text style={styles.fieldGroupTitle}>{title}</Text>
-        <View style={[styles.groupBadge, isRequired ? styles.groupBadgeRequired : styles.groupBadgeOptional]}>
-          <Text style={[styles.groupBadgeText, isRequired ? styles.groupBadgeTextRequired : undefined]}>
-            {badge}
-          </Text>
-        </View>
-      </View>
-      <Text style={[styles.groupHelper, error ? styles.groupHelperError : undefined]}>{error ?? helper}</Text>
-      <View style={styles.groupFields}>{children}</View>
-    </View>
-  );
-}
-
-function LabeledAddressInput({
   label,
+  optional = false,
   placeholderTextColor,
   style,
   ...props
-}: TextInputProps & { label: string }) {
+}: TextInputProps & {
+  error?: string;
+  helper?: string;
+  label: string;
+  optional?: boolean;
+}) {
   return (
-    <View style={styles.inputShell}>
-      <Text style={styles.inputLabel}>{label}</Text>
+    <View style={styles.field}>
+      <View style={styles.fieldLabelRow}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {optional ? (
+          <View style={styles.optionalBadge}>
+            <Text style={styles.optionalBadgeText}>Optional</Text>
+          </View>
+        ) : null}
+      </View>
+      {helper || error ? (
+        <Text style={[styles.fieldHelper, error ? styles.fieldHelperError : undefined]}>
+          {error ?? helper}
+        </Text>
+      ) : null}
       <TextInput
         placeholderTextColor={placeholderTextColor ?? onboardingColors.placeholder}
-        style={[styles.input, style]}
+        style={[styles.input, error ? styles.inputError : undefined, style]}
         {...props}
       />
     </View>
@@ -477,7 +465,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   sectionHeader: {
-    gap: 3,
+    gap: 2,
   },
   sectionTitle: {
     color: onboardingColors.text,
@@ -485,82 +473,69 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
   },
-  sectionFields: {
-    gap: 16,
-  },
-  fieldGroup: {
-    gap: 8,
-    width: '100%',
-  },
-  fieldGroupHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  fieldGroupTitle: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  groupBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  groupBadgeRequired: {
-    backgroundColor: '#EEF5FF',
-  },
-  groupBadgeOptional: {
-    backgroundColor: '#F6F6EF',
-  },
-  groupBadgeText: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 10,
-    lineHeight: 12,
-  },
-  groupBadgeTextRequired: {
-    color: onboardingColors.actionBlue,
-  },
-  groupHelper: {
+  sectionHelper: {
     color: onboardingColors.textMuted,
     fontFamily: 'Satoshi-Regular',
     fontSize: 12,
     lineHeight: 17,
   },
-  groupHelperError: {
+  sectionFields: {
+    gap: 12,
+  },
+  field: {
+    gap: 6,
+    width: '100%',
+  },
+  fieldLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  fieldLabel: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  optionalBadge: {
+    backgroundColor: '#F6F6EF',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  optionalBadgeText: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 9,
+    lineHeight: 11,
+  },
+  fieldHelper: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  fieldHelperError: {
     color: '#B91C1C',
     fontFamily: 'Satoshi-Medium',
   },
-  groupFields: {
-    gap: 10,
-  },
-  inputShell: {
+  input: {
     backgroundColor: '#FFFFFF',
     borderColor: onboardingColors.border,
     borderRadius: 12,
     borderWidth: 1,
-    height: 52,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  inputLabel: {
-    color: onboardingColors.placeholder,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
-    lineHeight: 12,
-  },
-  input: {
     color: onboardingColors.text,
     fontFamily: 'Satoshi-Regular',
     fontSize: 16,
-    height: 24,
+    height: 48,
     includeFontPadding: false,
     lineHeight: 20,
     margin: 0,
-    padding: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+  },
+  inputError: {
+    borderColor: '#B91C1C',
   },
   sheetHeader: {
     alignItems: 'center',
@@ -642,9 +617,9 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   disabledBlueButton: {
-    backgroundColor: '#5E8BC4',
+    backgroundColor: '#E5EAF1',
   },
   disabledBlueButtonText: {
-    color: onboardingColors.placeholder,
+    color: onboardingColors.textMuted,
   },
 });

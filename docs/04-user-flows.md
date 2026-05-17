@@ -36,7 +36,7 @@ Failure states:
 3. App collects basic profile identity.
 4. App collects current area as a separate selector step: fixed supported area `Brgy. San Pedro, Santo Tomas, Batangas`.
 5. App collects specific address details separately: public street/road or subdivision/area, and optional private block/lot, house number/building name, and landmark/note.
-6. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both). Provider service setup uses one clean screen with selector rows for work setup, categories, services, and optional custom service; detailed choices happen in bottom sheets.
+6. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both). Provider and client service setup both use one clean screen with selector rows for setup, categories, services, and optional custom text; detailed choices happen in bottom sheets. Provider work setup is stored separately. Client help setup only filters the temporary selection UI and does not store a separate needed delivery mode.
 7. App shows review.
 8. App saves onboarding and shows complete.
 9. App lets the user enter Home in viewer mode.

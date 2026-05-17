@@ -8,7 +8,6 @@ import { BottomSheet } from '@/components/BottomSheet';
 import {
   OnboardingButton,
   OnboardingFormScaffold,
-  OnboardingTextInput,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 import {
@@ -18,8 +17,6 @@ import {
   getMvpCategoriesForOfferedDeliveryMode,
   getServicesForMvpCategoryAndOfferedDeliveryMode,
   isMvpServiceCategory,
-  MVP_SERVICE_CATEGORIES,
-  MVP_SERVICES_BY_CATEGORY,
   OFFERED_DELIVERY_MODE_HELPERS,
   OFFERED_DELIVERY_MODE_LABELS,
   OFFERED_DELIVERY_MODES,
@@ -29,7 +26,20 @@ import {
 
 import { useOnboarding } from './onboarding-context';
 
-type ProviderSheet = 'workSetup' | 'categories' | 'services' | null;
+type ServiceSetupSheet =
+  | 'providerWorkSetup'
+  | 'providerCategories'
+  | 'providerServices'
+  | 'clientHelpSetup'
+  | 'clientCategories'
+  | 'clientServices'
+  | null;
+
+const NEEDED_DELIVERY_MODE_HELPERS: Record<OfferedDeliveryMode, string> = {
+  on_site: 'Help that happens in person nearby.',
+  online: 'Help that can happen remotely.',
+  both: 'Show both on-site and online help.',
+};
 
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
@@ -70,11 +80,18 @@ export default function JobStep() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     categoryListForServices(draft.offeredServices),
   );
+  const [neededDeliveryMode, setNeededDeliveryMode] = useState<OfferedDeliveryMode | null>(
+    draft.neededServices.length || draft.customNeededServices.length ? 'both' : null,
+  );
+  const [selectedNeededCategories, setSelectedNeededCategories] = useState<string[]>(
+    categoryListForServices(draft.neededServices),
+  );
   const [neededServices, setNeededServices] = useState<string[]>(draft.neededServices);
   const [customOffered, setCustomOffered] = useState(draft.customOfferedServices.join(', '));
   const [customNeeded, setCustomNeeded] = useState(draft.customNeededServices.join(', '));
-  const [activeSheet, setActiveSheet] = useState<ProviderSheet>(null);
+  const [activeSheet, setActiveSheet] = useState<ServiceSetupSheet>(null);
   const [showCustomServiceInput, setShowCustomServiceInput] = useState(false);
+  const [showCustomNeededInput, setShowCustomNeededInput] = useState(false);
   const [inlineHelper, setInlineHelper] = useState<string | null>(null);
   const [neededHelper, setNeededHelper] = useState<string | null>(null);
 
@@ -88,10 +105,15 @@ export default function JobStep() {
   }, [collectsNeeded, collectsOffered, router]);
 
   const customOfferedServices = useMemo(() => parseCustomServices(customOffered), [customOffered]);
+  const customNeededServices = useMemo(() => parseCustomServices(customNeeded), [customNeeded]);
   const selectedCategoryLabels = selectedCategories.filter(isMvpServiceCategory);
+  const selectedNeededCategoryLabels = selectedNeededCategories.filter(isMvpServiceCategory);
   const officialServiceLabels = offeredServices.map((service) => getDisplayLabelForMvpService(service));
+  const neededServiceLabels = neededServices.map((service) => getDisplayLabelForMvpService(service));
   const allOfferedLabels = [...officialServiceLabels, ...customOfferedServices];
+  const allNeededLabels = [...neededServiceLabels, ...customNeededServices];
   const providerCanContinue = Boolean(offeredDeliveryMode && allOfferedLabels.length);
+  const clientCanContinue = Boolean(neededDeliveryMode && allNeededLabels.length);
 
   const openCategories = () => {
     if (!offeredDeliveryMode) {
@@ -100,7 +122,7 @@ export default function JobStep() {
     }
 
     setInlineHelper(null);
-    setActiveSheet('categories');
+    setActiveSheet('providerCategories');
   };
 
   const openServices = ({ showCustom = false } = {}) => {
@@ -111,7 +133,28 @@ export default function JobStep() {
 
     setInlineHelper(null);
     setShowCustomServiceInput(showCustom);
-    setActiveSheet('services');
+    setActiveSheet('providerServices');
+  };
+
+  const openNeededCategories = () => {
+    if (!neededDeliveryMode) {
+      setNeededHelper('Choose where you need help first.');
+      return;
+    }
+
+    setNeededHelper(null);
+    setActiveSheet('clientCategories');
+  };
+
+  const openNeededServices = ({ showCustom = false } = {}) => {
+    if (!selectedNeededCategories.length) {
+      setNeededHelper('Choose a category first.');
+      return;
+    }
+
+    setNeededHelper(null);
+    setShowCustomNeededInput(showCustom);
+    setActiveSheet('clientServices');
   };
 
   const confirmDeliveryMode = (mode: OfferedDeliveryMode) => {
@@ -139,10 +182,32 @@ export default function JobStep() {
     );
   };
 
-  const toggleNeeded = (service: string) => {
+  const confirmNeededDeliveryMode = (mode: OfferedDeliveryMode) => {
+    setNeededDeliveryMode(mode);
+    setNeededHelper(null);
+    const allowedCategories = getMvpCategoriesForOfferedDeliveryMode(mode);
+    setSelectedNeededCategories((prev) =>
+      prev.filter((category) => allowedCategories.includes(category as MvpServiceCategory)),
+    );
+    setNeededServices((prev) =>
+      prev.filter((service) => {
+        const category = getCategoryForMvpService(service);
+        return Boolean(
+          category &&
+            getServicesForMvpCategoryAndOfferedDeliveryMode(category, mode).includes(service),
+        );
+      }),
+    );
+  };
+
+  const confirmNeededCategories = (categories: string[]) => {
+    setSelectedNeededCategories(categories);
     setNeededHelper(null);
     setNeededServices((prev) =>
-      prev.includes(service) ? prev.filter((value) => value !== service) : [...prev, service],
+      prev.filter((service) => {
+        const category = getCategoryForMvpService(service);
+        return Boolean(category && categories.includes(category));
+      }),
     );
   };
 
@@ -160,7 +225,6 @@ export default function JobStep() {
     }
 
     const parsedCustomOfferedServices = parseCustomServices(customOffered);
-    const customNeededServices = parseCustomServices(customNeeded);
     const finalOffered = uniqueValues([...offeredServices, ...parsedCustomOfferedServices]);
     const finalNeeded = uniqueValues([...neededServices, ...customNeededServices]);
 
@@ -205,6 +269,21 @@ export default function JobStep() {
       style={!providerCanContinue ? styles.disabledBlueButton : undefined}
       textStyle={!providerCanContinue ? styles.disabledBlueButtonText : undefined}
     />
+  ) : collectsNeeded ? (
+    <OnboardingButton
+      disabled={!clientCanContinue}
+      label="Next"
+      onDisabledPress={() =>
+        setNeededHelper(
+          neededDeliveryMode
+            ? 'Select one or more types of help you may need nearby.'
+            : 'Choose where you need help first.',
+        )
+      }
+      onPress={next}
+      style={!clientCanContinue ? styles.disabledBlueButton : undefined}
+      textStyle={!clientCanContinue ? styles.disabledBlueButtonText : undefined}
+    />
   ) : (
     <OnboardingButton label="Next" onPress={next} />
   );
@@ -232,7 +311,7 @@ export default function JobStep() {
             onOpenServices={() => openServices()}
             onOpenWorkSetup={() => {
               setInlineHelper(null);
-              setActiveSheet('workSetup');
+              setActiveSheet('providerWorkSetup');
             }}
             onOpenCustom={() => openServices({ showCustom: true })}
             serviceSummary={formatSummary(allOfferedLabels, 'Choose specific services')}
@@ -247,36 +326,48 @@ export default function JobStep() {
         ) : null}
 
         {collectsNeeded ? (
-          <ClientServiceSection
-            customLabel="Other help you need (optional)"
-            customValue={customNeeded}
+          <ClientServiceSetup
+            categorySummary={formatSummary(selectedNeededCategoryLabels, 'Choose service categories')}
+            customSummary={formatSummary(customNeededServices, 'Add help not listed')}
             helper={neededHelper}
-            onCustomChange={(value) => {
-              setCustomNeeded(value);
+            onOpenCategories={openNeededCategories}
+            onOpenCustom={() => openNeededServices({ showCustom: true })}
+            onOpenHelpSetup={() => {
               setNeededHelper(null);
+              setActiveSheet('clientHelpSetup');
             }}
-            onToggle={toggleNeeded}
-            selected={neededServices}
-            title="What help do you need nearby?"
+            onOpenServices={() => openNeededServices()}
+            serviceSummary={formatSummary(allNeededLabels, 'Choose specific help')}
+            servicesDisabled={!selectedNeededCategories.length}
+            categoriesDisabled={!neededDeliveryMode}
+            helpSetupSummary={
+              neededDeliveryMode
+                ? getDisplayLabelForOfferedDeliveryMode(neededDeliveryMode)
+                : 'Choose where you need help'
+            }
           />
         ) : null}
       </OnboardingFormScaffold>
 
       <WorkSetupSheet
+        helpers={OFFERED_DELIVERY_MODE_HELPERS}
         onClose={() => setActiveSheet(null)}
         onDone={confirmDeliveryMode}
         selectedMode={offeredDeliveryMode}
-        visible={activeSheet === 'workSetup'}
+        title="Choose work setup"
+        visible={activeSheet === 'providerWorkSetup'}
       />
       <CategoriesSheet
         deliveryMode={offeredDeliveryMode}
         onClose={() => setActiveSheet(null)}
         onDone={confirmCategories}
         selectedCategories={selectedCategories}
-        visible={activeSheet === 'categories'}
+        visible={activeSheet === 'providerCategories'}
       />
       <ServicesSheet
         customValue={customOffered}
+        customInputLabel="What service can you offer?"
+        customPlaceholder="e.g. Pet sitting"
         deliveryMode={offeredDeliveryMode}
         initialShowCustom={showCustomServiceInput}
         onClose={() => setActiveSheet(null)}
@@ -285,9 +376,46 @@ export default function JobStep() {
           setCustomOffered(customService);
           setInlineHelper(null);
         }}
+        otherHelper="Add a service not listed in the taxonomy."
+        otherTitle="Other service"
         selectedCategories={selectedCategories}
         selectedServices={offeredServices}
-        visible={activeSheet === 'services'}
+        title="Choose services"
+        visible={activeSheet === 'providerServices'}
+      />
+      <WorkSetupSheet
+        helpers={NEEDED_DELIVERY_MODE_HELPERS}
+        onClose={() => setActiveSheet(null)}
+        onDone={confirmNeededDeliveryMode}
+        selectedMode={neededDeliveryMode}
+        title="Choose help setup"
+        visible={activeSheet === 'clientHelpSetup'}
+      />
+      <CategoriesSheet
+        deliveryMode={neededDeliveryMode}
+        onClose={() => setActiveSheet(null)}
+        onDone={confirmNeededCategories}
+        selectedCategories={selectedNeededCategories}
+        visible={activeSheet === 'clientCategories'}
+      />
+      <ServicesSheet
+        customValue={customNeeded}
+        customInputLabel="What help do you need?"
+        customPlaceholder="e.g. Child pickup"
+        deliveryMode={neededDeliveryMode}
+        initialShowCustom={showCustomNeededInput}
+        onClose={() => setActiveSheet(null)}
+        onDone={({ customService, services }) => {
+          setNeededServices(services);
+          setCustomNeeded(customService);
+          setNeededHelper(null);
+        }}
+        otherHelper="Add help not listed in the taxonomy."
+        otherTitle="Other help"
+        selectedCategories={selectedNeededCategories}
+        selectedServices={neededServices}
+        title="Choose help"
+        visible={activeSheet === 'clientServices'}
       />
     </>
   );
@@ -399,14 +527,18 @@ function SelectorCard({
 }
 
 function WorkSetupSheet({
+  helpers,
   onClose,
   onDone,
   selectedMode,
+  title,
   visible,
 }: {
+  helpers: Record<OfferedDeliveryMode, string>;
   onClose: () => void;
   onDone: (mode: OfferedDeliveryMode) => void;
   selectedMode: OfferedDeliveryMode | null;
+  title: string;
   visible: boolean;
 }) {
   const [draftMode, setDraftMode] = useState<OfferedDeliveryMode | null>(selectedMode);
@@ -417,7 +549,7 @@ function WorkSetupSheet({
 
   return (
     <BottomSheet maxHeight="58%" onClose={onClose} visible={visible}>
-      <SheetHeader title="Choose work setup" />
+      <SheetHeader title={title} />
       <View style={styles.sheetList}>
         {OFFERED_DELIVERY_MODES.map((mode) => {
           const selected = draftMode === mode;
@@ -430,7 +562,7 @@ function WorkSetupSheet({
               style={({ pressed }) => [styles.optionRow, selected && styles.optionRowSelected, pressed && styles.pressed]}>
               <View style={styles.optionCopy}>
                 <Text style={styles.optionTitle}>{OFFERED_DELIVERY_MODE_LABELS[mode]}</Text>
-                <Text style={styles.optionHelper}>{OFFERED_DELIVERY_MODE_HELPERS[mode]}</Text>
+                <Text style={styles.optionHelper}>{helpers[mode]}</Text>
               </View>
               <SelectionMark selected={selected} />
             </Pressable>
@@ -519,21 +651,31 @@ function CategoriesSheet({
 
 function ServicesSheet({
   customValue,
+  customInputLabel,
+  customPlaceholder,
   deliveryMode,
   initialShowCustom,
   onClose,
   onDone,
+  otherHelper,
+  otherTitle,
   selectedCategories,
   selectedServices,
+  title,
   visible,
 }: {
   customValue: string;
+  customInputLabel: string;
+  customPlaceholder: string;
   deliveryMode: OfferedDeliveryMode | null;
   initialShowCustom: boolean;
   onClose: () => void;
   onDone: (value: { customService: string; services: string[] }) => void;
+  otherHelper: string;
+  otherTitle: string;
   selectedCategories: string[];
   selectedServices: string[];
+  title: string;
   visible: boolean;
 }) {
   const [draftServices, setDraftServices] = useState<string[]>(selectedServices);
@@ -555,7 +697,7 @@ function ServicesSheet({
 
   return (
     <BottomSheet maxHeight="82%" onClose={onClose} visible={visible}>
-      <SheetHeader title="Choose services" />
+      <SheetHeader title={title} />
       <ScrollView
         contentContainerStyle={styles.serviceSheetContent}
         keyboardShouldPersistTaps="handled"
@@ -601,8 +743,8 @@ function ServicesSheet({
             onPress={() => setShowCustom((value) => !value)}
             style={({ pressed }) => [styles.otherServiceRow, showCustom && styles.optionRowSelected, pressed && styles.pressed]}>
             <View style={styles.optionCopy}>
-              <Text style={styles.optionTitle}>Other service</Text>
-              <Text style={styles.optionHelper}>Add a service not listed in the taxonomy.</Text>
+              <Text style={styles.optionTitle}>{otherTitle}</Text>
+              <Text style={styles.optionHelper}>{otherHelper}</Text>
             </View>
             <MaterialIcons
               color={onboardingColors.textMuted}
@@ -612,11 +754,11 @@ function ServicesSheet({
           </Pressable>
           {showCustom ? (
             <View style={styles.customInputShell}>
-              <Text style={styles.customInputLabel}>What service can you offer?</Text>
+              <Text style={styles.customInputLabel}>{customInputLabel}</Text>
               <TextInput
                 autoCapitalize="sentences"
                 onChangeText={setDraftCustom}
-                placeholder="e.g. Pet sitting"
+                placeholder={customPlaceholder}
                 placeholderTextColor={onboardingColors.placeholder}
                 style={styles.customInput}
                 value={draftCustom}
@@ -639,7 +781,6 @@ function ServicesSheet({
 function SheetHeader({ title }: { title: string }) {
   return (
     <View style={styles.sheetHeader}>
-      <View style={styles.sheetHandle} />
       <Text style={styles.sheetTitle}>{title}</Text>
     </View>
   );
@@ -648,58 +789,65 @@ function SheetHeader({ title }: { title: string }) {
 function SelectionMark({ selected }: { selected: boolean }) {
   return (
     <View style={[styles.selectionMark, selected && styles.selectionMarkSelected]}>
-      {selected ? <MaterialIcons color={onboardingColors.brandYellow} name="check" size={14} /> : null}
+      {selected ? <MaterialIcons color={onboardingColors.white} name="check" size={14} /> : null}
     </View>
   );
 }
 
-function ClientServiceSection({
-  customLabel,
-  customValue,
+function ClientServiceSetup({
+  categoriesDisabled,
+  categorySummary,
+  customSummary,
+  helpSetupSummary,
   helper,
-  onCustomChange,
-  onToggle,
-  selected,
-  title,
+  onOpenCategories,
+  onOpenCustom,
+  onOpenHelpSetup,
+  onOpenServices,
+  serviceSummary,
+  servicesDisabled,
 }: {
-  customLabel: string;
-  customValue: string;
+  categoriesDisabled: boolean;
+  categorySummary: string;
+  customSummary: string;
+  helpSetupSummary: string;
   helper: string | null;
-  onCustomChange: (value: string) => void;
-  onToggle: (service: string) => void;
-  selected: string[];
-  title: string;
+  onOpenCategories: () => void;
+  onOpenCustom: () => void;
+  onOpenHelpSetup: () => void;
+  onOpenServices: () => void;
+  serviceSummary: string;
+  servicesDisabled: boolean;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {MVP_SERVICE_CATEGORIES.map((category) => (
-        <View key={category} style={styles.categoryBlock}>
-          <Text style={styles.categoryTitle}>{category}</Text>
-          <View style={styles.chipContainer}>
-            {MVP_SERVICES_BY_CATEGORY[category].map((service) => {
-              const isSelected = selected.includes(service);
-              return (
-                <Pressable
-                  key={service}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  onPress={() => onToggle(service)}
-                  style={[styles.chip, isSelected ? styles.chipSelected : undefined]}>
-                  <Text style={[styles.chipText, isSelected ? styles.chipTextSelected : undefined]}>
-                    {service}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      ))}
-
-      <OnboardingTextInput
-        onChangeText={onCustomChange}
-        placeholder={customLabel}
-        value={customValue}
+    <View style={styles.selectorStack}>
+      <SelectorCard
+        label="Help setup"
+        onPress={onOpenHelpSetup}
+        placeholder="Choose where you need help"
+        value={helpSetupSummary}
+      />
+      <SelectorCard
+        disabled={categoriesDisabled}
+        label="Categories"
+        onPress={onOpenCategories}
+        placeholder="Choose service categories"
+        value={categorySummary}
+      />
+      <SelectorCard
+        disabled={servicesDisabled}
+        label="Services"
+        onPress={onOpenServices}
+        placeholder="Choose specific help"
+        value={serviceSummary}
+      />
+      <SelectorCard
+        disabled={servicesDisabled}
+        label="Other help"
+        onPress={onOpenCustom}
+        optional
+        placeholder="Add help not listed"
+        value={customSummary}
       />
       {helper ? <Text style={styles.inlineHelper}>{helper}</Text> : null}
     </View>
@@ -772,14 +920,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   sheetHeader: {
-    gap: 12,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    backgroundColor: onboardingColors.placeholder,
-    borderRadius: 999,
-    height: 2,
-    width: 43,
+    gap: 4,
   },
   sheetTitle: {
     color: onboardingColors.text,
@@ -802,8 +943,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   optionRowSelected: {
-    backgroundColor: '#F5F5EF',
-    borderColor: onboardingColors.brandYellow,
+    backgroundColor: '#EEF5FF',
+    borderColor: onboardingColors.actionBlue,
   },
   optionCopy: {
     flex: 1,
@@ -824,7 +965,7 @@ const styles = StyleSheet.create({
   },
   selectionMark: {
     alignItems: 'center',
-    borderColor: onboardingColors.borderSoft,
+    borderColor: '#D6DCE5',
     borderRadius: 999,
     borderWidth: 1,
     height: 22,
@@ -832,8 +973,8 @@ const styles = StyleSheet.create({
     width: 22,
   },
   selectionMarkSelected: {
-    backgroundColor: onboardingColors.textMuted,
-    borderColor: onboardingColors.textMuted,
+    backgroundColor: onboardingColors.actionBlue,
+    borderColor: onboardingColors.actionBlue,
   },
   serviceSheetContent: {
     gap: 16,
@@ -887,29 +1028,6 @@ const styles = StyleSheet.create({
     minHeight: 28,
     padding: 0,
   },
-  section: {
-    gap: 10,
-  },
-  sectionTitle: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  categoryBlock: {
-    gap: 8,
-  },
-  categoryTitle: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
   chip: {
     backgroundColor: onboardingColors.surface,
     borderColor: onboardingColors.borderSoft,
@@ -919,8 +1037,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipSelected: {
-    backgroundColor: '#F5F5EF',
-    borderColor: onboardingColors.brandYellow,
+    backgroundColor: '#EEF5FF',
+    borderColor: onboardingColors.actionBlue,
   },
   chipText: {
     color: onboardingColors.textMuted,
@@ -936,9 +1054,9 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   disabledBlueButton: {
-    backgroundColor: '#5E8BC4',
+    backgroundColor: '#E5EAF1',
   },
   disabledBlueButtonText: {
-    color: onboardingColors.placeholder,
+    color: onboardingColors.textMuted,
   },
 });

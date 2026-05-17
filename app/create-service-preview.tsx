@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Skeleton } from '@/components/Skeleton';
 import { useFeedback } from '@/components/FeedbackProvider';
+import { getProfileDisplayName } from '@/components/profile/CurrentUserIdentity';
 import { WorkerCard } from '@/components/WorkerCard';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -83,14 +84,6 @@ function parseDraft(value: string | undefined): ServiceDraft | null {
   } catch {
     return null;
   }
-}
-
-function getDisplayName(profile: ReturnType<typeof useProfile>['profile']) {
-  return (
-    profile?.full_name?.trim() ||
-    `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
-    'Konektado resident'
-  );
 }
 
 function getStatusLine(draft: ServiceDraft) {
@@ -252,6 +245,7 @@ export default function CreateServicePreviewScreen() {
 
           <View style={styles.previewFrame}>
             <WorkerCard
+              avatarUrl={profile?.avatar_url}
               headline={formatServicePostTitle({
                 title: draft.title,
                 category: draft.category,
@@ -261,7 +255,7 @@ export default function CreateServicePreviewScreen() {
               isActive={isPresenceActive(draft.availability || profile?.availability)}
               jobsDoneText="Jobs after publish"
               location={draft.locationText || profile?.barangay || 'Barangay San Pedro'}
-              name={getDisplayName(profile)}
+              name={getProfileDisplayName(profile)}
               onPress={() => {}}
               onSave={() => {}}
               ratingText="Preview listing"
