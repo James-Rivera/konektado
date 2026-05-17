@@ -231,6 +231,13 @@ export default function AdminVerificationQueueScreen() {
             </View>
             <View style={styles.headerActions}>
               <Pressable
+                accessibilityLabel="Open reports"
+                accessibilityRole="button"
+                onPress={() => router.push('/admin/reports' as never)}
+                style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+                <MaterialIcons color={color.primary} name="flag" size={26} />
+              </Pressable>
+              <Pressable
                 accessibilityLabel="Refresh dashboard"
                 accessibilityRole="button"
                 onPress={() => load({ silent: true })}

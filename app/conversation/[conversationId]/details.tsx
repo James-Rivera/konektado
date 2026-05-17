@@ -2,18 +2,20 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { PresenceDot } from '@/components/PresenceDot';
+import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { Skeleton } from '@/components/Skeleton';
 import { color } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
   archiveConversation,
   getConversation,
+  markHiredJobCompleted,
   markWorkerHired,
   reportConversation,
 } from '@/services/conversation.service';
@@ -25,20 +27,10 @@ import {
   getMarketplaceLocation,
   isPresenceActive,
 } from '@/services/marketplace.helpers';
-import type { ConversationDetail } from '@/types/marketplace.types';
+import { createReview, getMyReviewForJob } from '@/services/review.service';
+import type { ConversationDetail, Review } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
-
-const REPORT_REASONS = [
-  'Fake Profile / Impersonation',
-  'Spam / Unwanted Messages',
-  'Scam / Fraudulent Activity',
-  'Inappropriate Content',
-  'Harassment / Bullying',
-  'Job Listing Violation',
-  'Off-platform Transaction Request',
-  'Other Violations',
-];
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -54,7 +46,16 @@ export default function ConversationDetailsScreen() {
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [reportVisible, setReportVisible] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [reviewVisible, setReviewVisible] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittedReview, setSubmittedReview] = useState<Review | null>(null);
 
   const load = () => {
     if (!conversationId) return;
@@ -74,8 +75,57 @@ export default function ConversationDetailsScreen() {
 
   const isClient = conversation?.clientId === profile?.id;
   const canMarkHired = Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
+  const canMarkCompleted =
+    Boolean(conversation?.jobId) &&
+    isClient &&
+    conversation?.status === 'hired' &&
+    conversation?.job?.status === 'in_progress';
   const context = conversation ? getContextSummary(conversation) : null;
   const other = conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
+  const reviewState = getReviewState({
+    conversation,
+    isClient,
+    loading: reviewLoading,
+    submittedReview,
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    if (
+      !conversation?.jobId ||
+      !conversation.providerId ||
+      !isClient ||
+      conversation.job?.acceptedProviderId !== conversation.providerId
+    ) {
+      setSubmittedReview(null);
+      setReviewLoading(false);
+      return;
+    }
+
+    setReviewLoading(true);
+    getMyReviewForJob({
+      jobId: conversation.jobId,
+      revieweeId: conversation.providerId,
+    }).then((result) => {
+      if (!active) return;
+      if (result.error) {
+        setSubmittedReview(null);
+      } else {
+        setSubmittedReview(result.data);
+      }
+      setReviewLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    conversation?.job?.acceptedProviderId,
+    conversation?.jobId,
+    conversation?.providerId,
+    isClient,
+  ]);
 
   const openPost = () => {
     if (conversation?.jobId) {
@@ -88,13 +138,22 @@ export default function ConversationDetailsScreen() {
     }
   };
 
+  const canOpenProfile = Boolean(
+    conversation &&
+      (conversation.clientId !== profile?.id || conversation.serviceId),
+  );
+
   const openProfile = () => {
-    if (conversation?.serviceId) {
-      router.push({ pathname: '/services/[serviceId]', params: { serviceId: conversation.serviceId } });
+    if (!conversation) return;
+
+    if (conversation.clientId !== profile?.id) {
+      router.push({ pathname: '/client/[clientId]' as never, params: { clientId: conversation.clientId } });
       return;
     }
 
-    Alert.alert('Profile', 'Public client profiles are not a separate route yet.');
+    if (conversation.serviceId) {
+      router.push({ pathname: '/services/[serviceId]', params: { serviceId: conversation.serviceId } });
+    }
   };
 
   const onMarkHired = async () => {
@@ -109,10 +168,62 @@ export default function ConversationDetailsScreen() {
     setConversation(result.data);
   };
 
-  const onReport = async (reason: string) => {
+  const onMarkCompleted = async () => {
     if (!conversationId) return;
 
-    const result = await reportConversation({ conversationId });
+    setCompleting(true);
+    const result = await markHiredJobCompleted({ conversationId });
+    setCompleting(false);
+
+    if (result.error) {
+      Alert.alert('Mark completed', result.error);
+      return;
+    }
+
+    setConversation(result.data);
+    showSuccessToast('Job marked completed');
+  };
+
+  const onSubmitReview = async () => {
+    if (!conversation?.jobId) return;
+
+    setReviewError(null);
+    setReviewSubmitting(true);
+    const result = await createReview({
+      jobId: conversation.jobId,
+      revieweeId: conversation.providerId,
+      rating: reviewRating,
+      comment: reviewComment,
+    });
+    setReviewSubmitting(false);
+
+    if (result.error) {
+      setReviewError(result.error);
+      return;
+    }
+
+    setSubmittedReview(result.data);
+    setReviewVisible(false);
+    setReviewComment('');
+    setReviewRating(0);
+    showSuccessToast('Review submitted');
+  };
+
+  const onReport = async ({ details, reason }: ReportSheetSubmitValue) => {
+    if (!conversationId || !conversation) return;
+
+    setReporting(true);
+    const result = await reportConversation({
+      conversationId,
+      details,
+      jobId: conversation.jobId,
+      reason,
+      reportedUserId:
+        conversation.clientId === profile?.id ? conversation.providerId : conversation.clientId,
+      serviceId: conversation.serviceId,
+    });
+    setReporting(false);
+
     if (result.error) {
       Alert.alert('Report user', result.error);
       return;
@@ -166,7 +277,9 @@ export default function ConversationDetailsScreen() {
                   label={conversation?.jobId ? 'View Post' : 'View Service'}
                   onPress={openPost}
                 />
-                <IconAction icon="person" label="View Profile" onPress={openProfile} />
+                {canOpenProfile ? (
+                  <IconAction icon="person" label="View Profile" onPress={openProfile} />
+                ) : null}
               </View>
             </View>
           ) : null}
@@ -191,17 +304,40 @@ export default function ConversationDetailsScreen() {
                 {canMarkHired ? (
                   <ActionRow icon="check-circle" label="Mark worker hired" onPress={onMarkHired} />
                 ) : null}
+                {canMarkCompleted ? (
+                  <ActionRow
+                    description="Completing the job unlocks client feedback"
+                    disabled={completing}
+                    icon="task-alt"
+                    label={completing ? 'Marking completed...' : 'Mark job completed'}
+                    onPress={onMarkCompleted}
+                  />
+                ) : null}
+                {reviewState.kind === 'submitted' ? (
+                  <ActionRow
+                    description={`${reviewState.review.rating}/5 submitted`}
+                    disabled
+                    icon="rate-review"
+                    label="Review submitted"
+                    onPress={() => {}}
+                  />
+                ) : (
+                  <ActionRow
+                    description={reviewState.description}
+                    disabled={!reviewState.enabled}
+                    icon="rate-review"
+                    label="Leave review"
+                    onPress={() => {
+                      setReviewError(null);
+                      setReviewVisible(true);
+                    }}
+                  />
+                )}
                 <ActionRow
-                  description="Available after the work is completed"
-                  disabled
-                  icon="rate-review"
-                  label="Leave review"
-                  onPress={() => {}}
-                />
-                <ActionRow
+                  description="Find chats from your inbox"
                   icon="search"
-                  label="Search a conversation"
-                  onPress={() => Alert.alert('Search', 'Use the Messages search field from the inbox.')}
+                  label="Search Messages"
+                  onPress={() => router.push('/(tabs)/messages')}
                 />
               </ActionList>
 
@@ -226,8 +362,12 @@ export default function ConversationDetailsScreen() {
       </View>
 
       <ReportSheet
+        description="Tell us what happened in this conversation. The other person will not see your report."
         onClose={() => setReportVisible(false)}
-        onReport={onReport}
+        onSubmit={onReport}
+        submitting={reporting}
+        targetLabel={other?.fullName ?? 'this conversation'}
+        title="Report conversation"
         visible={reportVisible}
       />
 
@@ -235,6 +375,22 @@ export default function ConversationDetailsScreen() {
         onCancel={() => setDeleteVisible(false)}
         onDelete={onDelete}
         visible={deleteVisible}
+      />
+      <ReviewDialog
+        comment={reviewComment}
+        error={reviewError}
+        onCancel={() => {
+          if (!reviewSubmitting) {
+            setReviewVisible(false);
+            setReviewError(null);
+          }
+        }}
+        onChangeComment={setReviewComment}
+        onChangeRating={setReviewRating}
+        onSubmit={onSubmitReview}
+        rating={reviewRating}
+        submitting={reviewSubmitting}
+        visible={reviewVisible}
       />
     </SafeAreaView>
   );
@@ -300,37 +456,6 @@ function ActionRow({
   );
 }
 
-function ReportSheet({
-  onClose,
-  onReport,
-  visible,
-}: {
-  onClose: () => void;
-  onReport: (reason: string) => void;
-  visible: boolean;
-}) {
-  return (
-    <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.sheetBackdrop}>
-        <Pressable onPress={onClose} style={StyleSheet.absoluteFill} />
-        <View style={styles.reportSheet}>
-          <Text style={styles.reportTitle}>Report user</Text>
-          <Text style={styles.reportBody}>
-            We will not let the person know who reported them. If someone is in immediate danger,
-            call local emergency services. Do not wait.
-          </Text>
-          {REPORT_REASONS.map((reason) => (
-            <Pressable key={reason} onPress={() => onReport(reason)} style={styles.reportReason}>
-              <Text style={styles.reportReasonText}>{reason}</Text>
-              <MaterialIcons color={color.verificationBlue} name="chevron-right" size={24} />
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 function DeleteChatDialog({
   onCancel,
   onDelete,
@@ -348,6 +473,81 @@ function DeleteChatDialog({
           <Text style={styles.dialogBody}>This removes the conversation from your active inbox.</Text>
           <PrimaryButton label="Delete" onPress={onDelete} />
           <Pressable onPress={onCancel} style={styles.dialogCancel}>
+            <Text style={styles.dialogCancelText}>Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ReviewDialog({
+  comment,
+  error,
+  onCancel,
+  onChangeComment,
+  onChangeRating,
+  onSubmit,
+  rating,
+  submitting,
+  visible,
+}: {
+  comment: string;
+  error: string | null;
+  onCancel: () => void;
+  onChangeComment: (value: string) => void;
+  onChangeRating: (value: number) => void;
+  onSubmit: () => void;
+  rating: number;
+  submitting: boolean;
+  visible: boolean;
+}) {
+  return (
+    <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
+      <View style={styles.dialogBackdrop}>
+        <View style={styles.reviewDialogCard}>
+          <Text style={styles.dialogTitle}>Leave review</Text>
+          <Text style={styles.dialogBody}>Rate the hired worker after this completed job.</Text>
+
+          <View style={styles.ratingRow}>
+            {Array.from({ length: 5 }).map((_, index) => {
+              const value = index + 1;
+              return (
+                <Pressable
+                  accessibilityLabel={`${value} star${value === 1 ? '' : 's'}`}
+                  accessibilityRole="button"
+                  key={value}
+                  onPress={() => onChangeRating(value)}
+                  style={({ pressed }) => [styles.ratingButton, pressed && styles.pressed]}>
+                  <MaterialIcons
+                    color={value <= rating ? color.brandYellow : color.textSubtle}
+                    name={value <= rating ? 'star' : 'star-border'}
+                    size={28}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <TextInput
+            multiline
+            onChangeText={onChangeComment}
+            placeholder="Optional comment"
+            placeholderTextColor={color.textSubtle}
+            style={styles.reviewInput}
+            textAlignVertical="top"
+            value={comment}
+          />
+
+          {error ? <Text style={styles.reviewError}>{error}</Text> : null}
+
+          <PrimaryButton
+            disabled={rating < 1}
+            label="Submit review"
+            loading={submitting}
+            onPress={onSubmit}
+          />
+          <Pressable disabled={submitting} onPress={onCancel} style={styles.dialogCancel}>
             <Text style={styles.dialogCancelText}>Cancel</Text>
           </Pressable>
         </View>
@@ -413,7 +613,7 @@ function getDetailMetrics(conversation: ConversationDetail) {
       { label: 'Budget', value: formatJobBudget(conversation.job) },
       { label: 'Location', value: getMarketplaceLocation(conversation.job) },
       { label: 'Schedule', value: conversation.job.scheduleText ?? 'Not yet agreed' },
-      { label: 'Job Status', value: formatStatus(conversation.status) },
+      { label: 'Job Status', value: formatStatus(conversation.job.status) },
     ];
   }
 
@@ -427,6 +627,54 @@ function getDetailMetrics(conversation: ConversationDetail) {
   }
 
   return [{ label: 'Status', value: formatStatus(conversation.status) }];
+}
+
+function getReviewState({
+  conversation,
+  isClient,
+  loading,
+  submittedReview,
+}: {
+  conversation: ConversationDetail | null;
+  isClient: boolean;
+  loading: boolean;
+  submittedReview: Review | null;
+}):
+  | { kind: 'submitted'; review: Review }
+  | { description: string; enabled: boolean; kind: 'available' | 'disabled' } {
+  if (submittedReview) {
+    return { kind: 'submitted', review: submittedReview };
+  }
+
+  if (loading) {
+    return { description: 'Checking review status...', enabled: false, kind: 'disabled' };
+  }
+
+  if (!conversation?.jobId || !isClient) {
+    return {
+      description: 'Only the client who posted the job can leave this review.',
+      enabled: false,
+      kind: 'disabled',
+    };
+  }
+
+  if (
+    conversation.status !== 'hired' ||
+    conversation.job?.acceptedProviderId !== conversation.providerId ||
+    conversation.job?.status !== 'completed'
+  ) {
+    return {
+      description: 'Available after job is completed.',
+      enabled: false,
+      kind: 'disabled',
+    };
+  }
+
+  return {
+    description: 'Share a 1-5 star rating and optional feedback.',
+    enabled: true,
+    kind: 'available',
+  };
 }
 
 function getInitials(name: string) {
@@ -636,48 +884,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
   },
-  sheetBackdrop: {
-    backgroundColor: 'rgba(58,58,58,0.5)',
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  reportSheet: {
-    backgroundColor: color.cardTint,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: 10,
-    minHeight: '88%',
-    padding: 24,
-  },
-  reportTitle: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  reportBody: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 12,
-  },
-  reportReason: {
-    alignItems: 'center',
-    borderBottomColor: '#C0C0C0',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 36,
-    paddingVertical: 6,
-  },
-  reportReasonText: {
-    color: color.text,
-    flex: 1,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 16,
-    lineHeight: 22,
-  },
   dialogBackdrop: {
     alignItems: 'center',
     backgroundColor: 'rgba(58,58,58,0.35)',
@@ -686,6 +892,13 @@ const styles = StyleSheet.create({
     padding: 27,
   },
   dialogCard: {
+    backgroundColor: color.background,
+    borderRadius: 16,
+    gap: 12,
+    padding: 24,
+    width: '100%',
+  },
+  reviewDialogCard: {
     backgroundColor: color.background,
     borderRadius: 16,
     gap: 12,
@@ -718,6 +931,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Medium',
     fontSize: 13,
     lineHeight: 18,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  ratingButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
+  reviewInput: {
+    borderColor: color.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    color: color.text,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    minHeight: 96,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  reviewError: {
+    color: color.danger,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
   },
   pressed: {
     opacity: 0.72,

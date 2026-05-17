@@ -17,6 +17,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
+import { BottomSheet } from '@/components/BottomSheet';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import {
     FloatingOnboardingInput,
     OnboardingBackButton,
@@ -57,6 +59,7 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(60);
+  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
   const verifyingCodeRef = useRef(false);
 
   const compactHeight = height < 760;
@@ -194,7 +197,7 @@ export default function RegisterScreen() {
           <Text style={styles.title}>{"Let's get started"}</Text>
           <View style={styles.languageRow}>
             <Text style={styles.languageText}>English (Manila)</Text>
-            <Pressable accessibilityRole="button" onPress={() => Alert.alert('Language', 'Language switching is not configured yet.')}>
+            <Pressable accessibilityRole="button" onPress={() => setLanguageSheetVisible(true)}>
               <Text style={styles.languageAction}>Change</Text>
             </Pressable>
           </View>
@@ -262,6 +265,23 @@ export default function RegisterScreen() {
       <StatusBar style="dark" />
       {step === 'email' ? renderEmailStep() : renderCodeStep()}
       <OnboardingLoadingOverlay visible={loading} />
+      <BottomSheet maxHeight="42%" onClose={() => setLanguageSheetVisible(false)} visible={languageSheetVisible}>
+        <View style={styles.languageSheetHeader}>
+          <Text style={styles.languageSheetTitle}>Language</Text>
+          <Pressable accessibilityLabel="Close language selector" accessibilityRole="button" onPress={() => setLanguageSheetVisible(false)}>
+            <Text style={styles.languageSheetClose}>Close</Text>
+          </Pressable>
+        </View>
+        <View style={styles.languageOptionSelected}>
+          <Text style={styles.languageOptionText}>English (Manila)</Text>
+          <Text style={styles.languageOptionMeta}>Current</Text>
+        </View>
+        <View style={styles.languageOptionDisabled}>
+          <Text style={styles.languageOptionTextMuted}>Filipino</Text>
+          <Text style={styles.languageOptionMetaMuted}>Not available in this MVP</Text>
+        </View>
+        <PrimaryButton label="Done" onPress={() => setLanguageSheetVisible(false)} />
+      </BottomSheet>
     </View>
   );
 }
@@ -363,6 +383,62 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 13,
     lineHeight: 20,
+  },
+  languageSheetHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  languageSheetTitle: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  languageSheetClose: {
+    color: '#69A4EC',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  languageOptionSelected: {
+    backgroundColor: '#EDF5FF',
+    borderColor: '#69A4EC',
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 2,
+    padding: 14,
+  },
+  languageOptionDisabled: {
+    backgroundColor: '#F5F5EF',
+    borderRadius: 12,
+    gap: 2,
+    opacity: 0.78,
+    padding: 14,
+  },
+  languageOptionText: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  languageOptionTextMuted: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  languageOptionMeta: {
+    color: '#69A4EC',
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  languageOptionMetaMuted: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
   },
   inputGroup: {
     gap: 24,

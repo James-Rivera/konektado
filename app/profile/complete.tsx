@@ -737,11 +737,11 @@ function ServiceAreaSheet({
       </View>
 
       <View style={styles.sheetSection}>
-        <Text style={styles.sheetSectionTitle}>Coming soon</Text>
+        <Text style={styles.sheetSectionTitle}>Other areas</Text>
         <View style={styles.sheetOptionDisabled}>
           <Text style={styles.sheetOptionTextMuted}>Other barangays in Santo Tomas</Text>
         </View>
-        <Text style={styles.sheetHelper}>Konektado is currently available only in selected service areas.</Text>
+        <Text style={styles.sheetHelper}>Konektado currently supports only selected service areas.</Text>
       </View>
 
       <PrimaryButton label="Done" onPress={onClose} />

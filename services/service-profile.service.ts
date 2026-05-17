@@ -11,10 +11,10 @@ import {
   mapService,
   normalizeExperienceLevel,
   normalizeRateType,
-  requireVerifiedUser,
   validateRateRange,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
+import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import type {
   CreateServiceInput,
   ProviderService,
@@ -109,7 +109,7 @@ function mapServiceSearchResult(
 export async function createService(
   input: CreateServiceInput,
 ): Promise<ServiceResult<ProviderService>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('provider');
   if (user.error) return user;
 
   const category = compactText(input.category);
@@ -198,7 +198,7 @@ export async function updateService({
   serviceId: string;
   input: CreateServiceInput;
 }): Promise<ServiceResult<ProviderService>> {
-  const user = await requireVerifiedUser();
+  const user = await requireVerifiedCompleteProfile('provider');
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
@@ -263,6 +263,41 @@ export async function updateService({
 
   if (!data) {
     return { data: null, error: 'Service not found.' };
+  }
+
+  return { data: mapService(data), error: null };
+}
+
+export async function updateServiceAvailability({
+  isActive,
+  serviceId,
+}: {
+  isActive: boolean;
+  serviceId: string;
+}): Promise<ServiceResult<ProviderService>> {
+  const user = await requireVerifiedCompleteProfile('provider');
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const { data, error } = await supabase
+    .from('services')
+    .update({ is_active: isActive })
+    .eq('id', serviceId)
+    .eq('provider_id', user.data)
+    .select(SERVICE_COLUMNS)
+    .maybeSingle<ServiceRow>();
+
+  if (error) {
+    return {
+      data: null,
+      error: error.message.toLowerCase().includes('row-level security')
+        ? 'Complete barangay verification before changing services.'
+        : error.message,
+    };
+  }
+
+  if (!data) {
+    return { data: null, error: 'Only the service owner can change this post.' };
   }
 
   return { data: mapService(data), error: null };
@@ -411,7 +446,6 @@ export async function getServiceDetail(serviceId: string): Promise<ServiceResult
     .from('services')
     .select(SERVICE_COLUMNS)
     .eq('id', serviceId)
-    .eq('is_active', true)
     .maybeSingle<ServiceRow>();
 
   if (error) {

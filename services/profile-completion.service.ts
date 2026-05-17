@@ -1004,7 +1004,7 @@ function buildVerificationStatus({
   return {
     status: 'unverified',
     label: 'Verification needed',
-    description: 'Barangay verification is required before publishing services, messaging, and applying to jobs.',
+    description: 'Barangay verification is required before publishing services, messaging, and contacting through Messages.',
     reviewerNote: null,
     submittedAt: null,
     reviewedAt: null,

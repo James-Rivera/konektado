@@ -32,6 +32,19 @@ export type PublicProfileSummary = {
   verifiedAt: string | null;
 };
 
+export type PublicClientProfile = {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  publicLocation: string;
+  barangayVerifiedAt: string | null;
+  verifiedAt: string | null;
+  jobsPostedCount: number;
+  averageRating: number | null;
+  reviewCount: number;
+  activeJobs: JobSummary[];
+};
+
 export type JobSummary = {
   id: string;
   clientId: string;

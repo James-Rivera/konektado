@@ -28,6 +28,8 @@ export type HomeFeedCardProps = {
   onPress?: () => void;
   onPrimaryAction?: () => void;
   onSave?: () => void;
+  isSaved?: boolean;
+  savePending?: boolean;
   isLoading?: boolean;
   loadingImage?: boolean;
   loadingTagCount?: number;
@@ -52,6 +54,8 @@ export function HomeFeedCard({
   onPress,
   onPrimaryAction,
   onSave,
+  isSaved = false,
+  savePending = false,
   isLoading = false,
   loadingImage = Boolean(imageUrl),
   loadingTagCount,
@@ -148,8 +152,17 @@ export function HomeFeedCard({
         </View>
         {onSave ? (
           <IconButton
-            icon="bookmark-border"
-            label={kind === 'job' ? 'Save job' : 'Save service'}
+            disabled={savePending}
+            icon={isSaved ? 'bookmark' : 'bookmark-border'}
+            label={
+              isSaved
+                ? kind === 'job'
+                  ? 'Remove saved job'
+                  : 'Remove saved service'
+                : kind === 'job'
+                  ? 'Save job'
+                  : 'Save service'
+            }
             onPress={onSave}
           />
         ) : null}
@@ -298,10 +311,12 @@ function Meta({ icon, text }: FeedMetaItem) {
 }
 
 function IconButton({
+  disabled,
   icon,
   label,
   onPress,
 }: {
+  disabled?: boolean;
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
   onPress?: () => void;
@@ -310,12 +325,18 @@ function IconButton({
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={(event) => {
         event.stopPropagation();
         onPress?.();
       }}
-      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-      <MaterialIcons color={color.textMuted} name={icon} size={30} />
+      style={({ pressed }) => [
+        styles.iconButton,
+        disabled && styles.iconButtonDisabled,
+        pressed && !disabled && styles.pressed,
+      ]}>
+      <MaterialIcons color={icon === 'bookmark' ? color.primary : color.textMuted} name={icon} size={30} />
     </Pressable>
   );
 }
@@ -407,6 +428,9 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 34,
+  },
+  iconButtonDisabled: {
+    opacity: 0.55,
   },
   bodyBlock: {
     gap: 8,

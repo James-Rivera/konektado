@@ -58,6 +58,22 @@ Rules:
 - Provider intent opens Home on Jobs, client intent opens Home on Workers.
 - Users can add a second profile (Work Profile or Hiring Profile) later from Profile tab without re-entering full onboarding.
 
+## Home Discovery Flow
+
+1. User opens Home and sees the existing `For you`, `Jobs`, and `Workers` quick tabs.
+2. User can tap the feed filter action beside `Latest in your barangay`.
+3. App opens a lightweight Home-only feed filter sheet for feed type, work/service mode, category, location preference, and sort.
+4. User applies filters and Home updates the already-bounded discovery feed locally.
+5. If no cards match, Home shows `No posts match these filters yet.` and suggests adjusting feed filters.
+6. User can reset filters or jump to `Advanced search`, which opens the fuller Search filter experience.
+
+Rules:
+
+- Home filters are discovery preferences, not a duplicate of Search.
+- Search remains the intentional lookup surface with advanced filters.
+- `Nearby areas` and `Relevant nearby` use known barangay/city text in MVP; they are not true geodistance.
+- Setup and profile-completion nudges stay outside feed filtering.
+
 ## Barangay Verification Flow
 
 1. Unverified user starts verification from a locked action, profile prompt, or verification page.
@@ -215,6 +231,21 @@ Admin safety rules:
 - Admin UI should not expose passwords or Supabase Auth internals.
 - The MVP implementation continues to use `verifications` and `verification_files.verification_id`; renaming to `verification_requests` is deferred until after the demo-critical flow is stable.
 - Barangay/admin is the current handler for profile verification, uploaded credential review, custom "Others" service review, and reported marketplace content where report infrastructure exists. Direct barangay/LGU system integration remains future scope.
+
+## In-app Notification Flow
+
+1. User taps the bell from Home or Messages.
+2. App opens the shared Notifications screen.
+3. User sees server-created notification rows for new messages, verification decisions, completed hired jobs, and report status changes.
+4. Unread rows are visually distinct.
+5. Tapping a row marks it read and opens its linked in-app route when one exists.
+6. User can mark all unread notifications as read.
+
+Rules:
+
+- MVP notifications are in-app only.
+- Do not add push notification tokens, background jobs, or notification preferences in this slice.
+- Users can read and update only their own notification rows.
 
 ## Ratings/Review Flow
 

@@ -8,20 +8,29 @@ import { color, radius } from '@/constants/theme';
 export function HomeTopHeader({
   topInset,
   onNotifications,
+  unreadCount = 0,
 }: {
   topInset: number;
-  onNotifications: () => void;
+  onNotifications?: () => void;
+  unreadCount?: number;
 }) {
   return (
     <View style={[styles.topHeader, { paddingTop: topInset + 10 }]}>
       <KonektadoWordmark color="dark" size="small" />
-      <Pressable
-        accessibilityLabel="Notifications"
-        accessibilityRole="button"
-        onPress={onNotifications}
-        style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-        <MaterialIcons color={color.verificationBlue} name="notifications" size={24} />
-      </Pressable>
+      {onNotifications ? (
+        <Pressable
+          accessibilityLabel="Notifications"
+          accessibilityRole="button"
+          onPress={onNotifications}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.verificationBlue} name="notifications" size={24} />
+          {unreadCount > 0 ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -124,7 +133,13 @@ export function HomeFilterPill({
   );
 }
 
-export function HomeSectionHeader({ onFilterPress }: { onFilterPress: () => void }) {
+export function HomeSectionHeader({
+  activeFilterCount = 0,
+  onFilterPress,
+}: {
+  activeFilterCount?: number;
+  onFilterPress: () => void;
+}) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>Latest in your barangay</Text>
@@ -134,6 +149,13 @@ export function HomeSectionHeader({ onFilterPress }: { onFilterPress: () => void
         onPress={onFilterPress}
         style={({ pressed }) => [styles.sectionIcon, pressed && styles.pressed]}>
         <MaterialIcons color={color.verificationBlue} name="tune" size={22} />
+        {activeFilterCount > 0 ? (
+          <View style={styles.feedFilterBadge}>
+            <Text style={styles.feedFilterBadgeText}>
+              {activeFilterCount > 9 ? '9+' : activeFilterCount}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -154,7 +176,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 24,
     justifyContent: 'center',
+    position: 'relative',
     width: 24,
+  },
+  notificationBadge: {
+    alignItems: 'center',
+    backgroundColor: color.accentYellow,
+    borderColor: color.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 16,
+    justifyContent: 'center',
+    minWidth: 16,
+    paddingHorizontal: 4,
+    position: 'absolute',
+    right: -8,
+    top: -7,
+  },
+  notificationBadgeText: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 9,
+    lineHeight: 11,
   },
   searchBand: {
     backgroundColor: color.background,
@@ -302,7 +345,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 24,
     justifyContent: 'center',
+    position: 'relative',
     width: 24,
+  },
+  feedFilterBadge: {
+    alignItems: 'center',
+    backgroundColor: color.accentYellow,
+    borderColor: color.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 16,
+    justifyContent: 'center',
+    minWidth: 16,
+    paddingHorizontal: 4,
+    position: 'absolute',
+    right: -8,
+    top: -7,
+  },
+  feedFilterBadgeText: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 9,
+    lineHeight: 11,
   },
   pressed: {
     opacity: 0.75,

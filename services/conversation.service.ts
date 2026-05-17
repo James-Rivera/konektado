@@ -12,6 +12,7 @@ import {
   type ServiceRow,
 } from '@/services/marketplace.helpers';
 import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
+import { createReport } from '@/services/report.service';
 import { getServiceDetail } from '@/services/service-profile.service';
 import type {
   ConversationDetail,
@@ -660,6 +661,61 @@ export async function markWorkerHired({
   return getConversation(conversationId);
 }
 
+export async function markHiredJobCompleted({
+  conversationId,
+}: {
+  conversationId: string;
+}): Promise<ServiceResult<ConversationDetail>> {
+  const user = await requireVerifiedCompleteProfile('client');
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const conversation = await getConversation(conversationId);
+  if (conversation.error || !conversation.data) {
+    return { data: null, error: conversation.error ?? 'Conversation not found.' };
+  }
+
+  if (conversation.data.clientId !== user.data) {
+    return { data: null, error: 'Only the client who posted the job can mark it completed.' };
+  }
+
+  if (!conversation.data.jobId || !conversation.data.job) {
+    return { data: null, error: 'Only job conversations can be marked completed.' };
+  }
+
+  if (
+    conversation.data.status !== 'hired' ||
+    conversation.data.job.acceptedProviderId !== conversation.data.providerId
+  ) {
+    return { data: null, error: 'Only a hired worker conversation can be marked completed.' };
+  }
+
+  if (conversation.data.job.status === 'completed') {
+    return getConversation(conversationId);
+  }
+
+  if (conversation.data.job.status !== 'in_progress') {
+    return { data: null, error: 'Only hired jobs in progress can be marked completed.' };
+  }
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({
+      status: 'completed',
+      closed_at: new Date().toISOString(),
+    })
+    .eq('id', conversation.data.jobId)
+    .eq('accepted_provider_id', conversation.data.providerId)
+    .eq('status', 'in_progress')
+    .select('id')
+    .maybeSingle<{ id: string }>();
+
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: 'This job could not be marked completed.' };
+
+  return getConversation(conversationId);
+}
+
 export async function updateConversationStatus({
   conversationId,
   status,
@@ -694,6 +750,50 @@ export function archiveConversation(input: { conversationId: string }) {
   return updateConversationStatus({ ...input, status: 'archived' });
 }
 
-export function reportConversation(input: { conversationId: string }) {
-  return updateConversationStatus({ ...input, status: 'reported' });
+export async function reportConversation({
+  conversationId,
+  details,
+  jobId,
+  reason,
+  reportedUserId,
+  serviceId,
+}: {
+  conversationId: string;
+  details?: string | null;
+  jobId?: string | null;
+  reason: string;
+  reportedUserId?: string | null;
+  serviceId?: string | null;
+}): Promise<ServiceResult<ConversationDetail>> {
+  const conversation = await getConversation(conversationId);
+  if (conversation.error || !conversation.data) {
+    return { data: null, error: conversation.error ?? 'Conversation not found.' };
+  }
+
+  const user = await getCurrentUserId();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  if (![conversation.data.clientId, conversation.data.providerId].includes(user.data)) {
+    return { data: null, error: 'Only conversation participants can report this chat.' };
+  }
+
+  const otherParticipantId =
+    reportedUserId ??
+    (conversation.data.clientId === user.data ? conversation.data.providerId : conversation.data.clientId);
+
+  const report = await createReport({
+    conversationId,
+    details,
+    jobId: jobId ?? conversation.data.jobId,
+    reportedUserId: otherParticipantId,
+    reason,
+    serviceId: serviceId ?? conversation.data.serviceId,
+  });
+
+  if (report.error) {
+    return { data: null, error: report.error };
+  }
+
+  return updateConversationStatus({ conversationId, status: 'reported' });
 }

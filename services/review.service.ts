@@ -38,6 +38,32 @@ async function mapReviewRows(rows: ReviewRow[]): Promise<Review[]> {
   }));
 }
 
+export async function getMyReviewForJob({
+  jobId,
+  revieweeId,
+}: {
+  jobId: string;
+  revieweeId: string;
+}): Promise<ServiceResult<Review | null>> {
+  const currentUser = await getCurrentUserId();
+  if (currentUser.error) return currentUser;
+  if (!currentUser.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(REVIEW_COLUMNS)
+    .eq('job_id', jobId)
+    .eq('reviewer_id', currentUser.data)
+    .eq('reviewee_id', revieweeId)
+    .maybeSingle<ReviewRow>();
+
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: null };
+
+  const [review] = await mapReviewRows([data]);
+  return { data: review, error: null };
+}
+
 export async function createReview(input: CreateReviewInput): Promise<ServiceResult<Review>> {
   if (!input.jobId || !input.revieweeId) {
     return { data: null, error: 'Choose a completed job and profile to review.' };
@@ -66,19 +92,33 @@ export async function createReview(input: CreateReviewInput): Promise<ServiceRes
   if (!job) return { data: null, error: 'Choose a completed job and profile to review.' };
 
   const clientId = job.client_id ?? job.owner_id;
-  const reviewerRole =
-    currentUser.data === clientId
-      ? 'client'
-      : currentUser.data === job.accepted_provider_id
-        ? 'provider'
-        : null;
+  if (currentUser.data !== clientId) {
+    return { data: null, error: 'Only the client who posted the job can leave this review.' };
+  }
 
-  if (!reviewerRole || job.status !== 'completed') {
+  if (!job.accepted_provider_id || input.revieweeId !== job.accepted_provider_id) {
+    return { data: null, error: 'Only the hired worker can be reviewed for this job.' };
+  }
+
+  if (input.revieweeId === currentUser.data) {
+    return { data: null, error: 'You cannot review yourself.' };
+  }
+
+  if (job.status !== 'completed') {
     return { data: null, error: 'Reviews are available only after a confirmed completed interaction.' };
   }
 
-  const user = await requireVerifiedCompleteProfile(reviewerRole);
+  const user = await requireVerifiedCompleteProfile('client');
   if (user.error) return user;
+
+  const existingReview = await getMyReviewForJob({
+    jobId: input.jobId,
+    revieweeId: input.revieweeId,
+  });
+  if (existingReview.error) return { data: null, error: existingReview.error };
+  if (existingReview.data) {
+    return { data: null, error: 'You already reviewed this completed job.' };
+  }
 
   const { data, error } = await supabase
     .from('reviews')
@@ -92,7 +132,13 @@ export async function createReview(input: CreateReviewInput): Promise<ServiceRes
     .select(REVIEW_COLUMNS)
     .single<ReviewRow>();
 
-  if (error) return { data: null, error: error.message };
+  if (error) {
+    if (error.code === '23505') {
+      return { data: null, error: 'You already reviewed this completed job.' };
+    }
+
+    return { data: null, error: error.message };
+  }
 
   const [review] = await mapReviewRows([data]);
   return { data: review, error: null };

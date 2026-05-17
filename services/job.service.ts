@@ -384,6 +384,7 @@ export async function updateJobStatus({
 }): Promise<ServiceResult<JobSummary>> {
   const user = await requireVerifiedUser();
   if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
   const { data, error } = await supabase
     .from('jobs')
@@ -392,13 +393,30 @@ export async function updateJobStatus({
       closed_at: ['completed', 'closed', 'cancelled'].includes(status) ? new Date().toISOString() : null,
     })
     .eq('id', jobId)
+    .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)
     .select(JOB_COLUMNS)
-    .single<JobRow>();
+    .maybeSingle<JobRow>();
 
   if (error) {
     return { data: null, error: formatSupabaseError(error.message) };
   }
 
+  if (!data) {
+    return { data: null, error: 'Only the job owner can change this post.' };
+  }
+
   const profiles = await loadPublicProfiles([data.client_id ?? data.owner_id]);
   return { data: mapJob(data, profiles), error: null };
+}
+
+export function deactivateJob(jobId: string) {
+  return updateJobStatus({ jobId, status: 'cancelled' });
+}
+
+export function reactivateJob(jobId: string) {
+  return updateJobStatus({ jobId, status: 'open' });
+}
+
+export function closeJob(jobId: string) {
+  return updateJobStatus({ jobId, status: 'closed' });
 }

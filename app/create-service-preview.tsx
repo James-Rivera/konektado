@@ -257,9 +257,9 @@ export default function CreateServicePreviewScreen() {
               location={draft.locationText || profile?.barangay || 'Barangay San Pedro'}
               name={getProfileDisplayName(profile)}
               onPress={() => {}}
-              onSave={() => {}}
               ratingText="Preview listing"
               rateLine={getRateLine(draft)}
+              showSaveButton={false}
               statusLine={getStatusLine(draft)}
               tags={getPreviewTags(draft).slice(0, 4)}
             />

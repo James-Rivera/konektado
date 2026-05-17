@@ -6,6 +6,9 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { useFeedback } from '@/components/FeedbackProvider';
+import { MoreActionsSheet } from '@/components/MoreActionsSheet';
+import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, typography } from '@/constants/theme';
@@ -26,7 +29,8 @@ import {
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import { listProfileReviews } from '@/services/review.service';
-import { getServiceDetail } from '@/services/service-profile.service';
+import { createReport } from '@/services/report.service';
+import { getServiceDetail, updateServiceAvailability } from '@/services/service-profile.service';
 import type { ProviderService, Review, ServiceDetail } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
@@ -44,6 +48,7 @@ function getVariant(value: string | string[] | undefined): DetailVariant {
 export default function ServiceDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showSuccessToast } = useFeedback();
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
@@ -57,6 +62,10 @@ export default function ServiceDetailScreen() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [messaging, setMessaging] = useState(false);
+  const [optionsVisible, setOptionsVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [updatingService, setUpdatingService] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -91,10 +100,6 @@ export default function ServiceDetailScreen() {
       active = false;
     };
   }, [serviceId]);
-
-  const showPlaceholder = (label: string) => {
-    Alert.alert(label, 'This will open from Worker Profile in a later slice.');
-  };
 
   const handleMessage = () => {
     if (messageCta.disabled && messageCta.reason !== 'verification') {
@@ -145,6 +150,61 @@ export default function ServiceDetailScreen() {
     });
   };
 
+  const handleReport = async ({ details, reason }: ReportSheetSubmitValue) => {
+    if (!detail) return;
+
+    setReporting(true);
+    const result = await createReport({
+      details,
+      reason,
+      reportedUserId: detail.providerId,
+      serviceId: detail.id,
+    });
+    setReporting(false);
+
+    if (result.error) {
+      Alert.alert('Report service', result.error);
+      return;
+    }
+
+    setReportVisible(false);
+    showSuccessToast('Report submitted');
+  };
+
+  const updateAvailability = async (nextActive: boolean) => {
+    if (!detail || updatingService) return;
+
+    setUpdatingService(true);
+    const result = await updateServiceAvailability({
+      isActive: nextActive,
+      serviceId: detail.id,
+    });
+    setUpdatingService(false);
+
+    if (result.error || !result.data) {
+      Alert.alert('Manage service', result.error ?? 'Could not update this service.');
+      return;
+    }
+
+    setDetail({
+      ...detail,
+      ...result.data,
+    });
+    setOptionsVisible(false);
+    showSuccessToast(nextActive ? 'Service reactivated' : 'Service deactivated');
+  };
+
+  const confirmDeactivateService = () => {
+    Alert.alert(
+      'Deactivate this service?',
+      'This hides the service from search. You can reactivate it later from your posts.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Deactivate', style: 'destructive', onPress: () => updateAvailability(false) },
+      ],
+    );
+  };
+
   if (loading) {
     return <WorkerDetailSkeleton bottomInset={insets.bottom} variant={variant} />;
   }
@@ -153,7 +213,7 @@ export default function ServiceDetailScreen() {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
         <View style={styles.screen}>
-          <DetailHeader onBack={() => router.back()} onMore={() => showPlaceholder('Options')} />
+          <DetailHeader onBack={() => router.back()} />
           <View style={styles.emptyWrap}>
             <EmptyState
               actionLabel="Go back"
@@ -188,18 +248,19 @@ export default function ServiceDetailScreen() {
   const ratingText = formatServiceRatingText(detail);
   const jobsDoneText = formatServiceJobsDoneText(detail, detail.completedJobsCount);
   const serviceImageUrl = detail.photoUrls?.[0] ?? null;
+  const isOwnService = profile?.id === detail.providerId;
   const messageCta = getWorkerMessageCta({
     allowMessages: detail.allowMessages,
     availabilityText: detail.availabilityText,
     isActive: detail.isActive,
-    isOwnService: profile?.id === detail.providerId,
+    isOwnService,
     isVerified,
   });
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <DetailHeader onBack={() => router.back()} onMore={() => showPlaceholder('Options')} />
+        <DetailHeader onBack={() => router.back()} onMore={() => setOptionsVisible(true)} />
 
         <ScrollView
           contentContainerStyle={[
@@ -333,6 +394,48 @@ export default function ServiceDetailScreen() {
           onMessage={handleMessage}
         />
       </View>
+
+      <MoreActionsSheet
+        actions={
+          isOwnService
+            ? getOwnerServiceActions({
+                isActive: detail.isActive,
+                onDeactivate: confirmDeactivateService,
+                onEdit: () => {
+                  setOptionsVisible(false);
+                  router.push({
+                    pathname: '/create-service' as never,
+                    params: { serviceId: detail.id },
+                  } as never);
+                },
+                onReactivate: () => updateAvailability(true),
+                updating: updatingService,
+              })
+            : [
+                {
+                  icon: 'report',
+                  label: 'Report service or provider',
+                  onPress: () => {
+                    setOptionsVisible(false);
+                    setReportVisible(true);
+                  },
+                  tone: 'danger',
+                },
+              ]
+        }
+        onClose={() => setOptionsVisible(false)}
+        subtitle={selectedServiceTitle}
+        title={isOwnService ? 'Manage service' : 'Service options'}
+        visible={optionsVisible}
+      />
+      <ReportSheet
+        onClose={() => setReportVisible(false)}
+        onSubmit={handleReport}
+        submitting={reporting}
+        targetLabel={providerName}
+        title="Report service or provider"
+        visible={reportVisible}
+      />
     </SafeAreaView>
   );
 }
@@ -441,7 +544,7 @@ function DetailHeader({
   isLoading = false,
 }: {
   onBack: () => void;
-  onMore: () => void;
+  onMore?: () => void;
   isLoading?: boolean;
 }) {
   if (isLoading) {
@@ -464,15 +567,56 @@ function DetailHeader({
         <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
       </Pressable>
       <Text style={styles.headerTitle}>Worker Profile</Text>
-      <Pressable
-        accessibilityLabel="More options"
-        accessibilityRole="button"
-        onPress={onMore}
-        style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-        <MaterialIcons color={color.textSubtle} name="more-horiz" size={20} />
-      </Pressable>
+      {onMore ? (
+        <Pressable
+          accessibilityLabel="More options"
+          accessibilityRole="button"
+          onPress={onMore}
+          style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.textSubtle} name="more-horiz" size={20} />
+        </Pressable>
+      ) : (
+        <View style={styles.headerButton} />
+      )}
     </View>
   );
+}
+
+function getOwnerServiceActions({
+  isActive,
+  onDeactivate,
+  onEdit,
+  onReactivate,
+  updating,
+}: {
+  isActive: boolean;
+  onDeactivate: () => void;
+  onEdit: () => void;
+  onReactivate: () => void;
+  updating: boolean;
+}) {
+  return [
+    {
+      disabled: updating,
+      icon: 'edit' as const,
+      label: 'Edit service',
+      onPress: onEdit,
+    },
+    isActive
+      ? {
+          disabled: updating,
+          icon: 'pause-circle' as const,
+          label: updating ? 'Updating...' : 'Deactivate service',
+          onPress: onDeactivate,
+          tone: 'danger' as const,
+        }
+      : {
+          disabled: updating,
+          icon: 'play-circle' as const,
+          label: updating ? 'Updating...' : 'Reactivate service',
+          onPress: onReactivate,
+        },
+  ];
 }
 
 function WorkerProfileHero({

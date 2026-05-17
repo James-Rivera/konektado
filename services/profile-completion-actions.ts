@@ -96,8 +96,8 @@ export function getProfileCompletionDestination(
     default:
       return {
         type: 'message',
-        title: 'Setup action unavailable',
-        message: 'This setup step is not connected yet.',
+        title: 'Open profile setup',
+        message: 'Continue this setup step from your profile details.',
       };
   }
 }

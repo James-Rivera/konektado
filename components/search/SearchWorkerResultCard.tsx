@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonAvatar, SkeletonChip } from '@/components/Skeleton';
@@ -9,15 +9,21 @@ import type { SearchWorkerItem } from '@/constants/search-demo-data';
 
 export function SearchWorkerResultCard({
   worker,
+  onMore,
   onOpenWorker,
   onSave,
+  isSaved = false,
+  savePending = false,
   isLoading = false,
   showSaveAction,
   loadingLocationInline = true,
 }: {
   worker?: SearchWorkerItem;
+  onMore?: () => void;
   onOpenWorker?: () => void;
   onSave?: () => void;
+  isSaved?: boolean;
+  savePending?: boolean;
   isLoading?: boolean;
   showSaveAction?: boolean;
   loadingLocationInline?: boolean;
@@ -102,8 +108,15 @@ export function SearchWorkerResultCard({
         </View>
 
         <View style={styles.iconRow}>
-          <IconButton label="More options" name="more-horiz" onPress={() => Alert.alert('Options', 'More search actions are not connected in this demo.')} />
-          {onSave ? <IconButton label="Save worker" name="bookmark-border" onPress={onSave} /> : null}
+          {onMore ? <IconButton label="More options" name="more-horiz" onPress={onMore} /> : null}
+          {onSave ? (
+            <IconButton
+              disabled={savePending}
+              label={isSaved ? 'Remove saved worker' : 'Save worker'}
+              name={isSaved ? 'bookmark' : 'bookmark-border'}
+              onPress={onSave}
+            />
+          ) : null}
         </View>
       </View>
 
@@ -215,10 +228,12 @@ function canShowLocationInline(firstMeta: string, secondMeta: string, location: 
 }
 
 function IconButton({
+  disabled,
   label,
   name,
   onPress,
 }: {
+  disabled?: boolean;
   label: string;
   name: keyof typeof MaterialIcons.glyphMap;
   onPress: () => void;
@@ -227,9 +242,19 @@ function IconButton({
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-      <MaterialIcons color={color.textMuted} name={name} size={name === 'more-horiz' ? 18 : 20} />
+      style={({ pressed }) => [
+        styles.iconButton,
+        disabled && styles.iconButtonDisabled,
+        pressed && !disabled && styles.pressed,
+      ]}>
+      <MaterialIcons
+        color={name === 'bookmark' ? color.primary : color.textMuted}
+        name={name}
+        size={name === 'more-horiz' ? 18 : 20}
+      />
     </Pressable>
   );
 }
@@ -315,6 +340,9 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     width: 18,
+  },
+  iconButtonDisabled: {
+    opacity: 0.55,
   },
   metaBlock: {
     gap: 5,

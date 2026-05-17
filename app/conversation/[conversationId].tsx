@@ -180,6 +180,10 @@ export default function ConversationDetailScreen() {
   const isJobConversation = Boolean(conversation?.jobId);
   const canMarkHired =
     Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
+  const canOpenProfile = Boolean(
+    conversation &&
+      (conversation.clientId !== profile?.id || conversation.serviceId),
+  );
   const prompts = isJobConversation ? JOB_PROMPTS : SERVICE_PROMPTS;
 
   const replaceMessage = (messageId: string, nextMessage: ThreadMessage | null) => {
@@ -329,19 +333,26 @@ export default function ConversationDetailScreen() {
         {conversation ? (
           <ConversationContextCard
             canMarkHired={canMarkHired}
+            canOpenProfile={canOpenProfile}
             conversation={conversation}
             expanded={contextExpanded}
             onMarkHired={onMarkHired}
             onOpenPost={openPost}
             onOpenProfile={() => {
+              if (conversation.clientId !== profile?.id) {
+                router.push({
+                  pathname: '/client/[clientId]' as never,
+                  params: { clientId: conversation.clientId },
+                });
+                return;
+              }
+
               if (conversation.serviceId) {
                 router.push({
                   pathname: '/services/[serviceId]',
                   params: { serviceId: conversation.serviceId },
                 });
-                return;
               }
-              Alert.alert('Profile', 'Public client profiles are not a separate route yet.');
             }}
             onToggleExpanded={() => {
               setContextExpanded((value) => !value);
@@ -605,6 +616,7 @@ function ConversationScreenSkeleton() {
 
 function ConversationContextCard({
   canMarkHired,
+  canOpenProfile,
   conversation,
   expanded,
   onMarkHired,
@@ -613,6 +625,7 @@ function ConversationContextCard({
   onToggleExpanded,
 }: {
   canMarkHired: boolean;
+  canOpenProfile: boolean;
   conversation: ConversationDetail;
   expanded: boolean;
   onMarkHired: () => void;
@@ -639,7 +652,9 @@ function ConversationContextCard({
       {expanded ? (
         <View style={styles.contextActions}>
           <SmallActionButton label={conversation.jobId ? 'View Job' : 'View Service'} onPress={onOpenPost} />
-          <SmallActionButton label={conversation.jobId ? 'View Client' : 'View Profile'} onPress={onOpenProfile} />
+          {canOpenProfile ? (
+            <SmallActionButton label="View Profile" onPress={onOpenProfile} />
+          ) : null}
           {canMarkHired ? <SmallActionButton label="Mark Hired" onPress={onMarkHired} /> : null}
         </View>
       ) : null}

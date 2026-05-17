@@ -5,13 +5,16 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { useFeedback } from '@/components/FeedbackProvider';
+import { MoreActionsSheet } from '@/components/MoreActionsSheet';
+import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { startJobConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
-import { getJobDetail } from '@/services/job.service';
+import { closeJob, deactivateJob, getJobDetail, reactivateJob } from '@/services/job.service';
 import {
   formatClientJobsPostedText,
   formatClientRatingText,
@@ -25,6 +28,7 @@ import {
   getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
+import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
 
 function getParamValue(value: string | string[] | undefined) {
@@ -34,6 +38,7 @@ function getParamValue(value: string | string[] | undefined) {
 
 export default function JobDetailScreen() {
   const router = useRouter();
+  const { showSuccessToast } = useFeedback();
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
@@ -42,6 +47,10 @@ export default function JobDetailScreen() {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [messaging, setMessaging] = useState(false);
+  const [optionsVisible, setOptionsVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [updatingPost, setUpdatingPost] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -72,10 +81,6 @@ export default function JobDetailScreen() {
     router.push('/verification');
   };
 
-  const showComingSoon = (label: string) => {
-    Alert.alert(label, 'This will open from Job Details in a later slice.');
-  };
-
   if (loading && !job) {
     return <JobDetailSkeleton />;
   }
@@ -93,13 +98,7 @@ export default function JobDetailScreen() {
               <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
             </Pressable>
             <Text style={styles.headerTitle}>Job Details</Text>
-            <Pressable
-              accessibilityLabel="More options"
-              accessibilityRole="button"
-              onPress={() => showComingSoon('Options')}
-              style={styles.headerIcon}>
-              <MaterialIcons color={color.textSubtle} name="more-vert" size={20} />
-            </Pressable>
+            <View style={styles.headerIcon} />
           </View>
 
           <View style={styles.emptyWrap}>
@@ -192,6 +191,119 @@ export default function JobDetailScreen() {
     });
   };
 
+  const handleReport = async ({ details, reason }: ReportSheetSubmitValue) => {
+    if (!job) return;
+
+    setReporting(true);
+    const result = await createReport({
+      details,
+      jobId: job.id,
+      reason,
+      reportedUserId: job.clientId,
+    });
+    setReporting(false);
+
+    if (result.error) {
+      Alert.alert('Report job', result.error);
+      return;
+    }
+
+    setReportVisible(false);
+    showSuccessToast('Report submitted');
+  };
+
+  const runJobStatusUpdate = async ({
+    action,
+    successMessage,
+  }: {
+    action: () => Promise<Awaited<ReturnType<typeof deactivateJob>>>;
+    successMessage: string;
+  }) => {
+    if (!job || updatingPost) return;
+
+    setUpdatingPost(true);
+    const result = await action();
+    setUpdatingPost(false);
+
+    if (result.error || !result.data) {
+      Alert.alert('Manage job', result.error ?? 'Could not update this job.');
+      return;
+    }
+
+    setJob({
+      ...job,
+      ...result.data,
+      closedAt: ['closed', 'completed', 'cancelled'].includes(result.data.status)
+        ? new Date().toISOString()
+        : null,
+    });
+    setOptionsVisible(false);
+    showSuccessToast(successMessage);
+  };
+
+  const confirmJobStatusUpdate = ({
+    body,
+    label,
+    onConfirm,
+    title,
+  }: {
+    body: string;
+    label: string;
+    onConfirm: () => void;
+    title: string;
+  }) => {
+    Alert.alert(title, body, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: label, style: 'destructive', onPress: onConfirm },
+    ]);
+  };
+
+  const ownerActions = isOwnJob
+    ? getOwnerJobActions({
+        job,
+        updating: updatingPost,
+        onClose: () =>
+          confirmJobStatusUpdate({
+            body: 'This marks the job as closed and removes it from active job search results.',
+            label: 'Close job',
+            onConfirm: () =>
+              runJobStatusUpdate({
+                action: () => closeJob(job.id),
+                successMessage: 'Job closed',
+              }),
+            title: 'Close this job?',
+          }),
+        onDeactivate: () =>
+          confirmJobStatusUpdate({
+            body: 'This hides the job from search. You can reactivate it later from your posts.',
+            label: 'Deactivate',
+            onConfirm: () =>
+              runJobStatusUpdate({
+                action: () => deactivateJob(job.id),
+                successMessage: 'Job deactivated',
+              }),
+            title: 'Deactivate this job?',
+          }),
+        onReactivate: () =>
+          runJobStatusUpdate({
+            action: () => reactivateJob(job.id),
+            successMessage: 'Job reactivated',
+          }),
+      })
+    : [];
+  const reportActions = [
+    {
+      icon: 'report' as const,
+      label: 'Report job',
+      onPress: () => {
+        setOptionsVisible(false);
+        setReportVisible(true);
+      },
+      tone: 'danger' as const,
+    },
+  ];
+  const hasHeaderOptions = !isOwnJob || ownerActions.length > 0;
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
@@ -204,13 +316,17 @@ export default function JobDetailScreen() {
             <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
           </Pressable>
           <Text style={styles.headerTitle}>Job Details</Text>
-          <Pressable
-            accessibilityLabel="More options"
-            accessibilityRole="button"
-            onPress={() => showComingSoon('Options')}
-            style={styles.headerIcon}>
-            <MaterialIcons color={color.textSubtle} name="more-vert" size={20} />
-          </Pressable>
+          {hasHeaderOptions ? (
+            <Pressable
+              accessibilityLabel="More options"
+              accessibilityRole="button"
+              onPress={() => setOptionsVisible(true)}
+              style={styles.headerIcon}>
+              <MaterialIcons color={color.textSubtle} name="more-vert" size={20} />
+            </Pressable>
+          ) : (
+            <View style={styles.headerIcon} />
+          )}
         </View>
 
         <ScrollView
@@ -304,6 +420,15 @@ export default function JobDetailScreen() {
                 <TrustMetric icon="star-border" label={formatClientRatingText(job)} tint="yellow" />
                 <TrustMetric icon="work" label={formatClientJobsPostedText(job)} />
               </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push({ pathname: '/client/[clientId]' as never, params: { clientId: job.clientId } })
+                }
+                style={({ pressed }) => [styles.posterProfileAction, pressed && styles.pressed]}>
+                <MaterialIcons color={color.primary} name="person" size={16} />
+                <Text style={styles.posterProfileActionText}>View client profile</Text>
+              </Pressable>
             </View>
           </View>
         </ScrollView>
@@ -333,6 +458,22 @@ export default function JobDetailScreen() {
           </Pressable>
         </View>
       </View>
+
+      <MoreActionsSheet
+        actions={isOwnJob ? ownerActions : reportActions}
+        onClose={() => setOptionsVisible(false)}
+        subtitle={jobTitle}
+        title={isOwnJob ? 'Manage job' : 'Job options'}
+        visible={optionsVisible && hasHeaderOptions}
+      />
+      <ReportSheet
+        onClose={() => setReportVisible(false)}
+        onSubmit={handleReport}
+        submitting={reporting}
+        targetLabel={jobTitle}
+        title="Report job"
+        visible={reportVisible}
+      />
     </SafeAreaView>
   );
 }
@@ -535,6 +676,52 @@ function BadgePill({ label }: { label: string }) {
       <Text style={styles.badgeText}>{label}</Text>
     </View>
   );
+}
+
+function getOwnerJobActions({
+  job,
+  onClose,
+  onDeactivate,
+  onReactivate,
+  updating,
+}: {
+  job: JobDetail;
+  onClose: () => void;
+  onDeactivate: () => void;
+  onReactivate: () => void;
+  updating: boolean;
+}) {
+  const actions = [];
+  const isInactive = job.status === 'cancelled';
+  const isFinal = job.status === 'closed' || job.status === 'completed';
+
+  if (isInactive) {
+    actions.push({
+      disabled: updating,
+      icon: 'play-circle' as const,
+      label: updating ? 'Updating...' : 'Reactivate job',
+      onPress: onReactivate,
+    });
+  } else if (!isFinal) {
+    actions.push({
+      disabled: updating,
+      icon: 'pause-circle' as const,
+      label: updating ? 'Updating...' : 'Deactivate job',
+      onPress: onDeactivate,
+    });
+  }
+
+  if (!isFinal) {
+    actions.push({
+      disabled: updating,
+      icon: 'task-alt' as const,
+      label: updating ? 'Updating...' : 'Close job',
+      onPress: onClose,
+      tone: 'danger' as const,
+    });
+  }
+
+  return actions;
 }
 
 function StatusPill({
@@ -800,6 +987,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: space.sm,
     marginTop: space.md,
+  },
+  posterProfileAction: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: space.xs,
+  },
+  posterProfileActionText: {
+    ...typography.bodyMedium,
+    color: color.primary,
   },
   trustMetric: {
     alignItems: 'center',

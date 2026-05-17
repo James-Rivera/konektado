@@ -12,6 +12,7 @@ export type PopularService = {
 
 export type SearchJobItem = {
   id: string;
+  clientId: string;
   postedAt: string;
   title: string;
   subtitle: string;
@@ -25,6 +26,7 @@ export type SearchJobItem = {
 
 export type SearchWorkerItem = {
   id: string;
+  providerId: string;
   name: string;
   avatarUrl?: string | null;
   statusLine: string;

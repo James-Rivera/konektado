@@ -30,6 +30,7 @@ import {
   updateConversationPreviewCache,
 } from '@/services/conversation-preview-events';
 import { isPresenceActive } from '@/services/marketplace.helpers';
+import { getUnreadNotificationCount } from '@/services/notification.service';
 import type { ConversationSummary } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -52,6 +53,7 @@ export default function MessagesScreen() {
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(!hasCachedConversations);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const hasLoadedOnceRef = useRef(hasCachedConversations);
   const conversationsRef = useRef(conversations);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
@@ -96,6 +98,21 @@ export default function MessagesScreen() {
         active = false;
       };
     }, [profileId]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      getUnreadNotificationCount().then((result) => {
+        if (!active || result.error) return;
+        setUnreadNotificationCount(result.data ?? 0);
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
   );
 
   useEffect(
@@ -202,10 +219,11 @@ export default function MessagesScreen() {
   return (
     <View style={styles.screen}>
       <AppHeader
+        actionBadgeCount={unreadNotificationCount}
         actionIcon="notifications"
         actionLabel="Notifications"
         actionTone="notification"
-        onActionPress={() => Alert.alert('Notifications', 'Notifications will open in a later slice.')}
+        onActionPress={() => router.push('/notifications' as never)}
         title="Messages"
       />
 

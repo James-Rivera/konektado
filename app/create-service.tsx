@@ -2,7 +2,18 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
@@ -295,7 +306,7 @@ export default function CreateServiceScreen() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-      <View style={styles.screen}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
         <View style={styles.header}>
           <Pressable
             accessibilityLabel="Go back"
@@ -569,7 +580,7 @@ export default function CreateServiceScreen() {
             <Text style={styles.secondaryButtonText}>Cancel</Text>
           </Pressable>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
 
       <GroupedServicePickerSheet
         categories={[...SERVICE_POST_CATEGORIES]}

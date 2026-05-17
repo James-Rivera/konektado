@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -11,12 +11,16 @@ import {
     HomeSetupNudge,
     HomeTopHeader,
 } from '@/components/home/HomeDashboardUI';
+import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
+import { EmptyState } from '@/components/EmptyState';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
 import { Skeleton } from '@/components/Skeleton';
 import { homeFilters, type HomeFilter } from '@/constants/demo-data';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useSavedItems } from '@/hooks/use-saved-items';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
   compactText,
@@ -35,12 +39,15 @@ import {
 } from '@/services/marketplace.helpers';
 import { searchJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { getUnreadNotificationCount } from '@/services/notification.service';
 import { searchServices } from '@/services/service-profile.service';
 import {
-  buildHomeForYouFeed,
+  DEFAULT_HOME_FEED_FILTERS,
+  applyHomeFeedFilters,
+  getHomeFeedFilterCount,
   getDefaultHomeFilter,
-  rankHomeFeedJobs,
-  rankHomeFeedWorkers,
+  type HomeFeedFilters,
+  type HomeFeedType,
   resolveHomeFeedMode,
 } from '@/services/home-feed.service';
 import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
@@ -74,6 +81,18 @@ type HomeWorkerFeedItem = {
 type HomeFeedItem = HomeJobFeedItem | HomeWorkerFeedItem;
 
 const HOME_FEED_LIMIT = 30;
+
+function mapHomeFilterToFeedType(filter: HomeFilter): HomeFeedType {
+  if (filter === 'Jobs') return 'jobs';
+  if (filter === 'Workers') return 'services';
+  return 'all';
+}
+
+function mapFeedTypeToHomeFilter(feedType: HomeFeedType): HomeFilter {
+  if (feedType === 'jobs') return 'Jobs';
+  if (feedType === 'services') return 'Workers';
+  return 'For you';
+}
 
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
   const category = compactText(job.category) || 'Job';
@@ -152,9 +171,12 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
   const isFocused = useIsFocused();
   const { profile, loading: profileLoading, version } = useProfile();
+  const { isPending, isSaved, refreshSavedItems, toggleSaved } = useSavedItems();
   const topInset = useSafeTopInset();
+  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [feedSources, setFeedSources] = useState<{ jobs: HomeJobFeedItem[]; workers: HomeWorkerFeedItem[] }>({
@@ -166,6 +188,10 @@ export default function HomeScreen() {
   const [optionalSetupDismissed, setOptionalSetupDismissed] = useState(false);
   const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
   const [completionLoading, setCompletionLoading] = useState(true);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
+  const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
+  const [feedFiltersVisible, setFeedFiltersVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
@@ -179,12 +205,14 @@ export default function HomeScreen() {
     getMyUserPreferences().then((result) => {
       if (!active || result.error) return;
       setPreferences(result.data);
-      setSelectedFilter(
-        getDefaultHomeFilter({
+      const defaultFilter = getDefaultHomeFilter({
           activeRole: profile?.active_role,
           preferences: result.data,
-        }),
-      );
+      });
+      const defaultFeedType = mapHomeFilterToFeedType(defaultFilter);
+      setSelectedFilter(defaultFilter);
+      setAppliedFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
+      setDraftFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
     });
 
     return () => {
@@ -218,6 +246,30 @@ export default function HomeScreen() {
       active = false;
     };
   }, [isFocused, profileLoading, version]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!isFocused || profileLoading) {
+      return () => {
+        active = false;
+      };
+    }
+
+    getUnreadNotificationCount().then((result) => {
+      if (!active || result.error) return;
+      setUnreadNotificationCount(result.data ?? 0);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isFocused, profileLoading]);
+
+  useEffect(() => {
+    if (!isFocused || profileLoading) return;
+    void refreshSavedItems();
+  }, [isFocused, profileLoading, refreshSavedItems]);
 
   useEffect(() => {
     let active = true;
@@ -288,21 +340,24 @@ export default function HomeScreen() {
     };
     const jobCandidates = feedSources.jobs.map((item) => ({ item, job: item.job }));
     const workerCandidates = feedSources.workers.map((item) => ({ item, service: item.service }));
-    const jobs = rankHomeFeedJobs(jobCandidates, rankingContext);
-    const workers = rankHomeFeedWorkers(workerCandidates, rankingContext);
+    const filtered = applyHomeFeedFilters({
+      context: rankingContext,
+      filters: appliedFeedFilters,
+      jobs: jobCandidates,
+      workers: workerCandidates,
+    });
 
     return {
-      Jobs: jobs,
-      Workers: workers,
-      'For you': buildHomeForYouFeed({
-        context: rankingContext,
-        jobs: jobCandidates,
-        workers: workerCandidates,
-      }),
+      Jobs: filtered.jobs,
+      Workers: filtered.services,
+      'For you': filtered.all,
     };
-  }, [feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
+  }, [appliedFeedFilters, feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
+  const activeFeedFilterCount = getHomeFeedFilterCount(appliedFeedFilters);
+  const hasAppliedFeedFilters =
+    activeFeedFilterCount > 0 || appliedFeedFilters.feedType !== DEFAULT_HOME_FEED_FILTERS.feedType;
   const setupNudge = useMemo(
     () =>
       getHomeSetupNudge({
@@ -378,8 +433,67 @@ export default function HomeScreen() {
     router.push({ pathname: '/services/[serviceId]', params: { serviceId, variant } });
   }, [router]);
 
-  const showPlaceholder = useCallback((label: string) => {
-    Alert.alert(label, 'This part of Home will be connected in a later slice.');
+  const openAdvancedSearch = useCallback(() => {
+    const homeMode = resolveHomeFeedMode({
+      activeRole: profile?.active_role,
+      preferences,
+    });
+    const searchFilter =
+      draftFeedFilters.feedType === 'services' ||
+      (draftFeedFilters.feedType === 'all' && homeMode === 'client')
+        ? 'Workers'
+        : 'Jobs';
+
+    setFeedFiltersVisible(false);
+    router.push({
+      pathname: '/(tabs)/search',
+      params: {
+        filter: searchFilter,
+        openFilters: '1',
+      },
+    });
+  }, [draftFeedFilters.feedType, preferences, profile?.active_role, router]);
+
+  const toggleFeedSave = useCallback(
+    async (feedItem: HomeFeedItem) => {
+      if (!isVerified) {
+        showInfoToast('Complete barangay verification before saving items.');
+        router.push('/verification' as never);
+        return;
+      }
+
+      const target = getHomeSavedTarget(feedItem);
+      const result = await toggleSaved(target);
+      if (result.error || !result.data) {
+        showErrorToast(result.error ?? 'Could not update saved items.');
+        return;
+      }
+
+      showSuccessToast(result.data.saved ? 'Saved' : 'Removed from saved');
+    },
+    [isVerified, router, showErrorToast, showInfoToast, showSuccessToast, toggleSaved],
+  );
+
+  const openFeedFilters = useCallback(() => {
+    setDraftFeedFilters(appliedFeedFilters);
+    setFeedFiltersVisible(true);
+  }, [appliedFeedFilters]);
+
+  const applyFeedFilters = useCallback(() => {
+    setAppliedFeedFilters(draftFeedFilters);
+    setSelectedFilter(mapFeedTypeToHomeFilter(draftFeedFilters.feedType));
+    setFeedFiltersVisible(false);
+  }, [draftFeedFilters]);
+
+  const resetFeedFilters = useCallback(() => {
+    setDraftFeedFilters(DEFAULT_HOME_FEED_FILTERS);
+  }, []);
+
+  const changeQuickFeedFilter = useCallback((filter: HomeFilter) => {
+    const feedType = mapHomeFilterToFeedType(filter);
+    setSelectedFilter(filter);
+    setAppliedFeedFilters((current) => ({ ...current, feedType }));
+    setDraftFeedFilters((current) => ({ ...current, feedType }));
   }, []);
 
   const keyExtractor = useCallback((item: HomeFeedItem) => item.key, []);
@@ -388,12 +502,15 @@ export default function HomeScreen() {
     ({ item }: { item: HomeFeedItem }) => (
       <FeedCard
         feedItem={item}
+        isSaved={isSaved(getHomeSavedTarget(item))}
+        savePending={isPending(getHomeSavedTarget(item))}
         onOpenJob={openJob}
         onOpenService={openService}
+        onToggleSaved={() => void toggleFeedSave(item)}
         workerVariant={selectedFilter === 'Workers' ? 'default' : 'match'}
       />
     ),
-    [openJob, openService, selectedFilter],
+    [isPending, isSaved, openJob, openService, selectedFilter, toggleFeedSave],
   );
 
   const renderListHeader = useCallback(
@@ -411,14 +528,18 @@ export default function HomeScreen() {
             title={setupNudge.title}
           />
         ) : null}
-        <HomeSectionHeader onFilterPress={() => showPlaceholder('Filters')} />
+        <HomeSectionHeader
+          activeFilterCount={activeFeedFilterCount}
+          onFilterPress={openFeedFilters}
+        />
       </>
     ),
     [
       completionLoading,
       openSetupAction,
+      activeFeedFilterCount,
+      openFeedFilters,
       setupNudge,
-      showPlaceholder,
     ],
   );
 
@@ -433,10 +554,20 @@ export default function HomeScreen() {
           </View>
         ) : null}
         {!feedLoading && feedError ? <Text style={styles.emptyText}>{feedError}</Text> : null}
-        {!feedLoading && !feedError && !feed.length ? <Text style={styles.emptyText}>No posts to show yet.</Text> : null}
+        {!feedLoading && !feedError && !feed.length ? (
+          hasAppliedFeedFilters ? (
+            <EmptyState
+              description="Try adjusting your feed filters."
+              icon="filter-alt-off"
+              title="No posts match these filters yet."
+            />
+          ) : (
+            <Text style={styles.emptyText}>No posts to show yet.</Text>
+          )
+        ) : null}
       </>
     ),
-    [feed.length, feedError, feedLoading, selectedFilter],
+    [feed.length, feedError, feedLoading, hasAppliedFeedFilters, selectedFilter],
   );
 
   return (
@@ -445,13 +576,17 @@ export default function HomeScreen() {
         <Animated.View
           onLayout={handleHeaderLayout}
           style={[styles.headerStack, { transform: [{ translateY: headerTranslateY }] }]}>
-          <HomeTopHeader onNotifications={() => showPlaceholder('Notifications')} topInset={topInset} />
+          <HomeTopHeader
+            onNotifications={() => router.push('/notifications' as never)}
+            topInset={topInset}
+            unreadCount={unreadNotificationCount}
+          />
           <HomeFilterTabs>
             {homeFilters.map((filter) => (
               <HomeFilterPill
                 key={filter}
                 label={filter}
-                onPress={() => setSelectedFilter(filter)}
+                onPress={() => changeQuickFeedFilter(filter)}
                 selected={selectedFilter === filter}
               />
             ))}
@@ -470,6 +605,17 @@ export default function HomeScreen() {
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         />
+        <HomeFeedFiltersSheet
+          filters={draftFeedFilters}
+          onAdvancedSearch={openAdvancedSearch}
+          onApply={applyFeedFilters}
+          onChange={(key, value) =>
+            setDraftFeedFilters((current) => ({ ...current, [key]: value }))
+          }
+          onClose={() => setFeedFiltersVisible(false)}
+          onReset={resetFeedFilters}
+          visible={feedFiltersVisible}
+        />
       </SafeAreaView>
     </View>
   );
@@ -479,23 +625,46 @@ function FeedSeparator() {
   return <View style={styles.feedSeparator} />;
 }
 
+function getHomeSavedTarget(feedItem: HomeFeedItem) {
+  if (feedItem.type === 'worker') {
+    return {
+      itemType: 'provider' as const,
+      itemId: feedItem.service.providerId,
+    };
+  }
+
+  return {
+    itemType: 'job' as const,
+    itemId: feedItem.itemId,
+  };
+}
+
 const FeedCard = memo(function FeedCard({
   feedItem,
+  isSaved,
+  savePending,
   onOpenJob,
   onOpenService,
+  onToggleSaved,
   workerVariant,
 }: {
   feedItem: HomeFeedItem;
+  isSaved: boolean;
+  savePending: boolean;
   onOpenJob: (jobId: string) => void;
   onOpenService: (serviceId: string, variant: 'default' | 'match') => void;
+  onToggleSaved: () => void;
   workerVariant: 'default' | 'match';
 }) {
   if (feedItem.type === 'worker') {
     return (
       <HomeFeedCard
         {...feedItem.cardProps}
+        isSaved={isSaved}
         onPress={() => onOpenService(feedItem.itemId, workerVariant)}
         onPrimaryAction={() => onOpenService(feedItem.itemId, workerVariant)}
+        onSave={onToggleSaved}
+        savePending={savePending}
       />
     );
   }
@@ -503,8 +672,11 @@ const FeedCard = memo(function FeedCard({
   return (
     <HomeFeedCard
       {...feedItem.cardProps}
+      isSaved={isSaved}
       onPress={() => onOpenJob(feedItem.itemId)}
       onPrimaryAction={() => onOpenJob(feedItem.itemId)}
+      onSave={onToggleSaved}
+      savePending={savePending}
     />
   );
 });
