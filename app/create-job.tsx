@@ -1,5 +1,7 @@
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import type { ReactNode } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -49,6 +51,32 @@ const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'experienced', label: 'Experienced' },
 ];
 
+type WorkersNeededOption = '1' | '2' | '3' | '4';
+type TimeBlock = 'morning' | 'afternoon' | 'evening' | 'anytime' | 'to_coordinate';
+type ScheduleFlexibility = 'fixed' | 'flexible';
+
+const WORKERS_NEEDED_OPTIONS: { value: WorkersNeededOption; label: string }[] = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
+  { value: '3', label: '3' },
+  { value: '4', label: '4+' },
+];
+
+const TIME_BLOCK_OPTIONS: { value: TimeBlock; label: string }[] = [
+  { value: 'morning', label: 'Morning' },
+  { value: 'afternoon', label: 'Afternoon' },
+  { value: 'evening', label: 'Evening' },
+  { value: 'anytime', label: 'Anytime' },
+  { value: 'to_coordinate', label: 'To coordinate' },
+];
+
+const SCHEDULE_FLEXIBILITY_OPTIONS: { value: ScheduleFlexibility; label: string }[] = [
+  { value: 'fixed', label: 'Fixed schedule' },
+  { value: 'flexible', label: 'Flexible / can coordinate' },
+];
+
+const DEFAULT_EXACT_TIME = '08:00';
+
 type JobDraft = {
   title: string;
   description: string;
@@ -65,6 +93,12 @@ type JobDraft = {
   budgetNegotiable: boolean;
   workersNeeded: string;
   scheduleText: string;
+  legacyScheduleText: string;
+  jobDate: string;
+  preferredTimeBlock: TimeBlock | '';
+  exactTimeNeeded: boolean;
+  exactTime: string;
+  scheduleFlexibility: ScheduleFlexibility;
   experienceLevel: ExperienceLevel;
   certificationRequired: boolean;
   certificationNote: string;
@@ -79,6 +113,165 @@ function parsePositiveNumber(value: string) {
   if (!value.trim()) return null;
   const parsed = Number(value.replace(/,/g, ''));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
+
+function formatDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateValue(value: string) {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+function getTodayAtStart() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function isPastDateValue(value: string) {
+  const date = parseDateValue(value);
+  if (!date) return false;
+  return date < getTodayAtStart();
+}
+
+function formatScheduleDate(value: string) {
+  const date = parseDateValue(value);
+  if (!date) return value;
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatTimeValue(date: Date) {
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function getTimePickerDate(value: string) {
+  const [hours, minutes] = (value || DEFAULT_EXACT_TIME).split(':').map(Number);
+  const date = new Date();
+  date.setHours(Number.isFinite(hours) ? hours : 8, Number.isFinite(minutes) ? minutes : 0, 0, 0);
+  return date;
+}
+
+function formatExactTime(value: string) {
+  const [rawHours, rawMinutes] = value.split(':').map(Number);
+  if (!Number.isFinite(rawHours) || !Number.isFinite(rawMinutes)) return value;
+
+  const suffix = rawHours >= 12 ? 'PM' : 'AM';
+  const hour = rawHours % 12 || 12;
+  return `${hour}:${`${rawMinutes}`.padStart(2, '0')} ${suffix}`;
+}
+
+function parseExactTimeLabel(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return '';
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const suffix = match[3].toUpperCase();
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return '';
+  if (suffix === 'PM' && hours < 12) hours += 12;
+  if (suffix === 'AM' && hours === 12) hours = 0;
+  return `${`${hours}`.padStart(2, '0')}:${`${minutes}`.padStart(2, '0')}`;
+}
+
+function getTimeBlockLabel(value: TimeBlock | '') {
+  return TIME_BLOCK_OPTIONS.find((option) => option.value === value)?.label ?? '';
+}
+
+function getFlexibilityLabel(value: ScheduleFlexibility) {
+  return value === 'fixed' ? 'Fixed' : 'Flexible';
+}
+
+function buildScheduleText(draft: JobDraft) {
+  if (draft.preferredTimeBlock === 'to_coordinate') return 'Schedule to coordinate';
+  if (!draft.jobDate) return draft.legacyScheduleText.trim();
+
+  const dateText = formatScheduleDate(draft.jobDate);
+  const flexibilityText = getFlexibilityLabel(draft.scheduleFlexibility);
+
+  if (draft.exactTimeNeeded && draft.exactTime) {
+    return `${dateText} ${formatExactTime(draft.exactTime)} ${flexibilityText}`;
+  }
+
+  const blockText = getTimeBlockLabel(draft.preferredTimeBlock || 'anytime');
+  return `${dateText} ${blockText} ${flexibilityText}`;
+}
+
+function getSchedulePreview(draft: JobDraft) {
+  const scheduleText = buildScheduleText(draft);
+  if (scheduleText) return scheduleText;
+  return 'Choose a date or coordinate the schedule with the worker.';
+}
+
+function formatWorkersNeededText(value: string) {
+  const parsed = parsePositiveNumber(value);
+  if (!parsed || Number.isNaN(parsed)) return 'Choose how many workers you need.';
+  if (parsed >= 4) return 'Needs 4+ workers';
+  return `Needs ${parsed} worker${parsed === 1 ? '' : 's'}`;
+}
+
+function parseScheduleText(value: string): Pick<
+  JobDraft,
+  'legacyScheduleText' | 'jobDate' | 'preferredTimeBlock' | 'exactTimeNeeded' | 'exactTime' | 'scheduleFlexibility'
+> {
+  const scheduleText = value.trim();
+  const base = {
+    legacyScheduleText: scheduleText,
+    jobDate: '',
+    preferredTimeBlock: '' as TimeBlock | '',
+    exactTimeNeeded: false,
+    exactTime: '',
+    scheduleFlexibility: 'flexible' as ScheduleFlexibility,
+  };
+
+  if (!scheduleText) return base;
+  if (scheduleText.toLowerCase() === 'schedule to coordinate') {
+    return {
+      ...base,
+      legacyScheduleText: '',
+      preferredTimeBlock: 'to_coordinate',
+    };
+  }
+
+  const match = scheduleText.match(/^([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})\s+(.+?)\s+(Fixed|Flexible)$/);
+  if (!match) return base;
+
+  const parsedDate = new Date(match[1]);
+  if (Number.isNaN(parsedDate.getTime())) return base;
+
+  const dateValue = formatDateValue(parsedDate);
+  const detail = match[2];
+  const exactTime = parseExactTimeLabel(detail);
+  const block = TIME_BLOCK_OPTIONS.find((option) => option.label === detail)?.value ?? '';
+
+  return {
+    legacyScheduleText: '',
+    jobDate: dateValue,
+    preferredTimeBlock: exactTime ? '' : block,
+    exactTimeNeeded: Boolean(exactTime),
+    exactTime,
+    scheduleFlexibility: match[3] === 'Fixed' ? 'fixed' : 'flexible',
+  };
 }
 
 function validateDraft(draft: JobDraft) {
@@ -112,6 +305,18 @@ function validateDraft(draft: JobDraft) {
     errors.workersNeeded = 'Enter a valid worker count or leave it blank.';
   }
 
+  if (draft.jobDate) {
+    if (!parseDateValue(draft.jobDate)) {
+      errors.scheduleText = 'Choose a valid job date.';
+    } else if (isPastDateValue(draft.jobDate)) {
+      errors.scheduleText = 'Choose today or a future date.';
+    }
+  }
+
+  if (draft.exactTimeNeeded && !draft.exactTime) {
+    errors.scheduleText = 'Choose the exact time needed.';
+  }
+
   return errors;
 }
 
@@ -124,6 +329,7 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
   const budgetMin = parsePositiveNumber(draft.budgetMin);
   const budgetMax = parsePositiveNumber(draft.budgetMax);
   const workersNeeded = parsePositiveNumber(draft.workersNeeded);
+  const scheduleText = buildScheduleText(draft);
 
   return {
     title: draft.title,
@@ -140,7 +346,7 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
     rateType: draft.rateType,
     budgetNegotiable: draft.budgetNegotiable,
     workersNeeded: Number.isNaN(workersNeeded) ? null : workersNeeded,
-    scheduleText: draft.scheduleText,
+    scheduleText,
     experienceLevel: draft.experienceLevel,
     certificationRequired: draft.certificationRequired,
     certificationNote: draft.certificationNote,
@@ -152,6 +358,7 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
 
 function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
   if (!record) return null;
+  const schedule = parseScheduleText(record.scheduleText ?? '');
 
   return {
     title: record.title ?? '',
@@ -167,8 +374,9 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
     budgetMax: record.budgetMax ? String(record.budgetMax) : '',
     rateType: record.rateType,
     budgetNegotiable: record.budgetNegotiable,
-    workersNeeded: record.workersNeeded ? String(record.workersNeeded) : '',
+    workersNeeded: record.workersNeeded ? String(Math.min(record.workersNeeded, 4)) : '',
     scheduleText: record.scheduleText ?? '',
+    ...schedule,
     experienceLevel: record.experienceLevel,
     certificationRequired: record.certificationRequired,
     certificationNote: record.certificationNote ?? '',
@@ -202,6 +410,8 @@ export default function CreateJobScreen() {
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [photoFolderId] = useState(() => `draft-${Date.now()}`);
   const [draft, setDraft] = useState<JobDraft>({
     title: '',
@@ -219,6 +429,12 @@ export default function CreateJobScreen() {
     budgetNegotiable: false,
     workersNeeded: '',
     scheduleText: '',
+    legacyScheduleText: '',
+    jobDate: '',
+    preferredTimeBlock: '',
+    exactTimeNeeded: false,
+    exactTime: '',
+    scheduleFlexibility: 'flexible',
     experienceLevel: 'any',
     certificationRequired: false,
     certificationNote: '',
@@ -273,6 +489,11 @@ export default function CreateJobScreen() {
   const selectedTagsText = useMemo(() => draft.tags.join(', '), [draft.tags]);
   const tagOptions = useMemo(() => getContextTagsForCategory(draft.category), [draft.category]);
   const serviceOptions = useMemo(() => getServicesForCategory(draft.category), [draft.category]);
+  const selectedDate = useMemo(
+    () => parseDateValue(draft.jobDate) ?? getTodayAtStart(),
+    [draft.jobDate],
+  );
+  const selectedTime = useMemo(() => getTimePickerDate(draft.exactTime), [draft.exactTime]);
 
   const scrollToBudgetRange = useCallback(() => {
     if (loading || loadingDraft || focusTarget !== 'budget-range' || handledFocusRef.current) return;
@@ -298,6 +519,48 @@ export default function CreateJobScreen() {
   const updateDraft = <Key extends keyof JobDraft>(key: Key, value: JobDraft[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  const updateScheduleDraft = (patch: Partial<JobDraft>) => {
+    setDraft((current) => ({
+      ...current,
+      ...patch,
+      legacyScheduleText: '',
+    }));
+    setErrors((current) => ({ ...current, scheduleText: undefined }));
+  };
+
+  const selectWorkersNeeded = (value: WorkersNeededOption) => {
+    updateDraft('workersNeeded', value);
+  };
+
+  const selectTimeBlock = (value: TimeBlock) => {
+    updateScheduleDraft({
+      preferredTimeBlock: value,
+      exactTimeNeeded: value === 'to_coordinate' ? false : draft.exactTimeNeeded,
+      exactTime: value === 'to_coordinate' ? '' : draft.exactTime,
+    });
+  };
+
+  const onJobDateChange = (_event: DateTimePickerEvent, date?: Date) => {
+    setDatePickerVisible(false);
+    if (!date) return;
+
+    const nextDate = new Date(date);
+    nextDate.setHours(0, 0, 0, 0);
+    const today = getTodayAtStart();
+    updateScheduleDraft({
+      jobDate: formatDateValue(nextDate < today ? today : nextDate),
+    });
+  };
+
+  const onExactTimeChange = (_event: DateTimePickerEvent, date?: Date) => {
+    setTimePickerVisible(false);
+    if (!date) return;
+
+    updateScheduleDraft({
+      exactTime: formatTimeValue(date),
+    });
   };
 
   const selectCategory = (categoryName: string) => {
@@ -389,13 +652,14 @@ export default function CreateJobScreen() {
       return;
     }
 
-    const validation = validateDraft(draft);
+    const nextDraft = { ...draft, scheduleText: buildScheduleText(draft) };
+    const validation = validateDraft(nextDraft);
     setErrors(validation);
 
     if (Object.keys(validation).length) return;
 
     setSavingDraft(true);
-    const saved = await saveJobDraft({ draftId, input: buildDraftInput(draft) });
+    const saved = await saveJobDraft({ draftId, input: buildDraftInput(nextDraft) });
     setSavingDraft(false);
 
     if (saved.error || !saved.data) {
@@ -408,7 +672,7 @@ export default function CreateJobScreen() {
     router.push({
       pathname: '/create-job-preview',
       params: {
-        draft: JSON.stringify(draft),
+        draft: JSON.stringify(nextDraft),
         draftId: saved.data.id,
         returnTo,
       },
@@ -461,176 +725,175 @@ export default function CreateJobScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <CurrentUserIdentityRow subtitle="Creating a job post" />
+          <Section
+            helper="Start by describing the type of help you need."
+            title="Job basics">
+            <CurrentUserIdentityRow subtitle="Creating a job post" />
 
-          {draft.photoUrls.length ? (
-            <View style={[styles.photoCard, uploadingPhotos && styles.disabled]}>
-              <ScrollView
-                horizontal
-                contentContainerStyle={styles.photoStrip}
-                showsHorizontalScrollIndicator={false}>
-                {draft.photoUrls.map((url, index) => (
-                  <View key={`${url}-${index}`} style={styles.photoTile}>
-                    <Image resizeMode="cover" source={{ uri: url }} style={styles.photoThumb} />
+            {draft.photoUrls.length ? (
+              <View style={[styles.photoCard, uploadingPhotos && styles.disabled]}>
+                <ScrollView
+                  horizontal
+                  contentContainerStyle={styles.photoStrip}
+                  showsHorizontalScrollIndicator={false}>
+                  {draft.photoUrls.map((url, index) => (
+                    <View key={`${url}-${index}`} style={styles.photoTile}>
+                      <Image resizeMode="cover" source={{ uri: url }} style={styles.photoThumb} />
+                      <Pressable
+                        accessibilityLabel={`Remove photo ${index + 1}`}
+                        accessibilityRole="button"
+                        onPress={() => removePhoto(url)}
+                        style={({ pressed }) => [styles.photoRemoveButton, pressed && styles.photoRemoveButtonPressed]}>
+                        <MaterialIcons color={color.white} name="close" size={14} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  {draft.photoUrls.length < MAX_JOB_PHOTOS ? (
                     <Pressable
-                      accessibilityLabel={`Remove photo ${index + 1}`}
                       accessibilityRole="button"
-                      onPress={() => removePhoto(url)}
-                      style={({ pressed }) => [styles.photoRemoveButton, pressed && styles.photoRemoveButtonPressed]}>
-                      <MaterialIcons color={color.white} name="close" size={14} />
+                      disabled={uploadingPhotos}
+                      onPress={addPhotos}
+                      style={({ pressed }) => [
+                        styles.photoAddTile,
+                        pressed && !uploadingPhotos && styles.pressed,
+                        uploadingPhotos && styles.disabled,
+                      ]}>
+                      <MaterialIcons color={color.verificationBlue} name="add" size={22} />
+                      <Text style={styles.photoAddText}>Add more</Text>
                     </Pressable>
-                  </View>
-                ))}
-                {draft.photoUrls.length < MAX_JOB_PHOTOS ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={uploadingPhotos}
-                    onPress={addPhotos}
-                    style={({ pressed }) => [
-                      styles.photoAddTile,
-                      pressed && !uploadingPhotos && styles.pressed,
-                      uploadingPhotos && styles.disabled,
-                    ]}>
-                    <MaterialIcons color={color.verificationBlue} name="add" size={22} />
-                    <Text style={styles.photoAddText}>Add more</Text>
-                  </Pressable>
-                ) : null}
-              </ScrollView>
-              <Text style={styles.photoCountText}>
-                {uploadingPhotos ? 'Uploading photos...' : `${draft.photoUrls.length}/10 photos added`}
-              </Text>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={addPhotos}
-              style={({ pressed }) => [
-                styles.photoCard,
-                styles.photoCardEmpty,
-                pressed && styles.pressed,
-                uploadingPhotos && styles.disabled,
-              ]}>
-              <View style={styles.photoIcon}>
-                <MaterialIcons color={color.verificationBlue} name="add-to-photos" size={22} />
+                  ) : null}
+                </ScrollView>
+                <Text style={styles.photoCountText}>
+                  {uploadingPhotos ? 'Uploading photos...' : `${draft.photoUrls.length}/10 photos added`}
+                </Text>
               </View>
-              <Text style={styles.photoTitle}>Add Photos</Text>
-            </Pressable>
-          )}
-          <Text style={styles.helperText}>
-            <Text style={styles.helperStrong}>Optional</Text>, but helps workers understand the job.
-          </Text>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={addPhotos}
+                style={({ pressed }) => [
+                  styles.photoCard,
+                  styles.photoCardEmpty,
+                  pressed && styles.pressed,
+                  uploadingPhotos && styles.disabled,
+                ]}>
+                <View style={styles.photoIcon}>
+                  <MaterialIcons color={color.verificationBlue} name="add-to-photos" size={22} />
+                </View>
+                <Text style={styles.photoTitle}>Add Photos</Text>
+              </Pressable>
+            )}
+            <Text style={styles.helperText}>
+              <Text style={styles.helperStrong}>Optional</Text>, but helps workers understand the job.
+            </Text>
 
-          <View style={styles.group}>
-            <Text style={styles.label}>Job Category</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setCategoryPickerVisible(true)}
-              style={({ pressed }) => [
-                styles.selectBox,
-                errors.category && styles.inputErrorBorder,
-                pressed && styles.pressed,
-              ]}>
-              <Text style={[styles.selectText, !draft.category && styles.placeholderText]} numberOfLines={1}>
-                {draft.category || 'Choose a category'}
-              </Text>
-              <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
-            </Pressable>
-            <FieldError message={errors.category} />
-          </View>
-
-          <View style={styles.group}>
-            <Text style={styles.label}>Service Needed</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !draft.category }}
-              onPress={openServicePicker}
-              style={({ pressed }) => [
-                styles.selectBox,
-                !draft.category && styles.selectBoxDisabled,
-                errors.serviceNeeded && styles.inputErrorBorder,
-                pressed && draft.category && styles.pressed,
-              ]}>
-              <Text
-                style={[
-                  styles.selectText,
-                  !draft.serviceNeeded && styles.placeholderText,
-                  !draft.category && styles.disabledText,
-                ]}
-                numberOfLines={1}>
-                {draft.serviceNeeded || 'Choose the service needed'}
-              </Text>
-              <MaterialIcons
-                color={draft.category ? color.verificationBlue : '#AFAFAF'}
-                name="keyboard-arrow-down"
-                size={24}
-              />
-            </Pressable>
-            <FieldError message={errors.serviceNeeded} />
-          </View>
-
-          <View style={styles.group}>
-            <View style={styles.rowBetween}>
-              <View>
-                <Text style={styles.label}>Add tags</Text>
-                <Text style={styles.smallHelper}>Choose up to 4 tags that describe the job.</Text>
-              </View>
-              <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-up" size={24} />
+            <View style={styles.group}>
+              <Text style={styles.label}>Category</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setCategoryPickerVisible(true)}
+                style={({ pressed }) => [
+                  styles.selectBox,
+                  errors.category && styles.inputErrorBorder,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.selectText, !draft.category && styles.placeholderText]} numberOfLines={1}>
+                  {draft.category || 'Choose a category'}
+                </Text>
+                <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+              </Pressable>
+              <FieldError message={errors.category} />
             </View>
-            <ChipWrap items={tagOptions} selected={draft.tags} onPress={toggleTag} />
-            <Text style={styles.smallHelper}>{selectedTagsText || 'No tags selected'}</Text>
-          </View>
 
-          <View
-            onLayout={(event) => {
-              budgetRangeOffsetRef.current = event.nativeEvent.layout.y;
-              scrollToBudgetRange();
-            }}
-            style={styles.group}>
-            <Text style={styles.label}>Job Information</Text>
+            <View style={styles.group}>
+              <Text style={styles.label}>Service needed</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !draft.category }}
+                onPress={openServicePicker}
+                style={({ pressed }) => [
+                  styles.selectBox,
+                  !draft.category && styles.selectBoxDisabled,
+                  errors.serviceNeeded && styles.inputErrorBorder,
+                  pressed && draft.category && styles.pressed,
+                ]}>
+                <Text
+                  style={[
+                    styles.selectText,
+                    !draft.serviceNeeded && styles.placeholderText,
+                    !draft.category && styles.disabledText,
+                  ]}
+                  numberOfLines={1}>
+                  {draft.serviceNeeded || 'Choose the service needed'}
+                </Text>
+                <MaterialIcons
+                  color={draft.category ? color.verificationBlue : '#AFAFAF'}
+                  name="keyboard-arrow-down"
+                  size={24}
+                />
+              </Pressable>
+              <FieldError message={errors.serviceNeeded} />
+            </View>
+
+            <View style={styles.group}>
+              <View style={styles.rowBetween}>
+                <View style={styles.flex}>
+                  <Text style={styles.label}>Tags</Text>
+                  <Text style={styles.smallHelper}>Choose up to 4 tags that describe the job.</Text>
+                </View>
+              </View>
+              <ChipWrap items={tagOptions} selected={draft.tags} onPress={toggleTag} />
+              <Text style={styles.smallHelper}>{selectedTagsText || 'No tags selected'}</Text>
+            </View>
+
             <FormInput
               error={errors.title}
+              label="Job title"
               onChangeText={(value) => updateDraft('title', value)}
-              placeholder="Job Title"
+              placeholder="Example: Need help cleaning after move-out"
               value={draft.title}
             />
-            <Text style={styles.smallHelper}>Use a range so workers know what to expect.</Text>
-            <RateRangeInput
-              error={errors.budgetMin}
-              label="Budget range"
-              maxValue={draft.budgetMax}
-              minLabel="Minimum budget"
-              minValue={draft.budgetMin}
-              negotiable={draft.budgetNegotiable}
-              onMaxChange={(value) => updateDraft('budgetMax', value)}
-              onMinChange={(value) => updateDraft('budgetMin', value)}
-              onNegotiableChange={(value) => updateDraft('budgetNegotiable', value)}
-              onRateTypeChange={(value) => updateDraft('rateType', value)}
-              previewPrefix="Budget"
-              rateType={draft.rateType}
+          </Section>
+
+          <Section
+            helper="Add the details workers need before they message you."
+            title="Explain the work">
+            <FormInput
+              error={errors.description}
+              label="Job description / additional notes"
+              multiline
+              onChangeText={(value) => updateDraft('description', value)}
+              placeholder="What needs to be done?"
+              value={draft.description}
             />
-            <View style={styles.twoColumn}>
-              <FormInput
-                error={errors.workersNeeded}
-                keyboardType="numeric"
-                onChangeText={(value) => updateDraft('workersNeeded', value)}
-                placeholder="Workers"
-                style={styles.halfInput}
-                value={draft.workersNeeded}
+
+            <View style={styles.group}>
+              <Text style={styles.label}>Workers needed</Text>
+              <Text style={styles.smallHelper}>How many people do you need for this job?</Text>
+              <ChipWrap
+                items={WORKERS_NEEDED_OPTIONS.map((option) => option.label)}
+                selected={[
+                  Number(draft.workersNeeded) >= 4
+                    ? '4+'
+                    : WORKERS_NEEDED_OPTIONS.find((option) => option.value === draft.workersNeeded)?.label ?? '',
+                ].filter(Boolean)}
+                onPress={(label) => selectWorkersNeeded(label === '4+' ? '4' : (label as WorkersNeededOption))}
+              />
+              <Text style={styles.summaryText}>{formatWorkersNeededText(draft.workersNeeded)}</Text>
+              <FieldError message={errors.workersNeeded} />
+            </View>
+
+            <View style={styles.group}>
+              <Text style={styles.label}>Preferred experience</Text>
+              <ChipWrap
+                items={EXPERIENCE_OPTIONS.map((option) => option.label)}
+                selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
+                onPress={(label) =>
+                  updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
+                }
               />
             </View>
-            <Text style={styles.smallHelper}>Preferred experience</Text>
-            <ChipWrap
-              items={EXPERIENCE_OPTIONS.map((option) => option.label)}
-              selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
-              onPress={(label) =>
-                updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
-              }
-            />
-            <FormInput
-              onChangeText={(value) => updateDraft('scheduleText', value)}
-              placeholder="Preferred schedule"
-              value={draft.scheduleText}
-            />
+
             <ToggleRow
               description="Show that a certificate is preferred or required for this job."
               label="Certification preferred"
@@ -639,58 +902,176 @@ export default function CreateJobScreen() {
             />
             {draft.certificationRequired ? (
               <FormInput
+                label="Certification note"
                 onChangeText={(value) => updateDraft('certificationNote', value)}
-                placeholder="Certification note"
+                placeholder="Example: TESDA certificate preferred"
                 value={draft.certificationNote}
               />
             ) : null}
-            <FormInput
-              error={errors.description}
-              multiline
-              onChangeText={(value) => updateDraft('description', value)}
-              placeholder="What needs to be done"
-              value={draft.description}
-            />
+          </Section>
+
+          <View
+            onLayout={(event) => {
+              budgetRangeOffsetRef.current = event.nativeEvent.layout.y;
+              scrollToBudgetRange();
+            }}>
+            <Section
+              helper="Use a range so workers know what to expect."
+              title="Budget">
+              <RateRangeInput
+                error={errors.budgetMin}
+                label="Budget range"
+                maxLabel="Maximum budget"
+                maxValue={draft.budgetMax}
+                minLabel="Minimum budget"
+                minValue={draft.budgetMin}
+                negotiable={draft.budgetNegotiable}
+                onMaxChange={(value) => updateDraft('budgetMax', value)}
+                onMinChange={(value) => updateDraft('budgetMin', value)}
+                onNegotiableChange={(value) => updateDraft('budgetNegotiable', value)}
+                onRateTypeChange={(value) => updateDraft('rateType', value)}
+                previewPrefix="Budget preview"
+                rateType={draft.rateType}
+              />
+            </Section>
           </View>
 
-          <View style={styles.sectionBand}>
-            <View style={styles.rowBetween}>
-              <View style={styles.flex}>
-                <Text style={styles.sectionTitle}>Barangay</Text>
-                <Text style={styles.smallHelper}>Only your barangay will be shown publicly.</Text>
-              </View>
+          <Section
+            helper="Choose when the job should happen, or coordinate it later."
+            title="Schedule">
+            <View style={styles.group}>
+              <Text style={styles.label}>Job date</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setDatePickerVisible(true)}
+                style={({ pressed }) => [styles.selectBox, errors.scheduleText && styles.inputErrorBorder, pressed && styles.pressed]}>
+                <Text style={[styles.selectText, !draft.jobDate && styles.placeholderText]} numberOfLines={1}>
+                  {draft.jobDate ? formatScheduleDate(draft.jobDate) : 'Choose date'}
+                </Text>
+                <MaterialIcons color={color.verificationBlue} name="calendar-today" size={20} />
+              </Pressable>
+              {datePickerVisible ? (
+                <DateTimePicker
+                  display="default"
+                  minimumDate={getTodayAtStart()}
+                  mode="date"
+                  onChange={onJobDateChange}
+                  value={selectedDate}
+                />
+              ) : null}
             </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setBarangayPickerVisible(true)}
-              style={({ pressed }) => [
-                styles.selectBox,
-                errors.locationText && styles.selectBoxError,
-                pressed && styles.pressed,
-              ]}>
-              <Text
-                style={[
-                  styles.selectText,
-                  !draft.locationText && styles.placeholderText,
-                ]}
-                numberOfLines={1}>
-                {draft.locationText || 'Choose barangay'}
-              </Text>
-              <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
-            </Pressable>
-            <FieldError message={errors.locationText} />
+
+            <View style={styles.group}>
+              <Text style={styles.label}>Preferred time block</Text>
+              <ChipWrap
+                items={TIME_BLOCK_OPTIONS.map((option) => option.label)}
+                selected={[getTimeBlockLabel(draft.preferredTimeBlock)].filter(Boolean)}
+                onPress={(label) =>
+                  selectTimeBlock(TIME_BLOCK_OPTIONS.find((option) => option.label === label)?.value ?? 'anytime')
+                }
+              />
+            </View>
+
+            {draft.preferredTimeBlock !== 'to_coordinate' ? (
+              <>
+                <ToggleRow
+                  description="Turn this on only when the worker needs a specific start time."
+                  label="Exact time needed"
+                  onValueChange={(value) =>
+                    updateScheduleDraft({
+                      exactTimeNeeded: value,
+                    })
+                  }
+                  value={draft.exactTimeNeeded}
+                />
+                {draft.exactTimeNeeded ? (
+                  <View style={styles.group}>
+                    <Text style={styles.label}>Exact time</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setTimePickerVisible(true)}
+                      style={({ pressed }) => [styles.selectBox, errors.scheduleText && styles.inputErrorBorder, pressed && styles.pressed]}>
+                      <Text style={[styles.selectText, !draft.exactTime && styles.placeholderText]} numberOfLines={1}>
+                        {draft.exactTime ? formatExactTime(draft.exactTime) : 'Choose exact time'}
+                      </Text>
+                      <MaterialIcons color={color.verificationBlue} name="schedule" size={20} />
+                    </Pressable>
+                    {timePickerVisible ? (
+                      <DateTimePicker
+                        display="default"
+                        mode="time"
+                        onChange={onExactTimeChange}
+                        value={selectedTime}
+                      />
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+
+            <View style={styles.group}>
+              <Text style={styles.label}>Schedule flexibility</Text>
+              <ChipWrap
+                items={SCHEDULE_FLEXIBILITY_OPTIONS.map((option) => option.label)}
+                selected={[SCHEDULE_FLEXIBILITY_OPTIONS.find((option) => option.value === draft.scheduleFlexibility)?.label ?? ''].filter(Boolean)}
+                onPress={(label) =>
+                  updateScheduleDraft({
+                    scheduleFlexibility:
+                      SCHEDULE_FLEXIBILITY_OPTIONS.find((option) => option.label === label)?.value ?? 'flexible',
+                  })
+                }
+              />
+            </View>
+
+            <View style={styles.previewBox}>
+              <Text style={styles.previewLabel}>Schedule preview</Text>
+              <Text style={styles.previewText}>{getSchedulePreview(draft)}</Text>
+            </View>
+            {draft.legacyScheduleText ? (
+              <Text style={styles.smallHelper}>Loaded from an older draft. Choose a date or time block to replace it.</Text>
+            ) : null}
+            <FieldError message={errors.scheduleText} />
+          </Section>
+
+          <Section
+            helper="Set the public barangay and private arrival details."
+            title="Location and privacy">
+            <View style={styles.group}>
+              <Text style={styles.label}>Barangay / general location</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setBarangayPickerVisible(true)}
+                style={({ pressed }) => [
+                  styles.selectBox,
+                  errors.locationText && styles.selectBoxError,
+                  pressed && styles.pressed,
+                ]}>
+                <Text
+                  style={[
+                    styles.selectText,
+                    !draft.locationText && styles.placeholderText,
+                  ]}
+                  numberOfLines={1}>
+                  {draft.locationText || 'Choose barangay'}
+                </Text>
+                <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+              </Pressable>
+              <FieldError message={errors.locationText} />
+            </View>
             <FormInput
+              helperText="Only your barangay is shown publicly. Exact address instructions are only shown to the worker you accept."
+              label="Private address instructions"
               multiline
               onChangeText={(value) => updateDraft('privateLocationNotes', value)}
-              placeholder="Private address notes for accepted worker"
+              placeholder="Example: Blue gate near the chapel. Message first before arriving."
               value={draft.privateLocationNotes}
             />
             <LocationMapPreview />
-          </View>
+          </Section>
 
-          <View style={styles.sectionBand}>
-            <Text style={styles.sectionTitle}>Listing Options</Text>
-            <Text style={styles.smallHelper}>Control how workers can respond to this post.</Text>
+          <Section
+            helper="Control how workers can respond after the main job details are clear."
+            title="Listing options">
             <ToggleRow
               description="Let workers ask questions before you choose who to hire."
               label="Allow messages before hiring"
@@ -709,7 +1090,7 @@ export default function CreateJobScreen() {
               onValueChange={(value) => updateDraft('autoCloseEnabled', value)}
               value={draft.autoCloseEnabled}
             />
-          </View>
+          </Section>
         </ScrollView>
       </KeyboardAvoidingView>
       <PostOptionPickerSheet
@@ -755,6 +1136,26 @@ export default function CreateJobScreen() {
   );
 }
 
+function Section({
+  children,
+  helper,
+  title,
+}: {
+  children: ReactNode;
+  helper?: string;
+  title: string;
+}) {
+  return (
+    <View style={styles.sectionBand}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {helper ? <Text style={styles.sectionHelper}>{helper}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 function ChipWrap({
   items,
   selected,
@@ -785,6 +1186,8 @@ function ChipWrap({
 
 function FormInput({
   error,
+  helperText,
+  label,
   multiline,
   onChangeText,
   placeholder,
@@ -793,6 +1196,8 @@ function FormInput({
   style,
 }: {
   error?: string;
+  helperText?: string;
+  label?: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -802,6 +1207,8 @@ function FormInput({
 }) {
   return (
     <View style={[styles.inputWrap, style]}>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {helperText ? <Text style={styles.smallHelper}>{helperText}</Text> : null}
       <TextInput
         keyboardType={keyboardType}
         multiline={multiline}
@@ -1165,6 +1572,7 @@ const styles = StyleSheet.create({
   },
   inputWrap: {
     flex: 1,
+    gap: space.xs,
   },
   halfInput: {
     flex: 1,
@@ -1199,10 +1607,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     paddingVertical: space.lg,
   },
+  sectionHeader: {
+    gap: space['2xs'],
+    marginBottom: space.xs,
+  },
+  sectionHelper: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
   flex: {
     flex: 1,
   },
   sectionTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  summaryText: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  previewBox: {
+    backgroundColor: color.primarySoft,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: space['2xs'],
+    padding: space.md,
+  },
+  previewLabel: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  previewText: {
     ...typography.bodyMedium,
     color: color.text,
   },
