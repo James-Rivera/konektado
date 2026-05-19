@@ -145,7 +145,8 @@ The script:
 - clears old marketplace/content rows from notifications, reports, reviews, saved items, messages, conversations, job drafts, services, and jobs
 - inserts 30 active service listings, 20 open job posts, safe conversations/messages, reviews, and saved items
 - uses current service taxonomy values from `constants/service-taxonomy.ts`
-- uses generated placeholder avatar and listing image URLs instead of resident photos
+- uses mixed generated avatar-style profile images with some initials fallbacks
+- keeps listing images optional: some services/jobs have relevant category photos and some intentionally have no image
 
 The generated profiles, listings, and messages are fictional sample marketplace content for system demonstration. They should be reset or replaced before official launch.
 
