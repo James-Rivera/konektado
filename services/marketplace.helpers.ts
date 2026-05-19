@@ -113,12 +113,24 @@ export function normalizeRateType(value: string | null | undefined): RateType {
     value === 'hourly' ||
     value === 'daily' ||
     value === 'weekly' ||
-    value === 'per_project'
+    value === 'per_project' ||
+    value === 'per_job' ||
+    value === 'per_visit' ||
+    value === 'per_load' ||
+    value === 'per_order' ||
+    value === 'per_meal' ||
+    value === 'per_session'
   ) {
     return value;
   }
 
-  if (value === 'per_visit' || value === 'service') return 'per_service';
+  if (value === 'service') return 'per_service';
+  if (value === 'job') return 'per_job';
+  if (value === 'visit') return 'per_visit';
+  if (value === 'load') return 'per_load';
+  if (value === 'order') return 'per_order';
+  if (value === 'meal') return 'per_meal';
+  if (value === 'session') return 'per_session';
 
   return 'per_project';
 }
@@ -226,6 +238,12 @@ function getRateTypeSuffix(rateType: RateType) {
   if (rateType === 'daily') return ' / day';
   if (rateType === 'weekly') return ' / week';
   if (rateType === 'per_project') return ' / project';
+  if (rateType === 'per_job') return ' / job';
+  if (rateType === 'per_visit') return ' / visit';
+  if (rateType === 'per_load') return ' / load';
+  if (rateType === 'per_order') return ' / order';
+  if (rateType === 'per_meal') return ' / meal';
+  if (rateType === 'per_session') return ' / session';
   return '';
 }
 
@@ -356,9 +374,15 @@ export function doesRateOverlap({
 }
 
 export const MARKETPLACE_RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
+  { value: 'per_job', label: 'Per job' },
   { value: 'per_service', label: 'Per service' },
   { value: 'hourly', label: 'Hourly' },
   { value: 'daily', label: 'Daily' },
+  { value: 'per_session', label: 'Per session' },
+  { value: 'per_visit', label: 'Per visit' },
+  { value: 'per_load', label: 'Per load' },
+  { value: 'per_order', label: 'Per order' },
+  { value: 'per_meal', label: 'Per meal' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'per_project', label: 'Project-based' },
 ];

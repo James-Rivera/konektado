@@ -8,7 +8,18 @@ export type JobStatus =
 
 export type ConversationStatus = 'active' | 'hired' | 'declined' | 'archived' | 'reported';
 
-export type RateType = 'per_service' | 'hourly' | 'daily' | 'weekly' | 'per_project';
+export type RateType =
+  | 'per_service'
+  | 'hourly'
+  | 'daily'
+  | 'weekly'
+  | 'per_project'
+  | 'per_job'
+  | 'per_visit'
+  | 'per_load'
+  | 'per_order'
+  | 'per_meal'
+  | 'per_session';
 
 export type ExperienceLevel = 'any' | 'beginner' | 'intermediate' | 'experienced';
 
