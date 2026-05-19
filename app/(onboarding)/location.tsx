@@ -7,9 +7,9 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, type TextInputProps, Vie
 
 import { BottomSheet } from '@/components/BottomSheet';
 import {
-  OnboardingButton,
-  OnboardingFormScaffold,
-  onboardingColors,
+    OnboardingButton,
+    OnboardingFormScaffold,
+    onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 import { DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_PROVINCE } from '@/services/onboarding.service';
 
@@ -19,25 +19,18 @@ type AddressStep = 'area' | 'address';
 
 const SERVICE_AREA_LABEL = `Brgy. ${DEFAULT_BARANGAY}, ${DEFAULT_CITY}, ${DEFAULT_PROVINCE}`;
 
-function combineAddressDetails(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).join(', ');
-}
-
 export default function LocationStep() {
   const router = useRouter();
   const { draft, role, updateDraft } = useOnboarding();
   const [step, setStep] = useState<AddressStep>('area');
   const [street, setStreet] = useState(draft.street);
-  const [subdivisionArea, setSubdivisionArea] = useState(draft.subdivisionArea);
-  const [exactAddressDetail, setExactAddressDetail] = useState(
-    combineAddressDetails([draft.houseNumber, draft.blockLot]),
-  );
   const [landmarkNote, setLandmarkNote] = useState(draft.landmarkNote);
   const [generalLocationTouched, setGeneralLocationTouched] = useState(false);
   const [areaSheetVisible, setAreaSheetVisible] = useState(false);
 
   const hasSupportedArea = true;
   const hasPublicLocation = useMemo(() => Boolean(street.trim()), [street]);
+  const showPublicError = generalLocationTouched && !hasPublicLocation;
 
   const saveCurrentArea = () => {
     updateDraft({
@@ -60,9 +53,7 @@ export default function LocationStep() {
     }
 
     const privateAddress = [
-      exactAddressDetail,
       street,
-      subdivisionArea,
       landmarkNote,
       DEFAULT_BARANGAY,
       DEFAULT_CITY,
@@ -92,9 +83,9 @@ export default function LocationStep() {
       barangay: DEFAULT_BARANGAY,
       streetAddress: privateAddress,
       street: street.trim(),
-      subdivisionArea: subdivisionArea.trim(),
+      subdivisionArea: '',
       blockLot: '',
-      houseNumber: exactAddressDetail.trim(),
+      houseNumber: '',
       landmarkNote: landmarkNote.trim(),
       certificationDetails: '',
       hasCertifications: null,
@@ -140,7 +131,7 @@ export default function LocationStep() {
         helper={
           step === 'area'
             ? 'Choose the area where you live or usually offer services.'
-            : 'Only your general area is shown publicly. Exact address details stay private.'
+            : undefined
         }
         onBack={onBack}
         title={step === 'area' ? 'Set your current area' : 'Add your address'}>
@@ -148,56 +139,40 @@ export default function LocationStep() {
           <CurrentAreaSelection onPressSelector={() => setAreaSheetVisible(true)} />
         ) : (
           <SpecificAddressEntry onChangeArea={() => setStep('area')}>
-            <AddressSection title="Address details">
+            <View style={styles.publicGroup}>
               <AddressInputField
                 autoCapitalize="words"
-                error={
-                  generalLocationTouched && !hasPublicLocation
-                    ? 'Add your area, street, purok, or sitio.'
-                    : undefined
-                }
-                helper="Shown publicly. Do not include your house number."
-                label="Area / Street / Purok / Sitio"
+                error={showPublicError ? 'Add your area, street, purok, or sitio.' : undefined}
+                helper="Purok, sitio, street, or subdivision"
+                label="Public area"
                 onBlur={() => setGeneralLocationTouched(true)}
                 onChangeText={(value) => {
                   setStreet(value);
-                  if (!generalLocationTouched) setGeneralLocationTouched(true);
                 }}
                 placeholder="e.g. Purok 3 or Gov. Carpio Ave"
                 value={street}
               />
-              <AddressInputField
-                autoCapitalize="words"
-                label="Additional area details"
-                optional
-                onBlur={() => setGeneralLocationTouched(true)}
-                onChangeText={(value) => {
-                  setSubdivisionArea(value);
-                  if (!generalLocationTouched) setGeneralLocationTouched(true);
-                }}
-                placeholder="e.g. Phase 2 or San Pedro Subdivision"
-                value={subdivisionArea}
-              />
-            </AddressSection>
-
-            <AddressSection helper="Kept private for verification and coordination." title="Private details">
-              <AddressInputField
-                autoCapitalize="words"
-                label="House / Building / Block / Lot"
-                optional
-                onChangeText={setExactAddressDetail}
-                placeholder="e.g. House 125, Block 4 Lot 12"
-                value={exactAddressDetail}
-              />
+              {!showPublicError ? (
+                <View style={styles.hintRow}>
+                  <MaterialIcons color={onboardingColors.textMuted} name="public" size={16} />
+                  <Text style={styles.hintText}>Shown publicly</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.privateGroup}>
               <AddressInputField
                 autoCapitalize="sentences"
-                label="Private note"
-                optional
+                label="Exact address / landmark"
                 onChangeText={setLandmarkNote}
-                placeholder="e.g. blue gate near chapel"
+                optional
+                placeholder="e.g. House 125, Block 4 Lot 12, blue gate near chapel"
                 value={landmarkNote}
               />
-            </AddressSection>
+              <View style={styles.hintRow}>
+                <MaterialIcons color={onboardingColors.textMuted} name="lock" size={16} />
+                <Text style={styles.hintText}>Kept private for verification and coordination</Text>
+              </View>
+            </View>
           </SpecificAddressEntry>
         )}
       </OnboardingFormScaffold>
@@ -255,10 +230,27 @@ function SpecificAddressEntry({
   onChangeArea: () => void;
 }) {
   return (
-    <>
+    <View style={styles.addressStack}>
+      <PrivacyNoteCard />
       <CurrentAreaCard onChange={onChangeArea} />
       {children}
-    </>
+    </View>
+  );
+}
+
+function PrivacyNoteCard() {
+  return (
+    <View style={styles.privacyCard}>
+      <View style={styles.privacyIconWrap}>
+        <MaterialIcons color={onboardingColors.brandYellowMuted} name="security" size={16} />
+      </View>
+      <View style={styles.privacyCopy}>
+        <Text style={styles.privacyTitle}>Privacy note</Text>
+        <Text style={styles.privacyBody}>
+          Only your general area is shown publicly. Exact address details stay private.
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -276,26 +268,6 @@ function CurrentAreaCard({ onChange }: { onChange: () => void }) {
         </Pressable>
       </View>
       <Text style={styles.areaValue}>{SERVICE_AREA_LABEL}</Text>
-    </View>
-  );
-}
-
-function AddressSection({
-  children,
-  helper,
-  title,
-}: {
-  children: ReactNode;
-  helper?: string;
-  title: string;
-}) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {helper ? <Text style={styles.sectionHelper}>{helper}</Text> : null}
-      </View>
-      <View style={styles.sectionFields}>{children}</View>
     </View>
   );
 }
@@ -391,9 +363,19 @@ function ServiceAreaSheet({
 
 const styles = StyleSheet.create({
   content: {
-    gap: 18,
-    paddingBottom: 28,
-    paddingTop: 34,
+    gap: 16,
+    paddingBottom: 12,
+    paddingTop: 32,
+  },
+  addressStack: {
+    marginTop: 20,
+    width: '100%',
+  },
+  publicGroup: {
+    marginBottom: 32,
+  },
+  privateGroup: {
+    marginBottom: 8,
   },
   selectorStack: {
     gap: 12,
@@ -429,13 +411,52 @@ const styles = StyleSheet.create({
   },
   areaCard: {
     backgroundColor: '#F8FAFC',
-    borderColor: onboardingColors.border,
+    borderColor: onboardingColors.borderSoft,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
+    marginBottom: 36,
     width: '100%',
+  },
+  privacyCard: {
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(242, 230, 64, 0.12)',
+    borderColor: 'rgba(194, 184, 51, 0.35)',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 32,
+    width: '100%',
+  },
+  privacyIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(242, 230, 64, 0.25)',
+    borderRadius: 12,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  privacyCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  privacyTitle: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  privacyBody: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
   },
   areaHeader: {
     alignItems: 'center',
@@ -483,7 +504,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   field: {
-    gap: 6,
+    gap: 8,
     width: '100%',
   },
   fieldLabelRow: {
@@ -514,10 +535,23 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Regular',
     fontSize: 12,
     lineHeight: 17,
+    marginBottom: 4,
   },
   fieldHelperError: {
     color: '#B91C1C',
     fontFamily: 'Satoshi-Medium',
+  },
+  hintRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 12,
+  },
+  hintText: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
   },
   input: {
     backgroundColor: '#FFFFFF',

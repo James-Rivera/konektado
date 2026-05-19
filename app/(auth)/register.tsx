@@ -2,37 +2,37 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    useWindowDimensions,
-    View,
-    type StyleProp,
-    type ViewStyle,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { BottomSheet } from '@/components/BottomSheet';
+import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import {
-    FloatingOnboardingInput,
-    OnboardingBackButton,
-    OnboardingButton,
-    onboardingColors,
-    OnboardingLoadingOverlay,
-    OtpCodeInput,
-    ProgressBars,
+  FloatingOnboardingInput,
+  OnboardingBackButton,
+  OnboardingButton,
+  onboardingColors,
+  OnboardingLoadingOverlay,
+  OtpCodeInput,
+  ProgressBars,
 } from '@/components/onboarding/FigmaOnboarding';
 import {
-    ACCOUNT_EXISTS_SIGNUP_MESSAGE,
-    requestSignupEmailOtp,
-    resendSignupEmailOtp,
-    verifySignupEmailOtp,
+  ACCOUNT_EXISTS_SIGNUP_MESSAGE,
+  requestSignupEmailOtp,
+  resendSignupEmailOtp,
+  verifySignupEmailOtp,
 } from '@/services/auth.service';
 import type { OnboardingIntent } from '@/utils/save-role';
 
@@ -196,7 +196,7 @@ export default function RegisterScreen() {
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{"Let's get started"}</Text>
           <View style={styles.languageRow}>
-            <Text style={styles.languageText}>English (Manila)</Text>
+            <Text style={styles.languageText}>English</Text>
             <Pressable accessibilityRole="button" onPress={() => setLanguageSheetVisible(true)}>
               <Text style={styles.languageAction}>Change</Text>
             </Pressable>
@@ -273,12 +273,12 @@ export default function RegisterScreen() {
           </Pressable>
         </View>
         <View style={styles.languageOptionSelected}>
-          <Text style={styles.languageOptionText}>English (Manila)</Text>
+          <Text style={styles.languageOptionText}>English</Text>
           <Text style={styles.languageOptionMeta}>Current</Text>
         </View>
         <View style={styles.languageOptionDisabled}>
           <Text style={styles.languageOptionTextMuted}>Filipino</Text>
-          <Text style={styles.languageOptionMetaMuted}>Not available in this MVP</Text>
+          <Text style={styles.languageOptionMetaMuted}>Coming Soon</Text>
         </View>
         <PrimaryButton label="Done" onPress={() => setLanguageSheetVisible(false)} />
       </BottomSheet>
