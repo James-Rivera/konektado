@@ -14,6 +14,9 @@ import type { PublicProfileSummary } from '@/types/marketplace.types';
 import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
 
+const VERIFICATION_BUCKET = 'verification-files';
+const VERIFICATION_FILE_SIGNED_URL_SECONDS = 10 * 60;
+
 export type VerificationRequestDetail = {
   id: string;
   userId: string;
@@ -28,6 +31,7 @@ export type VerificationRequestDetail = {
   files: {
     id: string;
     fileType: string;
+    filePath: string | null;
     url: string;
     createdAt: string;
   }[];
@@ -54,7 +58,8 @@ type VerificationFileRow = {
   id: string;
   verification_id: string;
   file_type: string;
-  url: string;
+  file_path: string | null;
+  url: string | null;
   created_at: string;
 };
 
@@ -66,16 +71,60 @@ async function requireAdmin(): Promise<ServiceResult<void>> {
   return { data: undefined, error: null };
 }
 
+function getLegacyVerificationFilePath(url: string | null | undefined) {
+  if (!url) return null;
+
+  const marker = `/storage/v1/object/public/${VERIFICATION_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex >= 0) {
+    return decodeURIComponent(url.slice(markerIndex + marker.length).split('?')[0] ?? '');
+  }
+
+  if (!/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  return null;
+}
+
+async function getSignedVerificationFileUrl(file: VerificationFileRow) {
+  const filePath = file.file_path ?? getLegacyVerificationFilePath(file.url);
+
+  if (!filePath) {
+    return '';
+  }
+
+  const { data, error } = await supabase.storage
+    .from(VERIFICATION_BUCKET)
+    .createSignedUrl(filePath, VERIFICATION_FILE_SIGNED_URL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    return '';
+  }
+
+  return data.signedUrl;
+}
+
 async function mapVerificationRows(rows: VerificationRow[]) {
   if (!rows.length) return [];
 
   const profiles = await loadPublicProfiles(rows.map((row) => row.user_id));
   const { data: files } = await supabase
     .from('verification_files')
-    .select('id, verification_id, file_type, url, created_at')
+    .select('id, verification_id, file_type, file_path, url, created_at')
     .in('verification_id', rows.map((row) => row.id));
 
   const fileRows = (files as VerificationFileRow[] | null) ?? [];
+  const mappedFiles = await Promise.all(
+    fileRows.map(async (file) => ({
+      id: file.id,
+      verificationId: file.verification_id,
+      fileType: file.file_type,
+      filePath: file.file_path ?? getLegacyVerificationFilePath(file.url),
+      url: await getSignedVerificationFileUrl(file),
+      createdAt: file.created_at,
+    })),
+  );
 
   return rows.map((row) => ({
     id: row.id,
@@ -88,14 +137,9 @@ async function mapVerificationRows(rows: VerificationRow[]) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     profile: profiles.get(row.user_id) ?? null,
-    files: fileRows
-      .filter((file) => file.verification_id === row.id)
-      .map((file) => ({
-        id: file.id,
-        fileType: file.file_type,
-        url: file.url,
-        createdAt: file.created_at,
-      })),
+    files: mappedFiles
+      .filter((file) => file.verificationId === row.id)
+      .map(({ verificationId, ...file }) => file),
   }));
 }
 
@@ -149,42 +193,16 @@ export async function reviewVerificationRequest({
     return { data: null, error: 'Enter a reviewer note before saving this review.' };
   }
 
-  const { data: userData } = await supabase.auth.getUser();
-  const reviewerId = userData.user?.id;
-
-  if (!reviewerId) {
-    return { data: null, error: 'Please sign in again to continue.' };
-  }
-
-  const now = new Date().toISOString();
   const { data, error } = await supabase
-    .from('verifications')
-    .update({
-      status: decision,
-      reviewer_id: reviewerId,
-      reviewer_note: reviewerNote,
-      reviewed_at: now,
+    .rpc('review_verification_request_atomic', {
+      p_decision: decision,
+      p_request_id: requestId,
+      p_reviewer_note: reviewerNote,
     })
-    .eq('id', requestId)
-    .eq('status', 'pending')
-    .select('id, user_id, status, notes, reviewer_id, reviewer_note, reviewed_at, created_at, updated_at')
     .single<VerificationRow>();
 
   if (error) {
     return { data: null, error: error.message || 'This request is no longer pending.' };
-  }
-
-  if (decision === 'approved') {
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ barangay_verified_at: now, verified_at: now })
-      .eq('id', data.user_id)
-      .select('id')
-      .single();
-
-    if (profileError) {
-      return { data: null, error: profileError.message };
-    }
   }
 
   const [mapped] = await mapVerificationRows([data]);

@@ -120,7 +120,6 @@ function RootNavigator() {
     const isMainAppRootRoute =
       targetGroup === "(tabs)" &&
       [
-        "admin",
         "client",
         "conversation",
         "create-job",
@@ -150,6 +149,10 @@ function RootNavigator() {
   }, [authenticated, isAdmin, loading, needsProfile, needsRole, needsSignupPassword, router, segments]);
 
   if (loading && !hasResolvedInitialStatus) {
+    return <AppSplashScreen />;
+  }
+
+  if (segments[0] === "admin" && !isAdmin) {
     return <AppSplashScreen />;
   }
 

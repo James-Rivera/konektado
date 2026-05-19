@@ -93,8 +93,7 @@ async function uploadVerificationFile({
       return { data: null, error: uploadError.message };
     }
 
-    const { data } = supabase.storage.from(VERIFICATION_BUCKET).getPublicUrl(path);
-    return { data: data.publicUrl, error: null };
+    return { data: path, error: null };
   } catch {
     return { data: null, error: `Could not upload ${file.name || file.fileType}.` };
   }
@@ -338,7 +337,7 @@ export async function createVerificationRequest(
     uploadedFiles.map(({ file, uploaded }) => ({
       verification_id: verification.id,
       file_type: file.fileType,
-      url: uploaded.data as string,
+      file_path: uploaded.data as string,
     })),
   );
 

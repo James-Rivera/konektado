@@ -183,6 +183,11 @@ export default function AdminVerificationQueueScreen() {
   };
 
   const openFile = async (url: string) => {
+    if (!url) {
+      Alert.alert('Open file', 'A signed link could not be created for this uploaded file.');
+      return;
+    }
+
     try {
       await Linking.openURL(url);
     } catch {
@@ -191,7 +196,12 @@ export default function AdminVerificationQueueScreen() {
   };
 
   const previewOrOpenFile = (file: VerificationFilePreview) => {
-    if (isImageUrl(file.url)) {
+    if (!file.url) {
+      openFile(file.url);
+      return;
+    }
+
+    if (isImageFile(file)) {
       setPreviewFile(file);
       return;
     }
@@ -634,7 +644,7 @@ function BottomReviewSheet({
                     <View style={styles.fileCopy}>
                       <Text style={styles.fileTitle}>{formatFileType(file.fileType)}</Text>
                       <Text numberOfLines={1} style={styles.fileUrl}>
-                        {file.url}
+                        {file.filePath ?? 'Private verification file'}
                       </Text>
                     </View>
                     <MaterialIcons color={color.textSubtle} name="open-in-new" size={16} />
@@ -923,8 +933,8 @@ function getSheetOffset(request: VerificationRequestDetail | null, state: Review
   return adminContentBottomPadding;
 }
 
-function isImageUrl(value: string) {
-  return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(value);
+function isImageFile(file: VerificationFilePreview) {
+  return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(file.filePath ?? file.url);
 }
 
 function getInitials(name: string) {
