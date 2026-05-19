@@ -482,7 +482,6 @@ function ChoosePostTypeSheet({
 }) {
   return (
     <BottomSheet onClose={onClose} visible={visible}>
-      <View style={styles.sheetHandle} />
       <Text style={styles.sheetTitle}>Choose post type</Text>
       <SheetOption
         description="Create a job post so nearby workers can message you."
@@ -861,13 +860,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 10,
     color: color.success,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    backgroundColor: color.textMuted,
-    borderRadius: radius.pill,
-    height: 2,
-    width: 40,
   },
   sheetTitle: {
     fontFamily: 'Satoshi-Bold',

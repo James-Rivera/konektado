@@ -13,11 +13,11 @@ import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } f
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { startServiceConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
+import { startServiceConversation } from '@/services/conversation.service';
 import {
-  formatServiceRate,
   formatServiceJobsDoneText,
+  formatServiceRate,
   formatServiceRatingText,
   getExperienceLabel,
   getMarketplaceLocation,
@@ -28,8 +28,8 @@ import {
   getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
-import { listProfileReviews } from '@/services/review.service';
 import { createReport } from '@/services/report.service';
+import { listProfileReviews } from '@/services/review.service';
 import { getServiceDetail, updateServiceAvailability } from '@/services/service-profile.service';
 import type { ProviderService, Review, ServiceDetail } from '@/types/marketplace.types';
 
@@ -229,6 +229,7 @@ export default function ServiceDetailScreen() {
   }
 
   const providerName = detail.provider?.fullName || 'Konektado resident';
+  const avatarUrl = detail.provider?.avatarUrl ?? null;
   const location = getMarketplaceLocation(detail);
   const displayCategory = getDisplayLabelForMvpService(detail.category) || detail.category;
   const selectedServiceTitle =
@@ -273,6 +274,7 @@ export default function ServiceDetailScreen() {
             availabilityText={detail.availabilityText || 'Availability to coordinate'}
             jobsDoneText={jobsDoneText}
             location={location}
+            avatarUrl={avatarUrl}
             name={providerName}
             ratingText={ratingText}
             serviceTitle={selectedServiceTitle}
@@ -626,6 +628,7 @@ function WorkerProfileHero({
   location,
   ratingText,
   serviceTitle,
+  avatarUrl,
   isLoading = false,
 }: {
   availabilityText: string;
@@ -634,8 +637,15 @@ function WorkerProfileHero({
   location: string;
   ratingText: string;
   serviceTitle: string;
+  avatarUrl?: string | null;
   isLoading?: boolean;
 }) {
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
+
   if (isLoading) {
     return (
       <SectionBand style={styles.workerInfoSection}>
@@ -671,7 +681,16 @@ function WorkerProfileHero({
     <SectionBand style={styles.workerInfoSection}>
       <View style={styles.heroRow}>
         <View style={styles.heroAvatar}>
-          <Text style={styles.heroAvatarText}>{getInitials(name)}</Text>
+          {avatarUrl && !avatarFailed ? (
+            <Image
+              onError={() => setAvatarFailed(true)}
+              resizeMode="cover"
+              source={{ uri: avatarUrl }}
+              style={styles.heroAvatarImage}
+            />
+          ) : (
+            <Text style={styles.heroAvatarText}>{getInitials(name)}</Text>
+          )}
         </View>
 
         <View style={styles.heroCopy}>
@@ -1025,6 +1044,11 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 44,
+  },
+  heroAvatarImage: {
+    borderRadius: radius.pill,
+    height: '100%',
+    width: '100%',
   },
   heroAvatarText: {
     color: color.text,

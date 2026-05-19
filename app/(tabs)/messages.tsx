@@ -2,13 +2,14 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
@@ -18,17 +19,17 @@ import { Skeleton, SkeletonAvatar } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
-  getConversationSummary,
-  listMyConversations,
-  mapRealtimeMessage,
-} from '@/services/conversation.service';
-import {
-  type ConversationPreviewEvent,
-  getConversationPreviewCache,
-  setConversationPreviewCache,
-  subscribeConversationPreviewUpdates,
-  updateConversationPreviewCache,
+    type ConversationPreviewEvent,
+    getConversationPreviewCache,
+    setConversationPreviewCache,
+    subscribeConversationPreviewUpdates,
+    updateConversationPreviewCache,
 } from '@/services/conversation-preview-events';
+import {
+    getConversationSummary,
+    listMyConversations,
+    mapRealtimeMessage,
+} from '@/services/conversation.service';
 import { isPresenceActive } from '@/services/marketplace.helpers';
 import { getUnreadNotificationCount } from '@/services/notification.service';
 import type { ConversationSummary } from '@/types/marketplace.types';
@@ -360,6 +361,14 @@ const MessageRow = memo(function MessageRow({
   onPress?: () => void;
   isLoading?: boolean;
 }) {
+  const other = conversation ? getOtherParticipant(conversation, currentUserId) : null;
+  const avatarUrl = other?.avatarUrl ?? null;
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
+
   if (isLoading) {
     return (
       <View style={styles.messageRow}>
@@ -378,7 +387,6 @@ const MessageRow = memo(function MessageRow({
 
   if (!conversation || !onPress) return null;
 
-  const other = getOtherParticipant(conversation, currentUserId);
   const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== currentUserId;
   const context = getConversationContext(conversation);
   const sentByCurrentUser = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId === currentUserId;
@@ -393,7 +401,16 @@ const MessageRow = memo(function MessageRow({
       onPress={onPress}
       style={({ pressed }) => [styles.messageRow, pressed && styles.pressed]}>
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
+        {avatarUrl && !avatarFailed ? (
+          <Image
+            onError={() => setAvatarFailed(true)}
+            resizeMode="cover"
+            source={{ uri: avatarUrl }}
+            style={styles.avatarImage}
+          />
+        ) : (
+          <Text style={styles.avatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
+        )}
         <PresenceDot active={isPresenceActive(other?.availability)} size={12} style={styles.onlineDot} />
       </View>
       <View style={styles.messageInfo}>
@@ -634,6 +651,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     width: 52,
+  },
+  avatarImage: {
+    borderRadius: 26,
+    height: '100%',
+    width: '100%',
   },
   avatarText: {
     color: color.text,

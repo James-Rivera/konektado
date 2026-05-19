@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { color, radius, space, typography } from '@/constants/theme';
+import { color, space, typography } from '@/constants/theme';
 
 type BarangayPickerSheetProps = {
   description: string;
@@ -45,8 +45,6 @@ export function BarangayPickerSheet({
 
   return (
     <BottomSheet maxHeight="64%" onClose={onClose} visible={visible}>
-      <View style={styles.handle} />
-
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>{description}</Text>
@@ -95,14 +93,6 @@ export function BarangayPickerSheet({
 }
 
 const styles = StyleSheet.create({
-  handle: {
-    alignSelf: 'center',
-    backgroundColor: color.textMuted,
-    borderRadius: radius.pill,
-    height: 2,
-    marginBottom: space.xs,
-    width: 43,
-  },
   header: {
     gap: space.xs,
   },

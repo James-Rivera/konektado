@@ -54,8 +54,6 @@ export function PostOptionPickerSheet({
 
   return (
     <BottomSheet maxHeight="72%" onClose={onClose} visible={visible}>
-      <View style={styles.handle} />
-
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>{description}</Text>
@@ -130,14 +128,6 @@ export function PostOptionPickerSheet({
 }
 
 const styles = StyleSheet.create({
-  handle: {
-    alignSelf: 'center',
-    backgroundColor: color.textMuted,
-    borderRadius: radius.pill,
-    height: 2,
-    marginBottom: space.xs,
-    width: 43,
-  },
   header: {
     gap: space.xs,
   },
