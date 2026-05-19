@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated.
 
 ## Common Types
 
@@ -146,9 +146,9 @@ Purpose: Role-specific public Work Profile completion details.
 | `bio` | `text` | Public worker bio. |
 | `service_area` | `text` | Public area where the provider can work. |
 | `availability` | `text` | Public work availability. |
-| `rate_text` | `text` | Optional public rate note. |
-| `rate_min` | `numeric` | Optional public minimum rate. |
-| `rate_max` | `numeric` | Optional public maximum rate; must be greater than or equal to `rate_min` when both exist. |
+| `rate_text` | `text` | Optional public rate note only; not parsed as pricing. |
+| `rate_min` | `numeric` | Required public minimum rate once Work Profile is complete. |
+| `rate_max` | `numeric` | Required public maximum rate once Work Profile is complete; must be greater than or equal to `rate_min`. |
 | `rate_type` | `text` | `per_service`, `hourly`, `daily`, `weekly`, or `per_project`. Negotiability is stored separately. |
 | `rate_negotiable` | `boolean` | Optional signal that the provider is open to negotiation within the required range. |
 | `custom_offered_services` | `text[]` | Free-text "Others / Specify" values, separate from official taxonomy values. |
@@ -201,9 +201,9 @@ Purpose: Provider service profile entries shown in search and provider profiles.
 | `description` | `text` | Service details. |
 | `years_experience` | `numeric` | Optional. |
 | `availability_text` | `text` | Example: weekends, afternoon, on call. |
-| `rate_text` | `text` | Optional public text; not an in-app payment record. |
-| `rate_min` | `numeric` | Optional minimum rate. |
-| `rate_max` | `numeric` | Optional maximum rate; constrained so min is not greater than max. |
+| `rate_text` | `text` | Optional public note only; not an in-app payment record and not parsed as pricing. |
+| `rate_min` | `numeric` | Required minimum rate for active service posts. |
+| `rate_max` | `numeric` | Required maximum rate for active service posts; constrained so min is not greater than max. |
 | `rate_type` | `text` | `per_service`, `hourly`, `daily`, `weekly`, or `per_project`. Negotiability is stored separately. |
 | `rate_negotiable` | `boolean` | Optional signal that the provider is open to negotiation within the required range. |
 | `experience_level` | `text` | `any`, `beginner`, `intermediate`, or `experienced`. |
@@ -333,9 +333,9 @@ Purpose: Client-posted work opportunities.
 | `location_text` | `text` | Human-readable location. |
 | `public_location_text` | `text` | Approximate public location shown on cards/details. |
 | `private_location_notes` | `text` | Owner/private coordination notes; do not select for public cards/details. |
-| `budget_amount` | `numeric` | Legacy optional budget amount. |
-| `budget_min` | `numeric` | Optional minimum budget. |
-| `budget_max` | `numeric` | Optional maximum budget; constrained so min is not greater than max. |
+| `budget_amount` | `numeric` | Deprecated legacy fixed budget amount. New app code reads/writes `budget_min` and `budget_max`. |
+| `budget_min` | `numeric` | Required minimum budget for open/published job posts. |
+| `budget_max` | `numeric` | Required maximum budget for open/published job posts; constrained so min is not greater than max. |
 | `rate_type` | `text` | `per_service`, `hourly`, `daily`, `weekly`, or `per_project`. Negotiability is stored separately. |
 | `budget_negotiable` | `boolean` | Optional signal that the client is open to negotiation within the required budget range. |
 | `workers_needed` | `integer` | Optional positive worker count. |
@@ -385,9 +385,9 @@ Purpose: Private job-post drafts. These let unverified users compose a post befo
 | `location_text` | `text` | Human-readable location. |
 | `public_location_text` | `text` | Approximate public location copied to the published job. |
 | `private_location_notes` | `text` | Private address/coordination notes copied only to the owner/private job row. |
-| `budget_amount` | `numeric` | Legacy optional budget amount. |
-| `budget_min` | `numeric` | Optional minimum budget. |
-| `budget_max` | `numeric` | Optional maximum budget. |
+| `budget_amount` | `numeric` | Deprecated legacy fixed draft budget amount. New app code reads/writes `budget_min` and `budget_max`. |
+| `budget_min` | `numeric` | Draft minimum budget. Required before publishing. |
+| `budget_max` | `numeric` | Draft maximum budget. Required before publishing. |
 | `rate_type` | `text` | `per_service`, `hourly`, `daily`, `weekly`, or `per_project`. Negotiability is stored separately. |
 | `budget_negotiable` | `boolean` | Draft copy of the negotiation preference. |
 | `workers_needed` | `integer` | Optional positive worker count. |

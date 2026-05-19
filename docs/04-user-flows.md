@@ -135,7 +135,7 @@ Rules:
 
 1. Provider opens Work Profile, Post, or provider setup.
 2. Provider selects work type/service group/specific service from the controlled taxonomy, or uses "Others / Specify" stored as separate custom text for admin review.
-3. Provider adds service title, description, availability, experience level, optional certification metadata, and rate range or negotiable rate text.
+3. Provider adds service title, description, availability, experience level, optional certification metadata, a minimum/maximum rate range, rate type, and optional negotiable flag.
 4. Provider may attach credentials related to the service.
 5. App validates required fields.
 6. App checks barangay verification and completed Work Profile.
@@ -154,8 +154,8 @@ Rules:
 
 1. Client opens Post.
 2. Client taps Create a post and chooses "I need help" from the Figma post-type sheet.
-3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, public approximate location, optional private location notes, optional context tags, budget minimum/maximum or negotiable rate, rate type, workers needed, preferred schedule, experience level, certification requirement, and listing options.
-4. App validates Job Category, Service Needed, title, description, public location, numeric optional fields, and `budget_min <= budget_max`.
+3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, public approximate location, optional private location notes, optional context tags, budget minimum/maximum, rate type, optional negotiable flag, workers needed, preferred schedule, experience level, certification requirement, and listing options.
+4. App validates Job Category, Service Needed, title, description, public location, numeric optional fields, and a valid required range where `budget_min > 0` and `budget_min <= budget_max`.
 5. App saves a private `job_drafts` row before showing Preview.
 6. App shows the Figma Preview screen with safety reminders.
 7. If the client is not barangay-verified and taps Publish, the app shows the Figma barangay verification gate with Start Verification and Keep Editing Draft actions.

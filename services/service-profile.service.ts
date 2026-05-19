@@ -396,8 +396,6 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
         itemMax: row.rate_max,
         filterMin: filters.rateMin,
         filterMax: filters.rateMax,
-        includeNegotiable: filters.includeNegotiable,
-        itemText: row.rate_text,
       })
     ) {
       return false;

@@ -18,7 +18,6 @@ export type SearchDiscoveryFilters = {
   service: 'all' | MvpServiceOption;
   locationScope: 'same_barangay' | 'nearby';
   rateRange: 'any' | 'under_500' | '500_1000' | '1000_2000' | '2000_plus';
-  includeNegotiable: boolean;
   experienceLevel: 'all' | ExperienceLevel;
   certification: 'any' | 'required_or_available';
   verifiedOnly: boolean;
@@ -207,13 +206,6 @@ export function SearchFiltersSheet({
                 onPress={() => onChange('rateRange', option.key)}
               />
             ))}
-            {filters.rateRange !== 'any' ? (
-              <ChoiceChip
-                label="Include negotiable"
-                selected={filters.includeNegotiable}
-                onPress={() => onChange('includeNegotiable', !filters.includeNegotiable)}
-              />
-            ) : null}
           </View>
         </FilterSection>
 

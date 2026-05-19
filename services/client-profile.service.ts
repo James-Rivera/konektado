@@ -6,7 +6,7 @@ import { supabase } from '@/utils/supabase';
 const PUBLIC_CLIENT_PROFILE_COLUMNS =
   'id, full_name, first_name, last_name, barangay, city, avatar_url, verified_at, barangay_verified_at';
 const PUBLIC_JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 type PublicClientProfileRow = {
   id: string;

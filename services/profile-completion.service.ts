@@ -104,7 +104,6 @@ type JobReadinessRow = {
   status: string | null;
   budget_min: number | null;
   budget_max: number | null;
-  budget_amount: number | null;
   rate_type: string | null;
 };
 
@@ -139,7 +138,7 @@ const PREFERENCES_SELECT =
 const SERVICE_READINESS_SELECT =
   'id, category, title, availability_text, rate_min, rate_max, rate_type, barangay, location_text, is_active';
 const JOB_READINESS_SELECT =
-  'id, status, budget_min, budget_max, budget_amount, rate_type';
+  'id, status, budget_min, budget_max, rate_type';
 const VERIFICATION_SELECT =
   'status, reviewer_note, reviewed_at, created_at, updated_at';
 
@@ -525,7 +524,7 @@ function buildCompletionStatus({
     rateMin: provider?.rate_min ? String(provider.rate_min) : '',
     rateMax: provider?.rate_max ? String(provider.rate_max) : '',
     rateType: normalizeRateType(provider?.rate_type),
-    rateNegotiable: provider?.rate_negotiable ?? (provider?.rate_type === 'negotiable'),
+    rateNegotiable: provider?.rate_negotiable ?? false,
     customOfferedServices,
     completedAt: provider?.profile_completed_at ?? null,
   };
@@ -809,8 +808,8 @@ function buildHiringCompletion({
   const hasPreferredSchedule = Boolean(compactText(hiring.preferredSchedule));
   const hasPostReadyHistory = jobs.some((job) =>
     validateRateRange({
-      min: job.budget_min ?? job.budget_amount,
-      max: job.budget_max ?? job.budget_amount,
+      min: job.budget_min,
+      max: job.budget_max,
       rateType: job.rate_type,
     }).valid,
   );

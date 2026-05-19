@@ -56,7 +56,6 @@ export type JobSummary = {
   photoUrls: string[];
   barangay: string | null;
   locationText: string | null;
-  budgetAmount: number | null;
   budgetMin: number | null;
   budgetMax: number | null;
   rateType: RateType;
@@ -93,7 +92,6 @@ export type CreateJobInput = {
   barangay?: string | null;
   locationText?: string | null;
   privateLocationNotes?: string | null;
-  budgetAmount?: number | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType;
@@ -119,7 +117,6 @@ export type JobDraftSummary = {
   photoUrls: string[];
   barangay: string | null;
   locationText: string | null;
-  budgetAmount: number | null;
   budgetMin: number | null;
   budgetMax: number | null;
   rateType: RateType;
@@ -146,7 +143,6 @@ export type UpsertJobDraftInput = {
   photoUrls?: string[];
   barangay?: string | null;
   locationText?: string | null;
-  budgetAmount?: number | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType;
@@ -171,7 +167,6 @@ export type JobSearchFilters = {
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType | 'any';
-  includeNegotiable?: boolean;
   experienceLevel?: ExperienceLevel | 'all';
   certificationRequired?: boolean;
   verifiedOnly?: boolean;
@@ -188,7 +183,6 @@ export type ServiceSearchFilters = {
   rateMin?: number | null;
   rateMax?: number | null;
   rateType?: RateType | 'any';
-  includeNegotiable?: boolean;
   experienceLevel?: ExperienceLevel | 'all';
   certificationAvailable?: boolean;
   verifiedOnly?: boolean;

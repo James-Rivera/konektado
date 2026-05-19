@@ -236,7 +236,6 @@ export default function SearchScreen() {
             barangay: barangayFilter,
             budgetMin: rateBounds.min,
             budgetMax: rateBounds.max,
-            includeNegotiable: appliedFilters.includeNegotiable,
             experienceLevel: appliedFilters.experienceLevel,
             certificationRequired:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -261,7 +260,6 @@ export default function SearchScreen() {
             barangay: barangayFilter,
             rateMin: rateBounds.min,
             rateMax: rateBounds.max,
-            includeNegotiable: appliedFilters.includeNegotiable,
             experienceLevel: appliedFilters.experienceLevel,
             certificationAvailable:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -522,11 +520,6 @@ export default function SearchScreen() {
         if (key === 'service' && value !== 'all') {
           next.serviceGroup = getDiscoveryGroupForService(value as MvpServiceOption) ?? current.serviceGroup;
         }
-
-        if (key === 'rateRange' && value === 'any') {
-          next.includeNegotiable = false;
-        }
-
         return next;
       });
     },
@@ -901,7 +894,6 @@ function buildDefaultFilters(): SearchDiscoveryFilters {
     service: 'all',
     locationScope: 'nearby',
     rateRange: 'any',
-    includeNegotiable: false,
     experienceLevel: 'all',
     certification: 'any',
     verifiedOnly: false,
