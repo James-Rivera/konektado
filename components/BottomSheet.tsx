@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   handle: {
     alignSelf: 'center',
-    backgroundColor: '#D6DCE5',
+    backgroundColor: color.border,
     borderRadius: radius.pill,
     height: 4,
     width: 44,

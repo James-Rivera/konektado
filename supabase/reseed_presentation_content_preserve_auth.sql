@@ -942,26 +942,26 @@ select
 from _seed_account_before b
 join public.profiles p on p.id = b.profile_id
 left join (
-  select provider_id, count(*)::integer as services_inserted
+  select s.provider_id, count(*)::integer as services_inserted
   from public.services s
   join _seed_inserted_services seed on seed.id = s.id
-  group by provider_id
+  group by s.provider_id
 ) service_counts on service_counts.provider_id = b.profile_id
 left join (
-  select coalesce(client_id, owner_id) as owner_id, count(*)::integer as jobs_inserted
+  select coalesce(j.client_id, j.owner_id) as owner_id, count(*)::integer as jobs_inserted
   from public.jobs j
   join _seed_inserted_jobs seed on seed.id = j.id
-  group by coalesce(client_id, owner_id)
+  group by coalesce(j.client_id, j.owner_id)
 ) job_counts on job_counts.owner_id = b.profile_id
 left join (
-  select sender_id, count(*)::integer as messages_sent
+  select m.sender_id, count(*)::integer as messages_sent
   from public.messages m
   join _seed_message_rows seed
     on seed.conversation_id = m.conversation_id
     and seed.sender_id = m.sender_id
     and seed.body = m.body
     and seed.created_at = m.created_at
-  group by sender_id
+  group by m.sender_id
 ) message_counts on message_counts.sender_id = b.profile_id
 left join (
   select account_id, count(*)::integer as conversations_involving_account

@@ -11,15 +11,15 @@ import {
 } from '@/components/public-profile/PublicProfiles';
 import { color } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { startServiceConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
-import { getServiceDetail } from '@/services/service-profile.service';
+import { startServiceConversation } from '@/services/conversation.service';
 import {
   getCompletionModeForError,
   getCompletionTitleForMode,
   getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
+import { getServiceDetail } from '@/services/service-profile.service';
 import { getPublicWorkerProfile } from '@/services/worker-profile.service';
 import type { ProviderService, PublicWorkerProfile } from '@/types/marketplace.types';
 

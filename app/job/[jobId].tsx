@@ -12,21 +12,21 @@ import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } f
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { startJobConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
+import { startJobConversation } from '@/services/conversation.service';
 import { closeJob, deactivateJob, getJobDetail, reactivateJob } from '@/services/job.service';
 import {
-  formatClientJobsPostedText,
-  formatClientRatingText,
-  formatJobBudget,
-  getExperienceLabel,
-  getMarketplaceLocation,
+    formatClientJobsPostedText,
+    formatClientRatingText,
+    formatJobBudget,
+    getExperienceLabel,
+    getMarketplaceLocation,
 } from '@/services/marketplace.helpers';
 import {
-  getCompletionModeForError,
-  getCompletionTitleForMode,
-  getProfileSetupGateMessage,
-  isProfileCompletionRequiredError,
+    getCompletionModeForError,
+    getCompletionTitleForMode,
+    getProfileSetupGateMessage,
+    isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
@@ -51,6 +51,11 @@ export default function JobDetailScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [updatingPost, setUpdatingPost] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [job?.client?.avatarUrl]);
 
   useEffect(() => {
     let active = true;
@@ -123,6 +128,7 @@ export default function JobDetailScreen() {
   const workersNeeded = job.workersNeeded ?? 1;
   const acceptedCount = job.acceptedProviderId ? 1 : 0;
   const jobImageUrl = job.photoUrls?.[0] ?? null;
+  const clientAvatarUrl = job.client?.avatarUrl ?? null;
   const location = getMarketplaceLocation(job);
   const displayServiceNeeded = getDisplayLabelForMvpService(job.serviceNeeded) || job.serviceNeeded;
   const jobTags = Array.from(
@@ -407,7 +413,16 @@ export default function JobDetailScreen() {
               <View style={styles.posterRow}>
                 <View style={styles.posterInfo}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{(job.client?.fullName ?? 'R').slice(0, 1).toUpperCase()}</Text>
+                    {clientAvatarUrl && !avatarFailed ? (
+                      <Image
+                        onError={() => setAvatarFailed(true)}
+                        resizeMode="cover"
+                        source={{ uri: clientAvatarUrl }}
+                        style={styles.avatarImage}
+                      />
+                    ) : (
+                      <Text style={styles.avatarText}>{(job.client?.fullName ?? 'R').slice(0, 1).toUpperCase()}</Text>
+                    )}
                   </View>
                   <View style={styles.posterCopy}>
                     <Text style={styles.posterName}>{job.client?.fullName ?? 'Konektado resident'}</Text>
@@ -966,6 +981,11 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 44,
+  },
+  avatarImage: {
+    borderRadius: radius.pill,
+    height: '100%',
+    width: '100%',
   },
   avatarText: {
     fontFamily: 'Satoshi-Bold',
