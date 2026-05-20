@@ -1,43 +1,43 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import {
-  PublicClientProfileView,
   PublicProfileHeader,
   PublicProfileSkeleton,
+  PublicWorkerProfileView,
 } from '@/components/public-profile/PublicProfiles';
 import { color } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { startJobConversation } from '@/services/conversation.service';
+import { startServiceConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
-import { getPublicClientProfile } from '@/services/client-profile.service';
 import {
   getCompletionModeForError,
   getCompletionTitleForMode,
   getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
-import type { JobSummary, PublicClientProfile } from '@/types/marketplace.types';
+import { getPublicWorkerProfile } from '@/services/worker-profile.service';
+import type { ProviderService, PublicWorkerProfile } from '@/types/marketplace.types';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
   return value;
 }
 
-export default function PublicClientProfileScreen() {
+export default function PublicWorkerProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile: currentProfile, loading: currentProfileLoading } = useProfile();
   const params = useLocalSearchParams<{
-    clientId?: string | string[];
-    sourceJobId?: string | string[];
+    sourceServiceId?: string | string[];
+    workerId?: string | string[];
   }>();
-  const clientId = getParamValue(params.clientId);
-  const sourceJobId = getParamValue(params.sourceJobId);
-  const [profile, setProfile] = useState<PublicClientProfile | null>(null);
+  const workerId = getParamValue(params.workerId);
+  const sourceServiceId = getParamValue(params.sourceServiceId);
+  const [profile, setProfile] = useState<PublicWorkerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
@@ -45,15 +45,15 @@ export default function PublicClientProfileScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!clientId) {
+    if (!workerId) {
       setLoading(false);
-      setError('Client profile not found.');
+      setError('Worker profile not found.');
       return;
     }
 
     setLoading(true);
     setError(null);
-    getPublicClientProfile(clientId, { sourceJobId }).then((result) => {
+    getPublicWorkerProfile(workerId, { sourceServiceId }).then((result) => {
       if (!active) return;
 
       if (result.error) {
@@ -69,15 +69,15 @@ export default function PublicClientProfileScreen() {
     return () => {
       active = false;
     };
-  }, [clientId, sourceJobId]);
+  }, [sourceServiceId, workerId]);
 
   const isVerified = Boolean(currentProfile?.barangay_verified_at || currentProfile?.verified_at);
   const isOwnProfile = Boolean(profile && currentProfile?.id === profile.id);
-  const messageJob = getMessageJob(profile);
-  const cta = getClientCta({
+  const messageService = getMessageService(profile);
+  const cta = getWorkerCta({
     isOwnProfile,
     isVerified,
-    job: messageJob,
+    service: messageService,
   });
 
   const handleMessage = async () => {
@@ -89,18 +89,18 @@ export default function PublicClientProfileScreen() {
       return;
     }
 
-    if (!messageJob) return;
+    if (!messageService) return;
 
     setMessaging(true);
-    const result = await startJobConversation({
-      jobId: messageJob.id,
-      message: `Hi, I am interested in "${messageJob.title}". Is this job still available?`,
+    const result = await startServiceConversation({
+      serviceId: messageService.id,
+      message: `Hi, I am interested in "${messageService.title}". Are you available?`,
     });
     setMessaging(false);
 
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
-        const mode = getCompletionModeForError(result.error) ?? 'work';
+        const mode = getCompletionModeForError(result.error) ?? 'hiring';
         Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
@@ -111,7 +111,7 @@ export default function PublicClientProfileScreen() {
         return;
       }
 
-      Alert.alert('Message client', result.error ?? 'Could not open the conversation.');
+      Alert.alert('Message worker', result.error ?? 'Could not open the conversation.');
       return;
     }
 
@@ -129,23 +129,25 @@ export default function PublicClientProfileScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <PublicProfileHeader onBack={() => router.back()} title="Client Profile" />
+        <PublicProfileHeader onBack={() => router.back()} title="Worker Profile" />
         {loading || currentProfileLoading ? <PublicProfileSkeleton bottomInset={insets.bottom} /> : null}
         {!loading && error ? (
-          <EmptyState description={error} icon="person-search" title="Could not load client profile" />
+          <EmptyState description={error} icon="person-search" title="Could not load worker profile" />
         ) : null}
         {!loading && !error && !profile ? (
           <EmptyState
-            description="This client profile is no longer available."
+            description="This worker profile is no longer available."
             icon="person-search"
-            title="Client not found"
+            title="Worker not found"
           />
         ) : null}
         {!loading && !currentProfileLoading && profile ? (
-          <PublicClientProfileView
+          <PublicWorkerProfileView
             bottomInset={insets.bottom}
             cta={{ ...cta, loading: messaging, onPress: handleMessage }}
-            onOpenJob={(jobId) => router.push({ pathname: '/job/[jobId]', params: { jobId } })}
+            onOpenService={(serviceId) =>
+              router.push({ pathname: '/services/[serviceId]', params: { serviceId } })
+            }
             profile={profile}
           />
         ) : null}
@@ -154,42 +156,42 @@ export default function PublicClientProfileScreen() {
   );
 }
 
-function getMessageJob(profile: PublicClientProfile | null): JobSummary | null {
+function getMessageService(profile: PublicWorkerProfile | null): ProviderService | null {
   if (!profile) return null;
-  return profile.selectedJob ?? profile.activeJobs[0] ?? null;
+  return profile.selectedService ?? profile.services[0] ?? null;
 }
 
-function getClientCta({
+function getWorkerCta({
   isOwnProfile,
   isVerified,
-  job,
+  service,
 }: {
   isOwnProfile: boolean;
   isVerified: boolean;
-  job: JobSummary | null;
+  service: ProviderService | null;
 }) {
   if (isOwnProfile) {
     return {
       disabled: true,
-      helper: 'This is your public hiring profile.',
-      label: 'This is your public hiring profile',
+      helper: 'This is your public worker profile.',
+      label: 'This is your public worker profile',
       reason: 'own',
     };
   }
 
-  if (!job) {
+  if (!service) {
     return {
       disabled: true,
-      helper: 'This client has no active job to message about right now.',
-      label: 'No active job',
-      reason: 'no_job',
+      helper: 'This worker has no active service to message about right now.',
+      label: 'No active service',
+      reason: 'no_service',
     };
   }
 
-  if (!['open', 'reviewing'].includes(job.status) || !job.allowMessages) {
+  if (!service.isActive || !service.allowMessages) {
     return {
       disabled: true,
-      helper: 'This job is not accepting messages right now.',
+      helper: 'This service is not accepting messages right now.',
       label: 'Messages unavailable',
       reason: 'unavailable',
     };
@@ -207,12 +209,12 @@ function getClientCta({
   return {
     disabled: false,
     helper: null,
-    label: 'Message client',
+    label: 'Message worker',
     reason: 'available',
   };
 }
 
-const styles = StyleSheet.create({
+const styles = {
   safeArea: {
     backgroundColor: color.background,
     flex: 1,
@@ -221,4 +223,4 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     flex: 1,
   },
-});
+};

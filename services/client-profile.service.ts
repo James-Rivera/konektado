@@ -4,7 +4,7 @@ import type { PublicClientProfile } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
 const PUBLIC_CLIENT_PROFILE_COLUMNS =
-  'id, full_name, first_name, last_name, barangay, city, avatar_url, verified_at, barangay_verified_at';
+  'id, full_name, first_name, last_name, barangay, city, about, availability, avatar_url, verified_at, barangay_verified_at';
 const PUBLIC_JOB_COLUMNS =
   'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
@@ -15,6 +15,8 @@ type PublicClientProfileRow = {
   last_name: string | null;
   barangay: string | null;
   city: string | null;
+  about: string | null;
+  availability: string | null;
   avatar_url: string | null;
   verified_at: string | null;
   barangay_verified_at: string | null;
@@ -22,11 +24,13 @@ type PublicClientProfileRow = {
 
 export async function getPublicClientProfile(
   clientId: string,
+  options: { sourceJobId?: string | null } = {},
 ): Promise<ServiceResult<PublicClientProfile | null>> {
   const id = compactText(clientId);
   if (!id) return { data: null, error: 'Client profile not found.' };
+  const sourceJobId = compactText(options.sourceJobId) || null;
 
-  const [{ data: profile, error: profileError }, jobsResult, reviewsResult, jobsCountResult] =
+  const [{ data: profile, error: profileError }, jobsResult, selectedJobResult, reviewsResult, jobsCountResult] =
     await Promise.all([
       supabase
         .from('profiles')
@@ -39,7 +43,15 @@ export async function getPublicClientProfile(
         .or(`owner_id.eq.${id},client_id.eq.${id}`)
         .in('status', ['open', 'reviewing'])
         .order('created_at', { ascending: false })
-        .limit(6),
+        .limit(8),
+      sourceJobId
+        ? supabase
+            .from('jobs')
+            .select(PUBLIC_JOB_COLUMNS)
+            .eq('id', sourceJobId)
+            .or(`owner_id.eq.${id},client_id.eq.${id}`)
+            .maybeSingle<JobRow>()
+        : Promise.resolve({ data: null, error: null }),
       supabase.from('reviews').select('rating').eq('reviewee_id', id),
       supabase
         .from('jobs')
@@ -50,6 +62,7 @@ export async function getPublicClientProfile(
   if (profileError) return { data: null, error: profileError.message };
   if (!profile) return { data: null, error: null };
   if (jobsResult.error) return { data: null, error: jobsResult.error.message };
+  if (selectedJobResult.error) return { data: null, error: selectedJobResult.error.message };
   if (reviewsResult.error) return { data: null, error: reviewsResult.error.message };
   if (jobsCountResult.error) return { data: null, error: jobsCountResult.error.message };
 
@@ -57,7 +70,10 @@ export async function getPublicClientProfile(
     (job) => (job.client_id ?? job.owner_id) === id,
   );
   const publicProfiles = await loadPublicProfiles([id]);
-  const activeJobs = jobs.map((job) => mapJob(job, publicProfiles));
+  const selectedJob = selectedJobResult.data ? mapJob(selectedJobResult.data as JobRow, publicProfiles) : null;
+  const activeJobs = jobs
+    .filter((job) => job.id !== selectedJob?.id)
+    .map((job) => mapJob(job, publicProfiles));
   const reviewRows = ((reviewsResult.data as { rating: number }[] | null) ?? []).filter(
     (review) => Number.isFinite(review.rating),
   );
@@ -76,11 +92,14 @@ export async function getPublicClientProfile(
       fullName: displayName,
       avatarUrl: compactText(profile.avatar_url) || null,
       publicLocation: formatPublicClientLocation(profile),
+      about: compactText(profile.about) || null,
+      availability: compactText(profile.availability) || null,
       barangayVerifiedAt: profile.barangay_verified_at,
       verifiedAt: profile.verified_at,
       jobsPostedCount: jobsCountResult.count ?? 0,
       averageRating,
       reviewCount,
+      selectedJob,
       activeJobs,
     },
     error: null,

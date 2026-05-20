@@ -423,7 +423,10 @@ export default function JobDetailScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() =>
-                  router.push({ pathname: '/client/[clientId]' as never, params: { clientId: job.clientId } })
+                  router.push({
+                    pathname: '/client/[clientId]' as never,
+                    params: { clientId: job.clientId, sourceJobId: job.id },
+                  })
                 }
                 style={({ pressed }) => [styles.posterProfileAction, pressed && styles.pressed]}>
                 <MaterialIcons color={color.primary} name="person" size={16} />

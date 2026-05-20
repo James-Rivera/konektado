@@ -132,6 +132,7 @@ function RootNavigator() {
         "profile",
         "services",
         "verification",
+        "worker",
       ].includes(String(activeGroup));
 
     if (
@@ -177,6 +178,7 @@ function RootNavigator() {
       <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
       <Stack.Screen name="services/[serviceId]" options={{ headerShown: false }} />
       <Stack.Screen name="verification" options={{ headerShown: false }} />
+      <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
       <Stack.Screen
         name="modal"
         options={{ presentation: "modal", title: "Modal" }}

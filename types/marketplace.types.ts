@@ -48,12 +48,31 @@ export type PublicClientProfile = {
   fullName: string;
   avatarUrl: string | null;
   publicLocation: string;
+  about: string | null;
+  availability: string | null;
   barangayVerifiedAt: string | null;
   verifiedAt: string | null;
   jobsPostedCount: number;
   averageRating: number | null;
   reviewCount: number;
+  selectedJob: JobSummary | null;
   activeJobs: JobSummary[];
+};
+
+export type PublicWorkerProfile = {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  publicLocation: string;
+  about: string | null;
+  availability: string | null;
+  barangayVerifiedAt: string | null;
+  verifiedAt: string | null;
+  completedJobsCount: number;
+  averageRating: number | null;
+  reviewCount: number;
+  selectedService: ProviderService | null;
+  services: ProviderService[];
 };
 
 export type JobSummary = {

@@ -139,21 +139,30 @@ export default function ConversationDetailsScreen() {
   };
 
   const canOpenProfile = Boolean(
-    conversation &&
-      (conversation.clientId !== profile?.id || conversation.serviceId),
+    conversation && profile?.id && [conversation.clientId, conversation.providerId].includes(profile.id),
   );
 
   const openProfile = () => {
     if (!conversation) return;
 
-    if (conversation.clientId !== profile?.id) {
-      router.push({ pathname: '/client/[clientId]' as never, params: { clientId: conversation.clientId } });
+    if (conversation.providerId === profile?.id) {
+      router.push({
+        pathname: '/client/[clientId]' as never,
+        params: {
+          clientId: conversation.clientId,
+          ...(conversation.jobId ? { sourceJobId: conversation.jobId } : {}),
+        },
+      });
       return;
     }
 
-    if (conversation.serviceId) {
-      router.push({ pathname: '/services/[serviceId]', params: { serviceId: conversation.serviceId } });
-    }
+    router.push({
+      pathname: '/worker/[workerId]' as never,
+      params: {
+        workerId: conversation.providerId,
+        ...(conversation.serviceId ? { sourceServiceId: conversation.serviceId } : {}),
+      },
+    });
   };
 
   const onMarkHired = async () => {

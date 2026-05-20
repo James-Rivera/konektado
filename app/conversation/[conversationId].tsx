@@ -181,8 +181,7 @@ export default function ConversationDetailScreen() {
   const canMarkHired =
     Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
   const canOpenProfile = Boolean(
-    conversation &&
-      (conversation.clientId !== profile?.id || conversation.serviceId),
+    conversation && profile?.id && [conversation.clientId, conversation.providerId].includes(profile.id),
   );
   const prompts = isJobConversation ? JOB_PROMPTS : SERVICE_PROMPTS;
 
@@ -339,20 +338,24 @@ export default function ConversationDetailScreen() {
             onMarkHired={onMarkHired}
             onOpenPost={openPost}
             onOpenProfile={() => {
-              if (conversation.clientId !== profile?.id) {
+              if (conversation.providerId === profile?.id) {
                 router.push({
                   pathname: '/client/[clientId]' as never,
-                  params: { clientId: conversation.clientId },
+                  params: {
+                    clientId: conversation.clientId,
+                    ...(conversation.jobId ? { sourceJobId: conversation.jobId } : {}),
+                  },
                 });
                 return;
               }
 
-              if (conversation.serviceId) {
-                router.push({
-                  pathname: '/services/[serviceId]',
-                  params: { serviceId: conversation.serviceId },
-                });
-              }
+              router.push({
+                pathname: '/worker/[workerId]' as never,
+                params: {
+                  workerId: conversation.providerId,
+                  ...(conversation.serviceId ? { sourceServiceId: conversation.serviceId } : {}),
+                },
+              });
             }}
             onToggleExpanded={() => {
               setContextExpanded((value) => !value);
