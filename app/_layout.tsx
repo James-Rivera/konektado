@@ -120,17 +120,19 @@ function RootNavigator() {
     const isMainAppRootRoute =
       targetGroup === "(tabs)" &&
       [
-        "admin",
+        "client",
         "conversation",
         "create-job",
         "create-job-preview",
         "create-service",
         "create-service-preview",
         "job",
+        "notifications",
         "post",
         "profile",
         "services",
         "verification",
+        "worker",
       ].includes(String(activeGroup));
 
     if (
@@ -151,10 +153,16 @@ function RootNavigator() {
     return <AppSplashScreen />;
   }
 
+  if (segments[0] === "admin" && !isAdmin) {
+    return <AppSplashScreen />;
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
       <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
+      <Stack.Screen name="client/[clientId]" options={{ headerShown: false }} />
       <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />
       <Stack.Screen name="conversation/[conversationId]/details" options={{ headerShown: false }} />
       <Stack.Screen name="create-job" options={{ headerShown: false }} />
@@ -162,6 +170,7 @@ function RootNavigator() {
       <Stack.Screen name="create-service" options={{ headerShown: false }} />
       <Stack.Screen name="create-service-preview" options={{ headerShown: false }} />
       <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="post/active" options={{ headerShown: false }} />
       <Stack.Screen name="post/renew" options={{ headerShown: false }} />
       <Stack.Screen name="profile/complete" options={{ headerShown: false }} />
@@ -169,6 +178,7 @@ function RootNavigator() {
       <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
       <Stack.Screen name="services/[serviceId]" options={{ headerShown: false }} />
       <Stack.Screen name="verification" options={{ headerShown: false }} />
+      <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />
       <Stack.Screen
         name="modal"
         options={{ presentation: "modal", title: "Modal" }}

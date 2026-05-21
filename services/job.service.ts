@@ -26,7 +26,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 type ClientStats = {
   averageRating: number | null;
@@ -140,8 +140,8 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
   const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
   const workersNeeded = input.workersNeeded ?? null;
   const serviceNeeded = compactText(input.serviceNeeded) || null;
-  const budgetMin = input.budgetMin ?? input.budgetAmount ?? null;
-  const budgetMax = input.budgetMax ?? input.budgetAmount ?? null;
+  const budgetMin = input.budgetMin ?? null;
+  const budgetMax = input.budgetMax ?? null;
   const rateType = normalizeRateType(input.rateType);
   const budgetRange = validateRateRange({ min: budgetMin, max: budgetMax, rateType });
   const experienceLevel = normalizeExperienceLevel(input.experienceLevel);
@@ -188,8 +188,8 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
       location_text: publicLocation,
       public_location_text: publicLocation,
       private_location_notes: compactText(input.privateLocationNotes) || null,
-      budget: budgetRange.min,
-      budget_amount: budgetRange.min,
+      budget: null,
+      budget_amount: null,
       budget_min: budgetRange.min,
       budget_max: budgetRange.max,
       rate_type: budgetRange.rateType,
@@ -311,11 +311,10 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
     if (excludeUserId && [row.owner_id, row.client_id].includes(excludeUserId)) return false;
     if (
       !doesRateOverlap({
-        itemMin: row.budget_min ?? row.budget_amount ?? row.budget,
-        itemMax: row.budget_max ?? row.budget_amount ?? row.budget,
+        itemMin: row.budget_min,
+        itemMax: row.budget_max,
         filterMin: filters.budgetMin,
         filterMax: filters.budgetMax,
-        includeNegotiable: filters.includeNegotiable,
       })
     ) {
       return false;
@@ -384,6 +383,7 @@ export async function updateJobStatus({
 }): Promise<ServiceResult<JobSummary>> {
   const user = await requireVerifiedUser();
   if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
   const { data, error } = await supabase
     .from('jobs')
@@ -392,13 +392,30 @@ export async function updateJobStatus({
       closed_at: ['completed', 'closed', 'cancelled'].includes(status) ? new Date().toISOString() : null,
     })
     .eq('id', jobId)
+    .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)
     .select(JOB_COLUMNS)
-    .single<JobRow>();
+    .maybeSingle<JobRow>();
 
   if (error) {
     return { data: null, error: formatSupabaseError(error.message) };
   }
 
+  if (!data) {
+    return { data: null, error: 'Only the job owner can change this post.' };
+  }
+
   const profiles = await loadPublicProfiles([data.client_id ?? data.owner_id]);
   return { data: mapJob(data, profiles), error: null };
+}
+
+export function deactivateJob(jobId: string) {
+  return updateJobStatus({ jobId, status: 'cancelled' });
+}
+
+export function reactivateJob(jobId: string) {
+  return updateJobStatus({ jobId, status: 'open' });
+}
+
+export function closeJob(jobId: string) {
+  return updateJobStatus({ jobId, status: 'closed' });
 }

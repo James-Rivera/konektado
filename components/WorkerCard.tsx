@@ -17,6 +17,9 @@ export type WorkerCardProps = {
   avatarUrl?: string | null;
   imageUrl?: string;
   isActive?: boolean;
+  showSaveButton?: boolean;
+  isSaved?: boolean;
+  savePending?: boolean;
   onPress?: () => void;
   onViewProfile?: () => void;
   onSave?: () => void;
@@ -34,6 +37,9 @@ export function WorkerCard({
   avatarUrl,
   imageUrl,
   isActive = true,
+  showSaveButton = true,
+  isSaved = false,
+  savePending = false,
   onPress,
   onViewProfile,
   onSave,
@@ -64,7 +70,14 @@ export function WorkerCard({
               </Text>
             </View>
           </View>
-          <IconButton icon="bookmark-border" label="Save worker" onPress={onSave} />
+          {showSaveButton ? (
+            <IconButton
+              disabled={savePending}
+              icon={isSaved ? 'bookmark' : 'bookmark-border'}
+              label={isSaved ? 'Remove saved worker' : 'Save worker'}
+              onPress={onSave}
+            />
+          ) : null}
         </View>
         <Text numberOfLines={1} style={styles.rateLine}>
           {rateLine}
@@ -139,10 +152,12 @@ function Meta({ icon, text }: { icon: keyof typeof MaterialIcons.glyphMap; text:
 }
 
 function IconButton({
+  disabled,
   icon,
   label,
   onPress,
 }: {
+  disabled?: boolean;
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
   onPress?: () => void;
@@ -151,12 +166,18 @@ function IconButton({
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={(event) => {
         event.stopPropagation();
         onPress?.();
       }}
-      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-      <MaterialIcons color={color.textSubtle} name={icon} size={30} />
+      style={({ pressed }) => [
+        styles.iconButton,
+        disabled && styles.iconButtonDisabled,
+        pressed && !disabled && styles.pressed,
+      ]}>
+      <MaterialIcons color={icon === 'bookmark' ? color.primary : color.textSubtle} name={icon} size={30} />
     </Pressable>
   );
 }
@@ -236,6 +257,9 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     width: 34,
+  },
+  iconButtonDisabled: {
+    opacity: 0.55,
   },
   rateLine: {
     ...typography.caption,

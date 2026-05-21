@@ -87,8 +87,10 @@ export default function PostScreen() {
     }, [hasLoadedOnce, profileId, profileLoading]),
   );
 
-  const activeJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
   const activeServices = services.filter((service) => service.isActive);
+  const inactivePostsCount =
+    jobs.filter((job) => ['cancelled', 'closed', 'completed'].includes(job.status)).length +
+    services.filter((service) => !service.isActive).length;
   const recentPosts = [
     ...jobs.map((job) => ({
       createdAt: job.createdAt,
@@ -163,13 +165,7 @@ export default function PostScreen() {
             Create a post
           </Text>
         </View>
-        <Pressable
-          accessibilityLabel="Post options"
-          accessibilityRole="button"
-          onPress={() => Alert.alert('Post options', 'More post actions are not connected yet.')}
-          style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
-          <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
-        </Pressable>
+        <View style={styles.headerIcon} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -208,17 +204,16 @@ export default function PostScreen() {
           </View>
         ) : (
           <View style={styles.panel}>
-            <Text style={styles.sectionTitle}>Job Posts</Text>
+            <Text style={styles.sectionTitle}>Your posts</Text>
             <View style={styles.statGrid}>
-              <StatBox icon="forum" label="Needs reply" value="0" />
               <StatBox
                 icon="business-center"
-                label="Active"
+                label="Posts"
                 onPress={() => router.push('/post/active')}
-                value={String(activeJobs.length + activeServices.length)}
+                value={String(jobs.length + services.length)}
               />
               <StatBox icon="description" label="Drafts" value={String(drafts.length)} />
-              <StatBox icon="arrow-circle-up" label="To renew" onPress={() => router.push('/post/renew')} value="0" />
+              <StatBox icon="pause" label="Inactive" value={String(inactivePostsCount)} />
             </View>
 
             {drafts.length ? (
@@ -238,8 +233,7 @@ export default function PostScreen() {
               <>
                 <Text style={styles.sectionTitle}>Service posts</Text>
                 <View style={styles.serviceStats}>
-                  <InlineStat icon="forum" label="Inquires" value="0" />
-                  <InlineStat icon="description" label="Drafts" value="0" />
+                  <InlineStat icon="business-center" label="Total" value={String(services.length)} />
                   <InlineStat icon="pause" label="Inactive" value={String(services.length - activeServices.length)} />
                 </View>
 
@@ -254,7 +248,7 @@ export default function PostScreen() {
               <RecentPostCard
                 key={post.id}
                 label={post.label}
-                onEdit={post.onPress}
+                onPress={post.onPress}
                 title={post.title}
               />
             ))}
@@ -399,11 +393,11 @@ function InlineStat({
 
 function RecentPostCard({
   label,
-  onEdit,
+  onPress,
   title,
 }: {
   label: string;
-  onEdit: () => void;
+  onPress: () => void;
   title: string;
 }) {
   return (
@@ -414,8 +408,8 @@ function RecentPostCard({
         </Text>
         <Text style={styles.recentLabel}>{label}</Text>
       </View>
-      <Pressable accessibilityRole="button" onPress={onEdit} style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
-        <Text style={styles.editButtonText}>Edit</Text>
+      <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
+        <Text style={styles.editButtonText}>View</Text>
       </Pressable>
     </View>
   );
@@ -469,7 +463,7 @@ function MiniPostCard({
         </View>
       </View>
       <View style={styles.editButton}>
-        <Text style={styles.editButtonText}>Edit</Text>
+        <Text style={styles.editButtonText}>View</Text>
       </View>
     </Pressable>
   );
@@ -488,7 +482,6 @@ function ChoosePostTypeSheet({
 }) {
   return (
     <BottomSheet onClose={onClose} visible={visible}>
-      <View style={styles.sheetHandle} />
       <Text style={styles.sheetTitle}>Choose post type</Text>
       <SheetOption
         description="Create a job post so nearby workers can message you."
@@ -867,13 +860,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 10,
     color: color.success,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    backgroundColor: color.textMuted,
-    borderRadius: radius.pill,
-    height: 2,
-    width: 40,
   },
   sheetTitle: {
     fontFamily: 'Satoshi-Bold',

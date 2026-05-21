@@ -132,6 +132,49 @@ The seed includes:
 - 5 verification requests across `approved`, `pending`, and `rejected`.
 - 2 completed-job reviews.
 
+## Presentation Content Reseed
+
+`reseed_presentation_content_preserve_auth.sql` keeps existing Supabase Auth users and identities so login accounts continue to work, but refreshes visible Konektado app data attached to selected non-admin accounts.
+
+The script:
+
+- selects 6 to 12 existing non-admin profiles and fails clearly if fewer than 6 are available
+- preserves `auth.users`, auth identities, migrations, storage bucket configuration, verification files, and credential files
+- updates selected profile display fields with fictional Barangay San Pedro sample content
+- regenerates provider and client profile display fields
+- clears old marketplace/content rows from notifications, reports, reviews, saved items, messages, conversations, job drafts, services, and jobs
+- inserts 30 active service listings, 20 open job posts, safe conversations/messages, reviews, and saved items
+- uses current service taxonomy values from `constants/service-taxonomy.ts`
+- uses mixed generated avatar-style profile images with some initials fallbacks
+- keeps listing images optional: some services/jobs have relevant category photos and some intentionally have no image
+
+The generated profiles, listings, and messages are fictional sample marketplace content for system demonstration. They should be reset or replaced before official launch.
+
+Local database:
+
+```bash
+npx supabase db query -f supabase/reseed_presentation_content_preserve_auth.sql
+```
+
+Linked remote project:
+
+```bash
+npx supabase db query --linked -f supabase/reseed_presentation_content_preserve_auth.sql
+```
+
+Explicit remote database URL:
+
+```bash
+npx supabase db query --db-url "$SUPABASE_DB_URL" -f supabase/reseed_presentation_content_preserve_auth.sql
+```
+
+Supabase SQL Editor:
+
+1. Open the target project in Supabase Dashboard.
+2. Go to SQL Editor.
+3. Paste the full contents of `supabase/reseed_presentation_content_preserve_auth.sql`.
+4. Run the SQL and review the verification result sets at the bottom.
+
 ## Auth Email Templates
 
 Copy the body in `email-templates/magic-link-otp.html` into both Supabase Auth templates:

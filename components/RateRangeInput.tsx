@@ -53,6 +53,7 @@ export function RateRangeInput({
     min: parseAmount(minValue),
     max: parseAmount(maxValue),
     rateType,
+    negotiable,
     fallback: 'Enter a minimum and maximum amount',
   });
 

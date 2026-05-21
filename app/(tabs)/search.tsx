@@ -1,10 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { useFeedback } from '@/components/FeedbackProvider';
+import { MoreActionsSheet, type MoreSheetAction } from '@/components/MoreActionsSheet';
+import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { PopularServicesSection } from '@/components/search/PopularServicesSection';
 import {
   SearchFiltersSheet,
@@ -32,6 +35,7 @@ import {
 } from '@/constants/service-taxonomy';
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useSavedItems } from '@/hooks/use-saved-items';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
   formatJobSubtitle,
@@ -49,6 +53,7 @@ import {
 } from '@/services/marketplace.helpers';
 import { searchJobs as searchOpenJobs } from '@/services/job.service';
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { createReport } from '@/services/report.service';
 import { searchServices } from '@/services/service-profile.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
@@ -84,6 +89,14 @@ type SearchListRow =
   | { key: 'empty'; type: 'empty' }
   | { key: 'helper'; type: 'helper' };
 
+type SearchActionTarget = {
+  id: string;
+  label: string;
+  reportedUserId: string;
+  title: string;
+  type: 'job' | 'service';
+};
+
 type RankingContext = {
   filters: SearchDiscoveryFilters;
   mode: SearchMode;
@@ -106,12 +119,18 @@ const SEARCH_RESULT_GROUP_LABELS: Record<DiscoveryGroupKey, string> = {
 
 export default function SearchScreen() {
   const router = useRouter();
+  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
   const isFocused = useIsFocused();
   const listRef = useRef<FlatList<SearchListRow>>(null);
   const topInset = useSafeTopInset();
   const { profile, loading: profileLoading } = useProfile();
-  const params = useLocalSearchParams<{ filter?: string | string[] }>();
+  const { isPending, isSaved, refreshSavedItems, toggleSaved } = useSavedItems();
+  const params = useLocalSearchParams<{
+    filter?: string | string[];
+    openFilters?: string | string[];
+  }>();
   const filterParam = getParamValue(params.filter);
+  const openFiltersParam = getParamValue(params.openFilters);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
@@ -132,6 +151,9 @@ export default function SearchScreen() {
   });
   const [appliedFilters, setAppliedFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
   const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
+  const [actionsTarget, setActionsTarget] = useState<SearchActionTarget | null>(null);
+  const [reportTarget, setReportTarget] = useState<SearchActionTarget | null>(null);
+  const [reporting, setReporting] = useState(false);
   const searchRequestRef = useRef(0);
   const controlsTranslateY = useRef(new Animated.Value(0)).current;
   const controlsHeightRef = useRef(0);
@@ -163,6 +185,11 @@ export default function SearchScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFocused || profileLoading) return;
+    void refreshSavedItems();
+  }, [isFocused, profileLoading, refreshSavedItems]);
 
   useEffect(() => {
     const nextDefaultFilters = buildDefaultFilters();
@@ -209,7 +236,6 @@ export default function SearchScreen() {
             barangay: barangayFilter,
             budgetMin: rateBounds.min,
             budgetMax: rateBounds.max,
-            includeNegotiable: appliedFilters.includeNegotiable,
             experienceLevel: appliedFilters.experienceLevel,
             certificationRequired:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -234,7 +260,6 @@ export default function SearchScreen() {
             barangay: barangayFilter,
             rateMin: rateBounds.min,
             rateMax: rateBounds.max,
-            includeNegotiable: appliedFilters.includeNegotiable,
             experienceLevel: appliedFilters.experienceLevel,
             certificationAvailable:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -471,6 +496,14 @@ export default function SearchScreen() {
     setIsFilterSheetVisible(true);
   }, [appliedFilters]);
 
+  useEffect(() => {
+    if (!isFocused || !openFiltersParam) return;
+
+    revealControlsAtTop();
+    handleOpenFilters();
+    router.setParams({ openFilters: undefined });
+  }, [handleOpenFilters, isFocused, openFiltersParam, revealControlsAtTop, router]);
+
   const handleDraftFilterChange = useCallback(
     <K extends keyof SearchDiscoveryFilters,>(key: K, value: SearchDiscoveryFilters[K]) => {
       setDraftFilters((current) => {
@@ -487,11 +520,6 @@ export default function SearchScreen() {
         if (key === 'service' && value !== 'all') {
           next.serviceGroup = getDiscoveryGroupForService(value as MvpServiceOption) ?? current.serviceGroup;
         }
-
-        if (key === 'rateRange' && value === 'any') {
-          next.includeNegotiable = false;
-        }
-
         return next;
       });
     },
@@ -529,6 +557,82 @@ export default function SearchScreen() {
       params: { serviceId, variant: 'match' },
     });
   }, [router]);
+
+  const openReportFromActions = useCallback(() => {
+    if (!actionsTarget) return;
+    setReportTarget(actionsTarget);
+    setActionsTarget(null);
+  }, [actionsTarget]);
+
+  const toggleSearchSave = useCallback(
+    async (target: { itemType: 'job' | 'provider'; itemId: string }) => {
+      if (!isVerified) {
+        showInfoToast('Complete barangay verification before saving items.');
+        router.push('/verification' as never);
+        return;
+      }
+
+      const result = await toggleSaved(target);
+      if (result.error || !result.data) {
+        showErrorToast(result.error ?? 'Could not update saved items.');
+        return;
+      }
+
+      showSuccessToast(result.data.saved ? 'Saved' : 'Removed from saved');
+    },
+    [isVerified, router, showErrorToast, showInfoToast, showSuccessToast, toggleSaved],
+  );
+
+  const submitReport = useCallback(
+    async ({ details, reason }: ReportSheetSubmitValue) => {
+      if (!reportTarget) return;
+
+      setReporting(true);
+      const result = await createReport({
+        details,
+        jobId: reportTarget.type === 'job' ? reportTarget.id : null,
+        reason,
+        reportedUserId: reportTarget.reportedUserId,
+        serviceId: reportTarget.type === 'service' ? reportTarget.id : null,
+      });
+      setReporting(false);
+
+      if (result.error) {
+        Alert.alert(reportTarget.label, result.error);
+        return;
+      }
+
+      setReportTarget(null);
+      showSuccessToast('Report submitted');
+    },
+    [reportTarget, showSuccessToast],
+  );
+
+  const searchActions = useMemo<MoreSheetAction[]>(() => {
+    if (!actionsTarget) return [];
+
+    return [
+      {
+        icon: 'visibility',
+        label: actionsTarget.type === 'job' ? 'View details' : 'View profile',
+        onPress: () => {
+          const target = actionsTarget;
+          setActionsTarget(null);
+          if (target.type === 'job') {
+            openJob(target.id);
+          } else {
+            openService(target.id);
+          }
+        },
+      },
+      {
+        icon: 'report',
+        label: actionsTarget.label,
+        onPress: openReportFromActions,
+        tone: 'danger',
+      },
+    ];
+  }, [actionsTarget, openJob, openReportFromActions, openService]);
 
   const listRows = useMemo<SearchListRow[]>(() => {
     const rows: SearchListRow[] = [{ key: 'result-header', type: 'resultHeader' }];
@@ -646,7 +750,22 @@ export default function SearchScreen() {
       if (item.type === 'job') {
         return (
           <View style={rowStyle}>
-            <SearchJobResultCard job={item.job} onOpenJob={() => openJob(item.job.id)} />
+            <SearchJobResultCard
+              isSaved={isSaved({ itemType: 'job', itemId: item.job.id })}
+              job={item.job}
+              onMore={() =>
+                setActionsTarget({
+                  id: item.job.id,
+                  label: 'Report job',
+                  reportedUserId: item.job.clientId,
+                  title: item.job.title,
+                  type: 'job',
+                })
+              }
+              onOpenJob={() => openJob(item.job.id)}
+              onSave={() => void toggleSearchSave({ itemType: 'job', itemId: item.job.id })}
+              savePending={isPending({ itemType: 'job', itemId: item.job.id })}
+            />
           </View>
         );
       }
@@ -655,7 +774,24 @@ export default function SearchScreen() {
         return (
           <View style={rowStyle}>
             <SearchWorkerResultCard
+              isSaved={isSaved({ itemType: 'provider', itemId: item.worker.providerId })}
+              onMore={() =>
+                setActionsTarget({
+                  id: item.worker.id,
+                  label: 'Report service or provider',
+                  reportedUserId: item.worker.providerId,
+                  title: item.worker.headline,
+                  type: 'service',
+                })
+              }
               onOpenWorker={() => openService(item.worker.id)}
+              onSave={() =>
+                void toggleSearchSave({
+                  itemType: 'provider',
+                  itemId: item.worker.providerId,
+                })
+              }
+              savePending={isPending({ itemType: 'provider', itemId: item.worker.providerId })}
               worker={item.worker}
             />
           </View>
@@ -688,7 +824,17 @@ export default function SearchScreen() {
         </View>
       );
     },
-    [clearSearch, handleOpenFilters, openJob, openService, resultHeading, searchError],
+    [
+      clearSearch,
+      handleOpenFilters,
+      isPending,
+      isSaved,
+      openJob,
+      openService,
+      resultHeading,
+      searchError,
+      toggleSearchSave,
+    ],
   );
 
   return (
@@ -721,6 +867,21 @@ export default function SearchScreen() {
           services={sheetServiceOptions}
           visible={isFilterSheetVisible}
         />
+        <MoreActionsSheet
+          actions={searchActions}
+          onClose={() => setActionsTarget(null)}
+          subtitle={actionsTarget?.title}
+          title={actionsTarget?.type === 'job' ? 'Job options' : 'Worker options'}
+          visible={Boolean(actionsTarget)}
+        />
+        <ReportSheet
+          onClose={() => setReportTarget(null)}
+          onSubmit={submitReport}
+          submitting={reporting}
+          targetLabel={reportTarget?.title}
+          title={reportTarget?.label ?? 'Report'}
+          visible={Boolean(reportTarget)}
+        />
       </SafeAreaView>
     </View>
   );
@@ -733,7 +894,6 @@ function buildDefaultFilters(): SearchDiscoveryFilters {
     service: 'all',
     locationScope: 'nearby',
     rateRange: 'any',
-    includeNegotiable: false,
     experienceLevel: 'all',
     certification: 'any',
     verifiedOnly: false,
@@ -1028,6 +1188,7 @@ function mapJobToSearchItem(job: JobSummary): SearchJobItem {
 
   return {
     id: job.id,
+    clientId: job.clientId,
     postedAt: formatRelativeMarketplaceDate(job.createdAt),
     title: formatJobPostTitle({
       title: job.title,
@@ -1059,6 +1220,7 @@ function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem 
 
   return {
     id: service.id,
+    providerId: service.providerId,
     name: service.provider?.fullName || 'Konektado resident',
     avatarUrl: getPublicProfileAvatarUrl(service.provider),
     statusLine: formatWorkerAvailability(service.availabilityText),

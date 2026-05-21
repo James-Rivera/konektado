@@ -12,6 +12,7 @@ Recommended service folder:
   verification.service.ts
   job.service.ts
   conversation.service.ts
+  notification.service.ts
   review.service.ts
   admin.service.ts
 ```
@@ -156,6 +157,23 @@ Rules:
 
 - Rating must be 1 to 5.
 - Reviewer and reviewee must be connected through the job.
+
+## NotificationService
+
+Purpose: Own current-user in-app notification reads and read-state updates.
+
+| Function | Input | Output | Behavior |
+| --- | --- | --- | --- |
+| `getMyNotifications(input?)` | `{ limit?: number }` | `ServiceResult<Notification[]>` | Lists current user's notifications newest first. |
+| `getUnreadNotificationCount()` | none | `ServiceResult<number>` | Returns unread count for badge display. |
+| `markNotificationRead(id)` | `{ id: string }` | `ServiceResult<void>` | Marks one owned unread notification as read. |
+| `markAllNotificationsRead()` | none | `ServiceResult<void>` | Marks all owned unread notifications as read. |
+
+Rules:
+
+- Screens read only the current user's notifications through the service.
+- The client app does not expose arbitrary notification creation.
+- Event creation is server-side in the MVP migration; push delivery is still deferred.
 
 ## AdminService
 

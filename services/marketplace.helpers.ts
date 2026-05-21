@@ -42,8 +42,6 @@ export type JobRow = {
   barangay: string | null;
   location: string | null;
   location_text: string | null;
-  budget: number | null;
-  budget_amount: number | null;
   budget_min?: number | null;
   budget_max?: number | null;
   rate_type?: string | null;
@@ -115,12 +113,24 @@ export function normalizeRateType(value: string | null | undefined): RateType {
     value === 'hourly' ||
     value === 'daily' ||
     value === 'weekly' ||
-    value === 'per_project'
+    value === 'per_project' ||
+    value === 'per_job' ||
+    value === 'per_visit' ||
+    value === 'per_load' ||
+    value === 'per_order' ||
+    value === 'per_meal' ||
+    value === 'per_session'
   ) {
     return value;
   }
 
-  if (value === 'per_visit' || value === 'service') return 'per_service';
+  if (value === 'service') return 'per_service';
+  if (value === 'job') return 'per_job';
+  if (value === 'visit') return 'per_visit';
+  if (value === 'load') return 'per_load';
+  if (value === 'order') return 'per_order';
+  if (value === 'meal') return 'per_meal';
+  if (value === 'session') return 'per_session';
 
   return 'per_project';
 }
@@ -228,40 +238,17 @@ function getRateTypeSuffix(rateType: RateType) {
   if (rateType === 'daily') return ' / day';
   if (rateType === 'weekly') return ' / week';
   if (rateType === 'per_project') return ' / project';
+  if (rateType === 'per_job') return ' / job';
+  if (rateType === 'per_visit') return ' / visit';
+  if (rateType === 'per_load') return ' / load';
+  if (rateType === 'per_order') return ' / order';
+  if (rateType === 'per_meal') return ' / meal';
+  if (rateType === 'per_session') return ' / session';
   return '';
 }
 
 function formatCurrency(value: number) {
   return `₱${value.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`;
-}
-
-function parseLegacyRateText(value: string | null | undefined) {
-  const text = compactText(value);
-  if (!text) return { min: null, max: null };
-
-  const phpRangeMatch = text.match(
-    /(?:php|₱)?\s*([0-9][0-9,]*)\s*(?:-|–|to)\s*(?:php|₱)?\s*([0-9][0-9,]*)/i,
-  );
-  if (phpRangeMatch) {
-    const min = Number(phpRangeMatch[1].replace(/,/g, ''));
-    const max = Number(phpRangeMatch[2].replace(/,/g, ''));
-    return {
-      min: normalizeAmount(min),
-      max: normalizeAmount(max),
-    };
-  }
-
-  const singleAmountMatch = text.match(/(?:php|₱)?\s*([0-9][0-9,]*)\s*(?:php)?/i);
-  if (singleAmountMatch) {
-    const amount = Number(singleAmountMatch[1].replace(/,/g, ''));
-    const normalizedAmount = normalizeAmount(amount);
-    return {
-      min: normalizedAmount,
-      max: normalizedAmount,
-    };
-  }
-
-  return { min: null, max: null };
 }
 
 function getDisplayRateType({
@@ -273,91 +260,71 @@ function getDisplayRateType({
   return normalizedRateType;
 }
 
-function getNormalizedRateBounds({
+function getStructuredRateBounds({
   min,
   max,
-  amount,
-  legacyText,
 }: {
   min?: number | null;
   max?: number | null;
-  amount?: number | null;
-  legacyText?: string | null;
 }) {
-  const normalizedAmount = normalizeAmount(amount);
-  const normalizedMin = normalizeAmount(min) ?? normalizedAmount;
-  const normalizedMax = normalizeAmount(max) ?? normalizedAmount;
-
-  if (normalizedMin || normalizedMax) {
-    return {
-      min: normalizedMin,
-      max: normalizedMax,
-      source: 'structured' as const,
-    };
-  }
-
-  const legacyBounds = parseLegacyRateText(legacyText);
   return {
-    ...legacyBounds,
-    source: legacyBounds.min || legacyBounds.max ? ('legacy' as const) : ('missing' as const),
+    min: normalizeAmount(min),
+    max: normalizeAmount(max),
   };
 }
 
 export function formatRateRange({
   min,
   max,
-  amount,
   rateType,
-  legacyText,
+  negotiable,
   fallback = 'Rate not specified',
 }: {
   min?: number | null;
   max?: number | null;
-  amount?: number | null;
   rateType?: RateType | string | null;
   negotiable?: boolean | null;
-  legacyText?: string | null;
   fallback?: string;
 }) {
-  const bounds = getNormalizedRateBounds({ min, max, amount, legacyText });
+  const bounds = getStructuredRateBounds({ min, max });
   const normalizedMin = bounds.min;
   const normalizedMax = bounds.max;
   const normalizedRateType = getDisplayRateType({ rateType });
+  const negotiableSuffix = negotiable ? ' · Negotiable' : '';
 
   if (normalizedMin && normalizedMax) {
     const orderedMin = Math.min(normalizedMin, normalizedMax);
     const orderedMax = Math.max(normalizedMin, normalizedMax);
 
     if (orderedMin === orderedMax) {
-      return `${formatCurrency(orderedMin)}${getRateTypeSuffix(normalizedRateType)}`;
+      return `${formatCurrency(orderedMin)}${getRateTypeSuffix(normalizedRateType)}${negotiableSuffix}`;
     }
 
-    return `${formatCurrency(orderedMin)}–${formatCurrency(orderedMax)}${getRateTypeSuffix(normalizedRateType)}`;
+    return `${formatCurrency(orderedMin)}–${formatCurrency(orderedMax)}${getRateTypeSuffix(normalizedRateType)}${negotiableSuffix}`;
   }
 
   if (normalizedMin) {
-    return `From ${formatCurrency(normalizedMin)}${getRateTypeSuffix(normalizedRateType)}`;
+    return `From ${formatCurrency(normalizedMin)}${getRateTypeSuffix(normalizedRateType)}${negotiableSuffix}`;
   }
 
   if (normalizedMax) {
-    return `Up to ${formatCurrency(normalizedMax)}${getRateTypeSuffix(normalizedRateType)}`;
+    return `Up to ${formatCurrency(normalizedMax)}${getRateTypeSuffix(normalizedRateType)}${negotiableSuffix}`;
   }
 
   return fallback;
 }
 
 export function formatJobBudget(job: {
-  budgetAmount?: number | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
   rateType?: RateType | string | null;
   budgetNegotiable?: boolean | null;
 }) {
   return formatRateRange({
-    min: job.budgetMin ?? job.budgetAmount ?? null,
-    max: job.budgetMax ?? job.budgetAmount ?? null,
-    amount: job.budgetAmount,
+    min: job.budgetMin ?? null,
+    max: job.budgetMax ?? null,
     rateType: job.rateType,
+    negotiable: job.budgetNegotiable,
     fallback: 'Budget to coordinate',
   });
 }
@@ -369,15 +336,13 @@ export function formatServiceRate(service: {
   rateType?: RateType | string | null;
   rateNegotiable?: boolean | null;
 }) {
-  const formattedRange = formatRateRange({
+  return formatRateRange({
     min: service.rateMin,
     max: service.rateMax,
     rateType: service.rateType,
-    legacyText: service.rateText,
-    fallback: '',
+    negotiable: service.rateNegotiable,
+    fallback: 'Rate not specified',
   });
-
-  return formattedRange || compactText(service.rateText) || 'Rate not specified';
 }
 
 export function doesRateOverlap({
@@ -385,37 +350,39 @@ export function doesRateOverlap({
   itemMax,
   filterMin,
   filterMax,
-  includeNegotiable = false,
-  itemText,
 }: {
   itemMin?: number | null;
   itemMax?: number | null;
   filterMin?: number | null;
   filterMax?: number | null;
-  includeNegotiable?: boolean;
-  itemText?: string | null;
 }) {
   const requestedMin = normalizeAmount(filterMin);
   const requestedMax = normalizeAmount(filterMax);
   if (!requestedMin && !requestedMax) return true;
 
-  const bounds = getNormalizedRateBounds({ min: itemMin, max: itemMax, legacyText: itemText });
+  const bounds = getStructuredRateBounds({ min: itemMin, max: itemMax });
   const normalizedItemMin = bounds.min;
   const normalizedItemMax = bounds.max ?? normalizedItemMin;
-  if (!normalizedItemMin && !normalizedItemMax) return includeNegotiable;
+  if (!normalizedItemMin && !normalizedItemMax) return false;
 
   const low = normalizedItemMin ?? normalizedItemMax ?? 0;
   const high = normalizedItemMax ?? normalizedItemMin ?? Number.MAX_SAFE_INTEGER;
   const filterLow = requestedMin ?? 0;
   const filterHigh = requestedMax ?? Number.MAX_SAFE_INTEGER;
 
-  return rangesOverlap({ min: low, max: high }, { min: filterLow, max: filterHigh });
+  return low <= filterHigh && high >= filterLow;
 }
 
 export const MARKETPLACE_RATE_TYPE_OPTIONS: { value: RateType; label: string }[] = [
+  { value: 'per_job', label: 'Per job' },
   { value: 'per_service', label: 'Per service' },
   { value: 'hourly', label: 'Hourly' },
   { value: 'daily', label: 'Daily' },
+  { value: 'per_session', label: 'Per session' },
+  { value: 'per_visit', label: 'Per visit' },
+  { value: 'per_load', label: 'Per load' },
+  { value: 'per_order', label: 'Per order' },
+  { value: 'per_meal', label: 'Per meal' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'per_project', label: 'Project-based' },
 ];
@@ -664,11 +631,10 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     photoUrls: row.photo_urls ?? [],
     barangay: row.barangay,
     locationText: row.location_text ?? row.location,
-    budgetAmount: row.budget_amount ?? row.budget,
-    budgetMin: row.budget_min ?? row.budget_amount ?? row.budget,
-    budgetMax: row.budget_max ?? row.budget_amount ?? row.budget,
+    budgetMin: row.budget_min ?? null,
+    budgetMax: row.budget_max ?? null,
     rateType: normalizeRateType(row.rate_type),
-    budgetNegotiable: row.budget_negotiable ?? (row.rate_type === 'negotiable'),
+    budgetNegotiable: row.budget_negotiable ?? false,
     workersNeeded: row.workers_needed ?? null,
     scheduleText: row.schedule_text,
     experienceLevel: normalizeExperienceLevel(row.experience_level),
@@ -703,7 +669,7 @@ export function mapService(row: ServiceRow): ProviderService {
     rateMin: row.rate_min ?? null,
     rateMax: row.rate_max ?? null,
     rateType: normalizeRateType(row.rate_type),
-    rateNegotiable: row.rate_negotiable ?? (row.rate_type === 'negotiable'),
+    rateNegotiable: row.rate_negotiable ?? false,
     experienceLevel: normalizeExperienceLevel(row.experience_level),
     certificationAvailable: row.certification_available ?? false,
     certificationNote: row.certification_note ?? null,

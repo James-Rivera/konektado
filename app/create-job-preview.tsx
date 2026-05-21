@@ -14,10 +14,10 @@ import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { createJob } from '@/services/job.service';
 import { formatJobBudget, formatJobPostTitle } from '@/services/marketplace.helpers';
 import {
-  getCompletionModeForError,
-  getCompletionTitleForMode,
-  getProfileSetupGateMessage,
-  isProfileCompletionRequiredError,
+    getCompletionModeForError,
+    getCompletionTitleForMode,
+    getProfileSetupGateMessage,
+    isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 
@@ -339,19 +339,18 @@ function VerificationGateModal({
   return (
     <BottomSheet maxHeight="48%" onClose={onClose} visible={visible}>
       <View style={styles.gateContent}>
-        <View style={styles.gateHandle} />
-          <MaterialIcons color={color.verificationBlue} name="shield" size={46} />
-          <Text style={styles.gateTitle}>Barangay Verification Required</Text>
-          <Text style={styles.gateText}>
-            To keep jobs and workers trusted, posting requires <Text style={styles.gateStrong}>barangay verification.</Text>
-          </Text>
-          <Pressable accessibilityRole="button" onPress={onStartVerification} style={styles.gatePrimary}>
-            <Text style={styles.gatePrimaryText}>Start Verification</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={onClose} style={styles.gateSecondary}>
-            <Text style={styles.gateSecondaryText}>Keep Editing Draft</Text>
-          </Pressable>
-          <Text style={styles.gateFootnote}>You can still save drafts and continue later.</Text>
+        <MaterialIcons color={color.verificationBlue} name="shield" size={46} />
+        <Text style={styles.gateTitle}>Barangay Verification Required</Text>
+        <Text style={styles.gateText}>
+          To keep jobs and workers trusted, posting requires <Text style={styles.gateStrong}>barangay verification.</Text>
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onStartVerification} style={styles.gatePrimary}>
+          <Text style={styles.gatePrimaryText}>Start Verification</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={onClose} style={styles.gateSecondary}>
+          <Text style={styles.gateSecondaryText}>Keep Editing Draft</Text>
+        </Pressable>
+        <Text style={styles.gateFootnote}>You can still save drafts and continue later.</Text>
       </View>
     </BottomSheet>
   );
@@ -677,15 +676,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
     width: '100%',
-  },
-  gateHandle: {
-    alignSelf: 'center',
-    backgroundColor: color.textMuted,
-    borderRadius: radius.pill,
-    height: 4,
-    marginBottom: space.xs,
-    opacity: 0.24,
-    width: 44,
   },
   gateTitle: {
     ...typography.sectionTitle,

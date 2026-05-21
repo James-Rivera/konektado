@@ -12,6 +12,7 @@ import {
   type ServiceRow,
 } from '@/services/marketplace.helpers';
 import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
+import { createReport } from '@/services/report.service';
 import { getServiceDetail } from '@/services/service-profile.service';
 import type {
   ConversationDetail,
@@ -27,9 +28,9 @@ const CONVERSATION_COLUMNS =
   'id, job_id, service_id, client_id, provider_id, started_by, status, hired_at, created_at, updated_at';
 const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, created_at';
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget, budget_amount, budget_min, budget_max, rate_type, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 const SERVICE_COLUMNS =
-  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
+  'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 
 type ConversationRow = {
   id: string;
@@ -161,7 +162,6 @@ function mapInboxJob(row: ConversationInboxRow): JobSummary | null {
     photoUrls: [],
     barangay: null,
     locationText: null,
-    budgetAmount: null,
     budgetMin: null,
     budgetMax: null,
     rateType: 'per_project',
@@ -660,6 +660,61 @@ export async function markWorkerHired({
   return getConversation(conversationId);
 }
 
+export async function markHiredJobCompleted({
+  conversationId,
+}: {
+  conversationId: string;
+}): Promise<ServiceResult<ConversationDetail>> {
+  const user = await requireVerifiedCompleteProfile('client');
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const conversation = await getConversation(conversationId);
+  if (conversation.error || !conversation.data) {
+    return { data: null, error: conversation.error ?? 'Conversation not found.' };
+  }
+
+  if (conversation.data.clientId !== user.data) {
+    return { data: null, error: 'Only the client who posted the job can mark it completed.' };
+  }
+
+  if (!conversation.data.jobId || !conversation.data.job) {
+    return { data: null, error: 'Only job conversations can be marked completed.' };
+  }
+
+  if (
+    conversation.data.status !== 'hired' ||
+    conversation.data.job.acceptedProviderId !== conversation.data.providerId
+  ) {
+    return { data: null, error: 'Only a hired worker conversation can be marked completed.' };
+  }
+
+  if (conversation.data.job.status === 'completed') {
+    return getConversation(conversationId);
+  }
+
+  if (conversation.data.job.status !== 'in_progress') {
+    return { data: null, error: 'Only hired jobs in progress can be marked completed.' };
+  }
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({
+      status: 'completed',
+      closed_at: new Date().toISOString(),
+    })
+    .eq('id', conversation.data.jobId)
+    .eq('accepted_provider_id', conversation.data.providerId)
+    .eq('status', 'in_progress')
+    .select('id')
+    .maybeSingle<{ id: string }>();
+
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: 'This job could not be marked completed.' };
+
+  return getConversation(conversationId);
+}
+
 export async function updateConversationStatus({
   conversationId,
   status,
@@ -694,6 +749,50 @@ export function archiveConversation(input: { conversationId: string }) {
   return updateConversationStatus({ ...input, status: 'archived' });
 }
 
-export function reportConversation(input: { conversationId: string }) {
-  return updateConversationStatus({ ...input, status: 'reported' });
+export async function reportConversation({
+  conversationId,
+  details,
+  jobId,
+  reason,
+  reportedUserId,
+  serviceId,
+}: {
+  conversationId: string;
+  details?: string | null;
+  jobId?: string | null;
+  reason: string;
+  reportedUserId?: string | null;
+  serviceId?: string | null;
+}): Promise<ServiceResult<ConversationDetail>> {
+  const conversation = await getConversation(conversationId);
+  if (conversation.error || !conversation.data) {
+    return { data: null, error: conversation.error ?? 'Conversation not found.' };
+  }
+
+  const user = await getCurrentUserId();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  if (![conversation.data.clientId, conversation.data.providerId].includes(user.data)) {
+    return { data: null, error: 'Only conversation participants can report this chat.' };
+  }
+
+  const otherParticipantId =
+    reportedUserId ??
+    (conversation.data.clientId === user.data ? conversation.data.providerId : conversation.data.clientId);
+
+  const report = await createReport({
+    conversationId,
+    details,
+    jobId: jobId ?? conversation.data.jobId,
+    reportedUserId: otherParticipantId,
+    reason,
+    serviceId: serviceId ?? conversation.data.serviceId,
+  });
+
+  if (report.error) {
+    return { data: null, error: report.error };
+  }
+
+  return updateConversationStatus({ conversationId, status: 'reported' });
 }

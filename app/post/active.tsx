@@ -4,16 +4,23 @@ import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useFeedback } from '@/components/FeedbackProvider';
+import { MoreActionsSheet, type MoreSheetAction } from '@/components/MoreActionsSheet';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { listMyJobs } from '@/services/job.service';
+import { closeJob, deactivateJob, listMyJobs, reactivateJob } from '@/services/job.service';
 import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketplace.helpers';
-import { listMyServices } from '@/services/service-profile.service';
+import { listMyServices, updateServiceAvailability } from '@/services/service-profile.service';
 import type { JobSummary, ProviderService } from '@/types/marketplace.types';
+
+type ManageTarget =
+  | { job: JobSummary; type: 'job' }
+  | { service: ProviderService; type: 'service' };
 
 export default function ActivePostsScreen() {
   const router = useRouter();
+  const { showSuccessToast } = useFeedback();
   const { profile, loading: profileLoading } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -21,6 +28,8 @@ export default function ActivePostsScreen() {
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [query, setQuery] = useState('');
+  const [manageTarget, setManageTarget] = useState<ManageTarget | null>(null);
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,13 +63,13 @@ export default function ActivePostsScreen() {
           if (jobResult.error || !jobResult.data) {
             Alert.alert('Active posts', jobResult.error ?? 'Could not load your posts.');
           } else {
-            setJobs(jobResult.data.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status)));
+            setJobs(jobResult.data);
           }
 
           if (serviceResult.error || !serviceResult.data) {
             setServices([]);
           } else {
-            setServices(serviceResult.data.filter((service) => service.isActive));
+            setServices(serviceResult.data);
           }
         } catch {
           if (active) {
@@ -99,6 +108,139 @@ export default function ActivePostsScreen() {
     );
   }, [query, services]);
 
+  const updatingSelected = manageTarget ? updatingKey === getTargetKey(manageTarget) : false;
+
+  const viewTarget = (target: ManageTarget) => {
+    setManageTarget(null);
+    if (target.type === 'job') {
+      router.push({ pathname: '/job/[jobId]', params: { jobId: target.job.id } });
+      return;
+    }
+
+    router.push({ pathname: '/services/[serviceId]', params: { serviceId: target.service.id } });
+  };
+
+  const editService = (service: ProviderService) => {
+    setManageTarget(null);
+    router.push({ pathname: '/create-service' as never, params: { serviceId: service.id } } as never);
+  };
+
+  const updateJob = async ({
+    job,
+    run,
+    successMessage,
+  }: {
+    job: JobSummary;
+    run: () => ReturnType<typeof deactivateJob>;
+    successMessage: string;
+  }) => {
+    const key = `job-${job.id}`;
+    setUpdatingKey(key);
+    const result = await run();
+    setUpdatingKey(null);
+
+    if (result.error || !result.data) {
+      Alert.alert('Manage post', result.error ?? 'Could not update this job.');
+      return;
+    }
+
+    setJobs((current) => current.map((item) => (item.id === result.data?.id ? result.data : item)));
+    setManageTarget(null);
+    showSuccessToast(successMessage);
+  };
+
+  const updateService = async (service: ProviderService, isActive: boolean) => {
+    const key = `service-${service.id}`;
+    setUpdatingKey(key);
+    const result = await updateServiceAvailability({ isActive, serviceId: service.id });
+    setUpdatingKey(null);
+
+    if (result.error || !result.data) {
+      Alert.alert('Manage service', result.error ?? 'Could not update this service.');
+      return;
+    }
+
+    setServices((current) => current.map((item) => (item.id === result.data?.id ? result.data : item)));
+    setManageTarget(null);
+    showSuccessToast(isActive ? 'Service reactivated' : 'Service deactivated');
+  };
+
+  const confirmJobAction = ({
+    body,
+    label,
+    onConfirm,
+    title,
+  }: {
+    body: string;
+    label: string;
+    onConfirm: () => void;
+    title: string;
+  }) => {
+    Alert.alert(title, body, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: label, style: 'destructive', onPress: onConfirm },
+    ]);
+  };
+
+  const manageActions: MoreSheetAction[] = !manageTarget
+    ? []
+    : manageTarget.type === 'job'
+      ? getJobManagementActions({
+        job: manageTarget.job,
+        onClose: () =>
+          confirmJobAction({
+            body: 'This marks the job as closed and removes it from active search results.',
+            label: 'Close job',
+            onConfirm: () =>
+              updateJob({
+                job: manageTarget.job,
+                run: () => closeJob(manageTarget.job.id),
+                successMessage: 'Job closed',
+              }),
+            title: 'Close this job?',
+          }),
+        onDeactivate: () =>
+          confirmJobAction({
+            body: 'This hides the job from search. You can reactivate it later from your posts.',
+            label: 'Deactivate',
+            onConfirm: () =>
+              updateJob({
+                job: manageTarget.job,
+                run: () => deactivateJob(manageTarget.job.id),
+                successMessage: 'Job deactivated',
+              }),
+            title: 'Deactivate this job?',
+          }),
+        onReactivate: () =>
+          updateJob({
+            job: manageTarget.job,
+            run: () => reactivateJob(manageTarget.job.id),
+            successMessage: 'Job reactivated',
+          }),
+        onView: () => viewTarget(manageTarget),
+        updating: updatingSelected,
+      })
+      : getServiceManagementActions({
+          isActive: manageTarget.service.isActive,
+          onDeactivate: () =>
+            Alert.alert(
+              'Deactivate this service?',
+              'This hides the service from search. You can reactivate it later from your posts.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Deactivate',
+                  style: 'destructive',
+                  onPress: () => updateService(manageTarget.service, false),
+                },
+              ],
+            ),
+          onEdit: () => editService(manageTarget.service),
+          onReactivate: () => updateService(manageTarget.service, true),
+          onView: () => viewTarget(manageTarget),
+          updating: updatingSelected,
+        });
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
@@ -107,7 +249,7 @@ export default function ActivePostsScreen() {
             <MaterialIcons color={color.text} name="chevron-left" size={28} />
           </Pressable>
           <Text style={styles.headerTitle}>Your Posts</Text>
-          <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+          <View style={styles.headerIcon} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -130,7 +272,7 @@ export default function ActivePostsScreen() {
             <MaterialIcons color={color.primary} name="search" size={24} />
           </View>
 
-          <Text style={styles.sectionTitle}>Active Posts</Text>
+          <Text style={styles.sectionTitle}>Your Posts</Text>
 
           {loading ? (
             <View style={styles.skeletonStack}>
@@ -141,8 +283,8 @@ export default function ActivePostsScreen() {
 
           {!loading && filteredJobs.length === 0 && filteredServices.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No active posts</Text>
-              <Text style={styles.emptyText}>Published job and service posts will appear here.</Text>
+              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptyText}>Your job and service posts will appear here.</Text>
             </View>
           ) : null}
 
@@ -150,24 +292,42 @@ export default function ActivePostsScreen() {
             <ActivePostCard
               job={job}
               key={job.id}
-              onManage={() => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } })}
+              onManage={() => viewTarget({ job, type: 'job' })}
+              onMore={() => setManageTarget({ job, type: 'job' })}
             />
           ))}
 
           {filteredServices.map((service) => (
             <ActiveServicePostCard
               key={service.id}
-              onManage={() => router.push({ pathname: '/services/[serviceId]', params: { serviceId: service.id } })}
+              onManage={() => viewTarget({ service, type: 'service' })}
+              onMore={() => setManageTarget({ service, type: 'service' })}
               service={service}
             />
           ))}
         </ScrollView>
+
+        <MoreActionsSheet
+          actions={manageActions}
+          onClose={() => setManageTarget(null)}
+          subtitle={getManageTargetSubtitle(manageTarget)}
+          title={manageTarget?.type === 'service' ? 'Manage service' : 'Manage job'}
+          visible={Boolean(manageTarget)}
+        />
       </View>
     </SafeAreaView>
   );
 }
 
-function ActivePostCard({ job, onManage }: { job: JobSummary; onManage: () => void }) {
+function ActivePostCard({
+  job,
+  onManage,
+  onMore,
+}: {
+  job: JobSummary;
+  onManage: () => void;
+  onMore: () => void;
+}) {
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
@@ -185,19 +345,33 @@ function ActivePostCard({ job, onManage }: { job: JobSummary; onManage: () => vo
           <Text style={styles.cardDate}>{formatDate(job.createdAt)}</Text>
           <View style={styles.cardMetaRow}>
             <TinyMeta icon="person" text={`${job.workersNeeded ?? 0} workers`} />
-            <TinyMeta icon="inbox" text="0 unread messages" />
           </View>
         </View>
-        <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+        <Pressable
+          accessibilityLabel="Manage job"
+          accessibilityRole="button"
+          onPress={onMore}
+          style={({ pressed }) => [styles.cardIconButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+        </Pressable>
       </View>
+      <StatusRow label={formatJobStatus(job.status)} tone={getJobStatusTone(job.status)} />
       <Pressable accessibilityRole="button" onPress={onManage} style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}>
-        <Text style={styles.manageButtonText}>Manage post</Text>
+        <Text style={styles.manageButtonText}>View</Text>
       </Pressable>
     </View>
   );
 }
 
-function ActiveServicePostCard({ service, onManage }: { service: ProviderService; onManage: () => void }) {
+function ActiveServicePostCard({
+  service,
+  onManage,
+  onMore,
+}: {
+  service: ProviderService;
+  onManage: () => void;
+  onMore: () => void;
+}) {
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
@@ -217,10 +391,17 @@ function ActiveServicePostCard({ service, onManage }: { service: ProviderService
             <TinyMeta icon="place" text={service.locationText ?? service.barangay ?? 'Location to coordinate'} />
           </View>
         </View>
-        <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+        <Pressable
+          accessibilityLabel="Manage service"
+          accessibilityRole="button"
+          onPress={onMore}
+          style={({ pressed }) => [styles.cardIconButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
+        </Pressable>
       </View>
+      <StatusRow label={service.isActive ? 'Active service' : 'Inactive service'} tone={service.isActive ? 'active' : 'inactive'} />
       <Pressable accessibilityRole="button" onPress={onManage} style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}>
-        <Text style={styles.manageButtonText}>Manage service</Text>
+        <Text style={styles.manageButtonText}>View</Text>
       </Pressable>
     </View>
   );
@@ -255,6 +436,161 @@ function TinyMeta({ icon, text }: { icon: React.ComponentProps<typeof MaterialIc
       </Text>
     </View>
   );
+}
+
+function StatusRow({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'active' | 'inactive' | 'final';
+}) {
+  return (
+    <View style={styles.statusRow}>
+      <View
+        style={[
+          styles.statusDot,
+          tone === 'active' && styles.statusDotActive,
+          tone === 'inactive' && styles.statusDotInactive,
+          tone === 'final' && styles.statusDotFinal,
+        ]}
+      />
+      <Text style={styles.statusText}>{label}</Text>
+    </View>
+  );
+}
+
+function getJobManagementActions({
+  job,
+  onClose,
+  onDeactivate,
+  onReactivate,
+  onView,
+  updating,
+}: {
+  job: JobSummary;
+  onClose: () => void;
+  onDeactivate: () => void;
+  onReactivate: () => void;
+  onView: () => void;
+  updating: boolean;
+}): MoreSheetAction[] {
+  const actions: MoreSheetAction[] = [
+    {
+      disabled: updating,
+      icon: 'visibility',
+      label: 'View',
+      onPress: onView,
+    },
+  ];
+  const isInactive = job.status === 'cancelled';
+  const isFinal = job.status === 'closed' || job.status === 'completed';
+
+  if (isInactive) {
+    actions.push({
+      disabled: updating,
+      icon: 'play-circle',
+      label: updating ? 'Updating...' : 'Reactivate job',
+      onPress: onReactivate,
+    });
+  } else if (!isFinal) {
+    actions.push({
+      disabled: updating,
+      icon: 'pause-circle',
+      label: updating ? 'Updating...' : 'Deactivate job',
+      onPress: onDeactivate,
+    });
+  }
+
+  if (!isFinal) {
+    actions.push({
+      disabled: updating,
+      icon: 'task-alt',
+      label: updating ? 'Updating...' : 'Close job',
+      onPress: onClose,
+      tone: 'danger',
+    });
+  }
+
+  return actions;
+}
+
+function getServiceManagementActions({
+  isActive,
+  onDeactivate,
+  onEdit,
+  onReactivate,
+  onView,
+  updating,
+}: {
+  isActive: boolean;
+  onDeactivate: () => void;
+  onEdit: () => void;
+  onReactivate: () => void;
+  onView: () => void;
+  updating: boolean;
+}): MoreSheetAction[] {
+  return [
+    {
+      disabled: updating,
+      icon: 'visibility',
+      label: 'View',
+      onPress: onView,
+    },
+    {
+      disabled: updating,
+      icon: 'edit',
+      label: 'Edit service',
+      onPress: onEdit,
+    },
+    isActive
+      ? {
+          disabled: updating,
+          icon: 'pause-circle',
+          label: updating ? 'Updating...' : 'Deactivate service',
+          onPress: onDeactivate,
+          tone: 'danger',
+        }
+      : {
+          disabled: updating,
+          icon: 'play-circle',
+          label: updating ? 'Updating...' : 'Reactivate service',
+          onPress: onReactivate,
+        },
+  ];
+}
+
+function getManageTargetSubtitle(target: ManageTarget | null) {
+  if (!target) return null;
+  if (target.type === 'job') {
+    return formatJobPostTitle({
+      title: target.job.title,
+      serviceNeeded: target.job.serviceNeeded,
+      category: target.job.category,
+    });
+  }
+
+  return formatServicePostTitle({
+    title: target.service.title,
+    category: target.service.category,
+  });
+}
+
+function getTargetKey(target: ManageTarget) {
+  return target.type === 'job' ? `job-${target.job.id}` : `service-${target.service.id}`;
+}
+
+function formatJobStatus(status: JobSummary['status']) {
+  if (status === 'cancelled') return 'Inactive job';
+  if (status === 'closed') return 'Closed job';
+  if (status === 'completed') return 'Completed job';
+  return `Active job - ${status.replace(/_/g, ' ')}`;
+}
+
+function getJobStatusTone(status: JobSummary['status']) {
+  if (status === 'cancelled') return 'inactive';
+  if (status === 'closed' || status === 'completed') return 'final';
+  return 'active';
 }
 
 function formatDate(value: string) {
@@ -385,6 +721,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: space.sm,
   },
+  cardIconButton: {
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
   tinyMeta: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -395,6 +738,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: color.textMuted,
     maxWidth: 120,
+  },
+  statusRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.xs,
+  },
+  statusDot: {
+    borderRadius: radius.pill,
+    height: 8,
+    width: 8,
+  },
+  statusDotActive: {
+    backgroundColor: color.success,
+  },
+  statusDotInactive: {
+    backgroundColor: color.warning,
+  },
+  statusDotFinal: {
+    backgroundColor: color.textSubtle,
+  },
+  statusText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+    textTransform: 'capitalize',
   },
   manageButton: {
     alignItems: 'center',

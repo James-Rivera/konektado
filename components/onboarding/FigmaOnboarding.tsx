@@ -3,25 +3,25 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Easing,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-    type ImageResizeMode,
-    type ImageSourcePropType,
-    type ImageStyle,
-    type StyleProp,
-    type TextStyle,
-    type TextInputProps,
-    type ViewStyle
+  ActivityIndicator,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type ImageResizeMode,
+  type ImageSourcePropType,
+  type ImageStyle,
+  type StyleProp,
+  type TextInputProps,
+  type TextStyle,
+  type ViewStyle
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     alignItems: 'center',
-    backgroundColor: '#D9D9D9',
+    backgroundColor: 'rgba(217, 217, 217, 0.24)',
     flex: 1,
     justifyContent: 'center',
   },

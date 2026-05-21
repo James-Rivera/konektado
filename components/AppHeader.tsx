@@ -14,6 +14,7 @@ type AppHeaderProps = {
   actionIcon?: MaterialIconName;
   actionLabel?: string;
   actionTone?: 'default' | 'notification';
+  actionBadgeCount?: number;
   onActionPress?: () => void;
   children?: ReactNode;
 };
@@ -25,6 +26,7 @@ export function AppHeader({
   actionIcon,
   actionLabel,
   actionTone = 'default',
+  actionBadgeCount = 0,
   onActionPress,
   children,
 }: AppHeaderProps) {
@@ -52,6 +54,13 @@ export function AppHeader({
               name={actionIcon}
               size={actionTone === 'notification' ? 24 : 22}
             />
+            {actionBadgeCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {actionBadgeCount > 9 ? '9+' : actionBadgeCount}
+                </Text>
+              </View>
+            ) : null}
           </Pressable>
         ) : null}
       </View>
@@ -101,5 +110,25 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     backgroundColor: 'transparent',
+  },
+  badge: {
+    alignItems: 'center',
+    backgroundColor: color.accentYellow,
+    borderColor: color.background,
+    borderRadius: 9,
+    borderWidth: 1,
+    height: 18,
+    justifyContent: 'center',
+    minWidth: 18,
+    paddingHorizontal: 4,
+    position: 'absolute',
+    right: 5,
+    top: 5,
+  },
+  badgeText: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 10,
+    lineHeight: 12,
   },
 });

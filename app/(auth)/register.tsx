@@ -2,35 +2,37 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    useWindowDimensions,
-    View,
-    type StyleProp,
-    type ViewStyle,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import {
-    FloatingOnboardingInput,
-    OnboardingBackButton,
-    OnboardingButton,
-    onboardingColors,
-    OnboardingLoadingOverlay,
-    OtpCodeInput,
-    ProgressBars,
+  FloatingOnboardingInput,
+  OnboardingBackButton,
+  OnboardingButton,
+  onboardingColors,
+  OnboardingLoadingOverlay,
+  OtpCodeInput,
+  ProgressBars,
 } from '@/components/onboarding/FigmaOnboarding';
 import {
-    ACCOUNT_EXISTS_SIGNUP_MESSAGE,
-    requestSignupEmailOtp,
-    resendSignupEmailOtp,
-    verifySignupEmailOtp,
+  ACCOUNT_EXISTS_SIGNUP_MESSAGE,
+  requestSignupEmailOtp,
+  resendSignupEmailOtp,
+  verifySignupEmailOtp,
 } from '@/services/auth.service';
 import type { OnboardingIntent } from '@/utils/save-role';
 
@@ -57,6 +59,7 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(60);
+  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
   const verifyingCodeRef = useRef(false);
 
   const compactHeight = height < 760;
@@ -193,8 +196,8 @@ export default function RegisterScreen() {
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{"Let's get started"}</Text>
           <View style={styles.languageRow}>
-            <Text style={styles.languageText}>English (Manila)</Text>
-            <Pressable accessibilityRole="button" onPress={() => Alert.alert('Language', 'Language switching is not configured yet.')}>
+            <Text style={styles.languageText}>English</Text>
+            <Pressable accessibilityRole="button" onPress={() => setLanguageSheetVisible(true)}>
               <Text style={styles.languageAction}>Change</Text>
             </Pressable>
           </View>
@@ -262,6 +265,23 @@ export default function RegisterScreen() {
       <StatusBar style="dark" />
       {step === 'email' ? renderEmailStep() : renderCodeStep()}
       <OnboardingLoadingOverlay visible={loading} />
+      <BottomSheet maxHeight="42%" onClose={() => setLanguageSheetVisible(false)} visible={languageSheetVisible}>
+        <View style={styles.languageSheetHeader}>
+          <Text style={styles.languageSheetTitle}>Language</Text>
+          <Pressable accessibilityLabel="Close language selector" accessibilityRole="button" onPress={() => setLanguageSheetVisible(false)}>
+            <Text style={styles.languageSheetClose}>Close</Text>
+          </Pressable>
+        </View>
+        <View style={styles.languageOptionSelected}>
+          <Text style={styles.languageOptionText}>English</Text>
+          <Text style={styles.languageOptionMeta}>Current</Text>
+        </View>
+        <View style={styles.languageOptionDisabled}>
+          <Text style={styles.languageOptionTextMuted}>Filipino</Text>
+          <Text style={styles.languageOptionMetaMuted}>Coming Soon</Text>
+        </View>
+        <PrimaryButton label="Done" onPress={() => setLanguageSheetVisible(false)} />
+      </BottomSheet>
     </View>
   );
 }
@@ -363,6 +383,62 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 13,
     lineHeight: 20,
+  },
+  languageSheetHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  languageSheetTitle: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  languageSheetClose: {
+    color: '#69A4EC',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  languageOptionSelected: {
+    backgroundColor: '#EDF5FF',
+    borderColor: '#69A4EC',
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 2,
+    padding: 14,
+  },
+  languageOptionDisabled: {
+    backgroundColor: '#F5F5EF',
+    borderRadius: 12,
+    gap: 2,
+    opacity: 0.78,
+    padding: 14,
+  },
+  languageOptionText: {
+    color: onboardingColors.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  languageOptionTextMuted: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  languageOptionMeta: {
+    color: '#69A4EC',
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  languageOptionMetaMuted: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
   },
   inputGroup: {
     gap: 24,

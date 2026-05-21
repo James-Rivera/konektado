@@ -16,6 +16,7 @@
 | Messages / Interest | Verified users message job posters or workers to show interest and coordinate. | This replaces a formal application flow for MVP. |
 | Hiring Decision | Clients can mark a worker as hired from a job-related conversation. | Keep the decision simple: interested, hired, completed, declined/cancelled. |
 | Reviews | Completed job participants can leave rating and feedback. | One review per reviewer/reviewee/job. |
+| In-app Notifications | Users can review basic unread/read notifications for messages, verification decisions, completed hired jobs, and report status updates. | In-app center only; no push delivery in MVP. |
 | Admin Dashboard | Basic review queues for verification requests, reports, users, jobs, and reviews. | Admin UI can be simple but must be reliable. |
 
 ## MVP Excluded Features
@@ -32,7 +33,7 @@ The following are intentionally out of scope for MVP:
 - Complex scheduling or calendar booking.
 - Advanced analytics.
 - Multi-barangay administration.
-- Push notifications beyond basic future support.
+- Push notifications.
 - Advanced chat features such as attachments, read receipts, calls, or group chat.
 - Gaming services, account sharing, academic cheating, and high-risk licensed or regulated service categories.
 - Formal file delivery, output approval, revisions, or online freelancing contract workflows.
@@ -45,7 +46,7 @@ These can be considered after the MVP is stable:
 - Advanced messaging features after basic MVP chat is stable, such as attachments, read receipts, calls, and group chat.
 - Saved jobs and saved providers.
 - Provider availability calendar.
-- Notification center and push notifications.
+- Push notifications and notification preferences beyond the basic in-app notification center.
 - Admin analytics dashboard.
 - More detailed provider portfolio.
 - Multi-barangay support.

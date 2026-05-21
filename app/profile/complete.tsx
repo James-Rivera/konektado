@@ -4,16 +4,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,27 +23,27 @@ import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerShee
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RateRangeInput } from '@/components/RateRangeInput';
-import {
-  getDisplayLabelForMvpService,
-  MVP_SERVICE_CATEGORIES,
-  MVP_SERVICES_BY_CATEGORY,
-} from '@/constants/service-taxonomy';
 import { Skeleton } from '@/components/Skeleton';
+import {
+    getDisplayLabelForMvpService,
+    MVP_SERVICE_CATEGORIES,
+    MVP_SERVICES_BY_CATEGORY,
+} from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
-  getMyProfileCompletion,
-  saveCoreProfile,
-  saveHiringProfile,
-  saveWorkProfile,
+    getMyProfileCompletion,
+    saveCoreProfile,
+    saveHiringProfile,
+    saveWorkProfile,
 } from '@/services/profile-completion.service';
 import { uploadProfilePhoto } from '@/services/profile-photo.service';
 import type {
-  CoreProfileInput,
-  HiringProfileInput,
-  ProfileCompletionMode,
-  ProfileCompletionStatus,
-  WorkProfileInput,
+    CoreProfileInput,
+    HiringProfileInput,
+    ProfileCompletionMode,
+    ProfileCompletionStatus,
+    WorkProfileInput,
 } from '@/types/profile.types';
 
 type FormMode = ProfileCompletionMode;
@@ -133,10 +133,6 @@ function normalizeFocusTarget(value: string | string[] | undefined): ProfileFocu
   }
 
   return null;
-}
-
-function combineAddressDetails(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).join(', ');
 }
 
 export default function CompleteProfileScreen() {
@@ -458,7 +454,6 @@ function CoreForm({
   onPickAvatar: () => void;
 }) {
   const [areaSheetVisible, setAreaSheetVisible] = useState(false);
-  const exactAddressDetail = combineAddressDetails([value.houseNumber, value.blockLot]);
 
   return (
     <>
@@ -492,55 +487,26 @@ function CoreForm({
 
       <SetupSection>
         <View style={styles.addressIntroBlock}>
+          <PrivacyNoteCard />
           <CurrentAreaCard onChange={() => setAreaSheetVisible(true)} />
-          <Text style={styles.addressIntroText}>
-            Only your general area is shown publicly. Exact address details stay private.
-          </Text>
         </View>
       </SetupSection>
 
       <SetupSection>
         <AddressSection
           badge="Required"
-          helper="Shown on your profile and posts. Do not include your exact house number."
-          title="General location">
-          {/* Legacy field: profiles.street now stores Area / Street / Purok / Sitio. */}
+          helper="Purok, sitio, street, or subdivision"
+          title="Public area">
           <Field
-            label="Area / Street / Purok / Sitio"
-            placeholder="e.g. Gov. Carpio Ave, Purok 3, Sitio Maligaya"
+            label="Public area"
+            placeholder="e.g. Purok 3 or Gov. Carpio Ave"
             value={value.street}
             onChangeText={(street) => onChange({ ...value, street })}
           />
-          {/* Legacy field: profiles.subdivision_area now stores optional additional area details. */}
-          <Field
-            badge="Optional"
-            label="Additional area details"
-            placeholder="e.g. San Pedro Subdivision, Phase 2, near barangay hall"
-            value={value.subdivisionArea}
-            onChangeText={(subdivisionArea) => onChange({ ...value, subdivisionArea })}
-          />
-        </AddressSection>
-      </SetupSection>
-
-      <SetupSection>
-        <AddressSection
-          badge="Optional"
-          helper="Kept private. Used only for verification and coordination."
-          title="Exact address details">
-          {/* Legacy fields: house_number/block_lot are shown as one private exact-detail input. */}
-          <Field
-            label="House / Building / Block / Lot"
-            placeholder="e.g. House 125, Block 4 Lot 12, Unit 2B"
-            value={exactAddressDetail}
-            onChangeText={(houseNumber) => onChange({ ...value, houseNumber, blockLot: '' })}
-          />
-          {/* Legacy field: landmark_note now means private note for finding the resident. */}
-          <Field
-            label="Private note for finding you"
-            placeholder="e.g. blue gate beside the sari-sari store"
-            value={value.landmarkNote}
-            onChangeText={(landmarkNote) => onChange({ ...value, landmarkNote })}
-          />
+          <View style={styles.publicHintRow}>
+            <MaterialIcons color={color.textSubtle} name="public" size={16} />
+            <Text style={styles.publicHintText}>Shown publicly</Text>
+          </View>
         </AddressSection>
       </SetupSection>
 
@@ -677,6 +643,22 @@ function CurrentAreaCard({ onChange }: { onChange: () => void }) {
   );
 }
 
+function PrivacyNoteCard() {
+  return (
+    <View style={styles.privacyCard}>
+      <View style={styles.privacyIconWrap}>
+        <MaterialIcons color={color.warning} name="lock" size={16} />
+      </View>
+      <View style={styles.privacyCopy}>
+        <Text style={styles.privacyTitle}>Privacy note</Text>
+        <Text style={styles.privacyBody}>
+          Only your general area is shown publicly. Exact address details stay private.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function AddressSection({
   badge,
   children,
@@ -737,11 +719,11 @@ function ServiceAreaSheet({
       </View>
 
       <View style={styles.sheetSection}>
-        <Text style={styles.sheetSectionTitle}>Coming soon</Text>
+        <Text style={styles.sheetSectionTitle}>Other areas</Text>
         <View style={styles.sheetOptionDisabled}>
           <Text style={styles.sheetOptionTextMuted}>Other barangays in Santo Tomas</Text>
         </View>
-        <Text style={styles.sheetHelper}>Konektado is currently available only in selected service areas.</Text>
+        <Text style={styles.sheetHelper}>Konektado currently supports only selected service areas.</Text>
       </View>
 
       <PrimaryButton label="Done" onPress={onClose} />
@@ -1340,9 +1322,46 @@ const styles = StyleSheet.create({
   addressIntroBlock: {
     gap: space.sm,
   },
-  addressIntroText: {
+  privacyCard: {
+    alignItems: 'flex-start',
+    backgroundColor: color.warningSoft,
+    borderColor: 'rgba(183, 121, 31, 0.35)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  privacyIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(252, 192, 59, 0.25)',
+    borderRadius: radius.pill,
+    height: 26,
+    justifyContent: 'center',
+    width: 26,
+  },
+  privacyCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  privacyTitle: {
+    ...typography.captionMedium,
+    color: color.text,
+  },
+  privacyBody: {
     ...typography.caption,
     color: color.textMuted,
+  },
+  publicHintRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.xs,
+  },
+  publicHintText: {
+    ...typography.caption,
+    color: color.textSubtle,
   },
   addressSection: {
     gap: space.md,

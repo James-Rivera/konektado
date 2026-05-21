@@ -242,7 +242,7 @@ export default function ProfileScreen() {
         )}
       </ScrollView>
       <ProfileQuickActionsSheet
-        hasPublicProfile={services.length > 0}
+        mode={mode}
         onClose={() => setQuickActionsVisible(false)}
         onSettings={() => {
           setQuickActionsVisible(false);
@@ -260,28 +260,17 @@ export default function ProfileScreen() {
         }}
         onViewPublicProfile={() => {
           setQuickActionsVisible(false);
-          if (services[0]) {
-            router.push({ pathname: '/services/[serviceId]', params: { serviceId: services[0].id } });
+          if (!profile?.id) {
+            Alert.alert('Public profile', 'Sign in again to preview your public profile.');
             return;
           }
 
-          Alert.alert(
-            'Public profile',
-            'Create a service post first so neighbors have a public Work Profile to view.',
-            [
-              { text: 'Not now', style: 'cancel' },
-              {
-                text: 'Add service',
-                onPress: () =>
-                  openProfileAction({
-                    id: 'service',
-                    kind: 'create_service',
-                    label: 'Add your first service',
-                    mode: 'work',
-                  }),
-              },
-            ],
-          );
+          if (mode === 'work') {
+            router.push({ pathname: '/worker/[workerId]' as never, params: { workerId: profile.id } });
+            return;
+          }
+
+          router.push({ pathname: '/client/[clientId]' as never, params: { clientId: profile.id } });
         }}
         visible={quickActionsVisible}
       />
@@ -290,14 +279,14 @@ export default function ProfileScreen() {
 }
 
 function ProfileQuickActionsSheet({
-  hasPublicProfile,
+  mode,
   onClose,
   onSettings,
   onUpdatePhoto,
   onViewPublicProfile,
   visible,
 }: {
-  hasPublicProfile: boolean;
+  mode: ProfileMode;
   onClose: () => void;
   onSettings: () => void;
   onUpdatePhoto: () => void;
@@ -320,7 +309,7 @@ function ProfileQuickActionsSheet({
         <QuickActionRow
           icon="visibility"
           label="View public profile"
-          subtitle={hasPublicProfile ? 'Open your public service profile' : 'Create a service post first'}
+          subtitle={mode === 'work' ? 'Preview your public worker profile' : 'Preview your public hiring profile'}
           onPress={onViewPublicProfile}
         />
         <QuickActionRow

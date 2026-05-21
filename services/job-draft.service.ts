@@ -9,7 +9,7 @@ import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.t
 import { supabase } from '@/utils/supabase';
 
 const JOB_DRAFT_COLUMNS =
-  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_amount, budget_min, budget_max, rate_type, budget_negotiable, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
+  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
 
 type JobDraftRow = {
   id: string;
@@ -22,7 +22,6 @@ type JobDraftRow = {
   photo_urls: string[] | null;
   barangay: string | null;
   location_text: string | null;
-  budget_amount: number | null;
   budget_min: number | null;
   budget_max: number | null;
   rate_type: string | null;
@@ -52,11 +51,10 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
     photoUrls: row.photo_urls ?? [],
     barangay: row.barangay,
     locationText: row.location_text,
-    budgetAmount: row.budget_amount,
-    budgetMin: row.budget_min ?? row.budget_amount,
-    budgetMax: row.budget_max ?? row.budget_amount,
+    budgetMin: row.budget_min,
+    budgetMax: row.budget_max,
     rateType: normalizeRateType(row.rate_type),
-    budgetNegotiable: row.budget_negotiable ?? (row.rate_type === 'negotiable'),
+    budgetNegotiable: row.budget_negotiable ?? false,
     privateLocationNotes: row.private_location_notes,
     workersNeeded: row.workers_needed,
     scheduleText: row.schedule_text,
@@ -74,8 +72,8 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
 function normalizeDraftPayload(input: UpsertJobDraftInput) {
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
   const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
-  const budgetMin = input.budgetMin ?? input.budgetAmount ?? null;
-  const budgetMax = input.budgetMax ?? input.budgetAmount ?? null;
+  const budgetMin = input.budgetMin ?? null;
+  const budgetMax = input.budgetMax ?? null;
 
   return {
     title: compactText(input.title) || null,
@@ -88,7 +86,7 @@ function normalizeDraftPayload(input: UpsertJobDraftInput) {
     location_text: compactText(input.locationText) || null,
     public_location_text: compactText(input.locationText) || compactText(input.barangay) || 'Barangay San Pedro',
     private_location_notes: compactText(input.privateLocationNotes) || null,
-    budget_amount: budgetMin ?? budgetMax,
+    budget_amount: null,
     budget_min: budgetMin,
     budget_max: budgetMax,
     rate_type: normalizeRateType(input.rateType),

@@ -2,16 +2,17 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,26 +20,26 @@ import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import {
-  getConversation,
-  getConversationSummary,
-  mapRealtimeMessage,
-  markWorkerHired,
-  sendMessage,
-} from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
-  formatJobBudget,
-  formatJobPostTitle,
-  formatServiceRate,
-  formatServicePostTitle,
-  getMarketplaceLocation,
-  isPresenceActive,
+    getConversation,
+    getConversationSummary,
+    mapRealtimeMessage,
+    markWorkerHired,
+    sendMessage,
+} from '@/services/conversation.service';
+import {
+    formatJobBudget,
+    formatJobPostTitle,
+    formatServicePostTitle,
+    formatServiceRate,
+    getMarketplaceLocation,
+    isPresenceActive,
 } from '@/services/marketplace.helpers';
 import {
-  getCompletionModeForError,
-  getCompletionTitleForMode,
-  isProfileCompletionRequiredError,
+    getCompletionModeForError,
+    getCompletionTitleForMode,
+    isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
@@ -68,6 +69,7 @@ export default function ConversationDetailScreen() {
   const [conversationReady, setConversationReady] = useState(false);
   const [conversationError, setConversationError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(false);
   const [visibleTimestampId, setVisibleTimestampId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -176,11 +178,19 @@ export default function ConversationDetailScreen() {
 
   const other =
     conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
+  const avatarUrl = other?.avatarUrl ?? null;
   const isClient = conversation?.clientId === profile?.id;
   const isJobConversation = Boolean(conversation?.jobId);
   const canMarkHired =
     Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
+  const canOpenProfile = Boolean(
+    conversation && profile?.id && [conversation.clientId, conversation.providerId].includes(profile.id),
+  );
   const prompts = isJobConversation ? JOB_PROMPTS : SERVICE_PROMPTS;
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
 
   const replaceMessage = (messageId: string, nextMessage: ThreadMessage | null) => {
     setConversation((current) => {
@@ -301,7 +311,16 @@ export default function ConversationDetailScreen() {
             <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
           </Pressable>
           <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
+            {avatarUrl && !avatarFailed ? (
+              <Image
+                onError={() => setAvatarFailed(true)}
+                resizeMode="cover"
+                source={{ uri: avatarUrl }}
+                style={styles.headerAvatarImage}
+              />
+            ) : (
+              <Text style={styles.headerAvatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
+            )}
             <PresenceDot active={isPresenceActive(other?.availability)} borderColor={color.background} size={8} style={styles.onlineDot} />
           </View>
           <View style={styles.headerCopy}>
@@ -329,19 +348,30 @@ export default function ConversationDetailScreen() {
         {conversation ? (
           <ConversationContextCard
             canMarkHired={canMarkHired}
+            canOpenProfile={canOpenProfile}
             conversation={conversation}
             expanded={contextExpanded}
             onMarkHired={onMarkHired}
             onOpenPost={openPost}
             onOpenProfile={() => {
-              if (conversation.serviceId) {
+              if (conversation.providerId === profile?.id) {
                 router.push({
-                  pathname: '/services/[serviceId]',
-                  params: { serviceId: conversation.serviceId },
+                  pathname: '/client/[clientId]' as never,
+                  params: {
+                    clientId: conversation.clientId,
+                    ...(conversation.jobId ? { sourceJobId: conversation.jobId } : {}),
+                  },
                 });
                 return;
               }
-              Alert.alert('Profile', 'Public client profiles are not a separate route yet.');
+
+              router.push({
+                pathname: '/worker/[workerId]' as never,
+                params: {
+                  workerId: conversation.providerId,
+                  ...(conversation.serviceId ? { sourceServiceId: conversation.serviceId } : {}),
+                },
+              });
             }}
             onToggleExpanded={() => {
               setContextExpanded((value) => !value);
@@ -605,6 +635,7 @@ function ConversationScreenSkeleton() {
 
 function ConversationContextCard({
   canMarkHired,
+  canOpenProfile,
   conversation,
   expanded,
   onMarkHired,
@@ -613,6 +644,7 @@ function ConversationContextCard({
   onToggleExpanded,
 }: {
   canMarkHired: boolean;
+  canOpenProfile: boolean;
   conversation: ConversationDetail;
   expanded: boolean;
   onMarkHired: () => void;
@@ -639,7 +671,9 @@ function ConversationContextCard({
       {expanded ? (
         <View style={styles.contextActions}>
           <SmallActionButton label={conversation.jobId ? 'View Job' : 'View Service'} onPress={onOpenPost} />
-          <SmallActionButton label={conversation.jobId ? 'View Client' : 'View Profile'} onPress={onOpenProfile} />
+          {canOpenProfile ? (
+            <SmallActionButton label="View Profile" onPress={onOpenProfile} />
+          ) : null}
           {canMarkHired ? <SmallActionButton label="Mark Hired" onPress={onMarkHired} /> : null}
         </View>
       ) : null}
@@ -841,6 +875,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     width: 36,
+  },
+  headerAvatarImage: {
+    borderRadius: 18,
+    height: '100%',
+    width: '100%',
   },
   headerAvatarText: {
     color: color.text,

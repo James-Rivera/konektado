@@ -1,7 +1,10 @@
 import {
+  doesServiceMatchWorkType,
   getCategoryForMvpService,
   isMvpServiceCategory,
   isMvpServiceOption,
+  type MvpServiceCategory,
+  type SearchWorkType,
 } from '@/constants/service-taxonomy';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
@@ -13,6 +16,18 @@ export type HomeFeedRankingContext = {
   city?: string | null;
   preferences: UserPreferences | null;
   userBarangay?: string | null;
+};
+
+export type HomeFeedType = 'all' | 'jobs' | 'services';
+export type HomeFeedLocationPreference = 'same_barangay' | 'nearby' | 'any';
+export type HomeFeedSort = 'recommended' | 'newest' | 'nearby';
+
+export type HomeFeedFilters = {
+  feedType: HomeFeedType;
+  workType: SearchWorkType;
+  category: 'all' | MvpServiceCategory;
+  locationPreference: HomeFeedLocationPreference;
+  sort: HomeFeedSort;
 };
 
 type Ranked<T> = {
@@ -28,6 +43,14 @@ type RankedQueues<TJob, TWorker> = {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const OPPOSITE_TYPE_RELEVANCE_GAP = 12;
+
+export const DEFAULT_HOME_FEED_FILTERS: HomeFeedFilters = {
+  feedType: 'all',
+  workType: 'either',
+  category: 'all',
+  locationPreference: 'any',
+  sort: 'recommended',
+};
 
 export function resolveHomeFeedMode(context: HomeFeedRankingContext): HomeFeedMode {
   const activeRole = normalizeRole(context.activeRole);
@@ -90,6 +113,93 @@ export function buildHomeForYouFeed<TJob, TWorker>({
   return mergeBalancedByScore({ jobs: rankedJobs, workers: rankedWorkers });
 }
 
+export function applyHomeFeedFilters<TJob, TWorker>({
+  context,
+  filters,
+  jobs,
+  workers,
+}: {
+  context: HomeFeedRankingContext;
+  filters: HomeFeedFilters;
+  jobs: Array<{ item: TJob; job: JobSummary }>;
+  workers: Array<{ item: TWorker; service: ServiceSearchResult }>;
+}) {
+  const visibleJobs = filters.feedType === 'services'
+    ? []
+    : jobs.filter(({ job }) => matchesJobFilters(job, context, filters));
+  const visibleWorkers = filters.feedType === 'jobs'
+    ? []
+    : workers.filter(({ service }) => matchesWorkerFilters(service, context, filters));
+
+  return {
+    jobs: sortFilteredJobs(visibleJobs, context, filters).map(({ item }) => item),
+    services: sortFilteredWorkers(visibleWorkers, context, filters).map(({ item }) => item),
+    all: buildFilteredMixedFeed({
+      context,
+      filters,
+      jobs: visibleJobs,
+      workers: visibleWorkers,
+    }),
+  };
+}
+
+export function getHomeFeedFilterCount(filters: HomeFeedFilters) {
+  let count = 0;
+  if (filters.workType !== DEFAULT_HOME_FEED_FILTERS.workType) count += 1;
+  if (filters.category !== DEFAULT_HOME_FEED_FILTERS.category) count += 1;
+  if (filters.locationPreference !== DEFAULT_HOME_FEED_FILTERS.locationPreference) count += 1;
+  if (filters.sort !== DEFAULT_HOME_FEED_FILTERS.sort) count += 1;
+  return count;
+}
+
+function buildFilteredMixedFeed<TJob, TWorker>({
+  context,
+  filters,
+  jobs,
+  workers,
+}: {
+  context: HomeFeedRankingContext;
+  filters: HomeFeedFilters;
+  jobs: Array<{ item: TJob; job: JobSummary }>;
+  workers: Array<{ item: TWorker; service: ServiceSearchResult }>;
+}) {
+  const rankedJobs = sortFilteredJobs(jobs, context, filters);
+  const rankedWorkers = sortFilteredWorkers(workers, context, filters);
+
+  if (filters.sort === 'newest') {
+    return [...rankedJobs, ...rankedWorkers]
+      .sort((left, right) => right.createdTime - left.createdTime)
+      .map(({ item }) => item);
+  }
+
+  if (filters.sort === 'nearby') {
+    return mergeBalancedByScore({
+      jobs: rankedJobs,
+      workers: rankedWorkers,
+    });
+  }
+
+  const mode = resolveHomeFeedMode(context);
+
+  if (mode === 'provider') {
+    return mergeWithPattern({
+      pattern: ['job', 'job', 'job', 'worker'],
+      primaryType: 'job',
+      queues: { jobs: rankedJobs, workers: rankedWorkers },
+    });
+  }
+
+  if (mode === 'client') {
+    return mergeWithPattern({
+      pattern: ['worker', 'worker', 'worker', 'job'],
+      primaryType: 'worker',
+      queues: { jobs: rankedJobs, workers: rankedWorkers },
+    });
+  }
+
+  return mergeBalancedByScore({ jobs: rankedJobs, workers: rankedWorkers });
+}
+
 function rankJobs<T>(
   jobs: Array<{ item: T; job: JobSummary }>,
   context: HomeFeedRankingContext,
@@ -105,6 +215,24 @@ function rankJobs<T>(
     .sort(compareRanked);
 }
 
+function sortFilteredJobs<T>(
+  jobs: Array<{ item: T; job: JobSummary }>,
+  context: HomeFeedRankingContext,
+  filters: HomeFeedFilters,
+): Ranked<T>[] {
+  const ranked = jobs.map(({ item, job }) => ({
+    item,
+    score: getFilteredJobScore(job, context, filters),
+    createdTime: getCreatedTime(job.createdAt),
+  }));
+
+  if (filters.sort === 'newest') {
+    return ranked.sort(compareNewest);
+  }
+
+  return ranked.sort(compareRanked);
+}
+
 function rankWorkers<T>(
   workers: Array<{ item: T; service: ServiceSearchResult }>,
   context: HomeFeedRankingContext,
@@ -118,6 +246,119 @@ function rankWorkers<T>(
       createdTime: getCreatedTime(service.createdAt),
     }))
     .sort(compareRanked);
+}
+
+function sortFilteredWorkers<T>(
+  workers: Array<{ item: T; service: ServiceSearchResult }>,
+  context: HomeFeedRankingContext,
+  filters: HomeFeedFilters,
+): Ranked<T>[] {
+  const ranked = workers.map(({ item, service }) => ({
+    item,
+    score: getFilteredWorkerScore(service, context, filters),
+    createdTime: getCreatedTime(service.createdAt),
+  }));
+
+  if (filters.sort === 'newest') {
+    return ranked.sort(compareNewest);
+  }
+
+  return ranked.sort(compareRanked);
+}
+
+function matchesJobFilters(
+  job: JobSummary,
+  context: HomeFeedRankingContext,
+  filters: HomeFeedFilters,
+) {
+  const service = job.serviceNeeded ?? job.category;
+  if (!doesServiceMatchWorkType(service, filters.workType)) return false;
+  if (!matchesCategory(job.category, service, filters.category)) return false;
+  return matchesLocationPreference(
+    getLocationMatch({
+      candidateBarangay: job.barangay,
+      candidateLocationText: job.locationText,
+      userBarangay: context.userBarangay,
+      userCity: context.city,
+    }),
+    filters.locationPreference,
+  );
+}
+
+function matchesWorkerFilters(
+  service: ServiceSearchResult,
+  context: HomeFeedRankingContext,
+  filters: HomeFeedFilters,
+) {
+  if (!doesServiceMatchWorkType(service.category, filters.workType)) return false;
+  if (!matchesCategory(service.category, service.category, filters.category)) return false;
+  return matchesLocationPreference(
+    getLocationMatch({
+      candidateBarangay: service.barangay ?? service.provider?.barangay,
+      candidateCity: service.provider?.city,
+      candidateLocationText: service.locationText,
+      userBarangay: context.userBarangay,
+      userCity: context.city,
+    }),
+    filters.locationPreference,
+  );
+}
+
+function matchesCategory(
+  candidateCategory: string | null | undefined,
+  candidateService: string | null | undefined,
+  filterCategory: HomeFeedFilters['category'],
+) {
+  if (filterCategory === 'all') return true;
+  return getTaxonomyGroup(candidateService) === filterCategory || getTaxonomyGroup(candidateCategory) === filterCategory;
+}
+
+function matchesLocationPreference(
+  locationMatch: number,
+  preference: HomeFeedLocationPreference,
+) {
+  if (preference === 'any') return true;
+  if (preference === 'same_barangay') return locationMatch >= 0.8;
+  return locationMatch > 0;
+}
+
+function getFilteredJobScore(
+  job: JobSummary,
+  context: HomeFeedRankingContext,
+  filters: HomeFeedFilters,
+) {
+  if (filters.sort !== 'nearby') {
+    return scoreJob(job, context, resolveHomeFeedMode(context));
+  }
+
+  const locationMatch = getLocationMatch({
+    candidateBarangay: job.barangay,
+    candidateLocationText: job.locationText,
+    userBarangay: context.userBarangay,
+    userCity: context.city,
+  });
+
+  return locationMatch * 100 + scoreJob(job, context, resolveHomeFeedMode(context));
+}
+
+function getFilteredWorkerScore(
+  service: ServiceSearchResult,
+  context: HomeFeedRankingContext,
+  filters: HomeFeedFilters,
+) {
+  if (filters.sort !== 'nearby') {
+    return scoreWorker(service, context, resolveHomeFeedMode(context));
+  }
+
+  const locationMatch = getLocationMatch({
+    candidateBarangay: service.barangay ?? service.provider?.barangay,
+    candidateCity: service.provider?.city,
+    candidateLocationText: service.locationText,
+    userBarangay: context.userBarangay,
+    userCity: context.city,
+  });
+
+  return locationMatch * 100 + scoreWorker(service, context, resolveHomeFeedMode(context));
 }
 
 function scoreJob(job: JobSummary, context: HomeFeedRankingContext, mode: HomeFeedMode) {
@@ -408,6 +649,10 @@ function mergeBalancedByScore<TJob, TWorker>(queues: RankedQueues<TJob, TWorker>
 function compareRanked<T>(left: Ranked<T>, right: Ranked<T>) {
   const scoreDiff = right.score - left.score;
   if (scoreDiff !== 0) return scoreDiff;
+  return right.createdTime - left.createdTime;
+}
+
+function compareNewest<T>(left: Ranked<T>, right: Ranked<T>) {
   return right.createdTime - left.createdTime;
 }
 
