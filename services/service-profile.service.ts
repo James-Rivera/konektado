@@ -3,6 +3,7 @@ import {
   getServiceSearchValuesForOptions,
 } from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
+import { applyPublicPhotoVisibilityToRows } from '@/services/content-visibility.service';
 import {
   compactText,
   doesRateOverlap,
@@ -415,11 +416,12 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
-  const profiles = await loadPublicProfiles(rows.map((row) => row.provider_id));
-  const stats = await loadProviderStats(rows.map((row) => row.provider_id));
+  const visibleRows = await applyPublicPhotoVisibilityToRows(rows, 'service_photo');
+  const profiles = await loadPublicProfiles(visibleRows.map((row) => row.provider_id));
+  const stats = await loadProviderStats(visibleRows.map((row) => row.provider_id));
 
   return {
-    data: rows
+    data: visibleRows
       .map((row) => mapServiceSearchResult(row, profiles, stats))
       .filter((service) =>
         filters.verifiedOnly
@@ -465,13 +467,16 @@ export async function getServiceDetail(serviceId: string): Promise<ServiceResult
       .order('created_at', { ascending: false }),
   ]);
 
-  const providerServices = ((providerServicesResult.data as ServiceRow[] | null) ?? []).map(mapService);
-  const detail = mapServiceSearchResult(data, profiles, stats);
+  const [visibleDetail, ...visibleProviderServices] = await applyPublicPhotoVisibilityToRows(
+    [data, ...((providerServicesResult.data as ServiceRow[] | null) ?? [])],
+    'service_photo',
+  );
+  const detail = mapServiceSearchResult(visibleDetail, profiles, stats);
 
   return {
     data: {
       ...detail,
-      providerServices,
+      providerServices: visibleProviderServices.map(mapService),
     },
     error: null,
   };

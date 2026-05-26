@@ -1,4 +1,8 @@
 import type { ServiceResult } from '@/services/auth.service';
+import {
+  applyPublicPhotoVisibilityToRows,
+  getVisibleProfileAvatarUrl,
+} from '@/services/content-visibility.service';
 import { compactText, formatBarangayDisplay, loadPublicProfiles, mapJob, type JobRow } from '@/services/marketplace.helpers';
 import type { PublicClientProfile } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
@@ -69,9 +73,13 @@ export async function getPublicClientProfile(
   const jobs = ((jobsResult.data as JobRow[] | null) ?? []).filter(
     (job) => (job.client_id ?? job.owner_id) === id,
   );
+  const visibleJobs = await applyPublicPhotoVisibilityToRows(jobs, 'job_photo');
+  const visibleSelectedJobRows = selectedJobResult.data
+    ? await applyPublicPhotoVisibilityToRows([selectedJobResult.data as JobRow], 'job_photo')
+    : [];
   const publicProfiles = await loadPublicProfiles([id]);
-  const selectedJob = selectedJobResult.data ? mapJob(selectedJobResult.data as JobRow, publicProfiles) : null;
-  const activeJobs = jobs
+  const selectedJob = visibleSelectedJobRows[0] ? mapJob(visibleSelectedJobRows[0], publicProfiles) : null;
+  const activeJobs = visibleJobs
     .filter((job) => job.id !== selectedJob?.id)
     .map((job) => mapJob(job, publicProfiles));
   const reviewRows = ((reviewsResult.data as { rating: number }[] | null) ?? []).filter(
@@ -90,7 +98,10 @@ export async function getPublicClientProfile(
     data: {
       id: profile.id,
       fullName: displayName,
-      avatarUrl: compactText(profile.avatar_url) || null,
+      avatarUrl: await getVisibleProfileAvatarUrl({
+        avatarUrl: profile.avatar_url,
+        profileId: profile.id,
+      }),
       publicLocation: formatPublicClientLocation(profile),
       about: compactText(profile.about) || null,
       availability: compactText(profile.availability) || null,

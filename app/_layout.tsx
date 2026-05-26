@@ -164,9 +164,12 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/photos/[photoId]" options={{ headerShown: false }} />
       <Stack.Screen name="admin/photos" options={{ headerShown: false }} />
       <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
       <Stack.Screen name="admin/settings" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/users/[userId]" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/users" options={{ headerShown: false }} />
       <Stack.Screen name="admin/verifications/[requestId]" options={{ headerShown: false }} />
       <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
       <Stack.Screen name="client/[clientId]" options={{ headerShown: false }} />

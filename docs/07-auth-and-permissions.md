@@ -168,6 +168,8 @@ These role permissions apply after the user's barangay verification is approved 
 | `messages`              | Conversation participants only. Admin can read only for moderation/report workflows.                                                           | Verified sender with relevant role profile only. | Avoid editing messages in MVP.                                                                     | Prefer archive/report over hard delete.                                      |
 | `reviews`               | Public can read approved public reviews.                                                                                                       | Verified job participants only after completion. | Reviewer can edit own review if allowed. Admin can hide/moderate reported reviews.                 | Avoid hard delete; admin moderation preferred.                               |
 | `reports`               | Reporter can read own report. Admin can read all.                                                                                              | Authenticated users.                             | Admin updates status.                                                                              | Admin-only.                                                                  |
+| `admin_moderation_actions` | Barangay admins only. Normal users cannot read admin reasons, notes, or history.                                                            | Barangay admins only.                            | Barangay admins only.                                                                              | Avoid hard delete; preserve audit history.                                   |
+| `content_visibility`    | Barangay admins can read full rows. Public app clients use only a safe visibility view without admin notes/reasons.                             | Barangay admins only.                            | Barangay admins only.                                                                              | Avoid hard delete; use `visible`/`hidden`.                                   |
 
 ## Admin Rules
 
@@ -176,6 +178,12 @@ These role permissions apply after the user's barangay verification is approved 
 - Admin actions should be routed through `AdminService`.
 - Admin review decisions must store reviewer ID and timestamp.
 - Admins should see only the data needed for verification or moderation.
+- Public photo moderation is limited to public profile avatars, public job photos, and public service photos.
+- Photo Flag writes an admin moderation action and keeps public visibility unchanged.
+- Photo Hide writes an admin moderation action and sets content visibility to `hidden`; public screens must stop rendering the image.
+- Photo Clear writes an admin moderation action and sets content visibility back to `visible`.
+- Public photo moderation does not physically delete storage files in the current phase.
+- Admin moderation reasons and notes must never be exposed in normal public app queries.
 
 ## Verification Rules
 
@@ -217,6 +225,7 @@ Private or restricted fields:
 - Report details.
 - Raw auth metadata.
 - Private job location notes or meetup/address instructions.
+- Admin moderation reasons, notes, and internal action history.
 
 Discovery privacy rules:
 
@@ -224,6 +233,7 @@ Discovery privacy rules:
 - Owner surfaces such as My Posts, Manage Posts, and Profile activity still show the user's own content.
 - Public job/service cards and details must use shared rate-range formatting and approximate location only.
 - Custom "Others / Specify" services are stored separately from official taxonomy values and can be marked for barangay/admin review so taxonomy filters continue to work.
+- Hidden public photos must be filtered before rendering public profile avatars, job photos, service photos, feed cards, search cards, and detail galleries. Hidden profile photos should fall back to initials/default avatars.
 
 ## Row Level Security Direction
 

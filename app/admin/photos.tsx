@@ -12,11 +12,14 @@ import {
   AdminPanel,
   AdminPrivacyNotice,
   AdminScreenShell,
+  AdminStatusBadge,
   adminPalette,
+  type AdminTone,
 } from '@/components/admin/AdminShell';
 import { color, radius, space, typography } from '@/constants/theme';
 import {
   listAdminPublicPhotos,
+  type AdminPhotoModerationStatus,
   type AdminPhotoSource,
   type AdminPublicPhotoItem,
 } from '@/services/admin-photo.service';
@@ -89,7 +92,7 @@ export default function AdminPhotosScreen() {
 
   return (
     <AdminScreenShell
-      activeSection="photos"
+      activeSection="users"
       loading={loading}
       onRefresh={() => load({ silent: true })}
       refreshing={refreshing}
@@ -134,7 +137,7 @@ export default function AdminPhotosScreen() {
         <View style={styles.backendNote}>
           <MaterialIcons color={adminPalette.faint} name="info-outline" size={18} />
           <Text style={styles.backendNoteText}>
-            Photo moderation actions require a moderation table before approval or takedown can be enabled.
+            Review opens backend-backed Flag, Hide photo, and Clear actions for public-facing photos only.
           </Text>
         </View>
       </AdminPanel>
@@ -146,6 +149,13 @@ function PhotoAuditCard({ photo }: { photo: AdminPublicPhotoItem }) {
   const router = useRouter();
   const action = actionForPhoto(photo);
   const disabled = !action.route;
+
+  const handleReviewPhoto = () => {
+    router.push({
+      pathname: '/admin/photos/[photoId]',
+      params: { photoId: photo.id },
+    });
+  };
 
   const handleOpenPhotoSource = () => {
     if (!action.route) {
@@ -161,7 +171,15 @@ function PhotoAuditCard({ photo }: { photo: AdminPublicPhotoItem }) {
       <View style={styles.photoRow}>
         <Image source={{ uri: photo.imageUrl }} style={styles.thumbnail} />
         <View style={styles.photoCopy}>
-          <Text style={styles.sourceType}>{sourceLabel(photo.source)}</Text>
+          <View style={styles.typeRow}>
+            <Text style={styles.sourceType}>{sourceLabel(photo.source)}</Text>
+            {photo.moderationStatus === 'visible' ? null : (
+              <AdminStatusBadge
+                label={formatModerationStatus(photo.moderationStatus)}
+                tone={toneForModeration(photo.moderationStatus)}
+              />
+            )}
+          </View>
           <Text numberOfLines={2} style={styles.photoTitle}>
             {photo.title}
           </Text>
@@ -179,6 +197,15 @@ function PhotoAuditCard({ photo }: { photo: AdminPublicPhotoItem }) {
         </View>
       </View>
 
+      <View style={styles.actionRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleReviewPhoto}
+          style={({ pressed }) => [styles.reviewAction, pressed && styles.pressed]}>
+          <Text style={styles.reviewActionText}>Review photo</Text>
+          <MaterialIcons color={color.white} name="chevron-right" size={20} />
+        </Pressable>
+
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled }}
@@ -190,10 +217,11 @@ function PhotoAuditCard({ photo }: { photo: AdminPublicPhotoItem }) {
           pressed && !disabled && styles.pressed,
         ]}>
         <Text style={[styles.primaryActionText, disabled && styles.primaryActionTextDisabled]}>
-          {action.label}
+          {disabled ? action.label : 'Open source'}
         </Text>
         {disabled ? null : <MaterialIcons color={adminPalette.blue} name="chevron-right" size={20} />}
       </Pressable>
+      </View>
     </AdminListCard>
   );
 }
@@ -249,6 +277,20 @@ function sourceLabel(source: AdminPhotoSource) {
   if (source === 'profile') return 'Profile photo';
   if (source === 'job') return 'Job photo';
   return 'Service photo';
+}
+
+function formatModerationStatus(status: AdminPhotoModerationStatus) {
+  if (status === 'flagged') return 'Flagged';
+  if (status === 'hidden') return 'Hidden';
+  if (status === 'cleared') return 'Cleared';
+  return 'Visible';
+}
+
+function toneForModeration(status: AdminPhotoModerationStatus): AdminTone {
+  if (status === 'hidden') return 'danger';
+  if (status === 'flagged') return 'warning';
+  if (status === 'cleared') return 'success';
+  return 'neutral';
 }
 
 function emptyStateForFilter(filter: PhotoFilter) {
@@ -338,6 +380,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  typeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.xs,
+  },
   photoTitle: {
     color: adminPalette.ink,
     fontFamily: 'Satoshi-Bold',
@@ -360,7 +408,6 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     alignItems: 'center',
-    alignSelf: 'flex-end',
     borderColor: adminPalette.blueLine,
     borderRadius: radius.pill,
     borderWidth: 1,
@@ -381,6 +428,28 @@ const styles = StyleSheet.create({
   },
   primaryActionTextDisabled: {
     color: adminPalette.faint,
+  },
+  actionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+    justifyContent: 'flex-end',
+  },
+  reviewAction: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.blue,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: 2,
+    minHeight: 34,
+    paddingLeft: space.md,
+    paddingRight: space.xs,
+  },
+  reviewActionText: {
+    ...typography.captionMedium,
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
   },
   backendNote: {
     alignItems: 'flex-start',

@@ -3,6 +3,7 @@ import {
   getServiceSearchValuesForOptions,
 } from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
+import { applyPublicPhotoVisibilityToRows } from '@/services/content-visibility.service';
 import {
     compactText,
     doesRateOverlap,
@@ -324,8 +325,9 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
-  const profiles = await loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id));
-  const jobs = rows
+  const visibleRows = await applyPublicPhotoVisibilityToRows(rows, 'job_photo');
+  const profiles = await loadPublicProfiles(visibleRows.map((row) => row.client_id ?? row.owner_id));
+  const jobs = visibleRows
     .map((row) => mapJob(row, profiles))
     .filter((job) =>
       filters.verifiedOnly
@@ -361,8 +363,9 @@ export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDeta
     return { data: null, error: 'Job not found.' };
   }
 
-  const profiles = await loadPublicProfiles([data.client_id ?? data.owner_id]);
-  const job = mapJob(data, profiles);
+  const [visibleData] = await applyPublicPhotoVisibilityToRows([data], 'job_photo');
+  const profiles = await loadPublicProfiles([visibleData.client_id ?? visibleData.owner_id]);
+  const job = mapJob(visibleData, profiles);
   const stats = await loadClientStats([job.clientId]);
 
   return {

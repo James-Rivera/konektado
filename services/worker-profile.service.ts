@@ -1,5 +1,9 @@
 import type { ServiceResult } from '@/services/auth.service';
 import {
+  applyPublicPhotoVisibilityToRows,
+  getVisibleProfileAvatarUrl,
+} from '@/services/content-visibility.service';
+import {
   compactText,
   formatPublicLocation,
   loadPublicProfiles,
@@ -76,16 +80,27 @@ export async function getPublicWorkerProfile(
   const profile = profiles.get(id);
   if (!profile) return { data: null, error: null };
 
-  const selectedService = selectedServiceResult.data ? mapService(selectedServiceResult.data as ServiceRow) : null;
-  const services = ((servicesResult.data as ServiceRow[] | null) ?? [])
+  const [visibleSelectedService] = selectedServiceResult.data
+    ? await applyPublicPhotoVisibilityToRows([selectedServiceResult.data as ServiceRow], 'service_photo')
+    : [null];
+  const visibleServices = await applyPublicPhotoVisibilityToRows(
+    ((servicesResult.data as ServiceRow[] | null) ?? []),
+    'service_photo',
+  );
+  const selectedService = visibleSelectedService ? mapService(visibleSelectedService) : null;
+  const services = visibleServices
     .filter((service) => service.id !== selectedService?.id)
     .map(mapService);
+  const avatarUrl = await getVisibleProfileAvatarUrl({
+    avatarUrl: profile.avatarUrl,
+    profileId: profile.id,
+  });
 
   return {
     data: {
       id: profile.id,
       fullName: profile.fullName,
-      avatarUrl: compactText(profile.avatarUrl) || null,
+      avatarUrl,
       publicLocation:
         compactText(profile.approximateLocation) ||
         formatPublicLocation({

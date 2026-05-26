@@ -19,7 +19,7 @@ import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { color, radius, space, typography } from '@/constants/theme';
 import { supabase } from '@/utils/supabase';
 
-export type AdminSection = 'verifications' | 'reports' | 'photos' | 'settings';
+export type AdminSection = 'verifications' | 'reports' | 'users' | 'settings';
 export type AdminTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -67,7 +67,7 @@ const adminSections: {
 }[] = [
   { icon: 'verified-user', label: 'Verifications', route: '/admin/verifications', value: 'verifications' },
   { icon: 'article', label: 'Reports', route: '/admin/reports', value: 'reports' },
-  { icon: 'photo-library', label: 'Photos', route: '/admin/photos', value: 'photos' },
+  { icon: 'people-alt', label: 'Users', route: '/admin/users', value: 'users' },
   { icon: 'settings', label: 'Settings', route: '/admin/settings', value: 'settings' },
 ];
 

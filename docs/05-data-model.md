@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state.
 
 ## Common Types
 
@@ -19,6 +19,10 @@ Recommended enum values can be implemented as PostgreSQL enums or `text check` c
 | `custom_service_review_status` | `none`, `pending`, `approved`, `rejected` |
 | `saved_item_type` | `job`, `provider` |
 | `report_status` | `open`, `reviewing`, `resolved`, `dismissed` |
+| `moderation_target_type` | `photo`, `user`, `job`, `service`, `report` |
+| `photo_source_type` | `profile_photo`, `job_photo`, `service_photo` |
+| `moderation_action` | `flag`, `hide`, `clear` |
+| `content_visibility` | `visible`, `hidden` |
 
 ## users
 
@@ -556,4 +560,60 @@ Important constraints:
 - Users can create reports.
 - Admins can read/update report status.
 - Public users cannot browse all reports.
+
+## admin_moderation_actions
+
+Purpose: Internal audit history for barangay admin moderation reviews.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `target_type` | `text` | `photo`, `user`, `job`, `service`, or `report`. |
+| `target_id` | `text` | Stable target identifier. Public photos use `source_type:source_id:image_url_hash`. |
+| `source_type` | `text` | Nullable. For photos: `profile_photo`, `job_photo`, or `service_photo`. |
+| `source_id` | `uuid` | Nullable profile/job/service row id. |
+| `owner_id` | `uuid` | Nullable owner profile id. |
+| `image_url` | `text` | Public image URL snapshot, if the target is a photo. |
+| `image_path` | `text` | Public storage bucket/path snapshot when derivable from the URL. |
+| `action` | `text` | `flag`, `hide`, or `clear`. |
+| `reason` | `text` | Admin-selected reason. Not public. |
+| `note` | `text` | Optional admin note. Not public. |
+| `status` | `text` | `flagged`, `hidden`, or `cleared`. |
+| `reviewed_by` | `uuid` | Admin profile id. |
+| `reviewed_at` | `timestamptz` | Review timestamp. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on change. |
+
+Important constraints:
+
+- Only barangay admins can read, insert, or update moderation actions.
+- Public users must never read admin reasons, notes, or internal moderation history.
+- Phase 2 uses this table for public-facing profile, job, and service photos only.
+- Verification files, government IDs, certificates, credential files, and signed verification URLs must never be represented as public photo moderation targets.
+
+## content_visibility
+
+Purpose: Public UI enforcement state for moderated public photos.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `content_type` | `text` | `profile_photo`, `job_photo`, or `service_photo`. |
+| `content_id` | `text` | Stable content key, matching public photo moderation target id. |
+| `source_id` | `uuid` | Nullable profile/job/service row id. |
+| `owner_id` | `uuid` | Nullable owner profile id. |
+| `image_url` | `text` | Public image URL snapshot. |
+| `visibility` | `text` | `visible` or `hidden`. |
+| `hidden_reason` | `text` | Admin-only reason. |
+| `hidden_by` | `uuid` | Admin profile id. |
+| `hidden_at` | `timestamptz` | Set when hidden. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on change. |
+
+Important constraints:
+
+- Barangay admins can read and write full rows.
+- Normal users do not read this base table because it contains admin-only fields.
+- Public app filtering uses the `public_content_visibility` view, which exposes only `content_type`, `content_id`, `source_id`, `owner_id`, `image_url`, and `visibility`.
+- Hiding a public image removes it from app UI but does not revoke an already-public storage URL. Physical storage takedown is a future phase.
 

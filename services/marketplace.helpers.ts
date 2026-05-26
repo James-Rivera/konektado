@@ -10,6 +10,7 @@ import type {
     RateType,
     ServiceSearchResult,
 } from '@/types/marketplace.types';
+import { applyPublicPhotoVisibilityToProfiles } from '@/services/content-visibility.service';
 import { supabase } from '@/utils/supabase';
 
 export type ProfileRow = {
@@ -609,12 +610,14 @@ export async function loadPublicProfiles(userIds: string[]) {
     )
     .in('id', ids);
 
-  return new Map(
+  const profiles = new Map(
     ((data as ProfileRow[] | null) ?? [])
       .map(mapProfile)
       .filter((profile): profile is PublicProfileSummary => Boolean(profile))
       .map((profile) => [profile.id, profile]),
   );
+
+  return applyPublicPhotoVisibilityToProfiles(profiles);
 }
 
 export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>): JobSummary {
