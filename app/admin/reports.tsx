@@ -1,19 +1,27 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
+import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
-  RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  AdminEmptyState,
+  AdminErrorState,
+  AdminFilterTabs,
+  AdminInfoRow,
+  AdminListCard,
+  AdminLoadingState,
+  AdminPanel,
+  AdminScreenShell,
+  AdminStatusBadge,
+  adminPalette,
+  type AdminTone,
+} from '@/components/admin/AdminShell';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { color, radius, space, typography } from '@/constants/theme';
 import {
@@ -23,43 +31,42 @@ import {
   type ReportSummary,
 } from '@/services/report.service';
 
-type ReportFilter = ReportStatus | 'all';
+type ReportFilter = ReportStatus | 'received';
+type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
-const filterOptions: { label: string; value: ReportFilter }[] = [
-  { label: 'Open', value: 'open' },
-  { label: 'Reviewing', value: 'reviewing' },
-  { label: 'Resolved', value: 'resolved' },
-  { label: 'Dismissed', value: 'dismissed' },
-  { label: 'All', value: 'all' },
-];
+const filterLabels: Record<ReportFilter, string> = {
+  dismissed: 'Dismissed',
+  open: 'Open',
+  received: 'Received',
+  resolved: 'Resolved',
+  reviewing: 'Reviewing',
+};
+
+const filterOrder: ReportFilter[] = ['open', 'reviewing', 'received', 'resolved', 'dismissed'];
 
 export default function AdminReportsScreen() {
-  const router = useRouter();
   const { showSuccessToast } = useFeedback();
   const [reports, setReports] = useState<ReportSummary[]>([]);
-  const [notes, setNotes] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<ReportFilter>('open');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const load = async ({ silent = false }: { silent?: boolean } = {}) => {
+    setErrorMessage(null);
     if (silent) {
       setRefreshing(true);
     } else {
       setLoading(true);
     }
 
-    const result = await getAdminReports({ limit: 100 });
+    const result = await getAdminReports({ limit: 120 });
 
     if (result.error || !result.data) {
-      Alert.alert('Reports', result.error ?? 'Could not load reports.');
+      setErrorMessage(result.error ?? 'Could not load reports.');
     } else {
       setReports(result.data);
-      setNotes((current) => ({
-        ...Object.fromEntries(result.data.map((report) => [report.id, report.adminNotes ?? ''])),
-        ...current,
-      }));
     }
 
     setLoading(false);
@@ -70,15 +77,36 @@ export default function AdminReportsScreen() {
     load();
   }, []);
 
+  const counts = useMemo(
+    () => ({
+      dismissed: reports.filter((report) => report.status === 'dismissed').length,
+      open: reports.filter((report) => report.status === 'open').length,
+      received: reports.filter(isReceivedReport).length,
+      resolved: reports.filter((report) => report.status === 'resolved').length,
+      reviewing: reports.filter((report) => report.status === 'reviewing').length,
+    }),
+    [reports],
+  );
+
+  const filterOptions = useMemo(
+    () =>
+      filterOrder.map((value) => ({
+        count: counts[value],
+        label: filterLabels[value],
+        value,
+      })),
+    [counts],
+  );
+
   const visibleReports = useMemo(() => {
-    if (filter === 'all') return reports;
+    if (filter === 'received') return reports.filter(isReceivedReport);
     return reports.filter((report) => report.status === filter);
   }, [filter, reports]);
 
   const review = async (report: ReportSummary, status: ReportStatus) => {
     setUpdatingId(report.id);
     const result = await updateReportStatus({
-      adminNotes: notes[report.id] ?? report.adminNotes,
+      adminNotes: report.adminNotes,
       reportId: report.id,
       status,
     });
@@ -95,333 +123,228 @@ export default function AdminReportsScreen() {
     showSuccessToast('Report updated');
   };
 
-  return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
-      <View style={styles.screen}>
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Back to verifications"
-            accessibilityRole="button"
-            onPress={() => router.replace('/admin/verifications' as never)}
-            style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-            <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
-          </Pressable>
-          <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>Barangay admin</Text>
-            <Text style={styles.title}>Reports</Text>
-          </View>
-          <Pressable
-            accessibilityLabel="Refresh reports"
-            accessibilityRole="button"
-            onPress={() => load({ silent: true })}
-            style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-            <MaterialIcons color={color.primary} name="refresh" size={22} />
-          </Pressable>
-        </View>
+  const emptyState = emptyStateForFilter(filter);
 
-        <View style={styles.filters}>
-          {filterOptions.map((option) => {
-            const active = filter === option.value;
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                key={option.value}
-                onPress={() => setFilter(option.value)}
-                style={({ pressed }) => [
-                  styles.filterChip,
-                  active && styles.filterChipActive,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+  return (
+    <AdminScreenShell
+      activeSection="reports"
+      loading={loading}
+      onRefresh={() => load({ silent: true })}
+      refreshing={refreshing}
+      subtitle="Review submitted user reports"
+      title="Reports">
+      <AdminPanel>
+        <AdminFilterTabs options={filterOptions} value={filter} onChange={setFilter} />
 
         {loading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={color.primary} />
-            <Text style={styles.loadingText}>Loading reports...</Text>
+          <AdminLoadingState label="Loading reports..." />
+        ) : errorMessage ? (
+          <AdminErrorState message={errorMessage} onRetry={() => load()} />
+        ) : visibleReports.length ? (
+          <View style={styles.list}>
+            {visibleReports.map((report) => (
+              <ReportCard
+                key={report.id}
+                onReview={(status) => review(report, status)}
+                report={report}
+                updating={updatingId === report.id}
+              />
+            ))}
           </View>
         ) : (
-          <ScrollView
-            contentContainerStyle={styles.content}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load({ silent: true })} />}
-            showsVerticalScrollIndicator={false}>
-            {visibleReports.length ? (
-              visibleReports.map((report) => (
-                <ReportCard
-                  key={report.id}
-                  notes={notes[report.id] ?? ''}
-                  onChangeNotes={(value) => setNotes((current) => ({ ...current, [report.id]: value }))}
-                  onReview={(status) => review(report, status)}
-                  report={report}
-                  updating={updatingId === report.id}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <MaterialIcons color={color.textSubtle} name="flag" size={28} />
-                <Text style={styles.emptyTitle}>No reports here</Text>
-                <Text style={styles.emptyText}>
-                  Submitted user reports will appear here for barangay admin review.
-                </Text>
-              </View>
-            )}
-          </ScrollView>
+          <AdminEmptyState
+            description={emptyState.description}
+            icon="flag"
+            title={emptyState.title}
+          />
         )}
-      </View>
-    </SafeAreaView>
+      </AdminPanel>
+    </AdminScreenShell>
   );
 }
 
 function ReportCard({
-  notes,
-  onChangeNotes,
   onReview,
   report,
   updating,
 }: {
-  notes: string;
-  onChangeNotes: (value: string) => void;
   onReview: (status: ReportStatus) => void;
   report: ReportSummary;
   updating: boolean;
 }) {
+  const reportTitle = titleForReport(report);
+  const canStartReview = report.status === 'open';
+  const summary = report.details?.trim() || report.reason;
+
   return (
-    <View style={styles.reportCard}>
+    <AdminListCard>
       <View style={styles.reportHeader}>
         <View style={styles.reportTitleWrap}>
-          <Text style={styles.reportTarget}>{report.targetLabel}</Text>
-          <Text style={styles.reportMeta}>{formatDateTime(report.createdAt)}</Text>
+          <View style={styles.reportTypeRow}>
+            <MaterialIcons color={adminPalette.blue} name={iconForTarget(report.targetType)} size={20} />
+            <Text numberOfLines={2} style={styles.reportTitle}>{reportTitle}</Text>
+          </View>
+          <Text style={styles.reportMeta}>{formatTargetType(report.targetType)}</Text>
         </View>
-        <StatusPill status={report.status} />
+        <AdminStatusBadge label={report.status} tone={toneForStatus(report.status)} />
       </View>
 
-      <View style={styles.metaGrid}>
-        <MetaItem label="Reporter" value={report.reporterName ?? shortId(report.reporterId)} />
-        <MetaItem
-          label="Reported user"
-          value={report.reportedUserName ?? (report.reportedUserId ? shortId(report.reportedUserId) : 'Not specified')}
-        />
-        <MetaItem label="Target" value={formatTargetIds(report)} />
-        <MetaItem label="Reason" value={report.reason} />
+      <Text numberOfLines={3} style={styles.reportSummary}>{summary}</Text>
+
+      <View style={styles.infoRows}>
+        <AdminInfoRow icon="person-outline" label="Submitted by" value={report.reporterName ?? shortId(report.reporterId)} />
+        <AdminInfoRow icon="event" label="Submitted" value={formatDate(report.createdAt)} />
+        <AdminInfoRow icon="category" label="Content" value={report.targetLabel} />
       </View>
 
-      {report.details ? (
-        <View style={styles.detailsBox}>
-          <Text style={styles.detailsLabel}>Details</Text>
-          <Text style={styles.detailsText}>{report.details}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.notesWrap}>
-        <Text style={styles.detailsLabel}>Admin notes</Text>
-        <TextInput
-          editable={!updating}
-          multiline
-          onChangeText={onChangeNotes}
-          placeholder="Optional note for the moderation record"
-          placeholderTextColor={color.textSubtle}
-          style={styles.notesInput}
-          textAlignVertical="top"
-          value={notes}
-        />
-      </View>
-
-      <View style={styles.reviewActions}>
-        <StatusButton
-          disabled={updating}
-          label="Reviewing"
+      <View style={styles.actions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: updating || !canStartReview }}
+          disabled={updating || !canStartReview}
           onPress={() => onReview('reviewing')}
-          selected={report.status === 'reviewing'}
-        />
+          style={({ pressed }) => [
+            styles.reviewButton,
+            !canStartReview && styles.reviewButtonDisabled,
+            pressed && canStartReview && !updating && styles.pressed,
+          ]}>
+          <MaterialIcons color={canStartReview ? color.white : adminPalette.faint} name="rate-review" size={18} />
+          <Text style={[styles.reviewButtonText, !canStartReview && styles.reviewButtonTextDisabled]}>
+            {canStartReview ? 'Review Report' : 'Under review'}
+          </Text>
+        </Pressable>
+
         <StatusButton
-          disabled={updating}
-          label="Resolved"
+          disabled={updating || report.status === 'resolved'}
+          icon="done-all"
+          label="Resolve"
           onPress={() => onReview('resolved')}
-          selected={report.status === 'resolved'}
           tone="success"
         />
         <StatusButton
-          disabled={updating}
-          label="Dismissed"
+          disabled={updating || report.status === 'dismissed'}
+          icon="block"
+          label="Dismiss"
           onPress={() => onReview('dismissed')}
-          selected={report.status === 'dismissed'}
           tone="danger"
         />
       </View>
-    </View>
-  );
-}
-
-function MetaItem({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metaItem}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value}</Text>
-    </View>
+    </AdminListCard>
   );
 }
 
 function StatusButton({
   disabled,
+  icon,
   label,
   onPress,
-  selected,
-  tone = 'default',
+  tone,
 }: {
   disabled?: boolean;
+  icon: MaterialIconName;
   label: string;
   onPress: () => void;
-  selected?: boolean;
-  tone?: 'default' | 'success' | 'danger';
+  tone: 'success' | 'danger';
 }) {
+  const foreground = tone === 'danger' ? color.danger : color.success;
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled, selected }}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.statusButton,
-        selected && styles.statusButtonSelected,
         tone === 'success' && styles.statusButtonSuccess,
         tone === 'danger' && styles.statusButtonDanger,
         disabled && styles.statusButtonDisabled,
         pressed && !disabled && styles.pressed,
       ]}>
-      <Text
-        style={[
-          styles.statusButtonText,
-          selected && styles.statusButtonTextSelected,
-          tone === 'success' && styles.statusButtonTextSuccess,
-          tone === 'danger' && styles.statusButtonTextDanger,
-        ]}>
+      <MaterialIcons color={foreground} name={icon} size={16} />
+      <Text style={[styles.statusButtonText, tone === 'danger' && styles.statusButtonTextDanger]}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-function StatusPill({ status }: { status: ReportStatus }) {
-  return (
-    <View style={[styles.statusPill, styles[`status_${status}`]]}>
-      <Text style={styles.statusPillText}>{status.replace('_', ' ')}</Text>
-    </View>
-  );
+function isReceivedReport(report: ReportSummary) {
+  return report.status === 'open' && !report.reviewedAt;
 }
 
-function formatTargetIds(report: ReportSummary) {
-  if (report.jobId) return `Job ${shortId(report.jobId)}`;
-  if (report.serviceId) return `Service ${shortId(report.serviceId)}`;
-  if (report.conversationId) return `Conversation ${shortId(report.conversationId)}`;
-  return report.reportedUserId ? `User ${shortId(report.reportedUserId)}` : 'Reported item';
+function titleForReport(report: ReportSummary) {
+  const reason = report.reason.trim();
+  if (reason) return reason;
+  return `${formatTargetType(report.targetType)} report`;
+}
+
+function formatTargetType(targetType: ReportSummary['targetType']) {
+  if (targetType === 'job') return 'Job report';
+  if (targetType === 'service') return 'Service report';
+  if (targetType === 'conversation') return 'Conversation report';
+  return 'User report';
 }
 
 function shortId(value: string) {
   return value.slice(0, 8);
 }
 
-function formatDateTime(value: string) {
+function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function toneForStatus(status: ReportStatus): AdminTone {
+  if (status === 'resolved') return 'success';
+  if (status === 'dismissed') return 'danger';
+  if (status === 'reviewing') return 'primary';
+  return 'warning';
+}
+
+function iconForTarget(targetType: ReportSummary['targetType']): MaterialIconName {
+  if (targetType === 'job') return 'work-outline';
+  if (targetType === 'service') return 'handyman';
+  if (targetType === 'conversation') return 'forum';
+  return 'person-outline';
+}
+
+function emptyStateForFilter(filter: ReportFilter) {
+  if (filter === 'reviewing') {
+    return {
+      title: 'No reports under review',
+      description: 'Reports being checked will appear here',
+    };
+  }
+  if (filter === 'received') {
+    return {
+      title: 'No received reports',
+      description: 'Newly submitted reports will appear here',
+    };
+  }
+  if (filter === 'resolved') {
+    return {
+      title: 'No resolved reports',
+      description: 'Completed reports will appear here',
+    };
+  }
+  if (filter === 'dismissed') {
+    return {
+      title: 'No dismissed reports',
+      description: 'Dismissed reports will appear here',
+    };
+  }
+
+  return {
+    title: 'No open reports',
+    description: 'Submitted user reports will appear here',
+  };
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: color.surfaceAlt,
-    flex: 1,
-  },
-  screen: {
-    backgroundColor: color.surfaceAlt,
-    flex: 1,
-  },
-  header: {
-    alignItems: 'center',
-    backgroundColor: color.background,
-    borderBottomColor: color.border,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-  },
-  headerButton: {
-    alignItems: 'center',
-    borderRadius: radius.pill,
-    height: 42,
-    justifyContent: 'center',
-    width: 42,
-  },
-  headerCopy: {
-    flex: 1,
-  },
-  eyebrow: {
-    ...typography.captionMedium,
-    color: color.primary,
-    textTransform: 'uppercase',
-  },
-  title: {
-    ...typography.screenTitle,
-    color: color.text,
-  },
-  filters: {
-    backgroundColor: color.background,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-  },
-  filterChip: {
-    backgroundColor: color.surfaceAlt,
-    borderColor: color.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs,
-  },
-  filterChipActive: {
-    backgroundColor: color.primarySoft,
-    borderColor: color.primary,
-  },
-  filterText: {
-    ...typography.captionMedium,
-    color: color.textMuted,
-  },
-  filterTextActive: {
-    color: color.primary,
-  },
-  content: {
-    gap: space.md,
-    padding: space.lg,
-    paddingBottom: space['3xl'],
-  },
-  loadingWrap: {
-    alignItems: 'center',
-    flex: 1,
-    gap: space.sm,
-    justifyContent: 'center',
-  },
-  loadingText: {
-    ...typography.body,
-    color: color.textMuted,
-  },
-  reportCard: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: space.md,
-    padding: space.lg,
+  list: {
+    gap: 0,
   },
   reportHeader: {
     alignItems: 'flex-start',
@@ -431,91 +354,60 @@ const styles = StyleSheet.create({
   },
   reportTitleWrap: {
     flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  reportTypeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
     gap: space.xs,
   },
-  reportTarget: {
-    ...typography.sectionTitle,
-    color: color.text,
+  reportTitle: {
+    color: adminPalette.ink,
+    flex: 1,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 17,
+    lineHeight: 22,
   },
   reportMeta: {
     ...typography.caption,
-    color: color.textSubtle,
+    color: adminPalette.faint,
   },
-  statusPill: {
-    borderRadius: radius.pill,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.xs,
+  reportSummary: {
+    ...typography.body,
+    color: adminPalette.muted,
   },
-  status_open: {
-    backgroundColor: color.warningSoft,
+  infoRows: {
+    gap: 0,
   },
-  status_reviewing: {
-    backgroundColor: color.primarySoft,
-  },
-  status_resolved: {
-    backgroundColor: color.successSoft,
-  },
-  status_dismissed: {
-    backgroundColor: color.dangerSoft,
-  },
-  statusPillText: {
-    ...typography.captionMedium,
-    color: color.text,
-    textTransform: 'capitalize',
-  },
-  metaGrid: {
+  actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.sm,
   },
-  metaItem: {
-    backgroundColor: color.surfaceAlt,
-    borderRadius: radius.md,
-    flexBasis: '48%',
+  reviewButton: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.blue,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
     flexGrow: 1,
     gap: space.xs,
-    padding: space.md,
+    justifyContent: 'center',
+    minHeight: 42,
+    minWidth: 150,
+    paddingHorizontal: space.lg,
   },
-  metaLabel: {
-    ...typography.captionMedium,
-    color: color.textSubtle,
-  },
-  metaValue: {
-    ...typography.bodyMedium,
-    color: color.text,
-  },
-  detailsBox: {
-    backgroundColor: color.surfaceAlt,
-    borderRadius: radius.md,
-    gap: space.xs,
-    padding: space.md,
-  },
-  detailsLabel: {
-    ...typography.captionMedium,
-    color: color.textMuted,
-  },
-  detailsText: {
-    ...typography.body,
-    color: color.text,
-  },
-  notesWrap: {
-    gap: space.xs,
-  },
-  notesInput: {
-    ...typography.body,
+  reviewButtonDisabled: {
     backgroundColor: color.surfaceAlt,
     borderColor: color.border,
-    borderRadius: radius.md,
     borderWidth: 1,
-    color: color.text,
-    minHeight: 78,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
   },
-  reviewActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
+  reviewButtonText: {
+    ...typography.button,
+    color: color.white,
+  },
+  reviewButtonTextDisabled: {
+    color: adminPalette.faint,
   },
   statusButton: {
     alignItems: 'center',
@@ -523,13 +415,12 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     borderRadius: radius.pill,
     borderWidth: 1,
+    flexDirection: 'row',
     flexGrow: 1,
-    minHeight: 38,
+    gap: space.xs,
     justifyContent: 'center',
+    minHeight: 42,
     paddingHorizontal: space.md,
-  },
-  statusButtonSelected: {
-    borderColor: color.primary,
   },
   statusButtonSuccess: {
     backgroundColor: color.successSoft,
@@ -538,38 +429,15 @@ const styles = StyleSheet.create({
     backgroundColor: color.dangerSoft,
   },
   statusButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
   statusButtonText: {
     ...typography.captionMedium,
-    color: color.textMuted,
-  },
-  statusButtonTextSelected: {
-    color: color.primary,
-  },
-  statusButtonTextSuccess: {
     color: color.success,
+    fontFamily: 'Satoshi-Bold',
   },
   statusButtonTextDanger: {
     color: color.danger,
-  },
-  emptyCard: {
-    alignItems: 'center',
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: space.sm,
-    padding: space['2xl'],
-  },
-  emptyTitle: {
-    ...typography.sectionTitle,
-    color: color.text,
-  },
-  emptyText: {
-    ...typography.body,
-    color: color.textMuted,
-    textAlign: 'center',
   },
   pressed: {
     opacity: 0.74,

@@ -134,12 +134,16 @@ function RootNavigator() {
         "verification",
         "worker",
       ].includes(String(activeGroup));
+    const isAdminInspectionRoute =
+      isAdmin &&
+      ["client", "job", "services", "worker"].includes(String(activeGroup));
 
     if (
       isMissingSignupPasswordRoute ||
       (
         activeGroup !== targetGroup &&
         !isMainAppRootRoute &&
+        !isAdminInspectionRoute &&
         !(targetGroup === "(tabs)" && isOnboardingComplete) &&
         !isCompletingAuthRegistration &&
         !isRecoveringPassword
@@ -160,7 +164,10 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/photos" options={{ headerShown: false }} />
       <Stack.Screen name="admin/reports" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/settings" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/verifications/[requestId]" options={{ headerShown: false }} />
       <Stack.Screen name="admin/verifications" options={{ headerShown: false }} />
       <Stack.Screen name="client/[clientId]" options={{ headerShown: false }} />
       <Stack.Screen name="conversation/[conversationId]" options={{ headerShown: false }} />

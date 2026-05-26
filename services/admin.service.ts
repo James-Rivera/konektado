@@ -38,6 +38,7 @@ export type VerificationRequestDetail = {
 };
 
 type ListVerificationRequestsInput = {
+  includeSignedFileUrls?: boolean;
   limit?: number;
   statuses?: VerificationStatus[];
 };
@@ -105,7 +106,10 @@ async function getSignedVerificationFileUrl(file: VerificationFileRow) {
   return data.signedUrl;
 }
 
-async function mapVerificationRows(rows: VerificationRow[]) {
+async function mapVerificationRows(
+  rows: VerificationRow[],
+  { includeSignedFileUrls = false }: { includeSignedFileUrls?: boolean } = {},
+) {
   if (!rows.length) return [];
 
   const profiles = await loadPublicProfiles(rows.map((row) => row.user_id));
@@ -121,7 +125,7 @@ async function mapVerificationRows(rows: VerificationRow[]) {
       verificationId: file.verification_id,
       fileType: file.file_type,
       filePath: file.file_path ?? getLegacyVerificationFilePath(file.url),
-      url: await getSignedVerificationFileUrl(file),
+      url: includeSignedFileUrls ? await getSignedVerificationFileUrl(file) : '',
       createdAt: file.created_at,
     })),
   );
@@ -144,6 +148,7 @@ async function mapVerificationRows(rows: VerificationRow[]) {
 }
 
 export async function listVerificationRequests({
+  includeSignedFileUrls = false,
   limit = 50,
   statuses,
 }: ListVerificationRequestsInput = {}): Promise<
@@ -166,7 +171,28 @@ export async function listVerificationRequests({
 
   if (error) return { data: null, error: error.message };
 
-  return { data: await mapVerificationRows((data as VerificationRow[] | null) ?? []), error: null };
+  return {
+    data: await mapVerificationRows((data as VerificationRow[] | null) ?? [], { includeSignedFileUrls }),
+    error: null,
+  };
+}
+
+export async function getVerificationRequest(
+  requestId: string,
+): Promise<ServiceResult<VerificationRequestDetail>> {
+  const admin = await requireAdmin();
+  if (admin.error) return admin;
+
+  const { data, error } = await supabase
+    .from('verifications')
+    .select('id, user_id, status, notes, reviewer_id, reviewer_note, reviewed_at, created_at, updated_at')
+    .eq('id', requestId)
+    .single<VerificationRow>();
+
+  if (error) return { data: null, error: error.message };
+
+  const [mapped] = await mapVerificationRows([data], { includeSignedFileUrls: true });
+  return { data: mapped, error: null };
 }
 
 export async function listPendingVerificationRequests(): Promise<
@@ -205,7 +231,7 @@ export async function reviewVerificationRequest({
     return { data: null, error: error.message || 'This request is no longer pending.' };
   }
 
-  const [mapped] = await mapVerificationRows([data]);
+  const [mapped] = await mapVerificationRows([data], { includeSignedFileUrls: true });
 
   if (decision === 'approved') {
     void sendVerificationApprovedEmail({
