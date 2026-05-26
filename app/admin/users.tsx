@@ -139,13 +139,6 @@ export default function AdminUsersScreen() {
             <Text style={styles.sectionTitle}>Resident review hub</Text>
             <Text style={styles.sectionSubtitle}>Search residents, roles, barangays, and safe activity counts</Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/admin/photos' as never)}
-            style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}>
-            <MaterialIcons color={adminPalette.blue} name="photo-library" size={18} />
-            <Text style={styles.secondaryActionText}>Public photos</Text>
-          </Pressable>
         </View>
 
         <View style={styles.searchWrap}>
@@ -235,8 +228,12 @@ function UserReviewCard({
         </View>
       </View>
 
+      <PublicPhotoSummary
+        count={user.publicPhotosCount}
+        previewUrls={user.publicPhotoPreviewUrls}
+      />
+
       <View style={styles.countRows}>
-        <AdminInfoRow icon="photo-library" label="Public photos" value={String(user.publicPhotosCount)} />
         <AdminInfoRow icon="work-outline" label="Active jobs" value={String(user.activeJobsCount)} />
         <AdminInfoRow icon="handyman" label="Active services" value={String(user.activeServicesCount)} />
         <AdminInfoRow icon="flag" label="Reports" value={String(user.reportCount)} />
@@ -263,6 +260,32 @@ function UserAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: strin
   return (
     <View style={styles.avatarFallback}>
       <Text style={styles.avatarInitials}>{getInitials(name) || 'KR'}</Text>
+    </View>
+  );
+}
+
+function PublicPhotoSummary({
+  count,
+  previewUrls,
+}: {
+  count: number;
+  previewUrls: string[];
+}) {
+  return (
+    <View style={styles.photoSummary}>
+      <View style={styles.photoSummaryCopy}>
+        <MaterialIcons color={adminPalette.blue} name="photo-library" size={18} />
+        <Text style={styles.photoSummaryText}>
+          {count} public photo{count === 1 ? '' : 's'}
+        </Text>
+      </View>
+      {previewUrls.length ? (
+        <View style={styles.photoPreviewStrip}>
+          {previewUrls.map((url) => (
+            <Image key={url} source={{ uri: url }} style={styles.photoPreview} />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -343,21 +366,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Regular',
     fontSize: 13,
     lineHeight: 18,
-  },
-  secondaryAction: {
-    alignItems: 'center',
-    borderColor: adminPalette.blueLine,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: space.xs,
-    minHeight: 38,
-    paddingHorizontal: space.md,
-  },
-  secondaryActionText: {
-    ...typography.captionMedium,
-    color: adminPalette.blue,
-    fontFamily: 'Satoshi-Bold',
   },
   searchWrap: {
     alignItems: 'center',
@@ -453,6 +461,42 @@ const styles = StyleSheet.create({
   },
   countRows: {
     gap: 0,
+  },
+  photoSummary: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.blueSoft,
+    borderColor: adminPalette.blueLine,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  photoSummaryCopy: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.xs,
+    minWidth: 0,
+  },
+  photoSummaryText: {
+    ...typography.captionMedium,
+    color: adminPalette.blueDeep,
+    fontFamily: 'Satoshi-Bold',
+  },
+  photoPreviewStrip: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  photoPreview: {
+    backgroundColor: color.surfaceAlt,
+    borderColor: color.white,
+    borderRadius: 6,
+    borderWidth: 1,
+    height: 28,
+    width: 28,
   },
   reviewButton: {
     alignItems: 'center',

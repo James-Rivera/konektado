@@ -50,6 +50,7 @@ export type AdminUserReportItem = {
 
 export type AdminUserListItem = {
   id: string;
+  profileId: string | null;
   fullName: string;
   avatarUrl: string | null;
   location: string;
@@ -58,7 +59,9 @@ export type AdminUserListItem = {
   verificationStatus: AdminUserVerificationStatus;
   verificationLabel: string;
   verificationRequestId: string | null;
+  verificationRequestStatus: VerificationStatus | null;
   publicPhotosCount: number;
+  publicPhotoPreviewUrls: string[];
   activeJobsCount: number;
   activeServicesCount: number;
   reportCount: number;
@@ -99,6 +102,7 @@ type VerificationRow = {
   id: string;
   user_id: string;
   status: VerificationStatus;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -162,7 +166,7 @@ type ListAdminUsersInput = {
 const PROFILE_COLUMNS =
   'id, full_name, first_name, last_name, barangay, purok_sitio, street, subdivision_area, city, about, avatar_url, availability, verified_at, barangay_verified_at, preferred_contact_method, created_at, updated_at';
 const ROLE_COLUMNS = 'user_id, role, is_active';
-const VERIFICATION_COLUMNS = 'id, user_id, status, created_at, updated_at';
+const VERIFICATION_COLUMNS = 'id, user_id, status, notes, created_at, updated_at';
 const JOB_COLUMNS =
   'id, owner_id, client_id, title, category, service_needed, status, barangay, location_text, photo_urls, created_at, updated_at';
 const SERVICE_COLUMNS =
@@ -210,10 +214,24 @@ export async function listAdminUsers({
   const jobs = (jobsResult.data as AdminJobRow[] | null) ?? [];
   const services = (servicesResult.data as AdminServiceRow[] | null) ?? [];
   const reports = (reportsResult.data as AdminReportRow[] | null) ?? [];
+  const profilesById = new Map(rows.map((row) => [row.id, row]));
+  const reviewableUserIds = Array.from(
+    new Set([...rows.map((row) => row.id), ...verifications.map((verification) => verification.user_id)]),
+  );
 
-  const mapped = rows
-    .filter((row) => !hasAdminRole(row.id, roles))
-    .map((row) => mapUserListItem(row, roles, verifications, jobs, services, reports))
+  const mapped = reviewableUserIds
+    .filter((userId) => !hasAdminRole(userId, roles))
+    .map((userId) =>
+      mapUserListItem({
+        jobs,
+        profileRow: profilesById.get(userId) ?? null,
+        reports,
+        roles,
+        services,
+        userId,
+        verifications,
+      }),
+    )
     .filter((item) => itemMatchesFilter(item, filter))
     .filter((item) => itemMatchesSearch(item, search));
 
@@ -256,15 +274,22 @@ export async function getAdminUserDetail(userId: string): Promise<ServiceResult<
     servicesResult.error;
 
   if (error) return { data: null, error: error.message };
-  if (!profileResult.data) return { data: null, error: 'User profile not found.' };
 
-  const profileRow = profileResult.data;
+  const profileRow = profileResult.data ?? makeFallbackProfileRow(cleanUserId, (verificationsResult.data as VerificationRow[] | null) ?? []);
   const roles = (rolesResult.data as UserRoleRow[] | null) ?? [];
   const verifications = (verificationsResult.data as VerificationRow[] | null) ?? [];
   const jobs = (jobsResult.data as AdminJobRow[] | null) ?? [];
   const services = (servicesResult.data as AdminServiceRow[] | null) ?? [];
   const reports = await loadReportsForUser(cleanUserId, jobs, services);
-  const listItem = mapUserListItem(profileRow, roles, verifications, jobs, services, reports);
+  const listItem = mapUserListItem({
+    jobs,
+    profileRow,
+    reports,
+    roles,
+    services,
+    userId: cleanUserId,
+    verifications,
+  });
   const profile = mapProfile(profileRow);
 
   if (!profile) return { data: null, error: 'User profile not found.' };
@@ -378,27 +403,41 @@ async function loadReportsForUser(
   return Array.from(reportMap.values());
 }
 
-function mapUserListItem(
-  row: AdminProfileRow,
-  roles: UserRoleRow[],
-  verifications: VerificationRow[],
-  jobs: AdminJobRow[],
-  services: AdminServiceRow[],
-  reports: AdminReportRow[],
-): AdminUserListItem {
+function mapUserListItem({
+  jobs,
+  profileRow,
+  reports,
+  roles,
+  services,
+  userId,
+  verifications,
+}: {
+  jobs: AdminJobRow[];
+  profileRow: AdminProfileRow | null;
+  reports: AdminReportRow[];
+  roles: UserRoleRow[];
+  services: AdminServiceRow[];
+  userId: string;
+  verifications: VerificationRow[];
+}): AdminUserListItem {
+  const row = profileRow ?? makeFallbackProfileRow(userId, verifications);
   const profile = mapProfile(row);
-  const userRoles = getUserRoles(row.id, roles);
-  const userJobs = jobs.filter((job) => jobOwnerId(job) === row.id);
-  const userServices = services.filter((service) => service.provider_id === row.id);
+  const userRoles = getUserRoles(userId, roles);
+  const userJobs = jobs.filter((job) => jobOwnerId(job) === userId);
+  const userServices = services.filter((service) => service.provider_id === userId);
   const userReports = reports.filter((report) =>
-    reportInvolvesUser(report, row.id, userJobs, userServices),
+    reportInvolvesUser(report, userId, userJobs, userServices),
   );
-  const latestVerification = getLatestVerification(row.id, verifications);
+  const latestVerification = getLatestVerification(userId, verifications);
   const verificationStatus = getVerificationStatus(row, latestVerification);
+  const publicPhotos = mapPublicPhotos(row, userJobs, userServices);
+  const verificationName = getFallbackNameFromVerification(latestVerification);
+  const profileName = profile?.fullName === 'Konektado resident' ? null : profile?.fullName;
 
   return {
-    id: row.id,
-    fullName: profile?.fullName ?? 'Konektado resident',
+    id: userId,
+    profileId: profileRow?.id ?? null,
+    fullName: profileName ?? verificationName ?? 'Konektado resident',
     avatarUrl: profile?.avatarUrl ?? null,
     location:
       profile?.approximateLocation ??
@@ -413,7 +452,9 @@ function mapUserListItem(
     verificationStatus,
     verificationLabel: formatVerificationLabel(verificationStatus),
     verificationRequestId: latestVerification?.id ?? null,
-    publicPhotosCount: mapPublicPhotos(row, userJobs, userServices).length,
+    verificationRequestStatus: latestVerification?.status ?? null,
+    publicPhotosCount: publicPhotos.length,
+    publicPhotoPreviewUrls: publicPhotos.map((photo) => photo.imageUrl).slice(0, 3),
     activeJobsCount: userJobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length,
     activeServicesCount: userServices.filter((service) => Boolean(service.is_active)).length,
     reportCount: userReports.length,
@@ -439,11 +480,15 @@ function getUserRoles(userId: string, roles: UserRoleRow[]): AdminUserRole[] {
 }
 
 function getLatestVerification(userId: string, verifications: VerificationRow[]) {
-  const row = verifications.find((verification) => verification.user_id === userId);
+  const userVerifications = verifications.filter((verification) => verification.user_id === userId);
+  const row =
+    userVerifications.find((verification) => verification.status === 'pending') ??
+    userVerifications[0];
   if (!row) return null;
 
   return {
     id: row.id,
+    notes: row.notes,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -454,10 +499,10 @@ function getVerificationStatus(
   row: AdminProfileRow,
   latestVerification: { status: VerificationStatus } | null,
 ): AdminUserVerificationStatus {
-  if (row.barangay_verified_at || row.verified_at || latestVerification?.status === 'approved') {
+  if (latestVerification?.status === 'pending') return 'pending';
+  if (latestVerification?.status === 'approved' || row.barangay_verified_at || row.verified_at) {
     return 'verified';
   }
-  if (latestVerification?.status === 'pending') return 'pending';
   return 'unverified';
 }
 
@@ -674,4 +719,61 @@ function sortNewestFirst(a: { createdAt: string }, b: { createdAt: string }) {
 
 function shortId(value: string) {
   return value.slice(0, 8);
+}
+
+function makeFallbackProfileRow(userId: string, verifications: VerificationRow[]): AdminProfileRow {
+  const latestVerification = getLatestVerification(userId, verifications);
+  const details = parseVerificationNotes(latestVerification?.notes ?? null);
+  const fullName = [details.firstName, details.lastName].filter(Boolean).join(' ');
+
+  return {
+    about: null,
+    avatar_url: null,
+    availability: null,
+    barangay: details.barangay || null,
+    barangay_verified_at: null,
+    city: details.city || null,
+    created_at: latestVerification?.createdAt ?? null,
+    first_name: details.firstName || null,
+    full_name: fullName || null,
+    id: userId,
+    last_name: details.lastName || null,
+    preferred_contact_method: null,
+    purok_sitio: null,
+    street: null,
+    subdivision_area: null,
+    updated_at: latestVerification?.updatedAt ?? latestVerification?.createdAt ?? null,
+    verified_at: null,
+  };
+}
+
+function getFallbackNameFromVerification(
+  latestVerification: ReturnType<typeof getLatestVerification>,
+) {
+  const details = parseVerificationNotes(latestVerification?.notes ?? null);
+  return [details.firstName, details.lastName].filter(Boolean).join(' ') || null;
+}
+
+function parseVerificationNotes(notes: string | null) {
+  if (!notes) return { barangay: '', city: '', firstName: '', lastName: '' };
+
+  try {
+    const parsed = JSON.parse(notes) as {
+      identity?: {
+        barangay?: string | null;
+        city?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+      };
+    };
+
+    return {
+      barangay: compactText(parsed.identity?.barangay),
+      city: compactText(parsed.identity?.city),
+      firstName: compactText(parsed.identity?.firstName),
+      lastName: compactText(parsed.identity?.lastName),
+    };
+  } catch {
+    return { barangay: '', city: '', firstName: '', lastName: '' };
+  }
 }
