@@ -30,6 +30,7 @@ import {
   deactivateEditableService,
   getEditableJobStatuses,
   getEditableRateTypes,
+  getEditableVerificationFileTypes,
   getEditableUser,
   getInternalDemoEditorAccess,
   listEditableUsers,
@@ -37,6 +38,7 @@ import {
   updateEditableProfile,
   updateEditableService,
   updateVerificationNotes,
+  upsertPrivateVerificationFile,
   uploadPublicDemoImage,
   type EditableJob,
   type EditableProfile,
@@ -47,6 +49,8 @@ import {
   type EditableVerificationRequest,
   type CreateEditableJobPayload,
   type CreateEditableServicePayload,
+  type EditableVerificationFileType,
+  type PrivateVerificationFileAsset,
   type InternalDemoAccess,
   type InternalDemoUserFilter,
   type InternalDemoVerificationStatus,
@@ -495,6 +499,7 @@ function ProfileEditor({
       avatarUrl,
       availability: form.availability,
       barangay: form.barangay,
+      city: form.city,
       firstName: form.firstName,
       fullName: form.fullName,
       lastName: form.lastName,
@@ -543,10 +548,13 @@ function ProfileEditor({
       <Field label="Full name" onChangeText={(value) => setForm({ ...form, fullName: value })} value={form.fullName} />
       <TwoColumn>
         <Field label="Barangay/address label" onChangeText={(value) => setForm({ ...form, barangay: value })} value={form.barangay} />
-        <Field label="Purok/address line" onChangeText={(value) => setForm({ ...form, purokSitio: value })} value={form.purokSitio} />
+        <Field label="City" onChangeText={(value) => setForm({ ...form, city: value })} value={form.city} />
       </TwoColumn>
       <TwoColumn>
+        <Field label="Purok/address line" onChangeText={(value) => setForm({ ...form, purokSitio: value })} value={form.purokSitio} />
         <Field label="Street/road" onChangeText={(value) => setForm({ ...form, street: value })} value={form.street} />
+      </TwoColumn>
+      <TwoColumn>
         <Field label="Subdivision/area" onChangeText={(value) => setForm({ ...form, subdivisionArea: value })} value={form.subdivisionArea} />
       </TwoColumn>
       <Field label="Bio/about" multiline onChangeText={(value) => setForm({ ...form, about: value })} value={form.about} />
@@ -1027,12 +1035,18 @@ function VerificationRequestEditor({
   const [residentNote, setResidentNote] = useState(request.residentNote);
   const [adminNote, setAdminNote] = useState(request.adminNote);
   const [documentType, setDocumentType] = useState(request.documentType);
+  const [files, setFiles] = useState(request.files);
+  const [fileType, setFileType] = useState<EditableVerificationFileType>('other');
   const [saving, setSaving] = useState(false);
+  const [uploadingFileId, setUploadingFileId] = useState<string | null>(null);
 
   useEffect(() => {
     setResidentNote(request.residentNote);
     setAdminNote(request.adminNote);
     setDocumentType(request.documentType);
+    setFiles(request.files);
+    setFileType('other');
+    setUploadingFileId(null);
   }, [request]);
 
   const save = async () => {
@@ -1055,18 +1069,76 @@ function VerificationRequestEditor({
     onPreview(result.data, formatFileType(file.fileType));
   };
 
+  const choosePrivateFile = async (): Promise<PrivateVerificationFileAsset | null> => {
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      multiple: false,
+      type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+    });
+    if (result.canceled || !result.assets?.[0]) return null;
+    const asset = result.assets[0];
+    return {
+      mimeType: asset.mimeType ?? null,
+      name: asset.name ?? null,
+      size: asset.size ?? null,
+      uri: asset.uri,
+    };
+  };
+
+  const uploadPrivateFile = async (targetFile?: EditableVerificationFile) => {
+    const asset = await choosePrivateFile();
+    if (!asset) return;
+
+    const activeFileType = (targetFile?.fileType ?? fileType) as EditableVerificationFileType;
+    setUploadingFileId(targetFile?.id ?? 'new');
+    const result = await upsertPrivateVerificationFile({
+      file: asset,
+      fileId: targetFile?.id,
+      fileType: activeFileType,
+      requestId: request.id,
+    });
+    setUploadingFileId(null);
+
+    if (result.error || !result.data) {
+      Alert.alert('Verification file', result.error ?? 'Could not upload this private file.');
+      return;
+    }
+
+    setFiles((current) => {
+      if (!targetFile) return [...current, result.data];
+      return current.map((item) => (item.id === targetFile.id ? result.data : item));
+    });
+    Alert.alert('Verification file', targetFile ? 'File replaced.' : 'File added.');
+  };
+
   return (
     <View style={styles.recordCard}>
-      <RecordHeader icon="verified-user" title={`Request ${request.id.slice(0, 8)}`} subtitle={`${formatStatus(request.status)} · ${request.files.length} files`} />
+      <RecordHeader icon="verified-user" title={`Request ${request.id.slice(0, 8)}`} subtitle={`${formatStatus(request.status)} · ${files.length} files`} />
       <TwoColumn>
         <Field label="Document type" onChangeText={setDocumentType} value={documentType} />
       </TwoColumn>
       <Field label="Resident note" multiline onChangeText={setResidentNote} value={residentNote} />
       <Field label="Admin note" multiline onChangeText={setAdminNote} value={adminNote} />
       <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Verification Notes'} onPress={() => void save()} />
+      <View style={styles.fieldWrap}>
+        <SelectChips
+          label="New private file type"
+          onSelect={(value) => setFileType(value as EditableVerificationFileType)}
+          options={getEditableVerificationFileTypes()}
+          value={fileType}
+        />
+        <Pressable
+          accessibilityRole="button"
+          disabled={Boolean(uploadingFileId)}
+          onPress={() => void uploadPrivateFile()}
+          style={({ pressed }) => [styles.secondaryButton, uploadingFileId === 'new' && styles.disabled, pressed && !uploadingFileId && styles.pressed]}>
+          <MaterialIcons color={adminPalette.blue} name="upload-file" size={18} />
+          <Text style={styles.secondaryButtonText}>{uploadingFileId === 'new' ? 'Uploading...' : 'Add private file'}</Text>
+        </Pressable>
+      </View>
       <View style={styles.fileList}>
-        {request.files.length ? (
-          request.files.map((file, index) => (
+        {files.length ? (
+          files.map((file, index) => (
             <View key={`${request.id}-verification-file-${file.id}`} style={styles.fileRow}>
               <View style={styles.fileIcon}>
                 <MaterialIcons color={adminPalette.blue} name={isPreviewableImage(file.filePath ?? '') ? 'image' : 'insert-drive-file'} size={20} />
@@ -1078,13 +1150,20 @@ function VerificationRequestEditor({
               <Pressable accessibilityRole="button" onPress={() => void previewFile(file)} style={({ pressed }) => [styles.secondaryButtonCompact, pressed && styles.pressed]}>
                 <Text style={styles.secondaryButtonText}>Preview</Text>
               </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={Boolean(uploadingFileId)}
+                onPress={() => void uploadPrivateFile(file)}
+                style={({ pressed }) => [styles.secondaryButtonCompact, uploadingFileId === file.id && styles.disabled, pressed && !uploadingFileId && styles.pressed]}>
+                <Text style={styles.secondaryButtonText}>{uploadingFileId === file.id ? 'Uploading...' : 'Replace'}</Text>
+              </Pressable>
             </View>
           ))
         ) : (
           <EmptyBlock text="No private files attached." />
         )}
       </View>
-      <InlineNotice tone="warning">Replacing private verification documents is Phase 2 because current storage policy does not let admins upload into a resident request path.</InlineNotice>
+      <InlineNotice tone="warning">Private verification files stay in the private bucket and open only through short-lived signed links.</InlineNotice>
     </View>
   );
 }
@@ -1126,7 +1205,7 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
   return (
     <EditorPanel title="Conversations, Reviews, and Reports">
       <Notice icon="info">
-        Phase 1 shows support status only. Rich conversation, review, and report editing can be added after safe selectors/RPCs are designed.
+        Activity is shown for audit context. Conversation messages, reviews, and reports stay content-read-only here.
       </Notice>
       <ActivityBlock count={user.conversations.length} icon="forum" title="Conversations">
         {user.conversations.slice(0, 8).map((item) => (

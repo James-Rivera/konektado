@@ -16,10 +16,12 @@ import { supabase } from '@/utils/supabase';
 const INTERNAL_ALLOWED_EMAILS = parseEnvList(process.env.EXPO_PUBLIC_INTERNAL_DEMO_EDITOR_EMAILS);
 const INTERNAL_ALLOWED_USER_IDS = parseEnvList(process.env.EXPO_PUBLIC_INTERNAL_DEMO_EDITOR_USER_IDS);
 const MAX_PUBLIC_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PRIVATE_VERIFICATION_FILE_BYTES = 10 * 1024 * 1024;
 const SIGNED_VERIFICATION_URL_SECONDS = 5 * 60;
 const PUBLIC_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const PUBLIC_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 const PRIVATE_DOCUMENT_BUCKET = 'verification-files';
+const EDITABLE_VERIFICATION_FILE_TYPES = ['id_front', 'id_back', 'certification', 'experience', 'other'] as const;
 
 const BANNED_VISIBLE_WORDS = [
   'seed',
@@ -50,6 +52,8 @@ const EDITABLE_RATE_TYPES: RateType[] = [
   'per_meal',
   'per_session',
 ];
+const EDITABLE_CONVERSATION_STATUSES = ['active', 'hired', 'declined', 'archived', 'reported'] as const;
+const EDITABLE_REPORT_STATUSES = ['open', 'reviewing', 'resolved', 'dismissed'] as const;
 
 export type InternalDemoAccess = {
   email: string | null;
@@ -69,6 +73,14 @@ export type PublicDemoImageAsset = {
   name?: string | null;
   mimeType?: string | null;
   size?: number | null;
+};
+
+export type PrivateVerificationFileAsset = PublicDemoImageAsset;
+export type EditableVerificationFileType = (typeof EDITABLE_VERIFICATION_FILE_TYPES)[number];
+
+type PublicDemoImageUploadBody = {
+  body: ArrayBuffer;
+  contentType: string;
 };
 
 export type EditableUserListItem = {
@@ -202,6 +214,7 @@ export type UpdateEditableProfilePayload = {
   avatarUrl?: string | null;
   availability?: string | null;
   barangay?: string | null;
+  city?: string | null;
   firstName?: string | null;
   fullName?: string | null;
   lastName?: string | null;
@@ -224,6 +237,9 @@ export type UpdateEditableJobPayload = {
   status?: JobStatus;
   title?: string | null;
 };
+
+export type EditableConversationStatus = (typeof EDITABLE_CONVERSATION_STATUSES)[number];
+export type EditableReportStatus = (typeof EDITABLE_REPORT_STATUSES)[number];
 
 export type CreateEditableJobPayload = {
   barangay?: string | null;
@@ -946,6 +962,7 @@ export async function updateEditableProfile(
     about: payload.about ?? '',
     availability: payload.availability ?? '',
     barangay: payload.barangay ?? '',
+    city: payload.city ?? '',
     firstName: payload.firstName ?? '',
     fullName: payload.fullName ?? '',
     lastName: payload.lastName ?? '',
@@ -972,6 +989,7 @@ export async function updateEditableProfile(
     avatar_url: compactText(payload.avatarUrl) || null,
     availability: compactText(payload.availability) || null,
     barangay: compactText(payload.barangay) || null,
+    city: compactText(payload.city) || null,
     first_name: firstName || null,
     full_name: fullName || [firstName, lastName].filter(Boolean).join(' ') || null,
     last_name: lastName || null,
@@ -1284,6 +1302,56 @@ export async function deactivateEditableService(serviceId: string): Promise<Serv
   return updateEditableService(serviceId, { isActive: false });
 }
 
+export async function updateEditableConversationStatus(
+  conversationId: string,
+  status: EditableConversationStatus | string,
+): Promise<ServiceResult<EditableConversationSummary>> {
+  const access = await requireInternalAccess();
+  if (access.error) return access;
+
+  const cleanConversationId = compactText(conversationId);
+  const cleanStatus = compactText(status) as EditableConversationStatus;
+  if (!cleanConversationId) return { data: null, error: 'Choose a conversation to update.' };
+  if (!EDITABLE_CONVERSATION_STATUSES.includes(cleanStatus)) return { data: null, error: 'Choose a valid conversation status.' };
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .update({ status: cleanStatus })
+    .eq('id', cleanConversationId)
+    .select('id, client_id, provider_id, status, updated_at')
+    .single<ConversationRow>();
+
+  if (error) return { data: null, error: error.message };
+  return { data: mapConversations([data], [])[0], error: null };
+}
+
+export async function updateEditableReportStatus(
+  reportId: string,
+  status: EditableReportStatus | string,
+): Promise<ServiceResult<EditableReportSummary>> {
+  const access = await requireInternalAccess();
+  if (access.error || !access.data) return access;
+
+  const cleanReportId = compactText(reportId);
+  const cleanStatus = compactText(status) as EditableReportStatus;
+  if (!cleanReportId) return { data: null, error: 'Choose a report to update.' };
+  if (!EDITABLE_REPORT_STATUSES.includes(cleanStatus)) return { data: null, error: 'Choose a valid report status.' };
+
+  const { data, error } = await supabase
+    .from('reports')
+    .update({
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: access.data.userId,
+      status: cleanStatus,
+    })
+    .eq('id', cleanReportId)
+    .select('id, reason, details, status, created_at')
+    .single<ReportRow>();
+
+  if (error) return { data: null, error: error.message };
+  return { data: mapReport(data), error: null };
+}
+
 export async function updateVerificationNotes(
   requestId: string,
   payload: UpdateVerificationNotesPayload,
@@ -1373,16 +1441,68 @@ export async function createSignedVerificationFileUrl(filePath: string): Promise
   return { data: data.signedUrl, error: null };
 }
 
-export async function replaceVerificationFile(): Promise<ServiceResult<EditableVerificationFile>> {
-  return {
-    data: null,
-    error:
-      'Private verification document replacement needs an internal storage upload RPC/policy so files stay under the resident request path. Preview is available in Phase 1.',
-  };
-}
+export async function upsertPrivateVerificationFile({
+  file,
+  fileId,
+  fileType,
+  requestId,
+}: {
+  file: PrivateVerificationFileAsset;
+  fileId?: string | null;
+  fileType: EditableVerificationFileType | string;
+  requestId: string;
+}): Promise<ServiceResult<EditableVerificationFile>> {
+  const access = await requireInternalAccess();
+  if (access.error) return access;
 
-export async function addVerificationFile(): Promise<ServiceResult<EditableVerificationFile>> {
-  return replaceVerificationFile();
+  const cleanRequestId = compactText(requestId);
+  const cleanFileId = compactText(fileId);
+  const cleanFileType = compactText(fileType) as EditableVerificationFileType;
+  if (!cleanRequestId) return { data: null, error: 'Choose a verification request first.' };
+  if (!EDITABLE_VERIFICATION_FILE_TYPES.includes(cleanFileType)) return { data: null, error: 'Choose a valid verification file type.' };
+
+  const validation = validatePrivateVerificationFileAsset(file);
+  if (validation.error) return validation;
+
+  const requestResult = await supabase
+    .from('verifications')
+    .select('id, user_id')
+    .eq('id', cleanRequestId)
+    .maybeSingle<{ id: string; user_id: string }>();
+
+  if (requestResult.error) return { data: null, error: requestResult.error.message };
+  if (!requestResult.data) return { data: null, error: 'Verification request not found.' };
+
+  const fileName = normalizeFileName(file.name ?? '', `${cleanFileType}.jpg`);
+  const path = `${requestResult.data.user_id}/internal-demo/${cleanRequestId}-${cleanFileType}-${Date.now()}-${fileName}`;
+
+  try {
+    const uploadBody = await getFileUploadBody(file, fileName);
+    if (uploadBody.error || !uploadBody.data) return { data: null, error: uploadBody.error ?? 'Could not read this file.' };
+
+    const uploadResult = await supabase.storage.from(PRIVATE_DOCUMENT_BUCKET).upload(path, uploadBody.data.body, {
+      contentType: uploadBody.data.contentType,
+      upsert: false,
+    });
+
+    if (uploadResult.error) return { data: null, error: uploadResult.error.message };
+  } catch {
+    return { data: null, error: `Could not upload ${file.name || 'verification file'}.` };
+  }
+
+  const query = cleanFileId
+    ? supabase
+        .from('verification_files')
+        .update({ file_path: path, file_type: cleanFileType, url: null })
+        .eq('id', cleanFileId)
+        .eq('verification_id', cleanRequestId)
+    : supabase
+        .from('verification_files')
+        .insert({ file_path: path, file_type: cleanFileType, url: null, verification_id: cleanRequestId });
+
+  const { data, error } = await query.select(VERIFICATION_FILE_COLUMNS).single<VerificationFileRow>();
+  if (error) return { data: null, error: error.message };
+  return { data: mapVerificationFile(data), error: null };
 }
 
 export async function uploadPublicDemoImage(
@@ -1400,10 +1520,11 @@ export async function uploadPublicDemoImage(
   const path = `${access.data.userId}/internal-demo/${targetType}-${Date.now()}-${fileName}`;
 
   try {
-    const localFile = new ExpoFile(file.uri);
-    const fileBuffer = await localFile.arrayBuffer();
-    const { error } = await supabase.storage.from(bucket).upload(path, fileBuffer, {
-      contentType: file.mimeType ?? contentTypeFromName(fileName) ?? 'image/jpeg',
+    const uploadBody = await getFileUploadBody(file, fileName);
+    if (uploadBody.error || !uploadBody.data) return { data: null, error: uploadBody.error ?? 'Could not read this image.' };
+
+    const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.data.body, {
+      contentType: uploadBody.data.contentType,
       upsert: false,
     });
 
@@ -1413,6 +1534,33 @@ export async function uploadPublicDemoImage(
   } catch {
     return { data: null, error: `Could not upload ${file.name || 'image'}.` };
   }
+}
+
+async function getFileUploadBody(
+  file: PublicDemoImageAsset,
+  fileName: string,
+): Promise<ServiceResult<PublicDemoImageUploadBody>> {
+  const contentType = file.mimeType ?? contentTypeFromName(fileName) ?? 'image/jpeg';
+
+  if (/^(blob:|data:|https?:\/\/)/i.test(file.uri)) {
+    const response = await fetch(file.uri);
+    if (!response.ok) return { data: null, error: `Could not read ${file.name || 'image'}.` };
+    const body = await response.arrayBuffer();
+    return { data: { body, contentType: response.headers.get('content-type') ?? contentType }, error: null };
+  }
+
+  const localFile = new ExpoFile(file.uri);
+  const body = await localFile.arrayBuffer();
+  return { data: { body, contentType }, error: null };
+}
+
+function validatePrivateVerificationFileAsset(file: PrivateVerificationFileAsset): ServiceResult<void> {
+  if (!file.uri) return { data: null, error: 'Choose a verification file first.' };
+  if (file.size && file.size > MAX_PRIVATE_VERIFICATION_FILE_BYTES) {
+    return { data: null, error: 'Choose a verification file under 10 MB.' };
+  }
+
+  return { data: undefined, error: null };
 }
 
 function validatePublicImageAsset(file: PublicDemoImageAsset): ServiceResult<void> {
@@ -1474,4 +1622,16 @@ export function getEditableJobStatuses() {
 
 export function getEditableRateTypes() {
   return [...EDITABLE_RATE_TYPES];
+}
+
+export function getEditableVerificationFileTypes() {
+  return [...EDITABLE_VERIFICATION_FILE_TYPES];
+}
+
+export function getEditableConversationStatuses() {
+  return [...EDITABLE_CONVERSATION_STATUSES];
+}
+
+export function getEditableReportStatuses() {
+  return [...EDITABLE_REPORT_STATUSES];
 }
