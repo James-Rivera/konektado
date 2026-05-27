@@ -111,7 +111,7 @@ export default function AdminUserReviewScreen() {
                 onItemPress={(item) =>
                   router.push({
                     pathname: '/job/[jobId]',
-                    params: { jobId: item.id },
+                    params: { adminView: '1', jobId: item.id },
                   })
                 }
                 title="Active jobs/listings"
@@ -124,7 +124,7 @@ export default function AdminUserReviewScreen() {
                 onItemPress={(item) =>
                   router.push({
                     pathname: '/services/[serviceId]',
-                    params: { serviceId: item.id },
+                    params: { adminView: '1', serviceId: item.id },
                   })
                 }
                 title="Active services"
@@ -169,16 +169,15 @@ export default function AdminUserReviewScreen() {
               <PublicPhotosPreview
                 photos={user.publicPhotos}
                 onOpenSource={(photo) => {
-                  const route = actionForPhoto(photo).route;
+                  const route = actionForPhoto(photo, user).route;
                   if (route) router.push(route as never);
                 }}
                 onReviewPhoto={(photo) =>
                   router.push({
                     pathname: '/admin/photos/[photoId]',
-                    params: { photoId: photo.id },
+                    params: { fromUserId: user.id, photoId: photo.id },
                   })
                 }
-                onViewAll={() => router.push('/admin/photos' as never)}
               />
             </Section>
 
@@ -348,14 +347,18 @@ function VerificationLink({
 function PublicPhotosPreview({
   onOpenSource,
   onReviewPhoto,
-  onViewAll,
   photos,
 }: {
   onOpenSource: (photo: AdminUserPublicPhoto) => void;
   onReviewPhoto: (photo: AdminUserPublicPhoto) => void;
-  onViewAll: () => void;
   photos: AdminUserPublicPhoto[];
 }) {
+  const groups = [
+    { photos: photos.filter((photo) => photo.source === 'profile'), title: 'Profile photos' },
+    { photos: photos.filter((photo) => photo.source === 'job'), title: 'Job/listing photos' },
+    { photos: photos.filter((photo) => photo.source === 'service'), title: 'Service photos' },
+  ].filter((group) => group.photos.length);
+
   return (
     <View style={styles.photosBlock}>
       <AdminPrivacyNotice icon="visibility">
@@ -363,34 +366,46 @@ function PublicPhotosPreview({
       </AdminPrivacyNotice>
 
       {photos.length ? (
-        <View style={styles.photoGrid}>
-          {photos.slice(0, 6).map((photo) => (
-            <View key={photo.id} style={styles.photoTile}>
-              <Image source={{ uri: photo.imageUrl }} style={styles.photoImage} />
-              <View style={styles.photoTileCopy}>
-                <View style={styles.photoTileHeader}>
-                  <Text numberOfLines={1} style={styles.photoLabel}>{sourceLabel(photo.source)}</Text>
-                  {photo.moderationStatus === 'visible' ? null : (
-                    <AdminStatusBadge
-                      label={formatModerationStatus(photo.moderationStatus)}
-                      tone={toneForPhotoStatus(photo.moderationStatus)}
-                    />
-                  )}
-                </View>
-                <View style={styles.photoActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => onReviewPhoto(photo)}
-                    style={({ pressed }) => [styles.photoActionButton, pressed && styles.pressed]}>
-                    <Text style={styles.photoActionText}>Review photo</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => onOpenSource(photo)}
-                    style={({ pressed }) => [styles.photoSourceButton, pressed && styles.pressed]}>
-                    <Text style={styles.photoSourceText}>Open source</Text>
-                  </Pressable>
-                </View>
+        <View style={styles.photoGroups}>
+          {groups.map((group) => (
+            <View key={group.title} style={styles.photoGroup}>
+              <View style={styles.photoGroupHeader}>
+                <Text style={styles.photoGroupTitle}>{group.title}</Text>
+                <Text style={styles.photoGroupCount}>
+                  {group.photos.length} photo{group.photos.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <View style={styles.photoGrid}>
+                {group.photos.map((photo) => (
+                  <View key={photo.id} style={styles.photoTile}>
+                    <Image source={{ uri: photo.imageUrl }} style={styles.photoImage} />
+                    <View style={styles.photoTileCopy}>
+                      <View style={styles.photoTileHeader}>
+                        <Text numberOfLines={1} style={styles.photoLabel}>{sourceLabel(photo.source)}</Text>
+                        {photo.moderationStatus === 'visible' ? null : (
+                          <AdminStatusBadge
+                            label={formatModerationStatus(photo.moderationStatus)}
+                            tone={toneForPhotoStatus(photo.moderationStatus)}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.photoActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => onReviewPhoto(photo)}
+                          style={({ pressed }) => [styles.photoActionButton, pressed && styles.pressed]}>
+                          <Text style={styles.photoActionText}>Review photo</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => onOpenSource(photo)}
+                          style={({ pressed }) => [styles.photoSourceButton, pressed && styles.pressed]}>
+                          <Text style={styles.photoSourceText}>Open source</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                ))}
               </View>
             </View>
           ))}
@@ -402,14 +417,6 @@ function PublicPhotosPreview({
           title="No public photos"
         />
       )}
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={onViewAll}
-        style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-        <MaterialIcons color={adminPalette.blue} name="photo-library" size={18} />
-        <Text style={styles.secondaryButtonText}>View all public photos</Text>
-      </Pressable>
     </View>
   );
 }
@@ -459,21 +466,27 @@ function sourceLabel(source: AdminUserPublicPhoto['source']) {
   return 'Service';
 }
 
-function actionForPhoto(photo: AdminUserPublicPhoto) {
+function actionForPhoto(photo: AdminUserPublicPhoto, user: AdminUserDetail) {
   if (photo.source === 'job') {
     return {
-      route: { pathname: '/job/[jobId]', params: { jobId: photo.sourceId } },
+      route: { pathname: '/job/[jobId]', params: { adminView: '1', jobId: photo.sourceId } },
     };
   }
 
   if (photo.source === 'service') {
     return {
-      route: { pathname: '/services/[serviceId]', params: { serviceId: photo.sourceId } },
+      route: { pathname: '/services/[serviceId]', params: { adminView: '1', serviceId: photo.sourceId } },
+    };
+  }
+
+  if (user.roles.includes('worker')) {
+    return {
+      route: { pathname: '/worker/[workerId]', params: { adminView: '1', workerId: user.id } },
     };
   }
 
   return {
-    route: { pathname: '/admin/users/[userId]', params: { userId: photo.sourceId } },
+    route: { pathname: '/client/[clientId]', params: { adminView: '1', clientId: user.id } },
   };
 }
 
@@ -728,6 +741,31 @@ const styles = StyleSheet.create({
   },
   photosBlock: {
     gap: 0,
+  },
+  photoGroups: {
+    gap: 0,
+  },
+  photoGroup: {
+    borderTopColor: adminPalette.line,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  photoGroupHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+  },
+  photoGroupTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  photoGroupCount: {
+    ...typography.caption,
+    color: adminPalette.muted,
   },
   photoGrid: {
     flexDirection: 'row',

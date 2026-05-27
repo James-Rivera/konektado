@@ -10,6 +10,7 @@ import {
   PublicWorkerProfileView,
 } from '@/components/public-profile/PublicProfiles';
 import { color } from '@/constants/theme';
+import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startServiceConversation } from '@/services/conversation.service';
@@ -32,8 +33,9 @@ export default function ServicePublicWorkerProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile: currentProfile, loading: currentProfileLoading } = useProfile();
-  const params = useLocalSearchParams<{ serviceId?: string | string[] }>();
+  const params = useLocalSearchParams<{ adminView?: string | string[]; serviceId?: string | string[] }>();
   const serviceId = getParamValue(params.serviceId);
+  const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
   const [profile, setProfile] = useState<PublicWorkerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +147,9 @@ export default function ServicePublicWorkerProfileScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
         <PublicProfileHeader onBack={() => router.back()} title="Worker Profile" />
-        {loading || currentProfileLoading ? <PublicProfileSkeleton bottomInset={insets.bottom} /> : null}
+        {loading || currentProfileLoading ? (
+          <PublicProfileSkeleton bottomInset={insets.bottom} showCta={!adminViewRequested} />
+        ) : null}
         {!loading && error ? (
           <EmptyState description={error} icon="person-search" title="Could not load worker profile" />
         ) : null}
@@ -158,11 +162,18 @@ export default function ServicePublicWorkerProfileScreen() {
         ) : null}
         {!loading && !currentProfileLoading && profile ? (
           <PublicWorkerProfileView
+            adminViewOnly={adminViewOnly}
             bottomInset={insets.bottom}
             cta={{ ...cta, loading: messaging, onPress: handleMessage }}
             onOpenService={(nextServiceId) =>
               nextServiceId !== serviceId
-                ? router.push({ pathname: '/services/[serviceId]', params: { serviceId: nextServiceId } })
+                ? router.push({
+                    pathname: '/services/[serviceId]',
+                    params: {
+                      ...(adminViewOnly ? { adminView: '1' } : {}),
+                      serviceId: nextServiceId,
+                    },
+                  })
                 : undefined
             }
             profile={profile}
