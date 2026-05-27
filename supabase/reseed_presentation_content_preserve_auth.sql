@@ -20,6 +20,11 @@ begin;
 drop table if exists _seed_profile_templates;
 drop table if exists _seed_excluded_accounts;
 drop table if exists _seed_people;
+drop table if exists _seed_account_status;
+drop table if exists _seed_verified_people;
+drop table if exists _seed_pending_people;
+drop table if exists _seed_rejected_people;
+drop table if exists _seed_unverified_people;
 drop table if exists _seed_account_before;
 drop table if exists _seed_account_change_log;
 drop table if exists _seed_updated_profiles;
@@ -81,7 +86,7 @@ values
    'Needs occasional home and document help',
    'Coordinates small household errands and school-related tasks through Konektado messages.',
    array['Cleaning', 'Laundry help', 'Document formatting'], 'Evenings and weekends',
-   'https://api.dicebear.com/9.x/notionists/png?seed=althea-ramos&backgroundColor=f9d978'),
+   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (2, 'Miguel', 'Santos', 'Purok 2, Barangay San Pedro', 'provider',
    'Fictional resident profile for minor home fixes and tech setup support near the covered court area.',
    'Available after 5 PM on weekdays and most Sunday afternoons.',
@@ -91,7 +96,7 @@ values
    'Hires trusted help for family tasks',
    'Looks for nearby help with cleaning, device setup, and short household tasks.',
    array['Cleaning', 'Phone setup', 'Yard or outdoor help'], 'Weekday evenings',
-   'https://api.dicebear.com/9.x/notionists/png?seed=miguel-santos&backgroundColor=8ed1c6'),
+   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (3, 'Clarisse', 'Dela Cruz', 'Purok 3, Barangay San Pedro', 'client',
    'Fictional resident profile for tutoring, school project planning, and online document work.',
    'Available for online coordination after class hours and Sunday mornings.',
@@ -101,7 +106,7 @@ values
    'Coordinates school and home support',
    'Books tutors, layout help, and short home assistance for a busy household schedule.',
    array['Tutoring', 'Canva layout', 'Home assistance'], 'After 6 PM or Sunday morning',
-   'https://api.dicebear.com/9.x/notionists/png?seed=clarisse-dela-cruz&backgroundColor=b8d8ff'),
+   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (4, 'Jomar', 'Bautista', 'Purok 4, Barangay San Pedro', 'provider',
    'Fictional resident profile focused on errands, delivery help, and outdoor cleanup within nearby areas.',
    'Usually available mornings and early afternoons when scheduled ahead.',
@@ -111,7 +116,7 @@ values
    'Needs help for home upkeep',
    'Looks for local support for laundry, basic troubleshooting, and occasional cleaning.',
    array['Laundry help', 'Basic troubleshooting', 'Cleaning'], 'Morning or early afternoon',
-   null),
+   'https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (5, 'Liza', 'Mercado', 'Purok 5, Barangay San Pedro', 'client',
    'Fictional resident profile for small business layouts, forms, and local household bookings.',
    'Responds during lunch break and after 7 PM.',
@@ -121,7 +126,7 @@ values
    'Books digital and home services',
    'Hires help for layout work, printer setup, cleaning, and occasional delivery tasks.',
    array['Canva layout', 'Printer setup', 'Delivery help'], 'Evenings',
-   'https://api.dicebear.com/9.x/notionists/png?seed=liza-mercado&backgroundColor=d7c5ff'),
+   'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (6, 'Paolo', 'Reyes', 'Purok 6, Barangay San Pedro', 'provider',
    'Fictional resident profile for WiFi/router help, printer setup, and beginner computer lessons.',
    'Available Saturday afternoon and weekday evenings by schedule.',
@@ -131,7 +136,7 @@ values
    'Needs help with home and errands',
    'Coordinates short household jobs and service bookings around Barangay San Pedro.',
    array['Errands', 'Home assistance', 'Laundry help'], 'Weekends',
-   'https://api.dicebear.com/9.x/notionists/png?seed=paolo-reyes&backgroundColor=a8e6a3'),
+   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (7, 'Marinel', 'Garcia', 'Purok 1, Barangay San Pedro', 'provider',
    'Fictional resident profile for laundry, cleaning, and light home organization.',
    'Available Tuesday, Thursday, and Saturday mornings.',
@@ -141,7 +146,7 @@ values
    'Looks for trusted family support',
    'Books nearby help for tutoring, computer setup, and delivery errands when needed.',
    array['Tutoring', 'Computer setup', 'Delivery help'], 'Morning appointments',
-   'https://api.dicebear.com/9.x/notionists/png?seed=marinel-garcia&backgroundColor=ffd6a5'),
+   'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (8, 'Rodel', 'Villanueva', 'Purok 2, Barangay San Pedro', 'client',
    'Fictional resident profile for practical home assistance and maintenance coordination.',
    'Usually checks messages before work and after dinner.',
@@ -151,7 +156,7 @@ values
    'Coordinates repairs and digital help',
    'Looks for clear rates and reliable schedules for household and document tasks.',
    array['Basic home repair', 'Document formatting', 'Cleaning'], 'After 6 PM',
-   'https://api.dicebear.com/9.x/notionists/png?seed=rodel-villanueva&backgroundColor=cde7b0'),
+   'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (9, 'Bea', 'Navarro', 'Purok 3, Barangay San Pedro', 'provider',
    'Fictional resident profile for tutoring, reading practice, and beginner computer guidance.',
    'Available Monday, Wednesday, Friday evenings, and Sunday afternoon.',
@@ -161,7 +166,7 @@ values
    'Needs occasional household services',
    'Books cleaning, laundry, and printer setup through message-based coordination.',
    array['Cleaning', 'Laundry help', 'Printer setup'], 'Weeknights',
-   null),
+   'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (10, 'Noel', 'Castillo', 'Purok 4, Barangay San Pedro', 'provider',
    'Fictional resident profile for document formatting, encoding, and resume assistance.',
    'Accepts online work during evenings and short in-person coordination on weekends.',
@@ -171,7 +176,7 @@ values
    'Books reliable tech and home help',
    'Looks for nearby help with router setup, cleaning, and small errands.',
    array['WiFi/router help', 'Cleaning', 'Errands'], 'Evenings',
-   'https://api.dicebear.com/9.x/notionists/png?seed=noel-castillo&backgroundColor=f4e285'),
+   'https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (11, 'Aira', 'Mendoza', 'Purok 5, Barangay San Pedro', 'client',
    'Fictional resident profile for social media posts, Canva layout, and small business coordination.',
    'Available for chat after 4 PM and most Saturdays.',
@@ -181,7 +186,7 @@ values
    'Books household and design help',
    'Coordinates local help for cleaning, delivery, layouts, and beginner tech setup.',
    array['Cleaning', 'Delivery help', 'Canva layout'], 'Afternoons',
-   'https://api.dicebear.com/9.x/notionists/png?seed=aira-mendoza&backgroundColor=a0ced9'),
+   'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (12, 'Renzo', 'Flores', 'Purok 6, Barangay San Pedro', 'provider',
    'Fictional resident profile for device checks, phone setup, and practical troubleshooting.',
    'Available Sunday morning and weekday evenings with one day notice.',
@@ -191,7 +196,7 @@ values
    'Needs organized home support',
    'Books yard cleanup, laundry, and occasional tutoring through Konektado.',
    array['Yard or outdoor help', 'Laundry help', 'Tutoring'], 'Sunday or weekday evening',
-   'https://api.dicebear.com/9.x/notionists/png?seed=renzo-flores&backgroundColor=f7b267');
+   'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&crop=faces&w=400&h=400&q=80');
 
 create temp table _seed_excluded_accounts as
 select distinct
@@ -226,6 +231,56 @@ where not exists (
 order by p.created_at nulls last, p.id
 limit 12;
 
+create temp table _seed_account_status as
+with prioritized_verifications as (
+  select
+    v.*,
+    row_number() over (
+      partition by v.user_id
+      order by (v.status = 'pending') desc, v.created_at desc, v.id
+    ) as rn
+  from public.verifications v
+)
+select
+  sp.slot,
+  sp.user_id,
+  case
+    when pv.status = 'pending' then 'pending'
+    when pv.status = 'approved' then 'verified'
+    when pv.status = 'rejected' then 'rejected'
+    when coalesce(p.barangay_verified_at, p.verified_at) is not null then 'verified'
+    else 'unverified'
+  end as verification_status,
+  pv.status as verification_request_status
+from _seed_people sp
+join public.profiles p on p.id = sp.user_id
+left join prioritized_verifications pv
+  on pv.user_id = sp.user_id
+ and pv.rn = 1;
+
+create temp table _seed_verified_people as
+select
+  row_number() over (order by slot) as verified_slot,
+  slot,
+  user_id
+from _seed_account_status
+where verification_status = 'verified';
+
+create temp table _seed_pending_people as
+select slot, user_id
+from _seed_account_status
+where verification_status = 'pending';
+
+create temp table _seed_rejected_people as
+select slot, user_id
+from _seed_account_status
+where verification_status = 'rejected';
+
+create temp table _seed_unverified_people as
+select slot, user_id
+from _seed_account_status
+where verification_status = 'unverified';
+
 create temp table _seed_account_before as
 select
   sp.slot,
@@ -237,19 +292,26 @@ select
   case when nullif(p.avatar_url, '') is not null then 'has_image' else 'initials_fallback' end as old_avatar_status,
   coalesce(nullif(p.purok_sitio, ''), nullif(p.subdivision_area, ''), nullif(p.barangay, ''), nullif(p.city, '')) as old_location,
   p.about as old_about,
-  case when coalesce(p.barangay_verified_at, p.verified_at) is not null then 'verified' else 'unverified' end as old_verification_status
+  status.verification_status as old_verification_status
 from _seed_people sp
+join _seed_account_status status on status.user_id = sp.user_id
 join public.profiles p on p.id = sp.user_id
 join auth.users au on au.id = p.id;
 
 do $$
 declare
   seed_people_count integer;
+  verified_people_count integer;
 begin
   select count(*) into seed_people_count from _seed_people;
+  select count(*) into verified_people_count from _seed_verified_people;
 
   if seed_people_count < 6 then
     raise exception 'Need at least 6 existing non-admin sample accounts before reseeding presentation content. Found %.', seed_people_count;
+  end if;
+
+  if verified_people_count < 2 then
+    raise exception 'Need at least 2 verified non-admin accounts before reseeding active public content. Found % verified accounts.', verified_people_count;
   end if;
 end $$;
 
@@ -301,8 +363,6 @@ with updated as (
     availability = t.availability,
     preferred_contact_method = 'app_message',
     avatar_url = t.avatar_url,
-    verified_at = coalesce(p.verified_at, now() - interval '45 days'),
-    barangay_verified_at = coalesce(p.barangay_verified_at, now() - interval '44 days'),
     updated_at = now()
   from _seed_people sp
   join _seed_profile_templates t on t.slot = sp.slot
@@ -478,7 +538,7 @@ set photo_urls = case idx
   when 3 then array['https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1200&q=80']
   when 4 then array['https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?auto=format&fit=crop&w=1200&q=80']
   when 5 then array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80']
-  when 6 then array['https://images.unsplash.com/photo-1605902711622-cfb43c4437d5?auto=format&fit=crop&w=1200&q=80']
+  when 6 then array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80']
   when 8 then array['https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=1200&q=80']
   when 9 then array['https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80']
   when 10 then array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80']
@@ -501,8 +561,8 @@ select
   r.idx,
   p.user_id as provider_id
 from _seed_service_rows r
-join _seed_people p
-  on p.slot = ((r.idx - 1) % (select count(*) from _seed_people)) + 1;
+join _seed_verified_people p
+  on p.verified_slot = ((r.idx - 1) % (select count(*) from _seed_verified_people)) + 1;
 
 insert into public.services (
   id,
@@ -652,10 +712,10 @@ select
   provider.user_id as provider_id,
   r.status
 from _seed_job_rows r
-join _seed_people client
-  on client.slot = ((r.idx - 1) % (select count(*) from _seed_people)) + 1
-join _seed_people provider
-  on provider.slot = (r.idx % (select count(*) from _seed_people)) + 1;
+join _seed_verified_people client
+  on client.verified_slot = ((r.idx - 1) % (select count(*) from _seed_verified_people)) + 1
+join _seed_verified_people provider
+  on provider.verified_slot = (r.idx % (select count(*) from _seed_verified_people)) + 1;
 
 insert into public.jobs (
   id,
@@ -821,8 +881,8 @@ select
   null,
   now() - ((s.idx + 2)::text || ' hours')::interval
 from _seed_inserted_services s
-join _seed_people client
-  on client.slot = (s.idx % (select count(*) from _seed_people)) + 1
+join _seed_verified_people client
+  on client.verified_slot = (s.idx % (select count(*) from _seed_verified_people)) + 1
 where s.idx in (2, 4, 14, 21, 25);
 
 insert into public.conversations (
@@ -897,7 +957,7 @@ select
   s.provider_id,
   now() - (s.idx::text || ' hours')::interval
 from _seed_inserted_services s
-join _seed_people p on p.slot = 1
+join _seed_verified_people p on p.verified_slot = 1
 where s.idx in (1, 5, 10, 15, 21)
   and p.user_id <> s.provider_id
 on conflict (user_id, item_type, item_id) do nothing;
@@ -909,10 +969,88 @@ select
   j.id,
   now() - (j.idx::text || ' hours')::interval
 from _seed_inserted_jobs j
-join _seed_people p on p.slot = 2
+join _seed_verified_people p on p.verified_slot = case when (select count(*) from _seed_verified_people) >= 2 then 2 else 1 end
 where j.idx in (1, 3, 7, 11, 16)
   and p.user_id <> j.client_id
 on conflict (user_id, item_type, item_id) do nothing;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.services s
+    join _seed_inserted_services seed on seed.id = s.id
+    join _seed_account_status owner_status on owner_status.user_id = s.provider_id
+    where s.is_active = true
+      and owner_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have active public services.';
+  end if;
+
+  if exists (
+    select 1
+    from public.jobs j
+    join _seed_inserted_jobs seed on seed.id = j.id
+    join _seed_account_status owner_status on owner_status.user_id = coalesce(j.client_id, j.owner_id)
+    where j.status in ('open', 'reviewing', 'in_progress')
+      and owner_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have active public jobs.';
+  end if;
+
+  if exists (
+    select 1
+    from _seed_people seed
+    join public.profiles p on p.id = seed.user_id
+    where nullif(trim(coalesce(p.avatar_url, '')), '') is null
+  ) then
+    raise exception 'Seed validation failed: demo public profile photos must be non-empty.';
+  end if;
+
+  if exists (
+    select 1
+    from _seed_people seed
+    join public.profiles p on p.id = seed.user_id
+    where coalesce(p.avatar_url, '') ~* '(dicebear|notionists|pixel|cartoon|robohash|bottts|avataaars|adventurer|lorelei|identicon)'
+  ) then
+    raise exception 'Seed validation failed: demo public profile photos cannot use pixel/cartoon avatar sources.';
+  end if;
+
+  if exists (
+    select 1
+    from _seed_people seed
+    join public.profiles p on p.id = seed.user_id
+    where coalesce(p.avatar_url, '') ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+  ) then
+    raise exception 'Seed validation failed: public profile photos cannot point to ID, certificate, or verification assets.';
+  end if;
+
+  if exists (
+    select 1
+    from public.jobs j
+    join _seed_inserted_jobs seed on seed.id = j.id
+    join _seed_account_status owner_status on owner_status.user_id = coalesce(j.client_id, j.owner_id)
+    cross join lateral unnest(coalesce(j.photo_urls, '{}'::text[])) as image_url
+    where nullif(trim(image_url), '') is null
+       or image_url ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+       or owner_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: public job photos must belong to verified owners and stay separate from private verification assets.';
+  end if;
+
+  if exists (
+    select 1
+    from public.services s
+    join _seed_inserted_services seed on seed.id = s.id
+    join _seed_account_status owner_status on owner_status.user_id = s.provider_id
+    cross join lateral unnest(coalesce(s.photo_urls, '{}'::text[])) as image_url
+    where nullif(trim(image_url), '') is null
+       or image_url ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+       or owner_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: public service photos must belong to verified owners and stay separate from private verification assets.';
+  end if;
+end $$;
 
 create temp table _seed_account_change_log as
 select
@@ -927,13 +1065,13 @@ select
   b.old_location,
   coalesce(nullif(p.purok_sitio, ''), nullif(p.subdivision_area, ''), nullif(p.barangay, ''), nullif(p.city, '')) as new_location,
   b.old_verification_status,
-  case when coalesce(p.barangay_verified_at, p.verified_at) is not null then 'verified' else 'unverified' end as new_verification_status,
+  status.verification_status as new_verification_status,
   (
     b.old_display_name is distinct from p.full_name
     or b.old_avatar_status is distinct from case when nullif(p.avatar_url, '') is not null then 'has_image' else 'initials_fallback' end
     or b.old_location is distinct from coalesce(nullif(p.purok_sitio, ''), nullif(p.subdivision_area, ''), nullif(p.barangay, ''), nullif(p.city, ''))
     or b.old_about is distinct from p.about
-    or b.old_verification_status is distinct from case when coalesce(p.barangay_verified_at, p.verified_at) is not null then 'verified' else 'unverified' end
+    or b.old_verification_status is distinct from status.verification_status
   ) as profile_display_fields_changed,
   coalesce(service_counts.services_inserted, 0) as services_inserted,
   coalesce(job_counts.jobs_inserted, 0) as jobs_inserted,
@@ -941,6 +1079,7 @@ select
   coalesce(conversation_counts.conversations_involving_account, 0) as conversations_involving_account
 from _seed_account_before b
 join public.profiles p on p.id = b.profile_id
+join _seed_account_status status on status.user_id = b.profile_id
 left join (
   select s.provider_id, count(*)::integer as services_inserted
   from public.services s
@@ -1012,6 +1151,14 @@ select
   value
 from (
   select 'selected_account_profile_count' as metric, count(*)::text as value from _seed_people
+  union all
+  select 'verified_content_owner_pool_count', count(*)::text from _seed_verified_people
+  union all
+  select 'pending_account_pool_count', count(*)::text from _seed_pending_people
+  union all
+  select 'rejected_account_pool_count', count(*)::text from _seed_rejected_people
+  union all
+  select 'unverified_account_pool_count', count(*)::text from _seed_unverified_people
   union all
   select 'excluded_admin_barangay_account_count', count(*)::text from _seed_excluded_accounts
   union all
@@ -1127,16 +1274,16 @@ from (
   select 'visible_home_search_service_count', count(*)::text
   from public.services s
   join _seed_inserted_services seed on seed.id = s.id
-  join public.profiles p on p.id = s.provider_id
+  join _seed_account_status owner_status on owner_status.user_id = s.provider_id
   where s.is_active = true
-    and coalesce(p.barangay_verified_at, p.verified_at) is not null
+    and owner_status.verification_status = 'verified'
   union all
   select 'visible_home_search_job_count', count(*)::text
   from public.jobs j
   join _seed_inserted_jobs seed on seed.id = j.id
-  join public.profiles p on p.id = coalesce(j.client_id, j.owner_id)
+  join _seed_account_status owner_status on owner_status.user_id = coalesce(j.client_id, j.owner_id)
   where j.status in ('open', 'reviewing')
-    and coalesce(p.barangay_verified_at, p.verified_at) is not null
+    and owner_status.verification_status = 'verified'
 ) visibility_rows;
 
 select

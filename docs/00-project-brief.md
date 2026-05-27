@@ -147,4 +147,4 @@ Important product language:
 
 - Home is still mostly demo/static and uses preferences only for ordering and filter defaults.
 - Locked actions now route to a Figma-matched verification intro and users can submit a pending verification request with contact details, ID files, services/purpose, and supporting files.
-- Verified-origin database filtering is pending.
+- Public Home/Search discovery now filters active/open marketplace rows to verified owners; pending or rejected users may appear in admin/account activity but should not appear in public discovery.

@@ -599,6 +599,10 @@ export function getPublicProfileAvatarUrl(profile: PublicProfileSummary | null |
   return compactText(profile?.avatarUrl) || null;
 }
 
+export function isPublicProfileVerified(profile: PublicProfileSummary | null | undefined) {
+  return Boolean(profile?.barangayVerifiedAt || profile?.verifiedAt);
+}
+
 export async function loadPublicProfiles(userIds: string[]) {
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (!ids.length) return new Map<string, PublicProfileSummary>();

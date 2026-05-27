@@ -338,9 +338,7 @@ function ResidentSummary({
   return (
     <View style={styles.summaryCard}>
       <View style={styles.summaryTop}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(name) || 'KR'}</Text>
-        </View>
+        <ResidentAvatar avatarUrl={request.profile?.avatarUrl ?? null} name={name} />
         <View style={styles.summaryCopy}>
           <Text numberOfLines={2} style={styles.summaryName}>{name}</Text>
           <View style={styles.inlineMeta}>
@@ -354,6 +352,18 @@ function ResidentSummary({
         <SummaryMeta icon="event" label="Submitted" value={formatDate(request.createdAt)} />
         <SummaryMeta icon="folder" label="Files" value={`${request.files.length} uploaded`} />
       </View>
+    </View>
+  );
+}
+
+function ResidentAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
+  if (avatarUrl) {
+    return <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />;
+  }
+
+  return (
+    <View style={styles.avatarFallback}>
+      <Text style={styles.avatarText}>{getInitials(name) || 'KR'}</Text>
     </View>
   );
 }
@@ -791,7 +801,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  avatar: {
+  avatarImage: {
+    backgroundColor: color.surfaceAlt,
+    borderColor: adminPalette.line,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 48,
+    width: 48,
+  },
+  avatarFallback: {
     alignItems: 'center',
     backgroundColor: adminPalette.blueSoft,
     borderColor: adminPalette.blueLine,

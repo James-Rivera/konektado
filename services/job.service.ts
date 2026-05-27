@@ -8,6 +8,7 @@ import {
     compactText,
     doesRateOverlap,
     getCurrentUserId,
+    isPublicProfileVerified,
     loadPublicProfiles,
     mapJob,
     normalizeExperienceLevel,
@@ -329,11 +330,7 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   const profiles = await loadPublicProfiles(visibleRows.map((row) => row.client_id ?? row.owner_id));
   const jobs = visibleRows
     .map((row) => mapJob(row, profiles))
-    .filter((job) =>
-      filters.verifiedOnly
-        ? Boolean(job.client?.barangayVerifiedAt || job.client?.verifiedAt)
-        : true,
-    );
+    .filter((job) => isPublicProfileVerified(job.client));
   const stats = await loadClientStats(jobs.map((job) => job.clientId));
 
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };

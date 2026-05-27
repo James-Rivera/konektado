@@ -230,6 +230,7 @@ function UserReviewCard({
 
       <PublicPhotoSummary
         count={user.publicPhotosCount}
+        ownerId={user.id}
         previewUrls={user.publicPhotoPreviewUrls}
       />
 
@@ -266,9 +267,11 @@ function UserAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: strin
 
 function PublicPhotoSummary({
   count,
+  ownerId,
   previewUrls,
 }: {
   count: number;
+  ownerId: string;
   previewUrls: string[];
 }) {
   return (
@@ -281,8 +284,8 @@ function PublicPhotoSummary({
       </View>
       {previewUrls.length ? (
         <View style={styles.photoPreviewStrip}>
-          {previewUrls.map((url) => (
-            <Image key={url} source={{ uri: url }} style={styles.photoPreview} />
+          {previewUrls.map((url, index) => (
+            <Image key={`${ownerId}-public-photo-preview-${index}-${url}`} source={{ uri: url }} style={styles.photoPreview} />
           ))}
         </View>
       ) : null}

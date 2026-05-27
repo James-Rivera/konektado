@@ -10,6 +10,7 @@ import {
   compactText,
   getCurrentUserId,
   isCurrentUserAdmin,
+  isPublicProfileVerified,
   loadPublicProfiles,
   mapProfile,
   type ProfileRow,
@@ -113,6 +114,8 @@ type VisibilityRow = {
   content_id: string;
   visibility: PublicPhotoVisibility;
 };
+
+const PUBLIC_PHOTO_JOB_STATUSES = new Set(['open', 'reviewing', 'in_progress']);
 
 export async function listPublicPhotosWithModeration({
   limit = 120,
@@ -388,7 +391,10 @@ async function loadAdminPublicPhotos({
     };
   });
 
-  const jobPhotos = jobRows.flatMap((row) => {
+  const jobPhotos = jobRows.filter((row) => {
+    const ownerId = row.client_id ?? row.owner_id;
+    return PUBLIC_PHOTO_JOB_STATUSES.has(row.status) && isPublicProfileVerified(owners.get(ownerId));
+  }).flatMap((row) => {
     const ownerId = row.client_id ?? row.owner_id;
     const owner = owners.get(ownerId) ?? null;
     return Array.from(new Set((row.photo_urls ?? []).map(compactPhotoUrl).filter(Boolean))).map((imageUrl) => ({
@@ -412,7 +418,9 @@ async function loadAdminPublicPhotos({
     }));
   });
 
-  const servicePhotos = serviceRows.flatMap((row) => {
+  const servicePhotos = serviceRows.filter((row) =>
+    Boolean(row.is_active) && isPublicProfileVerified(owners.get(row.provider_id)),
+  ).flatMap((row) => {
     const owner = owners.get(row.provider_id) ?? null;
     return Array.from(new Set((row.photo_urls ?? []).map(compactPhotoUrl).filter(Boolean))).map((imageUrl) => ({
       id: getPublicPhotoKey({ imageUrl, sourceId: row.id, sourceType: 'service_photo' }),

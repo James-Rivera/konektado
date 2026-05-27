@@ -81,6 +81,7 @@ function RootNavigator() {
     if (loading) return;
 
     const activeGroup = segments[0];
+    const isInternalRoute = activeGroup === "internal";
     const targetGroup = !authenticated
       ? "(auth)"
       : needsSignupPassword
@@ -139,8 +140,9 @@ function RootNavigator() {
       ["client", "job", "services", "worker"].includes(String(activeGroup));
 
     if (
-      isMissingSignupPasswordRoute ||
+      (!isInternalRoute && isMissingSignupPasswordRoute) ||
       (
+        !isInternalRoute &&
         activeGroup !== targetGroup &&
         !isMainAppRootRoute &&
         !isAdminInspectionRoute &&
@@ -180,6 +182,8 @@ function RootNavigator() {
       <Stack.Screen name="create-service" options={{ headerShown: false }} />
       <Stack.Screen name="create-service-preview" options={{ headerShown: false }} />
       <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
+      <Stack.Screen name="internal/demo-editor" options={{ headerShown: false }} />
+      <Stack.Screen name="internal/login" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="post/active" options={{ headerShown: false }} />
       <Stack.Screen name="post/renew" options={{ headerShown: false }} />

@@ -1,5 +1,12 @@
 import type { ServiceResult } from '@/services/auth.service';
 import {
+  canShowActivePublicContentForAdmin,
+  formatCanonicalAdminVerificationLabel,
+  getCanonicalAdminVerificationStatus,
+  getCanonicalVerificationRequest,
+  type AdminCanonicalVerificationStatus,
+} from '@/services/admin-verification-status.service';
+import {
   getPublicPhotoKey,
   type PublicPhotoSourceType,
   type PublicPhotoVisibility,
@@ -17,7 +24,7 @@ import { supabase } from '@/utils/supabase';
 
 export type AdminUserFilter = 'all' | 'verified' | 'pending';
 export type AdminUserRole = 'worker' | 'client';
-export type AdminUserVerificationStatus = 'verified' | 'pending' | 'unverified';
+export type AdminUserVerificationStatus = AdminCanonicalVerificationStatus;
 
 export type AdminUserPublicPhoto = {
   id: string;
@@ -294,7 +301,9 @@ export async function getAdminUserDetail(userId: string): Promise<ServiceResult<
 
   if (!profile) return { data: null, error: 'User profile not found.' };
 
-  const publicPhotos = await mapPublicPhotosWithModeration(profileRow, jobs, services);
+  const visibleJobs = getVisiblePublicJobsForAdmin(jobs, listItem.verificationStatus);
+  const visibleServices = getVisiblePublicServicesForAdmin(services, listItem.verificationStatus);
+  const publicPhotos = await mapPublicPhotosWithModeration(profileRow, visibleJobs, visibleServices);
 
   return {
     data: {
@@ -304,12 +313,10 @@ export async function getAdminUserDetail(userId: string): Promise<ServiceResult<
       availability: compactText(profileRow.availability) || null,
       preferredContactMethod: formatPreferredContact(profileRow.preferred_contact_method),
       latestVerification: getLatestVerification(cleanUserId, verifications),
-      activeJobs: jobs
-        .filter((job) => ACTIVE_JOB_STATUSES.has(job.status))
+      activeJobs: visibleJobs
         .map(mapJobActivity)
         .sort(sortNewestFirst),
-      activeServices: services
-        .filter((service) => Boolean(service.is_active))
+      activeServices: visibleServices
         .map(mapServiceActivity)
         .sort(sortNewestFirst),
       recentReports: reports.map(mapReportItem).sort(sortNewestFirst).slice(0, 5),
@@ -429,8 +436,10 @@ function mapUserListItem({
     reportInvolvesUser(report, userId, userJobs, userServices),
   );
   const latestVerification = getLatestVerification(userId, verifications);
-  const verificationStatus = getVerificationStatus(row, latestVerification);
-  const publicPhotos = mapPublicPhotos(row, userJobs, userServices);
+  const verificationStatus = getCanonicalAdminVerificationStatus(row, latestVerification);
+  const visibleJobs = getVisiblePublicJobsForAdmin(userJobs, verificationStatus);
+  const visibleServices = getVisiblePublicServicesForAdmin(userServices, verificationStatus);
+  const publicPhotos = mapPublicPhotos(row, visibleJobs, visibleServices);
   const verificationName = getFallbackNameFromVerification(latestVerification);
   const profileName = profile?.fullName === 'Konektado resident' ? null : profile?.fullName;
 
@@ -450,13 +459,13 @@ function mapUserListItem({
     roles: userRoles,
     roleLabel: formatRoleLabel(userRoles),
     verificationStatus,
-    verificationLabel: formatVerificationLabel(verificationStatus),
+    verificationLabel: formatCanonicalAdminVerificationLabel(verificationStatus),
     verificationRequestId: latestVerification?.id ?? null,
     verificationRequestStatus: latestVerification?.status ?? null,
     publicPhotosCount: publicPhotos.length,
     publicPhotoPreviewUrls: publicPhotos.map((photo) => photo.imageUrl).slice(0, 3),
-    activeJobsCount: userJobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length,
-    activeServicesCount: userServices.filter((service) => Boolean(service.is_active)).length,
+    activeJobsCount: visibleJobs.length,
+    activeServicesCount: visibleServices.length,
     reportCount: userReports.length,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
@@ -480,36 +489,7 @@ function getUserRoles(userId: string, roles: UserRoleRow[]): AdminUserRole[] {
 }
 
 function getLatestVerification(userId: string, verifications: VerificationRow[]) {
-  const userVerifications = verifications.filter((verification) => verification.user_id === userId);
-  const row =
-    userVerifications.find((verification) => verification.status === 'pending') ??
-    userVerifications[0];
-  if (!row) return null;
-
-  return {
-    id: row.id,
-    notes: row.notes,
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function getVerificationStatus(
-  row: AdminProfileRow,
-  latestVerification: { status: VerificationStatus } | null,
-): AdminUserVerificationStatus {
-  if (latestVerification?.status === 'pending') return 'pending';
-  if (latestVerification?.status === 'approved' || row.barangay_verified_at || row.verified_at) {
-    return 'verified';
-  }
-  return 'unverified';
-}
-
-function formatVerificationLabel(status: AdminUserVerificationStatus) {
-  if (status === 'verified') return 'Verified';
-  if (status === 'pending') return 'Pending';
-  return 'Unverified';
+  return getCanonicalVerificationRequest(userId, verifications);
 }
 
 function formatRoleLabel(roles: AdminUserRole[]) {
@@ -533,6 +513,22 @@ function itemMatchesSearch(item: AdminUserListItem, search: string | null | unde
     .join(' ')
     .toLowerCase()
     .includes(query);
+}
+
+function getVisiblePublicJobsForAdmin(
+  jobs: AdminJobRow[],
+  verificationStatus: AdminUserVerificationStatus,
+) {
+  if (!canShowActivePublicContentForAdmin(verificationStatus)) return [];
+  return jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status));
+}
+
+function getVisiblePublicServicesForAdmin(
+  services: AdminServiceRow[],
+  verificationStatus: AdminUserVerificationStatus,
+) {
+  if (!canShowActivePublicContentForAdmin(verificationStatus)) return [];
+  return services.filter((service) => Boolean(service.is_active));
 }
 
 function jobOwnerId(job: AdminJobRow) {

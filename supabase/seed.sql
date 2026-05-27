@@ -250,7 +250,7 @@ values
     'Barangay Hall',
     'Sto. Tomas',
     '+63 917 000 0001',
-    'https://i.pravatar.cc/300?img=47',
+    'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
     'Barangay verification reviewer for Konektado demos.',
     'Weekdays',
     now() - interval '19 days',
@@ -271,7 +271,7 @@ values
     'Purok 2, Sampaguita Street',
     'Sto. Tomas',
     '+63 917 000 0002',
-    'https://i.pravatar.cc/300?img=32',
+    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
     'Local homeowner who hires trusted workers for selected home, digital, and tech support services.',
     'Usually replies in the evening',
     now() - interval '16 days',
@@ -292,7 +292,7 @@ values
     'Purok 4, Mabini Road',
     'Sto. Tomas',
     '+63 917 000 0003',
-    'https://i.pravatar.cc/300?img=12',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
     'Experienced helper for minor home fix support, setup help, and household maintenance.',
     'Weekdays after 2:00 PM and Saturday mornings',
     now() - interval '15 days',
@@ -313,7 +313,7 @@ values
     'Purok 1, Rizal Street',
     'Sto. Tomas',
     '+63 917 000 0004',
-    'https://i.pravatar.cc/300?img=44',
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
     'Reliable cleaner and laundry helper for homes near Barangay San Pedro.',
     'Unavailable today, back this weekend',
     now() - interval '12 days',
@@ -334,7 +334,7 @@ values
     'Purok 5, Narra Street',
     'Sto. Tomas',
     '+63 917 000 0005',
-    'https://i.pravatar.cc/300?img=15',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
     'New resident browsing workers before completing verification.',
     null,
     null,
@@ -355,7 +355,7 @@ values
     'Purok 3, Bonifacio Street',
     'Sto. Tomas',
     '+63 917 000 0006',
-    'https://i.pravatar.cc/300?img=25',
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
     'Provider account for testing rejected verification correction states.',
     'Afternoons',
     null,
@@ -846,7 +846,7 @@ values
     'Local pickup and delivery support',
     'Handles small parcel pickup, market items, and short barangay-to-barangay delivery coordination.',
     array['Home & Local Help', 'Delivery help', 'Nearby errands'],
-    array['https://images.unsplash.com/photo-1605902711622-cfb43c4437d5?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80'],
     3,
     'Weekday mornings and early afternoons',
     'Small items only',
@@ -1586,7 +1586,7 @@ values
     'Home & Local Help',
     'Delivery help',
     array['Home & Local Help', 'Delivery help', 'Small item'],
-    array['https://images.unsplash.com/photo-1583912267550-3f7249ae401b?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80'],
     'Barangay San Pedro',
     'Purok 2, near covered court',
     'Purok 2, near covered court',
@@ -2068,6 +2068,18 @@ values
     now() - interval '20 hours'
   );
 
+update public.services
+set is_active = false
+where provider_id = '00000000-0000-4000-8000-000000000006';
+
+update public.jobs
+set
+  status = 'cancelled',
+  closed_at = coalesce(closed_at, now()),
+  updated_at = now()
+where coalesce(client_id, owner_id) = '00000000-0000-4000-8000-000000000005'
+  and status in ('open', 'reviewing');
+
 insert into public.verifications (
   id,
   user_id,
@@ -2227,5 +2239,96 @@ values
     now() - interval '6 days',
     now() - interval '6 days'
   );
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.services s
+    join public.profiles p on p.id = s.provider_id
+    where s.is_active = true
+      and coalesce(p.barangay_verified_at, p.verified_at) is null
+  ) then
+    raise exception 'Seed validation failed: pending/unverified users cannot have active public services.';
+  end if;
+
+  if exists (
+    select 1
+    from public.jobs j
+    join public.profiles p on p.id = coalesce(j.client_id, j.owner_id)
+    where j.status in ('open', 'reviewing')
+      and coalesce(p.barangay_verified_at, p.verified_at) is null
+  ) then
+    raise exception 'Seed validation failed: pending/unverified users cannot have active public jobs.';
+  end if;
+
+  if exists (
+    select 1
+    from public.profiles p
+    where p.id in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+        '00000000-0000-4000-8000-000000000005',
+        '00000000-0000-4000-8000-000000000006'
+      )
+      and nullif(trim(coalesce(p.avatar_url, '')), '') is null
+  ) then
+    raise exception 'Seed validation failed: demo public profile photos must be non-empty.';
+  end if;
+
+  if exists (
+    select 1
+    from public.profiles p
+    where p.id in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+        '00000000-0000-4000-8000-000000000005',
+        '00000000-0000-4000-8000-000000000006'
+      )
+      and coalesce(p.avatar_url, '') ~* '(dicebear|notionists|pixel|cartoon|robohash|bottts|avataaars|adventurer|lorelei|identicon)'
+  ) then
+    raise exception 'Seed validation failed: demo public profile photos cannot use pixel/cartoon avatar sources.';
+  end if;
+
+  if exists (
+    select 1
+    from public.profiles p
+    where p.id in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+        '00000000-0000-4000-8000-000000000005',
+        '00000000-0000-4000-8000-000000000006'
+      )
+      and coalesce(p.avatar_url, '') ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+  ) then
+    raise exception 'Seed validation failed: public profile photos cannot point to ID, certificate, or verification assets.';
+  end if;
+
+  if exists (
+    select 1
+    from public.jobs j
+    cross join lateral unnest(coalesce(j.photo_urls, '{}'::text[])) as image_url
+    where nullif(trim(image_url), '') is null
+       or image_url ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+  ) then
+    raise exception 'Seed validation failed: public job photos must be non-empty and separate from private verification assets.';
+  end if;
+
+  if exists (
+    select 1
+    from public.services s
+    cross join lateral unnest(coalesce(s.photo_urls, '{}'::text[])) as image_url
+    where nullif(trim(image_url), '') is null
+       or image_url ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+  ) then
+    raise exception 'Seed validation failed: public service photos must be non-empty and separate from private verification assets.';
+  end if;
+end $$;
 
 notify pgrst, 'reload schema';

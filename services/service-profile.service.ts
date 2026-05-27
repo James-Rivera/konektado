@@ -9,6 +9,7 @@ import {
   doesRateOverlap,
   loadPublicProfiles,
   getCurrentUserId,
+  isPublicProfileVerified,
   mapService,
   normalizeExperienceLevel,
   normalizeRateType,
@@ -423,11 +424,7 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
   return {
     data: visibleRows
       .map((row) => mapServiceSearchResult(row, profiles, stats))
-      .filter((service) =>
-        filters.verifiedOnly
-          ? Boolean(service.provider?.barangayVerifiedAt || service.provider?.verifiedAt)
-          : true,
-      ),
+      .filter((service) => isPublicProfileVerified(service.provider)),
     error: null,
   };
 }

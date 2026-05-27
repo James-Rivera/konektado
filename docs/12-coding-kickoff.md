@@ -70,7 +70,7 @@ Current limitations to preserve in docs and implementation:
 
 - Home is still mostly demo/static.
 - Locked actions route to the Figma-matched verification intro/request flow for unverified users.
-- Verified-origin database filtering is pending and should stay frozen until verified job posting is stable.
+- Verified-owner filtering is enforced for public Home/Search discovery; pending or rejected users' active-looking seed rows should stay hidden from public feeds.
 - Verification completion is now the baseline for the next marketplace slice, not the active target.
 - Camera capture for ID/selfie is not yet implemented. The current MVP path uses document/image picker upload and Supabase Storage.
 - Real search, real messaging, saved items persistence, full service posting, and verified-origin feed data are not finished yet.

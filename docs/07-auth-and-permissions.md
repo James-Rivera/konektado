@@ -230,6 +230,7 @@ Private or restricted fields:
 Discovery privacy rules:
 
 - General Home, Search, browsing, and message/apply discovery hide the current user's own public jobs/services.
+- Public Home and Search discovery show only active/open marketplace content owned by barangay-verified users. Pending, rejected, or otherwise unverified users' jobs/services remain hidden from public discovery even if a seed/script accidentally leaves the row active.
 - Owner surfaces such as My Posts, Manage Posts, and Profile activity still show the user's own content.
 - Public job/service cards and details must use shared rate-range formatting and approximate location only.
 - Custom "Others / Specify" services are stored separately from official taxonomy values and can be marked for barangay/admin review so taxonomy filters continue to work.

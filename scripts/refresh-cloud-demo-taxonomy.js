@@ -26,6 +26,18 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   },
 });
 
+const DEMO_USER_IDS = [
+  '00000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000003',
+  '00000000-0000-4000-8000-000000000004',
+  '00000000-0000-4000-8000-000000000005',
+  '00000000-0000-4000-8000-000000000006',
+];
+const ACTIVE_JOB_STATUSES = new Set(['open', 'reviewing', 'in_progress']);
+const PRIVATE_OR_DOCUMENT_PHOTO_PATTERN =
+  /(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)/i;
+const CARTOON_AVATAR_PATTERN = /(dicebear|notionists|pixel|cartoon|robohash|bottts|avataaars|adventurer|lorelei|identicon)/i;
+
 async function upsertRows(table, rows, onConflict) {
   const { error } = await supabase.from(table).upsert(rows, {
     onConflict,
@@ -254,7 +266,7 @@ async function main() {
       },
       {
         id: '00000000-0000-4000-9000-000000002006',
-        provider_id: '00000000-0000-4000-8000-000000000006',
+        provider_id: '00000000-0000-4000-8000-000000000003',
         category: 'Canva layout',
         title: 'Canva posters and social posts',
         description: 'Creates simple posters, social posts, and school layouts using Canva templates.',
@@ -278,7 +290,7 @@ async function main() {
       },
       {
         id: '00000000-0000-4000-9000-000000002007',
-        provider_id: '00000000-0000-4000-8000-000000000006',
+        provider_id: '00000000-0000-4000-8000-000000000004',
         category: 'Presentation design',
         title: 'Clean slide deck formatting',
         description: 'Formats presentations for school, small business, and barangay reports.',
@@ -350,7 +362,7 @@ async function main() {
       },
       {
         id: '00000000-0000-4000-9000-000000002010',
-        provider_id: '00000000-0000-4000-8000-000000000006',
+        provider_id: '00000000-0000-4000-8000-000000000003',
         category: 'Document formatting',
         title: 'Document formatting to coordinate',
         description: 'Helps clean up resumes, forms, and school documents. Rate depends on the file.',
@@ -561,8 +573,8 @@ async function main() {
       },
       {
         id: '00000000-0000-4000-9000-000000001007',
-        owner_id: '00000000-0000-4000-8000-000000000005',
-        client_id: '00000000-0000-4000-8000-000000000005',
+        owner_id: '00000000-0000-4000-8000-000000000002',
+        client_id: '00000000-0000-4000-8000-000000000002',
         title: 'Make a birthday poster in Canva',
         description: 'Need a simple birthday poster layout that can be printed and shared online.',
         category: 'Digital & Document Help',
@@ -591,8 +603,8 @@ async function main() {
       },
       {
         id: '00000000-0000-4000-9000-000000001008',
-        owner_id: '00000000-0000-4000-8000-000000000005',
-        client_id: '00000000-0000-4000-8000-000000000005',
+        owner_id: '00000000-0000-4000-8000-000000000002',
+        client_id: '00000000-0000-4000-8000-000000000002',
         title: 'Grade school math tutoring',
         description: 'Looking for patient help with fractions and word problems for one afternoon.',
         category: 'Learning & Tutoring',
@@ -621,8 +633,8 @@ async function main() {
       },
       {
         id: '00000000-0000-4000-9000-000000001009',
-        owner_id: '00000000-0000-4000-8000-000000000005',
-        client_id: '00000000-0000-4000-8000-000000000005',
+        owner_id: '00000000-0000-4000-8000-000000000002',
+        client_id: '00000000-0000-4000-8000-000000000002',
         title: 'Help with nearby medicine pickup',
         description: 'Need someone available nearby to help pick up prepaid medicine and deliver it within the barangay.',
         category: 'Errands & Assistance',
@@ -683,6 +695,8 @@ async function main() {
     'id',
   );
 
+  await assertDemoSeedConsistency();
+
   const { data: refreshedServices, error: serviceCheckError } = await supabase
     .from('services')
     .select('id, category, title, tags')
@@ -696,6 +710,110 @@ async function main() {
   for (const row of refreshedServices ?? []) {
     console.log(`- ${row.title} [${row.category}]`);
   }
+}
+
+async function assertDemoSeedConsistency() {
+  const [profilesResult, verificationsResult, jobsResult, servicesResult] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, avatar_url, verified_at, barangay_verified_at')
+      .in('id', DEMO_USER_IDS),
+    supabase
+      .from('verifications')
+      .select('id, user_id, status, created_at')
+      .in('user_id', DEMO_USER_IDS),
+    supabase
+      .from('jobs')
+      .select('id, owner_id, client_id, status, photo_urls')
+      .or(`owner_id.in.(${DEMO_USER_IDS.join(',')}),client_id.in.(${DEMO_USER_IDS.join(',')})`),
+    supabase
+      .from('services')
+      .select('id, provider_id, is_active, photo_urls')
+      .in('provider_id', DEMO_USER_IDS),
+  ]);
+
+  const error =
+    profilesResult.error ??
+    verificationsResult.error ??
+    jobsResult.error ??
+    servicesResult.error;
+  if (error) {
+    throw new Error(`seed validation query failed: ${error.message}`);
+  }
+
+  const profiles = profilesResult.data ?? [];
+  const statuses = getCanonicalDemoStatuses(profiles, verificationsResult.data ?? []);
+  const invalidJobs = (jobsResult.data ?? []).filter((job) => {
+    const ownerId = job.client_id ?? job.owner_id;
+    return ACTIVE_JOB_STATUSES.has(job.status) && statuses.get(ownerId) !== 'verified';
+  });
+  const invalidServices = (servicesResult.data ?? []).filter(
+    (service) => service.is_active && statuses.get(service.provider_id) !== 'verified',
+  );
+  const invalidProfilePhotos = profiles.filter((profile) => {
+    const avatarUrl = String(profile.avatar_url ?? '');
+    return !avatarUrl || PRIVATE_OR_DOCUMENT_PHOTO_PATTERN.test(avatarUrl) || CARTOON_AVATAR_PATTERN.test(avatarUrl);
+  });
+  const invalidJobPhotos = (jobsResult.data ?? []).filter((job) => {
+    const ownerId = job.client_id ?? job.owner_id;
+    return (job.photo_urls ?? []).some((url) =>
+      PRIVATE_OR_DOCUMENT_PHOTO_PATTERN.test(String(url)) || statuses.get(ownerId) !== 'verified',
+    );
+  });
+  const invalidServicePhotos = (servicesResult.data ?? []).filter((service) =>
+    (service.photo_urls ?? []).some((url) =>
+      PRIVATE_OR_DOCUMENT_PHOTO_PATTERN.test(String(url)) || statuses.get(service.provider_id) !== 'verified',
+    ),
+  );
+
+  if (
+    invalidJobs.length ||
+    invalidServices.length ||
+    invalidProfilePhotos.length ||
+    invalidJobPhotos.length ||
+    invalidServicePhotos.length
+  ) {
+    throw new Error(
+      [
+        'Hosted demo seed validation failed.',
+        `invalid active jobs: ${invalidJobs.map((job) => job.id).join(', ') || 'none'}`,
+        `invalid active services: ${invalidServices.map((service) => service.id).join(', ') || 'none'}`,
+        `invalid profile photos: ${invalidProfilePhotos.map((profile) => profile.id).join(', ') || 'none'}`,
+        `invalid job photos: ${invalidJobPhotos.map((job) => job.id).join(', ') || 'none'}`,
+        `invalid service photos: ${invalidServicePhotos.map((service) => service.id).join(', ') || 'none'}`,
+      ].join('\n'),
+    );
+  }
+}
+
+function getCanonicalDemoStatuses(profiles, verifications) {
+  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const statuses = new Map();
+
+  for (const userId of DEMO_USER_IDS) {
+    const profile = profileById.get(userId);
+    const userVerifications = verifications
+      .filter((verification) => verification.user_id === userId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const request =
+      userVerifications.find((verification) => verification.status === 'pending') ??
+      userVerifications[0] ??
+      null;
+
+    if (request?.status === 'pending') {
+      statuses.set(userId, 'pending');
+    } else if (request?.status === 'approved') {
+      statuses.set(userId, 'verified');
+    } else if (request?.status === 'rejected') {
+      statuses.set(userId, 'rejected');
+    } else if (profile?.barangay_verified_at || profile?.verified_at) {
+      statuses.set(userId, 'verified');
+    } else {
+      statuses.set(userId, 'unverified');
+    }
+  }
+
+  return statuses;
 }
 
 main().catch((error) => {

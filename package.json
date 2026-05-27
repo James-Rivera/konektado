@@ -8,6 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "export:web": "expo export -p web",
+    "vercel-build": "expo export -p web",
     "lint": "expo lint",
     "test:verification-email": "node ./scripts/test-verification-email.js",
     "refresh:cloud-demo-taxonomy": "node ./scripts/refresh-cloud-demo-taxonomy.js"

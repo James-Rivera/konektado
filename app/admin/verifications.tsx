@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -212,7 +213,7 @@ function VerificationRequestCard({
   return (
     <AdminListCard>
       <View style={styles.requestTop}>
-        <ResidentAvatarIllustration initials={getInitials(name)} />
+        <ResidentAvatar avatarUrl={request.profile?.avatarUrl ?? null} name={name} />
         <View style={styles.requestIdentity}>
           <View style={styles.requestNameRow}>
             <Text numberOfLines={2} style={styles.requestName}>
@@ -252,15 +253,14 @@ function VerificationRequestCard({
   );
 }
 
-function ResidentAvatarIllustration({ initials }: { initials: string }) {
+function ResidentAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
+  if (avatarUrl) {
+    return <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />;
+  }
+
   return (
-    <View style={styles.avatarArt}>
-      <View style={styles.avatarHalo}>
-        <MaterialIcons color="#111827" name="person-outline" size={28} />
-        <View style={styles.avatarInitialBubble}>
-          <Text style={styles.avatarInitials}>{initials || 'KR'}</Text>
-        </View>
-      </View>
+    <View style={styles.avatarFallback}>
+      <Text style={styles.avatarInitials}>{getInitials(name) || 'KR'}</Text>
     </View>
   );
 }
@@ -447,39 +447,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
-  avatarArt: {
+  avatarImage: {
+    backgroundColor: color.surfaceAlt,
+    borderColor: adminPalette.line,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 48,
+    width: 48,
+  },
+  avatarFallback: {
     alignItems: 'center',
+    backgroundColor: adminPalette.blueSoft,
+    borderColor: adminPalette.blueLine,
+    borderWidth: 1,
+    borderRadius: radius.pill,
     height: 48,
     justifyContent: 'center',
     width: 48,
   },
-  avatarHalo: {
-    alignItems: 'center',
-    backgroundColor: '#E6D7FF',
-    borderRadius: radius.pill,
-    height: 42,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    width: 42,
-  },
-  avatarInitialBubble: {
-    alignItems: 'center',
-    backgroundColor: color.white,
-    borderColor: '#111827',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    bottom: 3,
-    height: 16,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 3,
-    width: 16,
-  },
   avatarInitials: {
-    color: adminPalette.ink,
+    color: adminPalette.blueDeep,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 7,
-    lineHeight: 9,
+    fontSize: 14,
+    lineHeight: 18,
   },
   requestIdentity: {
     flex: 1,
