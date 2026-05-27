@@ -234,7 +234,7 @@ function actionForPhoto(photo: AdminPublicPhotoItem) {
 
     return {
       label: 'View listing',
-      route: { pathname: '/job/[jobId]', params: { jobId: photo.sourceId } },
+      route: { pathname: '/job/[jobId]', params: { adminView: '1', jobId: photo.sourceId } },
     };
   }
 
@@ -245,7 +245,7 @@ function actionForPhoto(photo: AdminPublicPhotoItem) {
 
     return {
       label: 'View service',
-      route: { pathname: '/services/[serviceId]', params: { serviceId: photo.sourceId } },
+      route: { pathname: '/services/[serviceId]', params: { adminView: '1', serviceId: photo.sourceId } },
     };
   }
 
@@ -256,14 +256,14 @@ function actionForPhoto(photo: AdminPublicPhotoItem) {
   if (photo.profileRouteKind === 'client') {
     return {
       label: 'View profile',
-      route: { pathname: '/client/[clientId]', params: { clientId: photo.ownerId } },
+      route: { pathname: '/client/[clientId]', params: { adminView: '1', clientId: photo.ownerId } },
     };
   }
 
   if (photo.profileRouteKind === 'worker') {
     return {
       label: 'View profile',
-      route: { pathname: '/worker/[workerId]', params: { workerId: photo.ownerId } },
+      route: { pathname: '/worker/[workerId]', params: { adminView: '1', workerId: photo.ownerId } },
     };
   }
 
