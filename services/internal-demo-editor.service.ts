@@ -225,6 +225,20 @@ export type UpdateEditableJobPayload = {
   title?: string | null;
 };
 
+export type CreateEditableJobPayload = {
+  barangay?: string | null;
+  budgetMax?: number | null;
+  budgetMin?: number | null;
+  category: string;
+  description: string;
+  locationText?: string | null;
+  photoUrls?: string[];
+  rateType: RateType;
+  serviceNeeded: string;
+  status: JobStatus;
+  title: string;
+};
+
 export type UpdateEditableServicePayload = {
   barangay?: string | null;
   category?: string | null;
@@ -236,6 +250,19 @@ export type UpdateEditableServicePayload = {
   rateMin?: number | null;
   rateType?: RateType | string | null;
   title?: string | null;
+};
+
+export type CreateEditableServicePayload = {
+  barangay?: string | null;
+  category: string;
+  description: string;
+  isActive: boolean;
+  locationText?: string | null;
+  photoUrls?: string[];
+  rateMax?: number | null;
+  rateMin?: number | null;
+  rateType: RateType;
+  title: string;
 };
 
 export type UpdateVerificationNotesPayload = {
@@ -648,17 +675,15 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
     services: (servicesResult.data as ServiceRow[] | null) ?? [],
     verifications,
   });
-  const verified = isVerifiedStatus(listItem.verificationStatus);
-
   return {
     data: {
       ...listItem,
-      conversations: verified ? conversations : [],
-      jobs: verified ? jobs : [],
+      conversations,
+      jobs,
       profile: mapProfile(profile),
       reports,
-      reviews: verified ? reviews : [],
-      services: verified ? services : [],
+      reviews,
+      services,
       verifications: verifications.map((verification) => mapVerification(verification, verificationFiles)),
     },
     error: null,
@@ -877,6 +902,18 @@ function validateRateBounds(min: number | null | undefined, max: number | null |
   return null;
 }
 
+function validateActiveRateBounds(min: number | null | undefined, max: number | null | undefined, label: string) {
+  const baseError = validateRateBounds(min, max, label);
+  if (baseError) return baseError;
+  if (min === null || min === undefined || max === null || max === undefined) {
+    return `${label} minimum and maximum are required before making this record active.`;
+  }
+  if (min <= 0 || max <= 0) {
+    return `${label} minimum and maximum must be greater than zero before making this record active.`;
+  }
+  return null;
+}
+
 async function getEditableOwnerStatus(userId: string): Promise<ServiceResult<InternalDemoVerificationStatus>> {
   const [profileResult, verificationResult] = await Promise.all([
     supabase
@@ -996,7 +1033,9 @@ export async function updateEditableJob(jobId: string, payload: UpdateEditableJo
   if (!description) return { data: null, error: 'Enter a job description.' };
   if (!MVP_SERVICE_CATEGORIES.includes(category as never)) return { data: null, error: 'Choose a valid job category.' };
   if (!getStoredMvpServiceOption(serviceNeeded)) return { data: null, error: 'Choose a valid service needed.' };
-  const rateError = validateRateBounds(budgetMin, budgetMax, 'Budget');
+  const rateError = ACTIVE_JOB_STATUSES.has(nextStatus)
+    ? validateActiveRateBounds(budgetMin, budgetMax, 'Budget')
+    : validateRateBounds(budgetMin, budgetMax, 'Budget');
   if (rateError) return { data: null, error: rateError };
   const visibleValidation = validateDemoContent({ barangay: payload.barangay ?? '', description, locationText: payload.locationText ?? '', serviceNeeded, title });
   if (visibleValidation.error) return visibleValidation;
@@ -1032,11 +1071,75 @@ export async function updateEditableJob(jobId: string, payload: UpdateEditableJo
   return { data: mapJob(data), error: null };
 }
 
-export async function createEditableJob(): Promise<ServiceResult<EditableJob>> {
-  return {
-    data: null,
-    error: 'Creating jobs for another user needs a dedicated internal RPC or RLS policy. Edit existing jobs in Phase 1.',
-  };
+export async function createEditableJob(
+  ownerId: string,
+  payload: CreateEditableJobPayload,
+): Promise<ServiceResult<EditableJob>> {
+  const access = await requireInternalAccess();
+  if (access.error) return access;
+
+  const cleanOwnerId = compactText(ownerId);
+  if (!cleanOwnerId) return { data: null, error: 'Choose a resident before creating a job.' };
+
+  const nextStatus = payload.status;
+  if (!EDITABLE_JOB_STATUSES.includes(nextStatus)) return { data: null, error: 'Choose a valid job status.' };
+
+  const ownerStatus = await getEditableOwnerStatus(cleanOwnerId);
+  if (ownerStatus.error || !ownerStatus.data) return { data: null, error: ownerStatus.error };
+  if (!isVerifiedStatus(ownerStatus.data) && ACTIVE_JOB_STATUSES.has(nextStatus)) {
+    return { data: null, error: 'Pending, rejected, or unverified users cannot have active public jobs.' };
+  }
+
+  const title = compactText(payload.title);
+  const description = compactText(payload.description);
+  const category = compactText(payload.category);
+  const serviceNeeded = compactText(payload.serviceNeeded);
+  const budgetMin = payload.budgetMin ?? null;
+  const budgetMax = payload.budgetMax ?? null;
+  const rateType = normalizeRateType(payload.rateType);
+  const photoUrls = payload.photoUrls ?? [];
+  const locationText = compactText(payload.locationText) || compactText(payload.barangay) || 'Barangay San Pedro';
+
+  if (!title) return { data: null, error: 'Enter a job title.' };
+  if (!description) return { data: null, error: 'Enter a job description.' };
+  if (!MVP_SERVICE_CATEGORIES.includes(category as never)) return { data: null, error: 'Choose a valid job category.' };
+  if (!getStoredMvpServiceOption(serviceNeeded)) return { data: null, error: 'Choose a valid service needed.' };
+  const rateError = ACTIVE_JOB_STATUSES.has(nextStatus)
+    ? validateActiveRateBounds(budgetMin, budgetMax, 'Budget')
+    : validateRateBounds(budgetMin, budgetMax, 'Budget');
+  if (rateError) return { data: null, error: rateError };
+  const visibleValidation = validateDemoContent({
+    barangay: payload.barangay ?? '',
+    description,
+    locationText,
+    serviceNeeded,
+    title,
+  });
+  if (visibleValidation.error) return visibleValidation;
+  const photoValidation = validatePublicPhotoUrls(photoUrls);
+  if (photoValidation.error) return photoValidation;
+
+  const { data, error } = await supabase
+    .rpc('internal_demo_create_job', {
+      p_owner_id: cleanOwnerId,
+      p_payload: {
+        barangay: compactText(payload.barangay) || 'Barangay San Pedro',
+        budgetMax,
+        budgetMin,
+        category,
+        description,
+        locationText,
+        photoUrls: photoUrls.map(compactText).filter(Boolean),
+        rateType,
+        serviceNeeded,
+        status: nextStatus,
+        title,
+      },
+    })
+    .single<JobRow>();
+
+  if (error) return { data: null, error: error.message };
+  return { data: mapJob(data), error: null };
 }
 
 export async function deactivateEditableJob(jobId: string): Promise<ServiceResult<EditableJob>> {
@@ -1082,7 +1185,7 @@ export async function updateEditableService(
   if (!title) return { data: null, error: 'Enter a service title.' };
   if (!description) return { data: null, error: 'Enter a service description.' };
   if (!MVP_SERVICE_OPTIONS.includes(category as never)) return { data: null, error: 'Choose a valid service category.' };
-  const rateError = validateRateBounds(rateMin, rateMax, 'Rate');
+  const rateError = nextActive ? validateActiveRateBounds(rateMin, rateMax, 'Rate') : validateRateBounds(rateMin, rateMax, 'Rate');
   if (rateError) return { data: null, error: rateError };
   const visibleValidation = validateDemoContent({ barangay: payload.barangay ?? '', category, description, locationText: payload.locationText ?? '', title });
   if (visibleValidation.error) return visibleValidation;
@@ -1113,11 +1216,68 @@ export async function updateEditableService(
   return { data: mapService(data), error: null };
 }
 
-export async function createEditableService(): Promise<ServiceResult<EditableService>> {
-  return {
-    data: null,
-    error: 'Creating services for another user needs a dedicated internal RPC or RLS policy. Edit existing services in Phase 1.',
-  };
+export async function createEditableService(
+  providerId: string,
+  payload: CreateEditableServicePayload,
+): Promise<ServiceResult<EditableService>> {
+  const access = await requireInternalAccess();
+  if (access.error) return access;
+
+  const cleanProviderId = compactText(providerId);
+  if (!cleanProviderId) return { data: null, error: 'Choose a worker before creating a service.' };
+
+  const nextActive = payload.isActive;
+  const ownerStatus = await getEditableOwnerStatus(cleanProviderId);
+  if (ownerStatus.error || !ownerStatus.data) return { data: null, error: ownerStatus.error };
+  if (!isVerifiedStatus(ownerStatus.data) && nextActive) {
+    return { data: null, error: 'Pending, rejected, or unverified users cannot have active public services.' };
+  }
+
+  const title = compactText(payload.title);
+  const description = compactText(payload.description);
+  const category = compactText(payload.category);
+  const rateMin = payload.rateMin ?? null;
+  const rateMax = payload.rateMax ?? null;
+  const rateType = normalizeRateType(payload.rateType);
+  const photoUrls = payload.photoUrls ?? [];
+  const locationText = compactText(payload.locationText) || compactText(payload.barangay) || 'Barangay San Pedro';
+
+  if (!title) return { data: null, error: 'Enter a service title.' };
+  if (!description) return { data: null, error: 'Enter a service description.' };
+  if (!MVP_SERVICE_OPTIONS.includes(category as never)) return { data: null, error: 'Choose a valid service category.' };
+  const rateError = nextActive ? validateActiveRateBounds(rateMin, rateMax, 'Rate') : validateRateBounds(rateMin, rateMax, 'Rate');
+  if (rateError) return { data: null, error: rateError };
+  const visibleValidation = validateDemoContent({
+    barangay: payload.barangay ?? '',
+    category,
+    description,
+    locationText,
+    title,
+  });
+  if (visibleValidation.error) return visibleValidation;
+  const photoValidation = validatePublicPhotoUrls(photoUrls);
+  if (photoValidation.error) return photoValidation;
+
+  const { data, error } = await supabase
+    .rpc('internal_demo_create_service', {
+      p_payload: {
+        barangay: compactText(payload.barangay) || 'Barangay San Pedro',
+        category,
+        description,
+        isActive: nextActive,
+        locationText,
+        photoUrls: photoUrls.map(compactText).filter(Boolean),
+        rateMax,
+        rateMin,
+        rateType,
+        title,
+      },
+      p_provider_id: cleanProviderId,
+    })
+    .single<ServiceRow>();
+
+  if (error) return { data: null, error: error.message };
+  return { data: mapService(data), error: null };
 }
 
 export async function deactivateEditableService(serviceId: string): Promise<ServiceResult<EditableService>> {

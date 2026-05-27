@@ -24,6 +24,8 @@ import { MVP_SERVICE_CATEGORIES, MVP_SERVICE_OPTIONS, getServicesForMvpCategory 
 import { color, radius, space } from '@/constants/theme';
 import {
   createSignedVerificationFileUrl,
+  createEditableJob,
+  createEditableService,
   deactivateEditableJob,
   deactivateEditableService,
   getEditableJobStatuses,
@@ -43,6 +45,8 @@ import {
   type EditableUserListItem,
   type EditableVerificationFile,
   type EditableVerificationRequest,
+  type CreateEditableJobPayload,
+  type CreateEditableServicePayload,
   type InternalDemoAccess,
   type InternalDemoUserFilter,
   type InternalDemoVerificationStatus,
@@ -575,17 +579,106 @@ function JobsEditor({
   onSaved: (message: string) => Promise<void>;
   user: EditableUserDetail;
 }) {
+  const [creating, setCreating] = useState(false);
+
   return (
     <EditorPanel title="Jobs/Listings">
-      <Notice icon="block">
-        Creating jobs for other users is intentionally disabled in Phase 1 because current RLS only permits owner-created jobs. Existing jobs can be edited or closed safely.
+      <Notice icon="admin-panel-settings">
+        Internal job creation uses an admin-only helper and keeps active public jobs limited to verified residents.
       </Notice>
+      {creating ? (
+        <NewJobForm
+          onCancel={() => setCreating(false)}
+          onSaved={async (nextMessage) => {
+            setCreating(false);
+            await onSaved(nextMessage);
+          }}
+          user={user}
+        />
+      ) : (
+        <Pressable accessibilityRole="button" onPress={() => setCreating(true)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+          <MaterialIcons color={adminPalette.blue} name="add" size={18} />
+          <Text style={styles.secondaryButtonText}>New job</Text>
+        </Pressable>
+      )}
       {user.jobs.length ? (
         user.jobs.map((job) => <JobForm key={`${user.id}-job-${job.id}`} job={job} onSaved={onSaved} user={user} />)
       ) : (
         <EmptyBlock text="No jobs found for this user." />
       )}
     </EditorPanel>
+  );
+}
+
+function NewJobForm({
+  onCancel,
+  onSaved,
+  user,
+}: {
+  onCancel: () => void;
+  onSaved: (message: string) => Promise<void>;
+  user: EditableUserDetail;
+}) {
+  const [form, setForm] = useState<CreateEditableJobPayload>(() => makeInitialJobPayload(user));
+  const [saving, setSaving] = useState(false);
+  const serviceOptions = getServicesForMvpCategory(form.category);
+
+  useEffect(() => setForm(makeInitialJobPayload(user)), [user]);
+
+  const addPhoto = async () => {
+    const uploaded = await chooseAndUploadPublicImage('job_photo');
+    if (uploaded) setForm((current) => ({ ...current, photoUrls: [...(current.photoUrls ?? []), uploaded] }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    const result = await createEditableJob(user.id, form);
+    setSaving(false);
+    if (result.error || !result.data) {
+      Alert.alert('Create job', result.error ?? 'Could not create this job.');
+      return;
+    }
+    await onSaved('Job created');
+  };
+
+  return (
+    <View style={styles.recordCard}>
+      <RecordHeader icon="add-business" title="New job listing" subtitle="Create a public job for this selected resident" />
+      {user.verificationStatus !== 'verified' ? (
+        <InlineNotice tone="warning">This user is not verified. Creating an active/open job will be blocked.</InlineNotice>
+      ) : null}
+      <Field label="Title" onChangeText={(value) => setForm({ ...form, title: value })} value={form.title} />
+      <Field label="Description" multiline onChangeText={(value) => setForm({ ...form, description: value })} value={form.description} />
+      <TwoColumn>
+        <SelectChips label="Category" onSelect={(value) => setForm({ ...form, category: value, serviceNeeded: '' })} options={[...MVP_SERVICE_CATEGORIES]} value={form.category} />
+        <SelectChips label="Service needed" onSelect={(value) => setForm({ ...form, serviceNeeded: value })} options={serviceOptions.length ? serviceOptions : [...MVP_SERVICE_OPTIONS]} value={form.serviceNeeded} />
+      </TwoColumn>
+      <TwoColumn>
+        <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText ?? ''} />
+        <SelectChips label="Status" onSelect={(value) => setForm({ ...form, status: value as JobStatus })} options={getEditableJobStatuses()} value={form.status} />
+      </TwoColumn>
+      <RateFields
+        max={form.budgetMax ?? null}
+        min={form.budgetMin ?? null}
+        onMax={(value) => setForm({ ...form, budgetMax: value })}
+        onMin={(value) => setForm({ ...form, budgetMin: value })}
+        onRateType={(value) => setForm({ ...form, rateType: value })}
+        rateType={form.rateType}
+      />
+      <PhotoUrlEditor
+        addLabel="Add job photo"
+        onAdd={() => void addPhoto()}
+        onChange={(photoUrls) => setForm({ ...form, photoUrls })}
+        photoUrls={form.photoUrls ?? []}
+        stablePrefix={`${user.id}-new-job`}
+      />
+      <View style={styles.actionRow}>
+        <SaveButton disabled={saving} label={saving ? 'Creating...' : 'Create Job'} onPress={() => void save()} />
+        <Pressable accessibilityRole="button" disabled={saving} onPress={onCancel} style={({ pressed }) => [styles.secondaryButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -679,11 +772,28 @@ function ServicesEditor({
   onSaved: (message: string) => Promise<void>;
   user: EditableUserDetail;
 }) {
+  const [creating, setCreating] = useState(false);
+
   return (
     <EditorPanel title="Services">
-      <Notice icon="block">
-        Creating services for other users is intentionally disabled in Phase 1 because current RLS only permits owner-created services. Existing services can be edited or deactivated.
+      <Notice icon="admin-panel-settings">
+        Internal service creation uses an admin-only helper and keeps active public services limited to verified residents.
       </Notice>
+      {creating ? (
+        <NewServiceForm
+          onCancel={() => setCreating(false)}
+          onSaved={async (nextMessage) => {
+            setCreating(false);
+            await onSaved(nextMessage);
+          }}
+          user={user}
+        />
+      ) : (
+        <Pressable accessibilityRole="button" onPress={() => setCreating(true)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+          <MaterialIcons color={adminPalette.blue} name="add" size={18} />
+          <Text style={styles.secondaryButtonText}>New service</Text>
+        </Pressable>
+      )}
       {user.services.length ? (
         user.services.map((service) => (
           <ServiceForm key={`${user.id}-service-${service.id}`} onSaved={onSaved} service={service} user={user} />
@@ -692,6 +802,76 @@ function ServicesEditor({
         <EmptyBlock text="No services found for this user." />
       )}
     </EditorPanel>
+  );
+}
+
+function NewServiceForm({
+  onCancel,
+  onSaved,
+  user,
+}: {
+  onCancel: () => void;
+  onSaved: (message: string) => Promise<void>;
+  user: EditableUserDetail;
+}) {
+  const [form, setForm] = useState<CreateEditableServicePayload>(() => makeInitialServicePayload(user));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setForm(makeInitialServicePayload(user)), [user]);
+
+  const addPhoto = async () => {
+    const uploaded = await chooseAndUploadPublicImage('service_photo');
+    if (uploaded) setForm((current) => ({ ...current, photoUrls: [...(current.photoUrls ?? []), uploaded] }));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    const result = await createEditableService(user.id, form);
+    setSaving(false);
+    if (result.error || !result.data) {
+      Alert.alert('Create service', result.error ?? 'Could not create this service.');
+      return;
+    }
+    await onSaved('Service created');
+  };
+
+  return (
+    <View style={styles.recordCard}>
+      <RecordHeader icon="add-business" title="New service listing" subtitle="Create a public service for this selected resident" />
+      {user.verificationStatus !== 'verified' ? (
+        <InlineNotice tone="warning">This user is not verified. Creating an active service will be blocked.</InlineNotice>
+      ) : null}
+      <Field label="Title" onChangeText={(value) => setForm({ ...form, title: value })} value={form.title} />
+      <Field label="Description" multiline onChangeText={(value) => setForm({ ...form, description: value })} value={form.description} />
+      <TwoColumn>
+        <SelectChips label="Category" onSelect={(value) => setForm({ ...form, category: value })} options={[...MVP_SERVICE_OPTIONS]} value={form.category} />
+        <SelectChips label="Status" onSelect={(value) => setForm({ ...form, isActive: value === 'active' })} options={['active', 'inactive']} value={form.isActive ? 'active' : 'inactive'} />
+      </TwoColumn>
+      <TwoColumn>
+        <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText ?? ''} />
+      </TwoColumn>
+      <RateFields
+        max={form.rateMax ?? null}
+        min={form.rateMin ?? null}
+        onMax={(value) => setForm({ ...form, rateMax: value })}
+        onMin={(value) => setForm({ ...form, rateMin: value })}
+        onRateType={(value) => setForm({ ...form, rateType: value })}
+        rateType={form.rateType}
+      />
+      <PhotoUrlEditor
+        addLabel="Add service photo"
+        onAdd={() => void addPhoto()}
+        onChange={(photoUrls) => setForm({ ...form, photoUrls })}
+        photoUrls={form.photoUrls ?? []}
+        stablePrefix={`${user.id}-new-service`}
+      />
+      <View style={styles.actionRow}>
+        <SaveButton disabled={saving} label={saving ? 'Creating...' : 'Create Service'} onPress={() => void save()} />
+        <Pressable accessibilityRole="button" disabled={saving} onPress={onCancel} style={({ pressed }) => [styles.secondaryButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+          <Text style={styles.secondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -965,6 +1145,44 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
       </ActivityBlock>
     </EditorPanel>
   );
+}
+
+function makeInitialJobPayload(user: EditableUserDetail): CreateEditableJobPayload {
+  const category = MVP_SERVICE_CATEGORIES[0] ?? 'Home & Local Help';
+  const serviceNeeded = getServicesForMvpCategory(category)[0] ?? MVP_SERVICE_OPTIONS[0] ?? 'Cleaning';
+  const location = user.profile.barangay || user.locationLabel || 'Barangay San Pedro';
+
+  return {
+    barangay: location,
+    budgetMax: 800,
+    budgetMin: 400,
+    category,
+    description: '',
+    locationText: location,
+    photoUrls: [],
+    rateType: 'per_service',
+    serviceNeeded,
+    status: user.verificationStatus === 'verified' ? 'open' : 'cancelled',
+    title: '',
+  };
+}
+
+function makeInitialServicePayload(user: EditableUserDetail): CreateEditableServicePayload {
+  const category = MVP_SERVICE_OPTIONS[0] ?? 'Cleaning';
+  const location = user.profile.barangay || user.locationLabel || 'Barangay San Pedro';
+
+  return {
+    barangay: location,
+    category,
+    description: '',
+    isActive: user.verificationStatus === 'verified',
+    locationText: location,
+    photoUrls: [],
+    rateMax: 800,
+    rateMin: 400,
+    rateType: 'per_service',
+    title: '',
+  };
 }
 
 async function chooseAndUploadPublicImage(target: 'job_photo' | 'service_photo') {
