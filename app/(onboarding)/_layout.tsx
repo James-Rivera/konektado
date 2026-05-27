@@ -7,7 +7,8 @@ import { OnboardingProvider } from './onboarding-context';
 export default function OnboardingLayout() {
   const status = useProfileStatus();
   const segments = useSegments();
-  const isCompleteRoute = segments[0] === '(onboarding)' && segments[1] === 'complete';
+  const routeSegments = [...segments] as string[];
+  const isCompleteRoute = routeSegments[0] === '(onboarding)' && routeSegments[1] === 'complete';
 
   if (status.loading) {
     return <AppSplashScreen />;
@@ -23,8 +24,8 @@ export default function OnboardingLayout() {
 
   if (status.needsRole) {
     const currentPath =
-      segments[0] === '(onboarding)' && segments[1]
-        ? `/(onboarding)/${segments[1]}`
+      routeSegments[0] === '(onboarding)' && routeSegments[1]
+        ? `/(onboarding)/${routeSegments[1]}`
         : '/(onboarding)';
 
     return (

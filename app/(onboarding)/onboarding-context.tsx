@@ -68,9 +68,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading || !needsRoleRecovery) return;
 
+    const routeSegments = [...segments] as string[];
     const currentPath =
-      segments[0] === '(onboarding)' && segments[1]
-        ? `/(onboarding)/${segments[1]}`
+      routeSegments[0] === '(onboarding)' && routeSegments[1]
+        ? `/(onboarding)/${routeSegments[1]}`
         : '/(onboarding)';
 
     router.replace({

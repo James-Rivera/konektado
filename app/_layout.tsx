@@ -67,6 +67,7 @@ export default function RootLayout() {
 function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
+  const activeRoot = segments[0];
   const { loading, authenticated, needsRole, needsProfile, needsSignupPassword, isAdmin } =
     useProfileStatus();
   const [hasResolvedInitialStatus, setHasResolvedInitialStatus] = useState(false);
@@ -80,7 +81,8 @@ function RootNavigator() {
   useEffect(() => {
     if (loading) return;
 
-    const activeGroup = segments[0];
+    const routeSegments = [...segments] as string[];
+    const activeGroup = routeSegments[0];
     const targetGroup = !authenticated
       ? "(auth)"
       : needsSignupPassword
@@ -106,17 +108,17 @@ function RootNavigator() {
           : "/(tabs)";
 
     const isOnboardingComplete =
-      activeGroup === "(onboarding)" && segments[1] === "complete";
+      activeGroup === "(onboarding)" && routeSegments[1] === "complete";
     const isCompletingAuthRegistration =
       authenticated &&
       activeGroup === "(auth)" &&
-      (segments[1] === "register" || segments[1] === "create-password") &&
+      (routeSegments[1] === "register" || routeSegments[1] === "create-password") &&
       (needsRole || needsProfile);
     const isRecoveringPassword =
-      activeGroup === "(auth)" && segments[1] === "forgot-password";
+      activeGroup === "(auth)" && routeSegments[1] === "forgot-password";
     const isMissingSignupPasswordRoute =
       needsSignupPassword &&
-      !(activeGroup === "(auth)" && segments[1] === "create-password");
+      !(activeGroup === "(auth)" && routeSegments[1] === "create-password");
     const isMainAppRootRoute =
       targetGroup === "(tabs)" &&
       [
@@ -137,6 +139,7 @@ function RootNavigator() {
     const isAdminInspectionRoute =
       isAdmin &&
       ["client", "job", "services", "worker"].includes(String(activeGroup));
+    const isAdminInternalRoute = isAdmin && activeGroup === "internal";
 
     if (
       isMissingSignupPasswordRoute ||
@@ -144,6 +147,7 @@ function RootNavigator() {
         activeGroup !== targetGroup &&
         !isMainAppRootRoute &&
         !isAdminInspectionRoute &&
+        !isAdminInternalRoute &&
         !(targetGroup === "(tabs)" && isOnboardingComplete) &&
         !isCompletingAuthRegistration &&
         !isRecoveringPassword
@@ -157,7 +161,7 @@ function RootNavigator() {
     return <AppSplashScreen />;
   }
 
-  if (segments[0] === "admin" && !isAdmin) {
+  if ((activeRoot === "admin" || activeRoot === "internal") && !isAdmin) {
     return <AppSplashScreen />;
   }
 
@@ -180,6 +184,7 @@ function RootNavigator() {
       <Stack.Screen name="create-service" options={{ headerShown: false }} />
       <Stack.Screen name="create-service-preview" options={{ headerShown: false }} />
       <Stack.Screen name="job/[jobId]" options={{ headerShown: false }} />
+      <Stack.Screen name="internal/demo-editor" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="post/active" options={{ headerShown: false }} />
       <Stack.Screen name="post/renew" options={{ headerShown: false }} />
