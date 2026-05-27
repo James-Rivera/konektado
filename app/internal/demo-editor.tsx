@@ -28,20 +28,29 @@ import {
   createEditableService,
   deactivateEditableJob,
   deactivateEditableService,
+  getEditableConversationStatuses,
   getEditableJobStatuses,
   getEditableRateTypes,
+  getEditableReportStatuses,
   getEditableVerificationFileTypes,
   getEditableUser,
   getInternalDemoEditorAccess,
   listEditableUsers,
+  moderateEditablePublicPhoto,
+  updateEditableConversationStatus,
   updateEditableJob,
   updateEditableProfile,
+  updateEditableReportStatus,
   updateEditableService,
   updateVerificationNotes,
   upsertPrivateVerificationFile,
   uploadPublicDemoImage,
+  type EditableConversationSummary,
   type EditableJob,
+  type EditableJobDraft,
   type EditableProfile,
+  type EditablePublicPhotoAction,
+  type EditableReportSummary,
   type EditableService,
   type EditableUserDetail,
   type EditableUserListItem,
@@ -82,6 +91,16 @@ const SECTIONS: { icon: MaterialIconName; label: string; value: EditorSection }[
 ];
 
 const CONTACT_OPTIONS = ['app_message', 'phone', 'email'];
+
+type PublicPhotoModerationItem = {
+  id: string;
+  ownerId: string;
+  source: string;
+  sourceId: string;
+  sourceType: 'profile_photo' | 'job_photo' | 'service_photo';
+  title: string;
+  url: string;
+};
 
 export default function InternalDemoContentEditorScreen() {
   const router = useRouter();
@@ -483,20 +502,9 @@ function ProfileEditor({
 
   const save = async () => {
     setSaving(true);
-    let avatarUrl = form.avatarUrl;
-    if (pendingImage) {
-      const uploaded = await uploadPublicDemoImage(pendingImage, 'profile_photo');
-      if (uploaded.error || !uploaded.data) {
-        setSaving(false);
-        Alert.alert('Profile photo', uploaded.error ?? 'Could not upload this image.');
-        return;
-      }
-      avatarUrl = uploaded.data;
-    }
-
     const result = await updateEditableProfile(user.id, {
       about: form.about,
-      avatarUrl,
+      avatarUrl: form.avatarUrl,
       availability: form.availability,
       barangay: form.barangay,
       city: form.city,
@@ -508,13 +516,32 @@ function ProfileEditor({
       street: form.street,
       subdivisionArea: form.subdivisionArea,
     });
-    setSaving(false);
 
     if (result.error || !result.data) {
+      setSaving(false);
       Alert.alert('Save profile', result.error ?? 'Could not save profile.');
       return;
     }
 
+    if (pendingImage) {
+      const uploaded = await uploadPublicDemoImage(pendingImage, 'profile_photo');
+      if (uploaded.error || !uploaded.data) {
+        setSaving(false);
+        Alert.alert('Profile saved', uploaded.error ?? 'Profile details were saved, but the photo upload failed.');
+        await onSaved('Profile saved; photo upload failed');
+        return;
+      }
+
+      const photoResult = await updateEditableProfile(user.id, { avatarUrl: uploaded.data });
+      if (photoResult.error || !photoResult.data) {
+        setSaving(false);
+        Alert.alert('Profile saved', photoResult.error ?? 'Profile details were saved, but the photo URL could not be updated.');
+        await onSaved('Profile saved; photo update failed');
+        return;
+      }
+    }
+
+    setSaving(false);
     await onSaved('Profile saved');
   };
 
@@ -609,10 +636,16 @@ function JobsEditor({
           <Text style={styles.secondaryButtonText}>New job</Text>
         </Pressable>
       )}
+      {user.jobDrafts.length ? (
+        <View style={styles.draftList}>
+          <Text style={styles.draftListTitle}>Private job drafts</Text>
+          {user.jobDrafts.map((draft) => <JobDraftCard draft={draft} key={`${user.id}-job-draft-${draft.id}`} />)}
+        </View>
+      ) : null}
       {user.jobs.length ? (
         user.jobs.map((job) => <JobForm key={`${user.id}-job-${job.id}`} job={job} onSaved={onSaved} user={user} />)
       ) : (
-        <EmptyBlock text="No jobs found for this user." />
+        <EmptyBlock text={user.jobDrafts.length ? 'No published jobs found for this user.' : 'No jobs found for this user.'} />
       )}
     </EditorPanel>
   );
@@ -646,14 +679,14 @@ function NewJobForm({
       Alert.alert('Create job', result.error ?? 'Could not create this job.');
       return;
     }
-    await onSaved('Job created');
+    await onSaved(result.data.kind === 'draft' ? 'Job saved as draft' : 'Job created');
   };
 
   return (
     <View style={styles.recordCard}>
       <RecordHeader icon="add-business" title="New job listing" subtitle="Create a public job for this selected resident" />
       {user.verificationStatus !== 'verified' ? (
-        <InlineNotice tone="warning">This user is not verified. Creating an active/open job will be blocked.</InlineNotice>
+        <InlineNotice tone="warning">This user is not verified. New jobs are saved as private drafts instead of public listings.</InlineNotice>
       ) : null}
       <Field label="Title" onChangeText={(value) => setForm({ ...form, title: value })} value={form.title} />
       <Field label="Description" multiline onChangeText={(value) => setForm({ ...form, description: value })} value={form.description} />
@@ -663,7 +696,14 @@ function NewJobForm({
       </TwoColumn>
       <TwoColumn>
         <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText ?? ''} />
-        <SelectChips label="Status" onSelect={(value) => setForm({ ...form, status: value as JobStatus })} options={getEditableJobStatuses()} value={form.status} />
+        {user.verificationStatus === 'verified' ? (
+          <SelectChips label="Status" onSelect={(value) => setForm({ ...form, status: value as JobStatus })} options={getEditableJobStatuses()} value={form.status} />
+        ) : (
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Status</Text>
+            <InfoLine label="Save target" value="Private draft" />
+          </View>
+        )}
       </TwoColumn>
       <RateFields
         max={form.budgetMax ?? null}
@@ -686,6 +726,19 @@ function NewJobForm({
           <Text style={styles.secondaryButtonText}>Cancel</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function JobDraftCard({ draft }: { draft: EditableJobDraft }) {
+  return (
+    <View style={styles.recordCard}>
+      <RecordHeader icon="edit" title={draft.title || 'Untitled job draft'} subtitle={`Private draft - ${formatDate(draft.updatedAt)}`} />
+      <InfoLine label="Service needed" value={draft.serviceNeeded || draft.category || 'Not set'} />
+      <InfoLine label="Location" value={draft.locationText || draft.barangay || 'Not set'} />
+      <InfoLine label="Budget" value={formatRange(draft.budgetMin, draft.budgetMax, draft.rateType)} />
+      {draft.description ? <Text style={styles.draftDescription}>{draft.description}</Text> : null}
+      <InlineNotice tone="warning">Drafts are private and will not appear in public discovery until the resident is verified and publishes a job.</InlineNotice>
     </View>
   );
 }
@@ -840,20 +893,27 @@ function NewServiceForm({
       Alert.alert('Create service', result.error ?? 'Could not create this service.');
       return;
     }
-    await onSaved('Service created');
+    await onSaved(user.verificationStatus === 'verified' ? 'Service created' : 'Service saved inactive');
   };
 
   return (
     <View style={styles.recordCard}>
       <RecordHeader icon="add-business" title="New service listing" subtitle="Create a public service for this selected resident" />
       {user.verificationStatus !== 'verified' ? (
-        <InlineNotice tone="warning">This user is not verified. Creating an active service will be blocked.</InlineNotice>
+        <InlineNotice tone="warning">This user is not verified. New services are saved inactive until verification is approved.</InlineNotice>
       ) : null}
       <Field label="Title" onChangeText={(value) => setForm({ ...form, title: value })} value={form.title} />
       <Field label="Description" multiline onChangeText={(value) => setForm({ ...form, description: value })} value={form.description} />
       <TwoColumn>
         <SelectChips label="Category" onSelect={(value) => setForm({ ...form, category: value })} options={[...MVP_SERVICE_OPTIONS]} value={form.category} />
-        <SelectChips label="Status" onSelect={(value) => setForm({ ...form, isActive: value === 'active' })} options={['active', 'inactive']} value={form.isActive ? 'active' : 'inactive'} />
+        {user.verificationStatus === 'verified' ? (
+          <SelectChips label="Status" onSelect={(value) => setForm({ ...form, isActive: value === 'active' })} options={['active', 'inactive']} value={form.isActive ? 'active' : 'inactive'} />
+        ) : (
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Status</Text>
+            <InfoLine label="Save target" value="Inactive service" />
+          </View>
+        )}
       </TwoColumn>
       <TwoColumn>
         <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText ?? ''} />
@@ -928,13 +988,20 @@ function ServiceForm({
     <View style={styles.recordCard}>
       <RecordHeader icon="handyman" title={service.title || 'Service listing'} subtitle={`${service.isActive ? 'Active' : 'Inactive'} · ${formatDate(service.updatedAt)}`} />
       {user.verificationStatus !== 'verified' ? (
-        <InlineNotice tone="warning">This user is not verified. Saving an active service will be blocked.</InlineNotice>
+        <InlineNotice tone="warning">This user is not verified. Saving keeps this service inactive until verification is approved.</InlineNotice>
       ) : null}
       <Field label="Title" onChangeText={(value) => setForm({ ...form, title: value })} value={form.title} />
       <Field label="Description" multiline onChangeText={(value) => setForm({ ...form, description: value })} value={form.description} />
       <TwoColumn>
         <SelectChips label="Category" onSelect={(value) => setForm({ ...form, category: value })} options={[...MVP_SERVICE_OPTIONS]} value={form.category} />
-        <SelectChips label="Status" onSelect={(value) => setForm({ ...form, isActive: value === 'active' })} options={['active', 'inactive']} value={form.isActive ? 'active' : 'inactive'} />
+        {user.verificationStatus === 'verified' ? (
+          <SelectChips label="Status" onSelect={(value) => setForm({ ...form, isActive: value === 'active' })} options={['active', 'inactive']} value={form.isActive ? 'active' : 'inactive'} />
+        ) : (
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Status</Text>
+            <InfoLine label="Save target" value="Inactive service" />
+          </View>
+        )}
       </TwoColumn>
       <TwoColumn>
         <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText} />
@@ -1169,20 +1236,77 @@ function VerificationRequestEditor({
 }
 
 function PublicPhotosPreview({ user }: { user: EditableUserDetail }) {
-  const photos = [
-    ...(user.profile.avatarUrl ? [{ id: `${user.id}-profile-photo`, source: 'Profile photo', title: user.fullName, url: user.profile.avatarUrl }] : []),
+  const [moderatingId, setModeratingId] = useState<string | null>(null);
+  const [photoStatuses, setPhotoStatuses] = useState<Record<string, string>>({});
+  const photos: PublicPhotoModerationItem[] = [
+    ...(user.profile.avatarUrl
+      ? [{
+          id: `${user.id}-profile-photo`,
+          ownerId: user.id,
+          source: 'Profile photo',
+          sourceId: user.id,
+          sourceType: 'profile_photo' as const,
+          title: user.fullName,
+          url: user.profile.avatarUrl,
+        }]
+      : []),
     ...user.jobs.flatMap((job) =>
-      job.photoUrls.map((url, index) => ({ id: `${user.id}-photo-job-${job.id}-${index}`, source: 'Job photo', title: job.title, url })),
+      job.photoUrls.map((url, index) => ({
+        id: `${user.id}-photo-job-${job.id}-${index}`,
+        ownerId: job.ownerId,
+        source: 'Job photo',
+        sourceId: job.id,
+        sourceType: 'job_photo' as const,
+        title: job.title,
+        url,
+      })),
     ),
     ...user.services.flatMap((service) =>
-      service.photoUrls.map((url, index) => ({ id: `${user.id}-photo-service-${service.id}-${index}`, source: 'Service photo', title: service.title, url })),
+      service.photoUrls.map((url, index) => ({
+        id: `${user.id}-photo-service-${service.id}-${index}`,
+        ownerId: service.providerId,
+        source: 'Service photo',
+        sourceId: service.id,
+        sourceType: 'service_photo' as const,
+        title: service.title,
+        url,
+      })),
     ),
   ];
+
+  useEffect(() => {
+    setModeratingId(null);
+    setPhotoStatuses({});
+  }, [user.id]);
+
+  const moderate = async (photo: PublicPhotoModerationItem, action: EditablePublicPhotoAction) => {
+    setModeratingId(`${photo.id}-${action}`);
+    const result = await moderateEditablePublicPhoto({
+      action,
+      note: 'Updated from internal demo editor.',
+      photo: {
+        imageUrl: photo.url,
+        ownerId: photo.ownerId,
+        sourceId: photo.sourceId,
+        sourceType: photo.sourceType,
+      },
+      reason: action === 'clear' ? null : 'Internal demo audit public photo review',
+    });
+    setModeratingId(null);
+
+    if (result.error || !result.data) {
+      Alert.alert('Public photo review', result.error ?? 'Could not save this photo review.');
+      return;
+    }
+
+    setPhotoStatuses((current) => ({ ...current, [photo.id]: result.data.action }));
+    Alert.alert('Public photo review', `${formatStatus(result.data.action)} saved.`);
+  };
 
   return (
     <EditorPanel title="Public Photos Preview">
       <Notice icon="visibility">
-        This section shows only public profile, job, and service photos. Private verification documents and signed URLs are intentionally excluded.
+        This section shows only public profile, job, and service photos. Use Hide, Flag, or Clear for public-photo moderation.
       </Notice>
       {photos.length ? (
         <View style={styles.photoGrid}>
@@ -1191,6 +1315,28 @@ function PublicPhotosPreview({ user }: { user: EditableUserDetail }) {
               <Image source={{ uri: photo.url }} style={styles.publicPhotoImage} />
               <Text style={styles.publicPhotoSource}>{photo.source}</Text>
               <Text numberOfLines={2} style={styles.publicPhotoTitle}>{photo.title}</Text>
+              {photoStatuses[photo.id] ? <Text style={styles.publicPhotoStatus}>{formatStatus(photoStatuses[photo.id])}</Text> : null}
+              <View style={styles.photoActionRow}>
+                {(['hide', 'flag', 'clear'] as const).map((action) => {
+                  const busy = moderatingId === `${photo.id}-${action}`;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={Boolean(moderatingId)}
+                      key={`${photo.id}-${action}`}
+                      onPress={() => void moderate(photo, action)}
+                      style={({ pressed }) => [
+                        action === 'hide' ? styles.dangerButtonCompact : styles.secondaryButtonCompact,
+                        busy && styles.disabled,
+                        pressed && !moderatingId && styles.pressed,
+                      ]}>
+                      <Text style={action === 'hide' ? styles.dangerButtonCompactText : styles.secondaryButtonText}>
+                        {busy ? 'Saving' : formatStatus(action)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           ))}
         </View>
@@ -1202,14 +1348,67 @@ function PublicPhotosPreview({ user }: { user: EditableUserDetail }) {
 }
 
 function ActivitySummary({ user }: { user: EditableUserDetail }) {
+  const [conversations, setConversations] = useState<EditableConversationSummary[]>(user.conversations);
+  const [reports, setReports] = useState<EditableReportSummary[]>(user.reports);
+  const [savingActivityId, setSavingActivityId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setConversations(user.conversations);
+    setReports(user.reports);
+    setSavingActivityId(null);
+  }, [user.id, user.conversations, user.reports]);
+
+  const saveConversationStatus = async (conversation: EditableConversationSummary, status: string) => {
+    if (conversation.status === status) return;
+    setSavingActivityId(`conversation-${conversation.id}`);
+    const result = await updateEditableConversationStatus(conversation.id, status);
+    setSavingActivityId(null);
+    if (result.error || !result.data) {
+      Alert.alert('Conversation status', result.error ?? 'Could not update this conversation.');
+      return;
+    }
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === conversation.id
+          ? { ...item, status: result.data.status, updatedAt: result.data.updatedAt, messageCount: item.messageCount }
+          : item,
+      ),
+    );
+  };
+
+  const saveReportStatus = async (report: EditableReportSummary, status: string) => {
+    if (report.status === status) return;
+    setSavingActivityId(`report-${report.id}`);
+    const result = await updateEditableReportStatus(report.id, status);
+    setSavingActivityId(null);
+    if (result.error || !result.data) {
+      Alert.alert('Report status', result.error ?? 'Could not update this report.');
+      return;
+    }
+    setReports((current) => current.map((item) => (item.id === report.id ? result.data : item)));
+  };
+
   return (
     <EditorPanel title="Conversations, Reviews, and Reports">
       <Notice icon="info">
-        Activity is shown for audit context. Conversation messages, reviews, and reports stay content-read-only here.
+        Conversation messages and review text stay read-only. Status fields can be corrected for demo cleanup.
       </Notice>
-      <ActivityBlock count={user.conversations.length} icon="forum" title="Conversations">
-        {user.conversations.slice(0, 8).map((item) => (
-          <InfoLine key={`conversation-${item.id}`} label={item.status} value={`${item.messageCount} messages · ${formatDate(item.updatedAt)}`} />
+      <ActivityBlock count={conversations.length} icon="forum" title="Conversations">
+        {conversations.slice(0, 8).map((item) => (
+          <View key={`conversation-${item.id}`} style={styles.activityRow}>
+            <View style={styles.activityMain}>
+              <Text style={styles.activityTitle}>{formatStatus(item.status)}</Text>
+              <Text style={styles.activityMeta}>{item.messageCount} messages - {formatDate(item.updatedAt)}</Text>
+            </View>
+            <View style={styles.activityStatusControl}>
+              <SelectChips
+                label={savingActivityId === `conversation-${item.id}` ? 'Saving status' : 'Status'}
+                onSelect={(value) => void saveConversationStatus(item, value)}
+                options={getEditableConversationStatuses()}
+                value={item.status}
+              />
+            </View>
+          </View>
         ))}
       </ActivityBlock>
       <ActivityBlock count={user.reviews.length} icon="star-rate" title="Reviews/Ratings">
@@ -1217,9 +1416,22 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
           <InfoLine key={`review-${item.id}`} label={`${item.rating}/5`} value={item.comment || `Job ${item.jobId.slice(0, 8)}`} />
         ))}
       </ActivityBlock>
-      <ActivityBlock count={user.reports.length} icon="flag" title="Reports">
-        {user.reports.slice(0, 8).map((item) => (
-          <InfoLine key={`report-${item.id}`} label={formatStatus(item.status)} value={item.reason} />
+      <ActivityBlock count={reports.length} icon="flag" title="Reports">
+        {reports.slice(0, 8).map((item) => (
+          <View key={`report-${item.id}`} style={styles.activityRow}>
+            <View style={styles.activityMain}>
+              <Text style={styles.activityTitle}>{formatStatus(item.status)}</Text>
+              <Text style={styles.activityMeta}>{item.reason || 'No reason'} - {formatDate(item.createdAt)}</Text>
+            </View>
+            <View style={styles.activityStatusControl}>
+              <SelectChips
+                label={savingActivityId === `report-${item.id}` ? 'Saving status' : 'Status'}
+                onSelect={(value) => void saveReportStatus(item, value)}
+                options={getEditableReportStatuses()}
+                value={item.status}
+              />
+            </View>
+          </View>
         ))}
       </ActivityBlock>
     </EditorPanel>
@@ -1637,6 +1849,14 @@ function formatDate(value: string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatRange(min: number | null, max: number | null, rateType: RateType) {
+  if (min == null && max == null) return 'Not set';
+  const prefix = 'PHP';
+  if (min != null && max != null) return `${prefix} ${min.toLocaleString()}-${max.toLocaleString()} ${formatOption(rateType).toLowerCase()}`;
+  if (min != null) return `${prefix} ${min.toLocaleString()}+ ${formatOption(rateType).toLowerCase()}`;
+  return `Up to ${prefix} ${max?.toLocaleString()} ${formatOption(rateType).toLowerCase()}`;
+}
+
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -2034,8 +2254,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
+  dangerButtonCompact: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.dangerSoft,
+    borderColor: '#F5D3D3',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
   secondaryButtonText: {
     color: adminPalette.blue,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+  },
+  dangerButtonCompactText: {
+    color: adminPalette.dangerDeep,
     fontFamily: 'Satoshi-Bold',
     fontSize: 12,
   },
@@ -2170,6 +2405,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 14,
     padding: 12,
+  },
+  draftList: {
+    gap: 10,
+  },
+  draftListTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  draftDescription: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 17,
   },
   recordHeader: {
     alignItems: 'center',
@@ -2401,6 +2651,50 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     paddingBottom: 10,
     paddingHorizontal: 10,
+  },
+  publicPhotoStatus: {
+    color: adminPalette.successDeep,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 11,
+    lineHeight: 15,
+    paddingHorizontal: 10,
+  },
+  photoActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    padding: 10,
+    paddingTop: 0,
+  },
+  activityRow: {
+    alignItems: 'flex-start',
+    borderTopColor: adminPalette.line,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    padding: 12,
+  },
+  activityMain: {
+    flex: 1,
+    gap: 3,
+    minWidth: 180,
+  },
+  activityTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  activityMeta: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  activityStatusControl: {
+    flex: 1.2,
+    minWidth: 220,
   },
   emptyText: {
     color: adminPalette.muted,

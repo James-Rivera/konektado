@@ -8,6 +8,11 @@ import {
   getCanonicalVerificationRequest,
   type AdminCanonicalVerificationStatus,
 } from '@/services/admin-verification-status.service';
+import {
+  getPublicPhotoKey,
+  type PublicPhotoSourceType,
+  type PublicPhotoVisibility,
+} from '@/services/content-visibility.service';
 import { compactText, formatPublicLocation, isCurrentUserAdmin, normalizeRateType } from '@/services/marketplace.helpers';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
 import type { VerificationStatus } from '@/types/verification.types';
@@ -67,6 +72,7 @@ export type InternalDemoVerificationStatus = AdminCanonicalVerificationStatus;
 export type InternalDemoUserRole = 'client' | 'worker';
 export type InternalDemoUserFilter = 'all' | 'verified' | 'pending' | 'unverified' | 'client' | 'worker' | 'both';
 export type PublicDemoImageTarget = 'profile_photo' | 'job_photo' | 'service_photo';
+export type EditablePublicPhotoAction = 'flag' | 'hide' | 'clear';
 
 export type PublicDemoImageAsset = {
   uri: string;
@@ -130,6 +136,23 @@ export type EditableJob = {
   budgetMax: number | null;
   rateType: RateType;
   status: JobStatus;
+  photoUrls: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EditableJobDraft = {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  category: string;
+  serviceNeeded: string;
+  barangay: string;
+  locationText: string;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  rateType: RateType;
   photoUrls: string[];
   createdAt: string;
   updatedAt: string;
@@ -201,12 +224,26 @@ export type EditableConversationSummary = {
 
 export type EditableUserDetail = EditableUserListItem & {
   conversations: EditableConversationSummary[];
+  jobDrafts: EditableJobDraft[];
   jobs: EditableJob[];
   profile: EditableProfile;
   reports: EditableReportSummary[];
   reviews: EditableReviewSummary[];
   services: EditableService[];
   verifications: EditableVerificationRequest[];
+};
+
+export type EditablePublicPhotoInput = {
+  imageUrl: string;
+  ownerId: string;
+  sourceId: string;
+  sourceType: PublicPhotoSourceType;
+};
+
+export type EditablePublicPhotoModerationResult = {
+  action: EditablePublicPhotoAction;
+  photoKey: string;
+  visibility: PublicPhotoVisibility;
 };
 
 export type UpdateEditableProfilePayload = {
@@ -254,6 +291,10 @@ export type CreateEditableJobPayload = {
   status: JobStatus;
   title: string;
 };
+
+export type CreateEditableJobResult =
+  | { kind: 'job'; record: EditableJob }
+  | { kind: 'draft'; record: EditableJobDraft };
 
 export type UpdateEditableServicePayload = {
   barangay?: string | null;
@@ -352,6 +393,23 @@ type JobRow = {
   barangay: string | null;
 };
 
+type JobDraftRow = {
+  barangay: string | null;
+  budget_max: number | null;
+  budget_min: number | null;
+  category: string | null;
+  created_at: string;
+  description: string | null;
+  id: string;
+  location_text: string | null;
+  photo_urls: string[] | null;
+  rate_type: string | null;
+  service_needed: string | null;
+  title: string | null;
+  updated_at: string;
+  user_id: string;
+};
+
 type ServiceRow = {
   category: string;
   created_at: string;
@@ -403,6 +461,8 @@ const PROFILE_COLUMNS =
   'id, email, full_name, first_name, last_name, barangay, purok_sitio, street, subdivision_area, city, about, avatar_url, availability, preferred_contact_method, verified_at, barangay_verified_at, created_at, updated_at';
 const JOB_COLUMNS =
   'id, owner_id, client_id, title, description, category, service_needed, barangay, location_text, budget_min, budget_max, rate_type, status, photo_urls, created_at, updated_at';
+const JOB_DRAFT_COLUMNS =
+  'id, user_id, title, description, category, service_needed, barangay, location_text, budget_min, budget_max, rate_type, photo_urls, created_at, updated_at';
 const SERVICE_COLUMNS =
   'id, provider_id, title, description, category, barangay, location_text, rate_min, rate_max, rate_type, is_active, photo_urls, created_at, updated_at';
 const VERIFICATION_COLUMNS = 'id, user_id, status, notes, reviewer_note, created_at, updated_at';
@@ -616,6 +676,7 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
     rolesResult,
     verificationsResult,
     filesResult,
+    jobDraftsResult,
     jobsResult,
     servicesResult,
     reviewsResult,
@@ -627,6 +688,11 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
     supabase.from('user_roles').select('user_id, role').eq('user_id', cleanUserId),
     supabase.from('verifications').select(VERIFICATION_COLUMNS).eq('user_id', cleanUserId).order('created_at', { ascending: false }),
     supabase.from('verification_files').select(VERIFICATION_FILE_COLUMNS).limit(200),
+    supabase
+      .from('job_drafts')
+      .select(JOB_DRAFT_COLUMNS)
+      .eq('user_id', cleanUserId)
+      .order('updated_at', { ascending: false }),
     supabase
       .from('jobs')
       .select(JOB_COLUMNS)
@@ -659,6 +725,7 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
     rolesResult.error ??
     verificationsResult.error ??
     filesResult.error ??
+    jobDraftsResult.error ??
     jobsResult.error ??
     servicesResult.error ??
     reviewsResult.error ??
@@ -673,6 +740,7 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
   const roles = (rolesResult.data as RoleRow[] | null) ?? [];
   const verifications = (verificationsResult.data as VerificationRow[] | null) ?? [];
   const verificationFiles = (filesResult.data as VerificationFileRow[] | null) ?? [];
+  const jobDrafts = ((jobDraftsResult.data as JobDraftRow[] | null) ?? []).map(mapJobDraft);
   const jobs = ((jobsResult.data as JobRow[] | null) ?? []).map(mapJob);
   const services = ((servicesResult.data as ServiceRow[] | null) ?? []).map(mapService);
   const reviews = ((reviewsResult.data as ReviewRow[] | null) ?? []).map(mapReview);
@@ -695,6 +763,7 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
     data: {
       ...listItem,
       conversations,
+      jobDrafts,
       jobs,
       profile: mapProfile(profile),
       reports,
@@ -744,6 +813,25 @@ function mapJob(row: JobRow): EditableJob {
     status: row.status,
     title: row.title,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapJobDraft(row: JobDraftRow): EditableJobDraft {
+  return {
+    barangay: row.barangay ?? '',
+    budgetMax: row.budget_max ?? null,
+    budgetMin: row.budget_min ?? null,
+    category: row.category ?? '',
+    createdAt: row.created_at,
+    description: row.description ?? '',
+    id: row.id,
+    locationText: row.location_text ?? row.barangay ?? '',
+    photoUrls: row.photo_urls ?? [],
+    rateType: normalizeRateType(row.rate_type),
+    serviceNeeded: row.service_needed ?? '',
+    title: row.title ?? '',
+    updatedAt: row.updated_at,
+    userId: row.user_id,
   };
 }
 
@@ -1092,7 +1180,7 @@ export async function updateEditableJob(jobId: string, payload: UpdateEditableJo
 export async function createEditableJob(
   ownerId: string,
   payload: CreateEditableJobPayload,
-): Promise<ServiceResult<EditableJob>> {
+): Promise<ServiceResult<CreateEditableJobResult>> {
   const access = await requireInternalAccess();
   if (access.error) return access;
 
@@ -1104,9 +1192,7 @@ export async function createEditableJob(
 
   const ownerStatus = await getEditableOwnerStatus(cleanOwnerId);
   if (ownerStatus.error || !ownerStatus.data) return { data: null, error: ownerStatus.error };
-  if (!isVerifiedStatus(ownerStatus.data) && ACTIVE_JOB_STATUSES.has(nextStatus)) {
-    return { data: null, error: 'Pending, rejected, or unverified users cannot have active public jobs.' };
-  }
+  const ownerVerified = isVerifiedStatus(ownerStatus.data);
 
   const title = compactText(payload.title);
   const description = compactText(payload.description);
@@ -1120,9 +1206,13 @@ export async function createEditableJob(
 
   if (!title) return { data: null, error: 'Enter a job title.' };
   if (!description) return { data: null, error: 'Enter a job description.' };
-  if (!MVP_SERVICE_CATEGORIES.includes(category as never)) return { data: null, error: 'Choose a valid job category.' };
-  if (!getStoredMvpServiceOption(serviceNeeded)) return { data: null, error: 'Choose a valid service needed.' };
-  const rateError = ACTIVE_JOB_STATUSES.has(nextStatus)
+  if (ownerVerified && ACTIVE_JOB_STATUSES.has(nextStatus) && !MVP_SERVICE_CATEGORIES.includes(category as never)) {
+    return { data: null, error: 'Choose a valid job category before making this job active.' };
+  }
+  if (ownerVerified && ACTIVE_JOB_STATUSES.has(nextStatus) && !getStoredMvpServiceOption(serviceNeeded)) {
+    return { data: null, error: 'Choose a valid service needed before making this job active.' };
+  }
+  const rateError = ownerVerified && ACTIVE_JOB_STATUSES.has(nextStatus)
     ? validateActiveRateBounds(budgetMin, budgetMax, 'Budget')
     : validateRateBounds(budgetMin, budgetMax, 'Budget');
   if (rateError) return { data: null, error: rateError };
@@ -1136,6 +1226,29 @@ export async function createEditableJob(
   if (visibleValidation.error) return visibleValidation;
   const photoValidation = validatePublicPhotoUrls(photoUrls);
   if (photoValidation.error) return photoValidation;
+
+  if (!ownerVerified) {
+    const { data, error } = await supabase
+      .rpc('internal_demo_create_job_draft', {
+        p_owner_id: cleanOwnerId,
+        p_payload: {
+          barangay: compactText(payload.barangay) || 'Barangay San Pedro',
+          budgetMax,
+          budgetMin,
+          category,
+          description,
+          locationText,
+          photoUrls: photoUrls.map(compactText).filter(Boolean),
+          rateType,
+          serviceNeeded,
+          title,
+        },
+      })
+      .single<JobDraftRow>();
+
+    if (error) return { data: null, error: error.message };
+    return { data: { kind: 'draft', record: mapJobDraft(data) }, error: null };
+  }
 
   const { data, error } = await supabase
     .rpc('internal_demo_create_job', {
@@ -1157,7 +1270,7 @@ export async function createEditableJob(
     .single<JobRow>();
 
   if (error) return { data: null, error: error.message };
-  return { data: mapJob(data), error: null };
+  return { data: { kind: 'job', record: mapJob(data) }, error: null };
 }
 
 export async function deactivateEditableJob(jobId: string): Promise<ServiceResult<EditableJob>> {
@@ -1185,12 +1298,10 @@ export async function updateEditableService(
   if (!currentResult.data) return { data: null, error: 'Service not found.' };
 
   const current = currentResult.data;
-  const nextActive = payload.isActive ?? Boolean(current.is_active);
   const ownerStatus = await getEditableOwnerStatus(current.provider_id);
   if (ownerStatus.error || !ownerStatus.data) return { data: null, error: ownerStatus.error };
-  if (!isVerifiedStatus(ownerStatus.data) && nextActive) {
-    return { data: null, error: 'Pending, rejected, or unverified users cannot have active public services.' };
-  }
+  const ownerVerified = isVerifiedStatus(ownerStatus.data);
+  const nextActive = ownerVerified ? payload.isActive ?? Boolean(current.is_active) : false;
 
   const title = compactText(payload.title ?? current.title);
   const description = compactText(payload.description ?? current.description);
@@ -1202,7 +1313,9 @@ export async function updateEditableService(
 
   if (!title) return { data: null, error: 'Enter a service title.' };
   if (!description) return { data: null, error: 'Enter a service description.' };
-  if (!MVP_SERVICE_OPTIONS.includes(category as never)) return { data: null, error: 'Choose a valid service category.' };
+  if (nextActive && !MVP_SERVICE_OPTIONS.includes(category as never)) {
+    return { data: null, error: 'Choose a valid service category before making this service active.' };
+  }
   const rateError = nextActive ? validateActiveRateBounds(rateMin, rateMax, 'Rate') : validateRateBounds(rateMin, rateMax, 'Rate');
   if (rateError) return { data: null, error: rateError };
   const visibleValidation = validateDemoContent({ barangay: payload.barangay ?? '', category, description, locationText: payload.locationText ?? '', title });
@@ -1244,12 +1357,10 @@ export async function createEditableService(
   const cleanProviderId = compactText(providerId);
   if (!cleanProviderId) return { data: null, error: 'Choose a worker before creating a service.' };
 
-  const nextActive = payload.isActive;
   const ownerStatus = await getEditableOwnerStatus(cleanProviderId);
   if (ownerStatus.error || !ownerStatus.data) return { data: null, error: ownerStatus.error };
-  if (!isVerifiedStatus(ownerStatus.data) && nextActive) {
-    return { data: null, error: 'Pending, rejected, or unverified users cannot have active public services.' };
-  }
+  const ownerVerified = isVerifiedStatus(ownerStatus.data);
+  const nextActive = ownerVerified ? payload.isActive : false;
 
   const title = compactText(payload.title);
   const description = compactText(payload.description);
@@ -1350,6 +1461,80 @@ export async function updateEditableReportStatus(
 
   if (error) return { data: null, error: error.message };
   return { data: mapReport(data), error: null };
+}
+
+export async function moderateEditablePublicPhoto({
+  action,
+  note,
+  photo,
+  reason,
+}: {
+  action: EditablePublicPhotoAction;
+  note?: string | null;
+  photo: EditablePublicPhotoInput;
+  reason?: string | null;
+}): Promise<ServiceResult<EditablePublicPhotoModerationResult>> {
+  const access = await requireInternalAccess();
+  if (access.error || !access.data) return access;
+
+  const imageUrl = compactText(photo.imageUrl);
+  const ownerId = compactText(photo.ownerId);
+  const sourceId = compactText(photo.sourceId);
+  const sourceType = photo.sourceType;
+  const cleanReason = compactText(reason);
+  const cleanNote = compactText(note);
+
+  if (!imageUrl || !ownerId || !sourceId) return { data: null, error: 'Choose a public photo to moderate.' };
+  if (!['profile_photo', 'job_photo', 'service_photo'].includes(sourceType)) {
+    return { data: null, error: 'Choose a valid public photo type.' };
+  }
+  if ((action === 'flag' || action === 'hide') && !cleanReason) {
+    return { data: null, error: 'Enter a reason before saving this photo review.' };
+  }
+
+  const photoKey = getPublicPhotoKey({ imageUrl, sourceId, sourceType });
+  const reviewedAt = new Date().toISOString();
+  const status = action === 'clear' ? 'cleared' : action === 'hide' ? 'hidden' : 'flagged';
+  const visibility: PublicPhotoVisibility = action === 'hide' ? 'hidden' : 'visible';
+
+  const { error: actionError } = await supabase.from('admin_moderation_actions').insert({
+    action,
+    image_path: getStoragePathFromPublicUrl(imageUrl),
+    image_url: imageUrl,
+    note: cleanNote || null,
+    owner_id: ownerId,
+    reason: cleanReason || null,
+    reviewed_at: reviewedAt,
+    reviewed_by: access.data.userId,
+    source_id: sourceId,
+    source_type: sourceType,
+    status,
+    target_id: photoKey,
+    target_type: 'photo',
+  });
+
+  if (actionError) return { data: null, error: actionError.message };
+
+  if (action === 'hide' || action === 'clear') {
+    const { error: visibilityError } = await supabase.from('content_visibility').upsert(
+      {
+        content_id: photoKey,
+        content_type: sourceType,
+        hidden_at: action === 'hide' ? reviewedAt : null,
+        hidden_by: action === 'hide' ? access.data.userId : null,
+        hidden_reason: action === 'hide' ? cleanReason || null : null,
+        image_url: imageUrl,
+        owner_id: ownerId,
+        source_id: sourceId,
+        visibility,
+      },
+      { onConflict: 'content_type,content_id' },
+    );
+
+    if (visibilityError) return { data: null, error: visibilityError.message };
+  }
+
+  return { data: { action, photoKey, visibility }, error: null };
 }
 
 export async function updateVerificationNotes(
@@ -1610,6 +1795,16 @@ function getLegacyVerificationFilePath(url: string | null | undefined) {
   }
   if (!/^https?:\/\//i.test(url)) return url;
   return null;
+}
+
+function getStoragePathFromPublicUrl(imageUrl: string) {
+  const marker = '/storage/v1/object/public/';
+  const markerIndex = imageUrl.indexOf(marker);
+  if (markerIndex < 0) return null;
+
+  const pathStart = markerIndex + marker.length;
+  const path = imageUrl.slice(pathStart).split('?')[0];
+  return path ? decodeURIComponent(path) : null;
 }
 
 export function getBannedVisibleWords() {
