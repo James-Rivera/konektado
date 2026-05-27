@@ -80,7 +80,8 @@ function RootNavigator() {
   useEffect(() => {
     if (loading) return;
 
-    const activeGroup = segments[0];
+    const routeSegments = [...segments] as string[];
+    const activeGroup = routeSegments[0];
     const isInternalRoute = activeGroup === "internal";
     const targetGroup = !authenticated
       ? "(auth)"
@@ -107,17 +108,17 @@ function RootNavigator() {
           : "/(tabs)";
 
     const isOnboardingComplete =
-      activeGroup === "(onboarding)" && segments[1] === "complete";
+      activeGroup === "(onboarding)" && routeSegments[1] === "complete";
     const isCompletingAuthRegistration =
       authenticated &&
       activeGroup === "(auth)" &&
-      (segments[1] === "register" || segments[1] === "create-password") &&
+      (routeSegments[1] === "register" || routeSegments[1] === "create-password") &&
       (needsRole || needsProfile);
     const isRecoveringPassword =
-      activeGroup === "(auth)" && segments[1] === "forgot-password";
+      activeGroup === "(auth)" && routeSegments[1] === "forgot-password";
     const isMissingSignupPasswordRoute =
       needsSignupPassword &&
-      !(activeGroup === "(auth)" && segments[1] === "create-password");
+      !(activeGroup === "(auth)" && routeSegments[1] === "create-password");
     const isMainAppRootRoute =
       targetGroup === "(tabs)" &&
       [
