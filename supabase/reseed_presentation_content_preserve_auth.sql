@@ -78,7 +78,7 @@ insert into _seed_profile_templates (
 )
 values
   (1, 'Althea', 'Ramos', 'Purok 1, Barangay San Pedro', 'provider',
-   'Fictional resident profile for local cleaning, laundry, and household coordination around Barangay San Pedro.',
+   'Local resident focused on cleaning, laundry, and household coordination around Barangay San Pedro.',
    'Usually replies in the evening. Available weekdays after 3 PM and Saturday mornings.',
    'Reliable cleaning and laundry help',
    'Offers careful home cleaning and laundry help for small households, uniforms, towels, and weekly upkeep.',
@@ -88,7 +88,7 @@ values
    array['Cleaning', 'Laundry help', 'Document formatting'], 'Evenings and weekends',
    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (2, 'Miguel', 'Santos', 'Purok 2, Barangay San Pedro', 'provider',
-   'Fictional resident profile for minor home fixes and tech setup support near the covered court area.',
+   'Local resident focused on minor home fixes and tech setup support near the covered court area.',
    'Available after 5 PM on weekdays and most Sunday afternoons.',
    'Minor home fix and setup helper',
    'Handles simple fixture checks, cabinet hinges, small shelves, phone setup, and basic computer setup.',
@@ -98,7 +98,7 @@ values
    array['Cleaning', 'Phone setup', 'Yard or outdoor help'], 'Weekday evenings',
    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (3, 'Clarisse', 'Dela Cruz', 'Purok 3, Barangay San Pedro', 'client',
-   'Fictional resident profile for tutoring, school project planning, and online document work.',
+   'Local resident focused on tutoring, school project planning, and online document work.',
    'Available for online coordination after class hours and Sunday mornings.',
    'Tutor and school project guide',
    'Helps grade school learners with reading, math review, project outlines, and presentation practice.',
@@ -108,7 +108,7 @@ values
    array['Tutoring', 'Canva layout', 'Home assistance'], 'After 6 PM or Sunday morning',
    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (4, 'Jomar', 'Bautista', 'Purok 4, Barangay San Pedro', 'provider',
-   'Fictional resident profile focused on errands, delivery help, and outdoor cleanup within nearby areas.',
+   'Local resident focused on errands, delivery help, and outdoor cleanup within nearby areas.',
    'Usually available mornings and early afternoons when scheduled ahead.',
    'Errands, pickup, and outdoor help',
    'Helps with nearby pickup tasks, queue assistance, light delivery, yard sweeping, and simple outdoor cleanup.',
@@ -118,7 +118,7 @@ values
    array['Laundry help', 'Basic troubleshooting', 'Cleaning'], 'Morning or early afternoon',
    'https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (5, 'Liza', 'Mercado', 'Purok 5, Barangay San Pedro', 'client',
-   'Fictional resident profile for small business layouts, forms, and local household bookings.',
+   'Local resident focused on small business layouts, forms, and local household bookings.',
    'Responds during lunch break and after 7 PM.',
    'Canva and document layout helper',
    'Creates clean Canva posts, simple tarpaulin layouts, resumes, certificates, and print-ready documents.',
@@ -128,7 +128,7 @@ values
    array['Canva layout', 'Printer setup', 'Delivery help'], 'Evenings',
    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (6, 'Paolo', 'Reyes', 'Purok 6, Barangay San Pedro', 'provider',
-   'Fictional resident profile for WiFi/router help, printer setup, and beginner computer lessons.',
+   'Local resident focused on WiFi/router help, printer setup, and beginner computer lessons.',
    'Available Saturday afternoon and weekday evenings by schedule.',
    'Friendly tech setup support',
    'Guides residents through router setup, printer pairing, phone settings, and basic computer lessons.',
@@ -138,7 +138,7 @@ values
    array['Errands', 'Home assistance', 'Laundry help'], 'Weekends',
    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (7, 'Marinel', 'Garcia', 'Purok 1, Barangay San Pedro', 'provider',
-   'Fictional resident profile for laundry, cleaning, and light home organization.',
+   'Local resident focused on laundry, cleaning, and light home organization.',
    'Available Tuesday, Thursday, and Saturday mornings.',
    'Laundry and organizing helper',
    'Helps with wash-and-fold laundry, ironing, room organization, and regular cleaning support.',
@@ -148,7 +148,7 @@ values
    array['Tutoring', 'Computer setup', 'Delivery help'], 'Morning appointments',
    'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (8, 'Rodel', 'Villanueva', 'Purok 2, Barangay San Pedro', 'client',
-   'Fictional resident profile for practical home assistance and maintenance coordination.',
+   'Local resident focused on practical home assistance and maintenance coordination.',
    'Usually checks messages before work and after dinner.',
    'Small repair and yard helper',
    'Assists with basic home repair, light carpentry checks, yard cleanup, and home setup tasks.',
@@ -158,7 +158,7 @@ values
    array['Basic home repair', 'Document formatting', 'Cleaning'], 'After 6 PM',
    'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (9, 'Bea', 'Navarro', 'Purok 3, Barangay San Pedro', 'provider',
-   'Fictional resident profile for tutoring, reading practice, and beginner computer guidance.',
+   'Local resident focused on tutoring, reading practice, and beginner computer guidance.',
    'Available Monday, Wednesday, Friday evenings, and Sunday afternoon.',
    'Patient tutor for young learners',
    'Supports reading practice, basic math, homework routines, and simple computer lessons for beginners.',
@@ -168,7 +168,7 @@ values
    array['Cleaning', 'Laundry help', 'Printer setup'], 'Weeknights',
    'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (10, 'Noel', 'Castillo', 'Purok 4, Barangay San Pedro', 'provider',
-   'Fictional resident profile for document formatting, encoding, and resume assistance.',
+   'Local resident focused on document formatting, encoding, and resume assistance.',
    'Accepts online work during evenings and short in-person coordination on weekends.',
    'Encoding and forms assistant',
    'Formats resumes, encodes lists, cleans up forms, and prepares print-ready school or work documents.',
@@ -178,7 +178,7 @@ values
    array['WiFi/router help', 'Cleaning', 'Errands'], 'Evenings',
    'https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (11, 'Aira', 'Mendoza', 'Purok 5, Barangay San Pedro', 'client',
-   'Fictional resident profile for social media posts, Canva layout, and small business coordination.',
+   'Local resident focused on social media posts, Canva layout, and small business coordination.',
    'Available for chat after 4 PM and most Saturdays.',
    'Small business social media helper',
    'Creates simple captions, Canva posts, content calendars, and presentation cleanup for home sellers.',
@@ -188,7 +188,7 @@ values
    array['Cleaning', 'Delivery help', 'Canva layout'], 'Afternoons',
    'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&crop=faces&w=400&h=400&q=80'),
   (12, 'Renzo', 'Flores', 'Purok 6, Barangay San Pedro', 'provider',
-   'Fictional resident profile for device checks, phone setup, and practical troubleshooting.',
+   'Local resident focused on device checks, phone setup, and practical troubleshooting.',
    'Available Sunday morning and weekday evenings with one day notice.',
    'Device setup and troubleshooting help',
    'Checks common phone, printer, laptop, and small device setup issues before referral when needed.',
@@ -374,6 +374,25 @@ select id from updated;
 
 alter table public.profiles enable trigger protect_profile_verification_fields;
 
+update public.verifications v
+set
+  notes = case
+    when v.status = 'approved' then '{"submittedNote":"Resident identity and address details submitted.","document":{"idType":"national_id"},"servicesOrPurpose":"Use verified marketplace features"}'
+    when v.status = 'pending' then '{"submittedNote":"Please verify my barangay residency and profile details.","document":{"idType":"national_id"},"servicesOrPurpose":"Use Konektado after approval"}'
+    when v.status = 'rejected' then '{"submittedNote":"First submission for resident verification.","document":{"idType":"national_id"},"servicesOrPurpose":"Use Konektado after approval"}'
+    else '{"submittedNote":"Resident verification details submitted.","document":{"idType":"national_id"},"servicesOrPurpose":"Use Konektado after approval"}'
+  end,
+  reviewer_note = case
+    when v.status = 'approved' then 'Approved after matching resident details and address.'
+    when v.status = 'rejected' then 'Please upload a clearer face photo and an ID with matching address.'
+    when v.status = 'needs_more_info' then 'Please provide clearer documents for review.'
+    when v.status = 'pending' then null
+    else v.reviewer_note
+  end,
+  updated_at = now()
+from _seed_people seed
+where seed.user_id = v.user_id;
+
 insert into public.provider_profiles (
   user_id,
   service_type,
@@ -518,7 +537,7 @@ values
   (19, 'Computer setup', 'Laptop and computer setup', 'Sets up user accounts, browsers, basic apps, folders, and printer connection for new computers.', array['Laptop setup','Home visit','Beginner help'], '{}'::text[], 5, 'Saturday mornings', null, 400, 900, 'per_visit', false, 'intermediate', true, 'Local tech references available.', 'Barangay San Pedro', 'Purok 2, Barangay San Pedro', now() - interval '12 days'),
   (20, 'Phone setup', 'Phone app and account setup', 'Sets up new phones, installs apps, adjusts accessibility settings, and guides first-time users.', array['App setup','Senior help','Home visit'], '{}'::text[], 4, 'Weekends by appointment', null, 200, 500, 'per_visit', false, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', now() - interval '11 days'),
   (21, 'WiFi/router help', 'WiFi router setup and signal check', 'Sets up router names and passwords, checks signal, and explains basic home internet troubleshooting.', array['Router setup','Signal check','Home visit'], '{}'::text[], 4, 'Weekdays after 5 PM', null, 300, 900, 'per_visit', true, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', now() - interval '10 days'),
-  (22, 'Printer setup', 'Printer pairing and print test', 'Connects printers to laptops or phones, checks ink status, and runs document print tests.', array['Printer pairing','Home visit','Troubleshooting'], '{}'::text[], 4, 'Saturday morning', null, 300, 800, 'per_visit', true, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', now() - interval '9 days'),
+  (22, 'Printer setup', 'Printer pairing and setup check', 'Connects printers to laptops or phones, checks ink status, and confirms a printed page.', array['Printer pairing','Home visit','Troubleshooting'], '{}'::text[], 4, 'Saturday morning', null, 300, 800, 'per_visit', true, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', now() - interval '9 days'),
   (23, 'Basic troubleshooting', 'Appliance and device checkup', 'Checks common issues with fans, chargers, printers, and small devices before repair-shop referral.', array['Device check','Setup help','Short task'], '{}'::text[], 4, 'Evenings and weekends', null, 300, 700, 'per_visit', true, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', now() - interval '8 days'),
   (24, 'Document formatting', 'Document formatting and print cleanup', 'Cleans up certificates, forms, school documents, minutes, and printable reports.', array['Forms','Printing-ready','Online'], '{}'::text[], 3, 'Evenings', null, 250, 700, 'per_project', true, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 4, Barangay San Pedro', now() - interval '7 days'),
   (25, 'Resume or form assistance', 'Resume and form assistance', 'Formats resumes, application letters, simple forms, and clean PDF copies for local applications.', array['Resume','Forms','Document help'], '{}'::text[], 3, 'Weeknights', null, 300, 1000, 'per_project', true, 'intermediate', false, null, 'Barangay San Pedro', 'Purok 4, Barangay San Pedro', now() - interval '6 days'),
@@ -537,13 +556,13 @@ set photo_urls = case idx
   when 2 then array['https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?auto=format&fit=crop&w=1200&q=80']
   when 3 then array['https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1200&q=80']
   when 4 then array['https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?auto=format&fit=crop&w=1200&q=80']
-  when 5 then array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80']
-  when 6 then array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80']
+  when 5 then array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80&konektado=service-5']
+  when 6 then array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80&konektado=service-6']
   when 8 then array['https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=1200&q=80']
-  when 9 then array['https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80']
-  when 10 then array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80']
+  when 9 then array['https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80&konektado=service-9']
+  when 10 then array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80&konektado=service-10']
   when 14 then array['https://images.unsplash.com/photo-1611224923853-80b023f02d71?auto=format&fit=crop&w=1200&q=80']
-  when 15 then array['https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80']
+  when 15 then array['https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80&konektado=service-15']
   when 16 then array['https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?auto=format&fit=crop&w=1200&q=80']
   when 19 then array['https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80']
   when 20 then array['https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&w=1200&q=80']
@@ -682,7 +701,7 @@ values
   (12, 'Need nearby medicine pickup', 'Medicine is already paid. Need pickup and delivery within nearby Santo Tomas area.', 'Home & Local Help', 'Delivery help', array['Delivery help','Same day','Small delivery'], '{}'::text[], 'Barangay San Pedro', 'Purok 4, Barangay San Pedro', 100, 250, 'per_service', false, 'any', false, null, 1, 'Today before 6 PM', 'open', now() - interval '2 days 6 hours'),
   (13, 'Need appliance checkup', 'Electric fan and rice cooker need basic checking before bringing them to a repair shop.', 'Tech & Document Support', 'Basic troubleshooting', array['Basic troubleshooting','Device check','Short task'], '{}'::text[], 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', 300, 700, 'per_visit', true, 'intermediate', false, null, 1, 'Sunday afternoon', 'open', now() - interval '3 days'),
   (14, 'Need resume formatting help', 'Resume needs cleaner layout and PDF export for a local job application.', 'Tech & Document Support', 'Resume or form assistance', array['Resume','Forms','Online'], '{}'::text[], 'Barangay San Pedro', 'Purok 4, Barangay San Pedro', 300, 1000, 'per_project', true, 'intermediate', false, null, 1, 'Before Monday', 'open', now() - interval '3 days 4 hours'),
-  (15, 'Need printer setup for school documents', 'Printer needs to connect to a laptop and print a test page.', 'Tech & Document Support', 'Printer setup', array['Printer setup','Home visit','School document'], '{}'::text[], 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', 300, 800, 'per_visit', false, 'intermediate', false, null, 1, 'This weekend', 'open', now() - interval '3 days 8 hours'),
+  (15, 'Need printer setup for school documents', 'Printer needs to connect to a laptop and produce a setup page.', 'Tech & Document Support', 'Printer setup', array['Printer setup','Home visit','School document'], '{}'::text[], 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', 300, 800, 'per_visit', false, 'intermediate', false, null, 1, 'This weekend', 'open', now() - interval '3 days 8 hours'),
   (16, 'Need WiFi router password changed', 'Router needs a safer password and a signal check in two rooms.', 'Tech & Document Support', 'WiFi/router help', array['WiFi/router help','Home internet','Home visit'], '{}'::text[], 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', 300, 900, 'per_visit', true, 'intermediate', false, null, 1, 'Weekday evening', 'open', now() - interval '4 days'),
   (17, 'Need school project guidance', 'Grade school project needs outline guidance and presentation flow planning.', 'Learning & Digital Help', 'School project guidance', array['School project guidance','Planning help','Online'], '{}'::text[], 'Barangay San Pedro', 'Purok 3, Barangay San Pedro', 250, 700, 'per_session', false, 'any', false, null, 1, 'Saturday morning', 'open', now() - interval '4 days 2 hours'),
   (18, 'Need basic phone setup for parent', 'New Android phone needs contact transfer, font size setup, and basic app installation.', 'Tech & Document Support', 'Phone setup', array['Phone setup','Senior help','Home visit'], '{}'::text[], 'Barangay San Pedro', 'Purok 6, Barangay San Pedro', 200, 500, 'per_visit', false, 'beginner', false, null, 1, 'Friday after 5 PM', 'open', now() - interval '5 days'),
@@ -694,12 +713,12 @@ set photo_urls = '{}'::text[];
 
 update _seed_job_rows
 set photo_urls = case idx
-  when 1 then array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80']
-  when 2 then array['https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1200&q=80']
-  when 5 then array['https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&w=1200&q=80']
-  when 6 then array['https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80']
+  when 1 then array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80&konektado=job-1']
+  when 2 then array['https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1200&q=80&konektado=job-2']
+  when 5 then array['https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&w=1200&q=80&konektado=job-5']
+  when 6 then array['https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80&konektado=job-6']
   when 9 then array['https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=1200&q=80']
-  when 20 then array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80']
+  when 20 then array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80&konektado=job-20']
   else '{}'::text[]
 end
 where idx in (1, 2, 5, 6, 9, 20);
@@ -1049,6 +1068,124 @@ begin
        or owner_status.verification_status <> 'verified'
   ) then
     raise exception 'Seed validation failed: public service photos must belong to verified owners and stay separate from private verification assets.';
+  end if;
+
+  if exists (
+    select 1
+    from public.conversations c
+    join _seed_account_status client_status on client_status.user_id = c.client_id
+    join _seed_account_status provider_status on provider_status.user_id = c.provider_id
+    where client_status.verification_status <> 'verified'
+       or provider_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have normal work conversations.';
+  end if;
+
+  if exists (
+    select 1
+    from public.reviews r
+    join _seed_account_status reviewer_status on reviewer_status.user_id = r.reviewer_id
+    join _seed_account_status reviewee_status on reviewee_status.user_id = r.reviewee_id
+    where reviewer_status.verification_status <> 'verified'
+       or reviewee_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have completed work reviews.';
+  end if;
+
+  if exists (
+    with visible_copy as (
+      select p.id::text as row_id, 'profiles.about' as field_name, p.about as value
+      from _seed_people seed join public.profiles p on p.id = seed.user_id
+      union all
+      select p.id::text, 'profiles.availability', p.availability
+      from _seed_people seed join public.profiles p on p.id = seed.user_id
+      union all
+      select pp.user_id::text, 'provider_profiles.headline', pp.headline
+      from public.provider_profiles pp join _seed_people seed on seed.user_id = pp.user_id
+      union all
+      select pp.user_id::text, 'provider_profiles.bio', pp.bio
+      from public.provider_profiles pp join _seed_people seed on seed.user_id = pp.user_id
+      union all
+      select cp.user_id::text, 'client_profiles.headline', cp.headline
+      from public.client_profiles cp join _seed_people seed on seed.user_id = cp.user_id
+      union all
+      select cp.user_id::text, 'client_profiles.bio', cp.bio
+      from public.client_profiles cp join _seed_people seed on seed.user_id = cp.user_id
+      union all
+      select cp.user_id::text, 'client_profiles.budget_preference', cp.budget_preference
+      from public.client_profiles cp join _seed_people seed on seed.user_id = cp.user_id
+      union all
+      select s.id::text, 'services.title', s.title
+      from public.services s join _seed_inserted_services seed on seed.id = s.id
+      union all
+      select s.id::text, 'services.description', s.description
+      from public.services s join _seed_inserted_services seed on seed.id = s.id
+      union all
+      select s.id::text, 'services.tags', array_to_string(s.tags, ' ')
+      from public.services s join _seed_inserted_services seed on seed.id = s.id
+      union all
+      select s.id::text, 'services.certification_note', s.certification_note
+      from public.services s join _seed_inserted_services seed on seed.id = s.id
+      union all
+      select j.id::text, 'jobs.title', j.title
+      from public.jobs j join _seed_inserted_jobs seed on seed.id = j.id
+      union all
+      select j.id::text, 'jobs.description', j.description
+      from public.jobs j join _seed_inserted_jobs seed on seed.id = j.id
+      union all
+      select j.id::text, 'jobs.tags', array_to_string(j.tags, ' ')
+      from public.jobs j join _seed_inserted_jobs seed on seed.id = j.id
+      union all
+      select j.id::text, 'jobs.certification_note', j.certification_note
+      from public.jobs j join _seed_inserted_jobs seed on seed.id = j.id
+      union all
+      select m.id::text, 'messages.body', m.body
+      from public.messages m
+      join _seed_message_rows seed
+        on seed.conversation_id = m.conversation_id
+       and seed.sender_id = m.sender_id
+       and seed.body = m.body
+       and seed.created_at = m.created_at
+      union all
+      select r.id::text, 'reviews.comment', r.comment
+      from public.reviews r
+      union all
+      select v.id::text, 'verifications.notes', v.notes
+      from public.verifications v join _seed_people seed on seed.user_id = v.user_id
+      union all
+      select v.id::text, 'verifications.reviewer_note', v.reviewer_note
+      from public.verifications v join _seed_people seed on seed.user_id = v.user_id
+    )
+    select 1
+    from visible_copy
+    where coalesce(value, '') ~* '(^|[^a-z])(seed|seeded|demo|test|fake|fictional|sample|placeholder|lorem|mock|dummy|internal|approved client|approved worker|approved cleaner)([^a-z]|$)'
+  ) then
+    raise exception 'Seed validation failed: visible presentation copy contains banned seed/demo/test/internal wording.';
+  end if;
+
+  if exists (
+    with public_images as (
+      select p.avatar_url as image_url
+      from _seed_people seed
+      join public.profiles p on p.id = seed.user_id
+      where nullif(trim(coalesce(p.avatar_url, '')), '') is not null
+      union all
+      select image_url
+      from public.jobs j
+      join _seed_inserted_jobs seed on seed.id = j.id
+      cross join lateral unnest(coalesce(j.photo_urls, '{}'::text[])) as image_url
+      union all
+      select image_url
+      from public.services s
+      join _seed_inserted_services seed on seed.id = s.id
+      cross join lateral unnest(coalesce(s.photo_urls, '{}'::text[])) as image_url
+    )
+    select 1
+    from public_images
+    group by image_url
+    having count(*) > 1
+  ) then
+    raise exception 'Seed validation failed: public image URLs must be unique across seeded public photos.';
   end if;
 end $$;
 

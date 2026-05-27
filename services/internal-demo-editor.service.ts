@@ -495,7 +495,9 @@ function mapUserListItem({
   const userRoles = getRoles(profile.id, roles);
   const userJobs = jobs.filter((job) => (job.client_id ?? job.owner_id) === profile.id);
   const userServices = services.filter((service) => service.provider_id === profile.id);
-  const userReviews = reviews.filter((review) => review.reviewee_id === profile.id || review.reviewer_id === profile.id);
+  const userReviews = verified
+    ? reviews.filter((review) => review.reviewee_id === profile.id || review.reviewer_id === profile.id)
+    : [];
 
   return {
     id: profile.id,
@@ -646,16 +648,17 @@ export async function getEditableUser(userId: string): Promise<ServiceResult<Edi
     services: (servicesResult.data as ServiceRow[] | null) ?? [],
     verifications,
   });
+  const verified = isVerifiedStatus(listItem.verificationStatus);
 
   return {
     data: {
       ...listItem,
-      conversations,
-      jobs,
+      conversations: verified ? conversations : [],
+      jobs: verified ? jobs : [],
       profile: mapProfile(profile),
       reports,
-      reviews,
-      services,
+      reviews: verified ? reviews : [],
+      services: verified ? services : [],
       verifications: verifications.map((verification) => mapVerification(verification, verificationFiles)),
     },
     error: null,

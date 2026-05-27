@@ -251,7 +251,7 @@ values
     'Sto. Tomas',
     '+63 917 000 0001',
     'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
-    'Barangay verification reviewer for Konektado demos.',
+    'Barangay verification reviewer for resident account checks.',
     'Weekdays',
     now() - interval '19 days',
     now() - interval '19 days',
@@ -356,7 +356,7 @@ values
     'Sto. Tomas',
     '+63 917 000 0006',
     'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&crop=faces&w=400&h=400&q=80',
-    'Provider account for testing rejected verification correction states.',
+    'Provider account with a rejected verification history for review practice.',
     'Afternoons',
     null,
     null,
@@ -846,7 +846,7 @@ values
     'Local pickup and delivery support',
     'Handles small parcel pickup, market items, and short barangay-to-barangay delivery coordination.',
     array['Home & Local Help', 'Delivery help', 'Nearby errands'],
-    array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     3,
     'Weekday mornings and early afternoons',
     'Small items only',
@@ -873,7 +873,7 @@ values
     'Light household assistance',
     'Helps with moving light items, organizing rooms, and assisting elders with simple household tasks.',
     array['Home & Local Help', 'Home assistance', 'Light lifting'],
-    array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     4,
     'Saturday afternoons',
     null,
@@ -954,7 +954,7 @@ values
     'Encoding and data cleanup',
     'Encodes survey answers, simple inventories, and handwritten notes into clean spreadsheets.',
     array['Learning & Digital Help', 'Encoding', 'Spreadsheet'],
-    array['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     3,
     'Evenings, remote only',
     'Rush work depends on length',
@@ -1089,7 +1089,7 @@ values
     'Basic gadget troubleshooting',
     'Checks common phone, laptop, printer, and app issues before recommending a repair shop.',
     array['Tech & Document Support', 'Basic troubleshooting', 'Gadgets'],
-    array['https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     5,
     'On call most evenings',
     null,
@@ -1211,7 +1211,7 @@ values
     'Home & Local Help',
     'Cleaning',
     array['Home & Local Help', 'Morning', 'Supplies ready'],
-    array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80&konektado=seed-3'],
     'Barangay San Pedro',
     'Sampaguita Street',
     'Sampaguita Street',
@@ -1307,7 +1307,7 @@ values
     'Home & Local Help',
     'Yard or outdoor help',
     array['Home & Local Help', 'Yard cleanup', 'Outdoor'],
-    array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Narra Street',
     'Narra Street',
@@ -1371,7 +1371,7 @@ values
     'Learning & Digital Help',
     'Canva layout',
     array['Learning & Digital Help', 'Canva layout', 'Posters', 'Online'],
-    array['https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80&konektado=seed-3'],
     'Barangay San Pedro',
     'Online from Brgy. San Pedro',
     'Online from Brgy. San Pedro',
@@ -1403,7 +1403,7 @@ values
     'Learning & Digital Help',
     'Tutoring',
     array['Learning & Digital Help', 'Tutoring', 'Grade school'],
-    array['https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Near San Pedro chapel',
     'Near San Pedro chapel',
@@ -1586,7 +1586,7 @@ values
     'Home & Local Help',
     'Delivery help',
     array['Home & Local Help', 'Delivery help', 'Small item'],
-    array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1534536281715-e28d76689b4d?auto=format&fit=crop&w=1200&q=80&konektado=seed-3'],
     'Barangay San Pedro',
     'Purok 2, near covered court',
     'Purok 2, near covered court',
@@ -1619,7 +1619,7 @@ values
     'Home & Local Help',
     'Laundry help',
     array['Home & Local Help', 'Laundry help', 'Ironing'],
-    array['https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Sampaguita Street',
     'Sampaguita Street',
@@ -1652,7 +1652,7 @@ values
     'Tech & Document Support',
     'Computer setup',
     array['Tech & Document Support', 'Computer setup', 'Beginner help'],
-    array['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80&konektado=seed-3'],
     'Barangay San Pedro',
     'Purok 3, near chapel',
     'Purok 3, near chapel',
@@ -1685,7 +1685,7 @@ values
     'Tech & Document Support',
     'WiFi/router help',
     array['Tech & Document Support', 'WiFi/router help', 'Home internet'],
-    array['https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Mabini Road',
     'Mabini Road',
@@ -1751,7 +1751,7 @@ values
     'Tech & Document Support',
     'Phone setup',
     array['Tech & Document Support', 'Phone setup', 'Senior friendly'],
-    array['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80&konektado=seed-4'],
     'Barangay San Pedro',
     'Purok 2, covered court area',
     'Purok 2, covered court area',
@@ -1784,7 +1784,7 @@ values
     'Learning & Digital Help',
     'Encoding',
     array['Learning & Digital Help', 'Encoding', 'Spreadsheet'],
-    array['https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Online from Brgy. San Pedro',
     'Online from Brgy. San Pedro',
@@ -1817,7 +1817,7 @@ values
     'Learning & Digital Help',
     'Presentation design',
     array['Learning & Digital Help', 'Presentation design', 'Slides'],
-    array['https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Online coordination',
     'Online coordination',
@@ -1850,7 +1850,7 @@ values
     'Learning & Digital Help',
     'Basic computer lessons',
     array['Learning & Digital Help', 'Basic computer lessons', 'Beginner'],
-    array['https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Purok 3, near chapel',
     'Purok 3, near chapel',
@@ -1883,7 +1883,7 @@ values
     'Learning & Digital Help',
     'School project guidance',
     array['Learning & Digital Help', 'School project guidance', 'Student support'],
-    array['https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=1200&q=80&konektado=seed-2'],
     'Barangay San Pedro',
     'Online or near barangay hall',
     'Online or near barangay hall',
@@ -1916,7 +1916,7 @@ values
     'Tech & Document Support',
     'Resume or form assistance',
     array['Tech & Document Support', 'Resume or form assistance', 'Documents'],
-    array['https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1200&q=80&konektado=seed-3'],
     'Barangay San Pedro',
     'Online from Brgy. San Pedro',
     'Online from Brgy. San Pedro',
@@ -1949,7 +1949,7 @@ values
     'Tech & Document Support',
     'Document formatting',
     array['Tech & Document Support', 'Document formatting', 'Printable'],
-    array['https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80'],
+    array['https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80&konektado=seed-4'],
     'Barangay San Pedro',
     'Online coordination',
     'Online coordination',
@@ -2096,9 +2096,9 @@ values
     '00000000-0000-4000-9000-000000005001',
     '00000000-0000-4000-8000-000000000002',
     'approved',
-    '{"submittedNote":"Seed approved client","document":{"idType":"national_id"},"servicesOrPurpose":"Hire verified local workers"}',
+    '{"submittedNote":"Resident identity and address details submitted.","document":{"idType":"national_id"},"servicesOrPurpose":"Hire verified local workers"}',
     '00000000-0000-4000-8000-000000000001',
-    'Approved for demo testing.',
+    'Approved after matching resident details and address.',
     now() - interval '16 days',
     now() - interval '17 days',
     now() - interval '16 days'
@@ -2107,9 +2107,9 @@ values
     '00000000-0000-4000-9000-000000005002',
     '00000000-0000-4000-8000-000000000003',
     'approved',
-    '{"submittedNote":"Seed approved worker","document":{"idType":"barangay_certificate"},"servicesOrPurpose":"Offer handyman services"}',
+    '{"submittedNote":"Resident identity and barangay certificate submitted.","document":{"idType":"barangay_certificate"},"servicesOrPurpose":"Offer handyman services"}',
     '00000000-0000-4000-8000-000000000001',
-    'Approved for demo testing.',
+    'Approved after matching resident details and address.',
     now() - interval '15 days',
     now() - interval '16 days',
     now() - interval '15 days'
@@ -2118,9 +2118,9 @@ values
     '00000000-0000-4000-9000-000000005003',
     '00000000-0000-4000-8000-000000000004',
     'approved',
-    '{"submittedNote":"Seed approved cleaner","document":{"idType":"national_id"},"servicesOrPurpose":"Offer cleaning services"}',
+    '{"submittedNote":"Resident identity and address details submitted.","document":{"idType":"national_id"},"servicesOrPurpose":"Offer cleaning services"}',
     '00000000-0000-4000-8000-000000000001',
-    'Approved for demo testing.',
+    'Approved after matching resident details and address.',
     now() - interval '12 days',
     now() - interval '13 days',
     now() - interval '12 days'
@@ -2240,26 +2240,79 @@ values
     now() - interval '6 days'
   );
 
+create temp table _seed_canonical_verification_status as
+with prioritized_verifications as (
+  select
+    v.*,
+    row_number() over (
+      partition by v.user_id
+      order by (v.status = 'pending') desc, v.created_at desc, v.id
+    ) as rn
+  from public.verifications v
+)
+select
+  p.id as user_id,
+  case
+    when pv.status = 'pending' then 'pending'
+    when pv.status = 'approved' then 'verified'
+    when pv.status = 'rejected' then 'rejected'
+    when coalesce(p.barangay_verified_at, p.verified_at) is not null then 'verified'
+    else 'unverified'
+  end as verification_status
+from public.profiles p
+left join prioritized_verifications pv
+  on pv.user_id = p.id
+ and pv.rn = 1
+where p.id in (
+  '00000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000003',
+  '00000000-0000-4000-8000-000000000004',
+  '00000000-0000-4000-8000-000000000005',
+  '00000000-0000-4000-8000-000000000006'
+);
+
 do $$
 begin
   if exists (
     select 1
     from public.services s
-    join public.profiles p on p.id = s.provider_id
+    join _seed_canonical_verification_status status on status.user_id = s.provider_id
     where s.is_active = true
-      and coalesce(p.barangay_verified_at, p.verified_at) is null
+      and status.verification_status <> 'verified'
   ) then
-    raise exception 'Seed validation failed: pending/unverified users cannot have active public services.';
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have active public services.';
   end if;
 
   if exists (
     select 1
     from public.jobs j
-    join public.profiles p on p.id = coalesce(j.client_id, j.owner_id)
-    where j.status in ('open', 'reviewing')
-      and coalesce(p.barangay_verified_at, p.verified_at) is null
+    join _seed_canonical_verification_status status on status.user_id = coalesce(j.client_id, j.owner_id)
+    where j.status in ('open', 'reviewing', 'in_progress')
+      and status.verification_status <> 'verified'
   ) then
-    raise exception 'Seed validation failed: pending/unverified users cannot have active public jobs.';
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have active public jobs.';
+  end if;
+
+  if exists (
+    select 1
+    from public.conversations c
+    join _seed_canonical_verification_status client_status on client_status.user_id = c.client_id
+    join _seed_canonical_verification_status provider_status on provider_status.user_id = c.provider_id
+    where client_status.verification_status <> 'verified'
+       or provider_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have normal work conversations.';
+  end if;
+
+  if exists (
+    select 1
+    from public.reviews r
+    join _seed_canonical_verification_status reviewer_status on reviewer_status.user_id = r.reviewer_id
+    join _seed_canonical_verification_status reviewee_status on reviewee_status.user_id = r.reviewee_id
+    where reviewer_status.verification_status <> 'verified'
+       or reviewee_status.verification_status <> 'verified'
+  ) then
+    raise exception 'Seed validation failed: pending/unverified/rejected users cannot have completed work reviews.';
   end if;
 
   if exists (
@@ -2313,21 +2366,120 @@ begin
   if exists (
     select 1
     from public.jobs j
+    join _seed_canonical_verification_status status on status.user_id = coalesce(j.client_id, j.owner_id)
     cross join lateral unnest(coalesce(j.photo_urls, '{}'::text[])) as image_url
     where nullif(trim(image_url), '') is null
        or image_url ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+       or status.verification_status <> 'verified'
   ) then
-    raise exception 'Seed validation failed: public job photos must be non-empty and separate from private verification assets.';
+    raise exception 'Seed validation failed: public job photos must belong to verified owners and stay separate from private verification assets.';
   end if;
 
   if exists (
     select 1
     from public.services s
+    join _seed_canonical_verification_status status on status.user_id = s.provider_id
     cross join lateral unnest(coalesce(s.photo_urls, '{}'::text[])) as image_url
     where nullif(trim(image_url), '') is null
        or image_url ~* '(verification-files|verification_files|credential|certificate|id-front|id-back|passport|license|government|viewer-id|rejected-id)'
+       or status.verification_status <> 'verified'
   ) then
-    raise exception 'Seed validation failed: public service photos must be non-empty and separate from private verification assets.';
+    raise exception 'Seed validation failed: public service photos must belong to verified owners and stay separate from private verification assets.';
+  end if;
+
+  if exists (
+    with visible_copy as (
+      select p.id::text as row_id, 'profiles.about' as field_name, p.about as value
+      from public.profiles p
+      where p.id in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+        '00000000-0000-4000-8000-000000000005',
+        '00000000-0000-4000-8000-000000000006'
+      )
+      union all
+      select p.id::text, 'profiles.availability', p.availability
+      from public.profiles p
+      where p.id in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+        '00000000-0000-4000-8000-000000000005',
+        '00000000-0000-4000-8000-000000000006'
+      )
+      union all
+      select pp.user_id::text, 'provider_profiles.headline', pp.headline from public.provider_profiles pp
+      union all
+      select pp.user_id::text, 'provider_profiles.bio', pp.bio from public.provider_profiles pp
+      union all
+      select cp.user_id::text, 'client_profiles.headline', cp.headline from public.client_profiles cp
+      union all
+      select cp.user_id::text, 'client_profiles.bio', cp.bio from public.client_profiles cp
+      union all
+      select cp.user_id::text, 'client_profiles.budget_preference', cp.budget_preference from public.client_profiles cp
+      union all
+      select s.id::text, 'services.title', s.title from public.services s
+      union all
+      select s.id::text, 'services.description', s.description from public.services s
+      union all
+      select s.id::text, 'services.tags', array_to_string(s.tags, ' ') from public.services s
+      union all
+      select s.id::text, 'services.certification_note', s.certification_note from public.services s
+      union all
+      select j.id::text, 'jobs.title', j.title from public.jobs j
+      union all
+      select j.id::text, 'jobs.description', j.description from public.jobs j
+      union all
+      select j.id::text, 'jobs.tags', array_to_string(j.tags, ' ') from public.jobs j
+      union all
+      select j.id::text, 'jobs.certification_note', j.certification_note from public.jobs j
+      union all
+      select m.id::text, 'messages.body', m.body from public.messages m
+      union all
+      select r.id::text, 'reviews.comment', r.comment from public.reviews r
+      union all
+      select v.id::text, 'verifications.notes', v.notes from public.verifications v
+      union all
+      select v.id::text, 'verifications.reviewer_note', v.reviewer_note from public.verifications v
+    )
+    select 1
+    from visible_copy
+    where coalesce(value, '') ~* '(^|[^a-z])(seed|seeded|demo|test|fake|fictional|sample|placeholder|lorem|mock|dummy|internal|approved client|approved worker|approved cleaner)([^a-z]|$)'
+  ) then
+    raise exception 'Seed validation failed: visible presentation copy contains banned seed/demo/test/internal wording.';
+  end if;
+
+  if exists (
+    with public_images as (
+      select p.avatar_url as image_url
+      from public.profiles p
+      where p.id in (
+        '00000000-0000-4000-8000-000000000001',
+        '00000000-0000-4000-8000-000000000002',
+        '00000000-0000-4000-8000-000000000003',
+        '00000000-0000-4000-8000-000000000004',
+        '00000000-0000-4000-8000-000000000005',
+        '00000000-0000-4000-8000-000000000006'
+      )
+      union all
+      select image_url
+      from public.jobs j
+      cross join lateral unnest(coalesce(j.photo_urls, '{}'::text[])) as image_url
+      union all
+      select image_url
+      from public.services s
+      cross join lateral unnest(coalesce(s.photo_urls, '{}'::text[])) as image_url
+    )
+    select 1
+    from public_images
+    where nullif(trim(coalesce(image_url, '')), '') is not null
+    group by image_url
+    having count(*) > 1
+  ) then
+    raise exception 'Seed validation failed: public image URLs must be unique across seeded public photos.';
   end if;
 end $$;
 

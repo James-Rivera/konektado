@@ -285,7 +285,7 @@ function PublicPhotoSummary({
       {previewUrls.length ? (
         <View style={styles.photoPreviewStrip}>
           {previewUrls.map((url, index) => (
-            <Image key={`${ownerId}-public-photo-preview-${index}-${url}`} source={{ uri: url }} style={styles.photoPreview} />
+            <Image key={`${ownerId}-public-photo-preview-${index}`} source={{ uri: url }} style={styles.photoPreview} />
           ))}
         </View>
       ) : null}
