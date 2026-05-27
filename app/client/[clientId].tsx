@@ -10,6 +10,7 @@ import {
   PublicProfileSkeleton,
 } from '@/components/public-profile/PublicProfiles';
 import { color } from '@/constants/theme';
+import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
 import { startJobConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
@@ -32,11 +33,13 @@ export default function PublicClientProfileScreen() {
   const insets = useSafeAreaInsets();
   const { profile: currentProfile, loading: currentProfileLoading } = useProfile();
   const params = useLocalSearchParams<{
+    adminView?: string | string[];
     clientId?: string | string[];
     sourceJobId?: string | string[];
   }>();
   const clientId = getParamValue(params.clientId);
   const sourceJobId = getParamValue(params.sourceJobId);
+  const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
   const [profile, setProfile] = useState<PublicClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +133,9 @@ export default function PublicClientProfileScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
         <PublicProfileHeader onBack={() => router.back()} title="Client Profile" />
-        {loading || currentProfileLoading ? <PublicProfileSkeleton bottomInset={insets.bottom} /> : null}
+        {loading || currentProfileLoading ? (
+          <PublicProfileSkeleton bottomInset={insets.bottom} showCta={!adminViewRequested} />
+        ) : null}
         {!loading && error ? (
           <EmptyState description={error} icon="person-search" title="Could not load client profile" />
         ) : null}
@@ -143,9 +148,18 @@ export default function PublicClientProfileScreen() {
         ) : null}
         {!loading && !currentProfileLoading && profile ? (
           <PublicClientProfileView
+            adminViewOnly={adminViewOnly}
             bottomInset={insets.bottom}
             cta={{ ...cta, loading: messaging, onPress: handleMessage }}
-            onOpenJob={(jobId) => router.push({ pathname: '/job/[jobId]', params: { jobId } })}
+            onOpenJob={(jobId) =>
+              router.push({
+                pathname: '/job/[jobId]',
+                params: {
+                  ...(adminViewOnly ? { adminView: '1' } : {}),
+                  jobId,
+                },
+              })
+            }
             profile={profile}
           />
         ) : null}

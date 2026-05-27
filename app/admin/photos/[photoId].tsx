@@ -52,8 +52,9 @@ const REASONS = [
 export default function AdminPhotoReviewScreen() {
   const router = useRouter();
   const { showSuccessToast } = useFeedback();
-  const params = useLocalSearchParams<{ photoId?: string | string[] }>();
+  const params = useLocalSearchParams<{ fromUserId?: string | string[]; photoId?: string | string[] }>();
   const photoId = Array.isArray(params.photoId) ? params.photoId[0] : params.photoId;
+  const fromUserId = Array.isArray(params.fromUserId) ? params.fromUserId[0] : params.fromUserId;
   const [photo, setPhoto] = useState<AdminPhotoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -148,10 +149,20 @@ export default function AdminPhotoReviewScreen() {
         <View style={styles.backRow}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.replace('/admin/photos')}
+            onPress={() => {
+              if (fromUserId) {
+                router.replace({
+                  pathname: '/admin/users/[userId]',
+                  params: { userId: fromUserId },
+                });
+                return;
+              }
+
+              router.replace('/admin/users');
+            }}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
             <MaterialIcons color={adminPalette.ink} name="arrow-back" size={20} />
-            <Text style={styles.backText}>Photos</Text>
+            <Text style={styles.backText}>{fromUserId ? 'User Review' : 'Users'}</Text>
           </Pressable>
         </View>
 
@@ -376,28 +387,28 @@ function actionForPhoto(photo: AdminPublicPhotoItem) {
   if (photo.source === 'job') {
     return {
       label: 'Open listing',
-      route: { pathname: '/job/[jobId]', params: { jobId: photo.sourceId } },
+      route: { pathname: '/job/[jobId]', params: { adminView: '1', jobId: photo.sourceId } },
     };
   }
 
   if (photo.source === 'service') {
     return {
       label: 'Open service',
-      route: { pathname: '/services/[serviceId]', params: { serviceId: photo.sourceId } },
+      route: { pathname: '/services/[serviceId]', params: { adminView: '1', serviceId: photo.sourceId } },
     };
   }
 
   if (photo.profileRouteKind === 'client') {
     return {
       label: 'Open profile',
-      route: { pathname: '/client/[clientId]', params: { clientId: photo.ownerId } },
+      route: { pathname: '/client/[clientId]', params: { adminView: '1', clientId: photo.ownerId } },
     };
   }
 
   if (photo.profileRouteKind === 'worker') {
     return {
       label: 'Open profile',
-      route: { pathname: '/worker/[workerId]', params: { workerId: photo.ownerId } },
+      route: { pathname: '/worker/[workerId]', params: { adminView: '1', workerId: photo.ownerId } },
     };
   }
 

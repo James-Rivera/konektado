@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { MoreActionsSheet } from '@/components/MoreActionsSheet';
@@ -11,6 +12,7 @@ import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportShe
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
+import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startJobConversation } from '@/services/conversation.service';
@@ -42,8 +44,9 @@ export default function JobDetailScreen() {
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
-  const params = useLocalSearchParams<{ jobId?: string | string[] }>();
+  const params = useLocalSearchParams<{ adminView?: string | string[]; jobId?: string | string[] }>();
   const rawJobId = getParamValue(params.jobId);
+  const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [messaging, setMessaging] = useState(false);
@@ -87,7 +90,7 @@ export default function JobDetailScreen() {
   };
 
   if (loading && !job) {
-    return <JobDetailSkeleton />;
+    return <JobDetailSkeleton showActionBar={!adminViewRequested} />;
   }
 
   if (!job) {
@@ -309,6 +312,7 @@ export default function JobDetailScreen() {
     },
   ];
   const hasHeaderOptions = !isOwnJob || ownerActions.length > 0;
+  const showHeaderOptions = !adminViewOnly && hasHeaderOptions;
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -322,7 +326,7 @@ export default function JobDetailScreen() {
             <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
           </Pressable>
           <Text style={styles.headerTitle}>Job Details</Text>
-          {hasHeaderOptions ? (
+          {showHeaderOptions ? (
             <Pressable
               accessibilityLabel="More options"
               accessibilityRole="button"
@@ -339,6 +343,12 @@ export default function JobDetailScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           style={styles.scroll}>
+          {adminViewOnly ? (
+            <View style={styles.section}>
+              <AdminContextBanner />
+            </View>
+          ) : null}
+
           <View style={styles.section}>
             <View style={styles.jobTitleRow}>
               <Text style={styles.jobTitle}>{jobTitle}</Text>
@@ -440,7 +450,11 @@ export default function JobDetailScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/client/[clientId]' as never,
-                    params: { clientId: job.clientId, sourceJobId: job.id },
+                    params: {
+                      ...(adminViewOnly ? { adminView: '1' } : {}),
+                      clientId: job.clientId,
+                      sourceJobId: job.id,
+                    },
                   })
                 }
                 style={({ pressed }) => [styles.posterProfileAction, pressed && styles.pressed]}>
@@ -451,30 +465,32 @@ export default function JobDetailScreen() {
           </View>
         </ScrollView>
 
-        <View style={styles.actionBar}>
-          <Text style={styles.boundaryNote}>
-            Budget is for coordination. Payment and final agreement happen outside Konektado.
-          </Text>
-          {messageCta.helper ? <Text style={styles.actionHelper}>{messageCta.helper}</Text> : null}
-          <Pressable
-            accessibilityRole="button"
-            disabled={messageCta.disabled || messaging}
-            onPress={handleMessage}
-            style={({ pressed }) => [
-              styles.primaryAction,
-              (messageCta.disabled || messaging) && styles.disabledAction,
-              pressed && !messageCta.disabled && !messaging && styles.pressed,
-            ]}>
-            <MaterialIcons
-              color={messageCta.disabled ? color.textSubtle : color.primary}
-              name="chat-bubble"
-              size={16}
-            />
-            <Text style={[styles.primaryActionText, messageCta.disabled && styles.disabledActionText]}>
-              {messaging ? 'Opening...' : messageCta.label}
+        {adminViewOnly ? null : (
+          <View style={styles.actionBar}>
+            <Text style={styles.boundaryNote}>
+              Budget is for coordination. Payment and final agreement happen outside Konektado.
             </Text>
-          </Pressable>
-        </View>
+            {messageCta.helper ? <Text style={styles.actionHelper}>{messageCta.helper}</Text> : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={messageCta.disabled || messaging}
+              onPress={handleMessage}
+              style={({ pressed }) => [
+                styles.primaryAction,
+                (messageCta.disabled || messaging) && styles.disabledAction,
+                pressed && !messageCta.disabled && !messaging && styles.pressed,
+              ]}>
+              <MaterialIcons
+                color={messageCta.disabled ? color.textSubtle : color.primary}
+                name="chat-bubble"
+                size={16}
+              />
+              <Text style={[styles.primaryActionText, messageCta.disabled && styles.disabledActionText]}>
+                {messaging ? 'Opening...' : messageCta.label}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <MoreActionsSheet
@@ -482,7 +498,7 @@ export default function JobDetailScreen() {
         onClose={() => setOptionsVisible(false)}
         subtitle={jobTitle}
         title={isOwnJob ? 'Manage job' : 'Job options'}
-        visible={optionsVisible && hasHeaderOptions}
+        visible={optionsVisible && showHeaderOptions}
       />
       <ReportSheet
         onClose={() => setReportVisible(false)}
@@ -490,13 +506,13 @@ export default function JobDetailScreen() {
         submitting={reporting}
         targetLabel={jobTitle}
         title="Report job"
-        visible={reportVisible}
+        visible={reportVisible && !adminViewOnly}
       />
     </SafeAreaView>
   );
 }
 
-function JobDetailSkeleton() {
+function JobDetailSkeleton({ showActionBar = true }: { showActionBar?: boolean }) {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
@@ -570,10 +586,12 @@ function JobDetailSkeleton() {
           </View>
         </ScrollView>
 
-        <View style={styles.actionBar}>
-          <Skeleton height={12} width="92%" />
-          <SkeletonChip height={42} width="100%" />
-        </View>
+        {showActionBar ? (
+          <View style={styles.actionBar}>
+            <Skeleton height={12} width="92%" />
+            <SkeletonChip height={42} width="100%" />
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );

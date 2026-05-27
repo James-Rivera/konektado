@@ -2,6 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ReactNode } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
@@ -51,11 +52,13 @@ export function PublicProfileHeader({
 }
 
 export function PublicWorkerProfileView({
+  adminViewOnly = false,
   bottomInset,
   cta,
   onOpenService,
   profile,
 }: {
+  adminViewOnly?: boolean;
   bottomInset: number;
   cta: ProfileCta;
   onOpenService?: (serviceId: string) => void;
@@ -66,7 +69,10 @@ export function PublicWorkerProfileView({
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(bottomInset, space.md) + 116 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(bottomInset, space.md) + (adminViewOnly ? space.xl : 116) },
+        ]}
         showsVerticalScrollIndicator={false}>
         <PublicSummaryCard
           avatarUrl={profile.avatarUrl}
@@ -75,6 +81,7 @@ export function PublicWorkerProfileView({
           roleLabel="Worker profile"
           verified={Boolean(profile.barangayVerifiedAt || profile.verifiedAt)}
         />
+        {adminViewOnly ? <AdminContextBanner /> : null}
 
         {profile.selectedService ? (
           <Section title="Service you viewed">
@@ -119,17 +126,19 @@ export function PublicWorkerProfileView({
           <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm schedule, exact location, and rate in Messages before starting." />
         </Section>
       </ScrollView>
-      <PublicProfileCta bottomInset={bottomInset} cta={cta} />
+      {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={cta} />}
     </View>
   );
 }
 
 export function PublicClientProfileView({
+  adminViewOnly = false,
   bottomInset,
   cta,
   onOpenJob,
   profile,
 }: {
+  adminViewOnly?: boolean;
   bottomInset: number;
   cta: ProfileCta;
   onOpenJob?: (jobId: string) => void;
@@ -138,7 +147,10 @@ export function PublicClientProfileView({
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(bottomInset, space.md) + 116 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(bottomInset, space.md) + (adminViewOnly ? space.xl : 116) },
+        ]}
         showsVerticalScrollIndicator={false}>
         <PublicSummaryCard
           avatarUrl={profile.avatarUrl}
@@ -147,6 +159,7 @@ export function PublicClientProfileView({
           roleLabel="Hiring profile"
           verified={Boolean(profile.barangayVerifiedAt || profile.verifiedAt)}
         />
+        {adminViewOnly ? <AdminContextBanner /> : null}
 
         {profile.selectedJob ? (
           <Section title="Job you viewed">
@@ -191,16 +204,19 @@ export function PublicClientProfileView({
           <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm scope, schedule, and budget in Messages before starting." />
         </Section>
       </ScrollView>
-      <PublicProfileCta bottomInset={bottomInset} cta={cta} />
+      {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={cta} />}
     </View>
   );
 }
 
-export function PublicProfileSkeleton({ bottomInset }: { bottomInset: number }) {
+export function PublicProfileSkeleton({ bottomInset, showCta = true }: { bottomInset: number; showCta?: boolean }) {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(bottomInset, space.md) + 116 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(bottomInset, space.md) + (showCta ? 116 : space.xl) },
+        ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
           <SkeletonAvatar size={64} showPresence={false} />
@@ -227,10 +243,12 @@ export function PublicProfileSkeleton({ bottomInset }: { bottomInset: number }) 
           </View>
         </View>
       </ScrollView>
-      <View style={[styles.ctaBar, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
-        <Skeleton height={12} width="90%" />
-        <SkeletonChip height={42} width="100%" />
-      </View>
+      {showCta ? (
+        <View style={[styles.ctaBar, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
+          <Skeleton height={12} width="90%" />
+          <SkeletonChip height={42} width="100%" />
+        </View>
+      ) : null}
     </View>
   );
 }
