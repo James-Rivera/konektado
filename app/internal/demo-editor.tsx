@@ -19,9 +19,9 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AdminStatusBadge, AdminTopHeader, adminPalette, type AdminTone } from '@/components/admin/AdminShell';
+import { AdminStatusBadge, adminPalette, type AdminTone } from '@/components/admin/AdminShell';
 import { MVP_SERVICE_CATEGORIES, MVP_SERVICE_OPTIONS, getServicesForMvpCategory } from '@/constants/service-taxonomy';
-import { color, radius, space } from '@/constants/theme';
+import { color, radius } from '@/constants/theme';
 import {
   createSignedVerificationFileUrl,
   createEditableJob,
@@ -112,7 +112,7 @@ export default function InternalDemoContentEditorScreen() {
   const [users, setUsers] = useState<EditableUserListItem[]>([]);
   const [selectedUser, setSelectedUser] = useState<EditableUserDetail | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [section, setSection] = useState<EditorSection>('overview');
+  const [section, setSection] = useState<EditorSection>('profile');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filter, setFilter] = useState<InternalDemoUserFilter>('all');
   const [search, setSearch] = useState('');
@@ -209,7 +209,7 @@ export default function InternalDemoContentEditorScreen() {
   const selectUser = (userId: string) => {
     setSelectedUserId(userId);
     setSelectedUser(null);
-    setSection('overview');
+    setSection('profile');
     setPickerOpen(false);
   };
 
@@ -266,28 +266,11 @@ export default function InternalDemoContentEditorScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <AdminTopHeader onLogout={signOut} />
-        <View style={styles.internalHeader}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.title}>Internal Demo Content Editor</Text>
-            <Text style={styles.subtitle}>Curate safe demo profiles, listings, services, photos, documents, and conversations.</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void refreshAll()}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-            <MaterialIcons color={adminPalette.blue} name="refresh" size={22} />
-          </Pressable>
-        </View>
-
-        <View style={[styles.statusLine, access.whitelistConfigured ? styles.statusLineStrict : null]}>
-          <MaterialIcons color={access.whitelistConfigured ? adminPalette.successDeep : adminPalette.orange} name="security" size={18} />
-          <Text style={styles.statusText}>
-            {access.whitelistConfigured
-              ? `Admin plus whitelist: ${access.email ?? access.userId}`
-              : 'Admin role guard active. Add whitelist env vars to tighten this route.'}
-          </Text>
-        </View>
+        <CompactContextBar
+          access={access}
+          onRefresh={() => void refreshAll()}
+          onSignOut={signOut}
+        />
 
         {message ? <InlineNotice tone="success">{message}</InlineNotice> : null}
         {errorMessage ? <InlineNotice tone="danger">{errorMessage}</InlineNotice> : null}
@@ -382,6 +365,52 @@ export default function InternalDemoContentEditorScreen() {
         />
       </View>
     </SafeAreaView>
+  );
+}
+
+function CompactContextBar({
+  access,
+  onRefresh,
+  onSignOut,
+}: {
+  access: InternalDemoAccess;
+  onRefresh: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <View style={styles.contextBar}>
+      <View style={styles.contextMain}>
+        <Text numberOfLines={1} style={styles.contextTitle}>Internal Demo Content Editor</Text>
+        <View style={styles.contextSecurityLine}>
+          <MaterialIcons
+            color={access.whitelistConfigured ? adminPalette.successDeep : adminPalette.orange}
+            name="security"
+            size={15}
+          />
+          <Text numberOfLines={1} style={styles.contextSecurityText}>
+            {access.whitelistConfigured
+              ? `Admin + whitelist: ${access.email ?? access.userId}`
+              : 'Admin guard active. Add whitelist env vars for stricter access.'}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.contextActions}>
+        <Pressable
+          accessibilityLabel="Refresh internal demo editor"
+          accessibilityRole="button"
+          onPress={onRefresh}
+          style={({ pressed }) => [styles.contextIconButton, pressed && styles.pressed]}>
+          <MaterialIcons color={adminPalette.blue} name="refresh" size={20} />
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Log out of internal demo editor"
+          accessibilityRole="button"
+          onPress={onSignOut}
+          style={({ pressed }) => [styles.contextIconButton, pressed && styles.pressed]}>
+          <MaterialIcons color={adminPalette.blue} name="logout" size={20} />
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -508,7 +537,7 @@ function SelectedUserHeader({
   return (
     <View style={styles.selectedHeader}>
       <View style={styles.selectedIdentityRow}>
-        <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={70} />
+        <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={48} />
         <View style={styles.selectedCopy}>
           <View style={styles.selectedTitleRow}>
             <Text style={styles.selectedTitle}>{user.fullName}</Text>
@@ -566,7 +595,7 @@ function SectionTabs({
   }
 
   return (
-    <ScrollView horizontal contentContainerStyle={styles.sectionTabs} showsHorizontalScrollIndicator={false}>
+    <View style={styles.sectionTabs}>
       {SECTIONS.map((item) => {
         const active = item.value === section;
         return (
@@ -581,7 +610,7 @@ function SectionTabs({
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -823,21 +852,6 @@ function ProfileEditor({
         <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Profile'} onPress={() => void save()} />
       }
       title="Profile">
-      <Notice icon="photo-camera">
-        Use only photos your group owns or has permission to use. Do not upload IDs, certificates, screenshots, or private information.
-      </Notice>
-      <View style={styles.photoEditorRow}>
-        {previewUrl ? <Image source={{ uri: previewUrl }} style={styles.profilePreview} /> : <UserAvatar avatarUrl={null} name={form.fullName} size={82} />}
-        <View style={styles.flex}>
-          <Text style={styles.lockedLabel}>Public profile photo</Text>
-          <Text style={styles.helperText}>Uploads use the public profile photo bucket. Signed verification files are never used here.</Text>
-          <Pressable accessibilityRole="button" onPress={chooseImage} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <MaterialIcons color={adminPalette.blue} name="upload" size={18} />
-            <Text style={styles.secondaryButtonText}>Choose image</Text>
-          </Pressable>
-        </View>
-      </View>
-      <Field label="Public photo URL" onChangeText={(value) => setForm({ ...form, avatarUrl: value })} value={form.avatarUrl} />
       <TwoColumn>
         <Field label="First name" onChangeText={(value) => setForm({ ...form, firstName: value })} value={form.firstName} />
         <Field label="Last name" onChangeText={(value) => setForm({ ...form, lastName: value })} value={form.lastName} />
@@ -864,6 +878,20 @@ function ProfileEditor({
           value={form.preferredContactMethod}
         />
       </TwoColumn>
+      <View style={styles.compactPhotoBlock}>
+        <View style={styles.photoEditorRow}>
+          {previewUrl ? <Image source={{ uri: previewUrl }} style={styles.profilePreviewCompact} /> : <UserAvatar avatarUrl={null} name={form.fullName} size={58} />}
+          <View style={styles.flex}>
+            <Text style={styles.lockedLabel}>Public profile photo</Text>
+            <Text style={styles.helperText}>Use public images only. Verification files and IDs stay private.</Text>
+            <Pressable accessibilityRole="button" onPress={chooseImage} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+              <MaterialIcons color={adminPalette.blue} name="upload" size={18} />
+              <Text style={styles.secondaryButtonText}>Choose image</Text>
+            </Pressable>
+          </View>
+        </View>
+        <Field label="Public photo URL" onChangeText={(value) => setForm({ ...form, avatarUrl: value })} value={form.avatarUrl} />
+      </View>
       <LockedFields
         rows={[
           ['Auth/Profile ID', user.id],
@@ -2191,13 +2219,60 @@ const styles = StyleSheet.create({
     backgroundColor: adminPalette.canvasSoft,
     flex: 1,
   },
+  contextBar: {
+    alignItems: 'center',
+    backgroundColor: color.white,
+    borderBottomColor: adminPalette.line,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  contextMain: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  contextTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  contextSecurityLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  contextSecurityText: {
+    color: adminPalette.muted,
+    flex: 1,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  contextActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  contextIconButton: {
+    alignItems: 'center',
+    borderColor: adminPalette.line,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
   internalHeader: {
     alignItems: 'center',
     backgroundColor: color.white,
     borderBottomColor: adminPalette.line,
     borderBottomWidth: 1,
     flexDirection: 'row',
-    gap: space.md,
+    gap: 12,
     paddingHorizontal: 24,
     paddingVertical: 16,
   },
@@ -2248,9 +2323,9 @@ const styles = StyleSheet.create({
   workspace: {
     alignSelf: 'center',
     flex: 1,
-    gap: 12,
+    gap: 8,
     maxWidth: 1280,
-    padding: 12,
+    padding: 8,
     width: '100%',
   },
   browsePane: {
@@ -2432,29 +2507,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   editorContent: {
-    gap: 18,
-    paddingBottom: 24,
+    gap: 10,
+    paddingBottom: 18,
   },
   editorContentDesktop: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
   selectedHeader: {
     backgroundColor: color.white,
     borderColor: adminPalette.line,
     borderRadius: radius.md,
     borderWidth: 1,
-    gap: 16,
-    padding: 18,
+    gap: 8,
+    padding: 10,
   },
   selectedIdentityRow: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    gap: 10,
   },
   selectedCopy: {
     flex: 1,
-    gap: 8,
+    gap: 4,
     minWidth: 220,
   },
   selectedTitleRow: {
@@ -2466,23 +2541,23 @@ const styles = StyleSheet.create({
   selectedTitle: {
     color: adminPalette.ink,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 18,
+    lineHeight: 23,
   },
   selectedMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   selectedStatsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   selectedActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   headerAction: {
     alignItems: 'center',
@@ -2490,9 +2565,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 7,
-    minHeight: 40,
-    paddingHorizontal: 14,
+    gap: 6,
+    minHeight: 34,
+    paddingHorizontal: 11,
   },
   headerActionText: {
     color: adminPalette.blue,
@@ -2500,7 +2575,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   sectionTabs: {
-    gap: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   sectionTab: {
     alignItems: 'center',
@@ -2509,8 +2586,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: 6,
-    minHeight: 36,
-    paddingHorizontal: 12,
+    minHeight: 32,
+    paddingHorizontal: 10,
   },
   sectionTabActive: {
     backgroundColor: adminPalette.blueSoft,
@@ -2567,7 +2644,7 @@ const styles = StyleSheet.create({
     borderBottomColor: adminPalette.line,
     borderBottomWidth: 1,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   panelTitle: {
     color: adminPalette.ink,
@@ -2576,8 +2653,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   panelBody: {
-    gap: 18,
-    padding: 18,
+    gap: 14,
+    padding: 14,
   },
   panelFooter: {
     backgroundColor: color.white,
@@ -2726,6 +2803,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
   },
+  compactPhotoBlock: {
+    borderColor: adminPalette.line,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 12,
+    padding: 12,
+  },
   profilePreview: {
     backgroundColor: color.surfaceAlt,
     borderColor: adminPalette.line,
@@ -2733,6 +2817,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 82,
     width: 82,
+  },
+  profilePreviewCompact: {
+    backgroundColor: color.surfaceAlt,
+    borderColor: adminPalette.line,
+    borderRadius: 29,
+    borderWidth: 1,
+    height: 58,
+    width: 58,
   },
   helperText: {
     color: adminPalette.muted,
