@@ -379,7 +379,7 @@ function toneForStatus(status: VerificationStatus): AdminTone {
 }
 
 function formatStatusLabel(status: VerificationStatus) {
-  if (status === 'needs_more_info') return 'Needs more info';
+  if (status === 'needs_more_info') return 'Needs Correction';
   return status.replace(/_/g, ' ');
 }
 

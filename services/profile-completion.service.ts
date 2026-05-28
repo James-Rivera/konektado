@@ -18,7 +18,12 @@ import type {
   ProfileVerificationStatus,
   WorkProfileInput,
 } from '@/types/profile.types';
+import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
+import {
+  getLegalNameEditPolicy,
+  NAME_LOCKED_SERVICE_ERROR,
+} from '@/utils/verified-name-policy';
 
 export const WORK_PROFILE_REQUIRED_MESSAGE =
   'Complete your Work Profile before messaging clients or publishing services.';
@@ -52,6 +57,11 @@ type ProfileRow = {
   verified_at: string | null;
   barangay_verified_at: string | null;
 };
+
+type ProfileNameGuardRow = Pick<
+  ProfileRow,
+  'barangay_verified_at' | 'first_name' | 'full_name' | 'last_name' | 'verified_at'
+>;
 
 type ProviderProfileRow = {
   service_type: string | null;
@@ -113,7 +123,7 @@ type CredentialReadinessRow = {
 };
 
 type VerificationRow = {
-  status: string;
+  status: VerificationStatus;
   reviewer_note: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -260,6 +270,46 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
     return { data: null, error: 'Choose a contact preference.' };
   }
 
+  const [{ data: profile, error: profileError }, { data: latestVerification, error: latestError }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('first_name, last_name, full_name, verified_at, barangay_verified_at')
+      .eq('id', user.data.id)
+      .maybeSingle<ProfileNameGuardRow>(),
+    supabase
+      .from('verifications')
+      .select(VERIFICATION_SELECT)
+      .eq('user_id', user.data.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<VerificationRow>(),
+  ]);
+
+  if (profileError) {
+    return { data: null, error: profileError.message };
+  }
+
+  if (latestError) {
+    return { data: null, error: latestError.message };
+  }
+
+  const legalNameEdit = getLegalNameEditPolicy({
+    isVerified: Boolean(profile?.barangay_verified_at || profile?.verified_at),
+    reviewerNote: latestVerification?.reviewer_note ?? null,
+    status: latestVerification?.status ?? null,
+  });
+
+  const nameChanged = hasProfileNameChanged({
+    current: profile ?? null,
+    nextFirstName: firstName,
+    nextFullName: fullName,
+    nextLastName: lastName,
+  });
+
+  if (nameChanged && !legalNameEdit.canEdit) {
+    return { data: null, error: NAME_LOCKED_SERVICE_ERROR };
+  }
+
   const privateAddress = formatPrivateLocation({
     province: DEFAULT_PROVINCE,
     city: DEFAULT_CITY,
@@ -271,12 +321,7 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
     landmarkNote: input.landmarkNote,
   });
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      first_name: firstName,
-      last_name: lastName,
-      full_name: fullName,
+  const profilePayload = {
       province: DEFAULT_PROVINCE,
       barangay: DEFAULT_BARANGAY,
       // Legacy DB names remain: street stores Area / Street / Purok / Sitio,
@@ -293,7 +338,20 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
       preferred_contact_method: compactText(input.preferredContactMethod),
       about: compactText(input.about) || null,
       availability: compactText(input.availability) || null,
-    })
+    };
+
+  const { error } = await supabase
+    .from('profiles')
+    .update(
+      legalNameEdit.canEdit
+        ? {
+            ...profilePayload,
+            first_name: firstName,
+            full_name: fullName,
+            last_name: lastName,
+          }
+        : profilePayload,
+    )
     .eq('id', user.data.id);
 
   if (error) {
@@ -547,6 +605,11 @@ function buildCompletionStatus({
     isVerified,
     latestVerification,
   });
+  const legalNameEdit = getLegalNameEditPolicy({
+    isVerified,
+    reviewerNote: latestVerification?.reviewer_note ?? null,
+    status: latestVerification?.status ?? null,
+  });
   const coreCompletion = buildCoreCompletion({ core, name });
   const coreComplete = coreCompletion.state === 'ready';
   const missingCore = coreCompletion.missingItems.map((item) => item.label);
@@ -583,6 +646,7 @@ function buildCompletionStatus({
     workCompletion,
     hiringCompletion,
     verification,
+    legalNameEdit,
     photoRecommended: !core.avatarUrl,
     missingCore,
     missingWork: workCompletion.missingItems.map((item) => item.label),
@@ -591,6 +655,30 @@ function buildCompletionStatus({
     work,
     hiring,
   };
+}
+
+function hasProfileNameChanged({
+  current,
+  nextFirstName,
+  nextFullName,
+  nextLastName,
+}: {
+  current: ProfileNameGuardRow | null;
+  nextFirstName: string;
+  nextFullName: string | null;
+  nextLastName: string;
+}) {
+  if (!current) return true;
+
+  const currentFirstName = compactText(current.first_name);
+  const currentLastName = compactText(current.last_name);
+  const currentFullName = compactText(current.full_name) || `${currentFirstName} ${currentLastName}`.trim();
+
+  return (
+    nextFirstName !== currentFirstName ||
+    nextLastName !== currentLastName ||
+    compactText(nextFullName) !== currentFullName
+  );
 }
 
 function buildCoreCompletion({

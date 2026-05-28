@@ -1,4 +1,5 @@
 import type { VerificationUpload } from '@/types/onboarding.types';
+import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 
 export type VerificationStatus =
   | 'pending'
@@ -32,6 +33,7 @@ export type VerificationPrefill = {
   city: string;
   barangay: string;
   servicesOrPurpose: string;
+  legalNameEdit: LegalNameEditPolicy;
   latestRequest: VerificationSummary | null;
 };
 

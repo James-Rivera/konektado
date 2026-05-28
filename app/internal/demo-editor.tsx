@@ -871,6 +871,11 @@ function ProfileEditor({
       }
       hideHeader
       title="Profile">
+      {user.verificationStatus === 'verified' ? (
+        <InlineNotice tone="warning">
+          Internal override: changing a verified name should only be used for demo/admin correction.
+        </InlineNotice>
+      ) : null}
       <TwoColumn>
         <Field label="First name" onChangeText={(value) => setForm({ ...form, firstName: value })} value={form.firstName} />
         <Field label="Last name" onChangeText={(value) => setForm({ ...form, lastName: value })} value={form.lastName} />

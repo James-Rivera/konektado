@@ -1,4 +1,5 @@
 import type { RateType } from '@/types/marketplace.types';
+import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 
 export type ProfileCompletionMode = 'core' | 'work' | 'hiring';
 
@@ -111,6 +112,7 @@ export type ProfileCompletionStatus = {
   workCompletion: ProfileModeCompletion;
   hiringCompletion: ProfileModeCompletion;
   verification: ProfileVerificationStatus;
+  legalNameEdit: LegalNameEditPolicy;
   photoRecommended: boolean;
   missingCore: string[];
   missingWork: string[];

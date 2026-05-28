@@ -33,6 +33,11 @@ import {
 } from '@/services/admin.service';
 import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
+import {
+  NEEDS_CORRECTION_REASONS,
+  NAME_MISMATCH_REASON,
+  type NeedsCorrectionReason,
+} from '@/utils/verified-name-policy';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 type VerificationFile = VerificationRequestDetail['files'][number];
@@ -59,8 +64,9 @@ export default function AdminVerificationReviewScreen() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittingDecision, setSubmittingDecision] = useState(false);
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
+  const [decisionModal, setDecisionModal] = useState<'needs_more_info' | 'rejected' | null>(null);
+  const [decisionNote, setDecisionNote] = useState('');
+  const [correctionReason, setCorrectionReason] = useState<NeedsCorrectionReason>(NAME_MISMATCH_REASON);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -131,18 +137,25 @@ export default function AdminVerificationReviewScreen() {
     );
   };
 
-  const submitReject = () => {
-    if (!rejectReason.trim()) {
+  const submitReviewNote = () => {
+    if (!decisionModal) return;
+
+    if (decisionModal === 'rejected' && !decisionNote.trim()) {
       Alert.alert('Rejection reason required', 'Provide a reason so the resident knows what to fix.');
       return;
     }
 
-    submitDecision('rejected', rejectReason.trim());
+    submitDecision(
+      decisionModal,
+      decisionModal === 'needs_more_info' ? decisionNote.trim() : decisionNote.trim(),
+      decisionModal === 'needs_more_info' ? correctionReason : undefined,
+    );
   };
 
   const submitDecision = async (
     decision: 'approved' | 'rejected' | 'needs_more_info',
     note?: string,
+    reason?: NeedsCorrectionReason,
   ) => {
     if (!request || submittingDecision) return;
 
@@ -151,6 +164,7 @@ export default function AdminVerificationReviewScreen() {
       requestId: request.id,
       decision,
       note,
+      reason,
     });
     setSubmittingDecision(false);
 
@@ -160,13 +174,20 @@ export default function AdminVerificationReviewScreen() {
     }
 
     setRequest(result.data);
-    setRejectModalVisible(false);
-    setRejectReason('');
+    setDecisionModal(null);
+    setDecisionNote('');
+    setCorrectionReason(NAME_MISMATCH_REASON);
     Alert.alert(
-      decision === 'approved' ? 'Verification approved' : 'Verification rejected',
+      decision === 'approved'
+        ? 'Verification approved'
+        : decision === 'needs_more_info'
+          ? 'Correction requested'
+          : 'Verification rejected',
       decision === 'approved'
         ? 'The resident is now Barangay Verified.'
-        : 'The resident will see the rejection reason.',
+        : decision === 'needs_more_info'
+          ? 'The resident will see the correction reason and can resubmit.'
+          : 'The resident will see the rejection reason.',
       [{ text: 'Done', onPress: goBack }],
     );
   };
@@ -275,13 +296,25 @@ export default function AdminVerificationReviewScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ disabled: submittingDecision }}
                   disabled={submittingDecision}
-                  onPress={() => setRejectModalVisible(true)}
+                  onPress={() => setDecisionModal('rejected')}
                   style={({ pressed }) => [
                     styles.rejectButton,
                     submittingDecision && styles.disabled,
                     pressed && !submittingDecision && styles.pressed,
                   ]}>
                   <Text style={styles.rejectButtonText}>Reject</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: submittingDecision }}
+                  disabled={submittingDecision}
+                  onPress={() => setDecisionModal('needs_more_info')}
+                  style={({ pressed }) => [
+                    styles.correctionButton,
+                    submittingDecision && styles.disabled,
+                    pressed && !submittingDecision && styles.pressed,
+                  ]}>
+                  <Text style={styles.correctionButtonText}>Needs Correction</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -312,13 +345,16 @@ export default function AdminVerificationReviewScreen() {
           onPrevious={() => setViewerIndex((current) => previousDocumentIndex(current, request?.files.length ?? 0))}
         />
 
-        <RejectReasonModal
+        <ReviewDecisionModal
+          correctionReason={correctionReason}
+          decision={decisionModal}
           loading={submittingDecision}
-          onCancel={() => setRejectModalVisible(false)}
-          onChangeReason={setRejectReason}
-          onReject={submitReject}
-          reason={rejectReason}
-          visible={rejectModalVisible}
+          note={decisionNote}
+          onCancel={() => setDecisionModal(null)}
+          onChangeNote={setDecisionNote}
+          onChangeReason={setCorrectionReason}
+          onSubmit={submitReviewNote}
+          visible={Boolean(decisionModal)}
         />
       </View>
     </SafeAreaView>
@@ -517,38 +553,76 @@ function DocumentViewerModal({
   );
 }
 
-function RejectReasonModal({
+function ReviewDecisionModal({
+  correctionReason,
+  decision,
   loading,
   onCancel,
+  onChangeNote,
   onChangeReason,
-  onReject,
-  reason,
+  onSubmit,
+  note,
   visible,
 }: {
+  correctionReason: NeedsCorrectionReason;
+  decision: 'needs_more_info' | 'rejected' | null;
   loading: boolean;
   onCancel: () => void;
-  onChangeReason: (value: string) => void;
-  onReject: () => void;
-  reason: string;
+  onChangeNote: (value: string) => void;
+  onChangeReason: (value: NeedsCorrectionReason) => void;
+  onSubmit: () => void;
+  note: string;
   visible: boolean;
 }) {
+  const needsCorrection = decision === 'needs_more_info';
+  const submitDisabled = loading || (!needsCorrection && !note.trim());
+
   return (
     <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.rejectBackdrop}>
         <View style={styles.rejectDialog}>
-          <Text style={styles.rejectTitle}>Reject verification?</Text>
-          <Text style={styles.rejectBody}>Provide a reason so the resident knows what to fix.</Text>
+          <Text style={styles.rejectTitle}>{needsCorrection ? 'Return for correction?' : 'Reject verification?'}</Text>
+          <Text style={styles.rejectBody}>
+            {needsCorrection
+              ? 'Use Needs Correction for likely honest mistakes, typos, nicknames, missing legal name parts, unreadable files, or fixable document issues.'
+              : 'Use Rejected only for suspicious, fake, invalid, or completely unrelated identity documents.'}
+          </Text>
+          {needsCorrection ? (
+            <View style={styles.correctionReasonList}>
+              {NEEDS_CORRECTION_REASONS.map((reason) => {
+                const selected = reason === correctionReason;
+
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    disabled={loading}
+                    key={reason}
+                    onPress={() => onChangeReason(reason)}
+                    style={({ pressed }) => [
+                      styles.correctionReasonChip,
+                      selected && styles.correctionReasonChipSelected,
+                      pressed && !loading && styles.pressed,
+                    ]}>
+                    <Text style={[styles.correctionReasonText, selected && styles.correctionReasonTextSelected]}>
+                      {reason}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
           <TextInput
             editable={!loading}
             multiline
-            onChangeText={onChangeReason}
-            placeholder="Rejection reason"
+            onChangeText={onChangeNote}
+            placeholder={needsCorrection ? 'Optional details for the resident' : 'Rejection reason'}
             placeholderTextColor={color.textSubtle}
             style={styles.rejectInput}
             textAlignVertical="top"
-            value={reason}
+            value={note}
           />
           <View style={styles.rejectActions}>
             <Pressable
@@ -560,15 +634,18 @@ function RejectReasonModal({
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: loading || !reason.trim() }}
-              disabled={loading || !reason.trim()}
-              onPress={onReject}
+              accessibilityState={{ disabled: submitDisabled }}
+              disabled={submitDisabled}
+              onPress={onSubmit}
               style={({ pressed }) => [
                 styles.confirmRejectButton,
-                (loading || !reason.trim()) && styles.disabled,
-                pressed && !loading && reason.trim() && styles.pressed,
+                needsCorrection && styles.confirmCorrectionButton,
+                submitDisabled && styles.disabled,
+                pressed && !submitDisabled && styles.pressed,
               ]}>
-              <Text style={styles.confirmRejectText}>{loading ? 'Saving...' : 'Reject'}</Text>
+              <Text style={styles.confirmRejectText}>
+                {loading ? 'Saving...' : needsCorrection ? 'Return for Correction' : 'Reject'}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -703,7 +780,7 @@ function toneForStatus(status: VerificationStatus): AdminTone {
 }
 
 function formatStatusLabel(status: VerificationStatus) {
-  if (status === 'needs_more_info') return 'Needs more info';
+  if (status === 'needs_more_info') return 'Needs Correction';
   return status.replace(/_/g, ' ');
 }
 
@@ -1005,6 +1082,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
   },
+  correctionButton: {
+    alignItems: 'center',
+    backgroundColor: color.warningSoft,
+    borderColor: 'rgba(183, 121, 31, 0.35)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 46,
+    justifyContent: 'center',
+  },
+  correctionButtonText: {
+    color: color.warning,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   approveButton: {
     alignItems: 'center',
     backgroundColor: adminPalette.blue,
@@ -1136,6 +1230,32 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: adminPalette.muted,
   },
+  correctionReasonList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  correctionReasonChip: {
+    backgroundColor: color.surfaceAlt,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  correctionReasonChipSelected: {
+    backgroundColor: adminPalette.blueSoft,
+    borderColor: adminPalette.blueLine,
+  },
+  correctionReasonText: {
+    ...typography.captionMedium,
+    color: adminPalette.muted,
+  },
+  correctionReasonTextSelected: {
+    color: adminPalette.blueDeep,
+    fontFamily: 'Satoshi-Bold',
+  },
   rejectInput: {
     ...typography.body,
     backgroundColor: color.surfaceAlt,
@@ -1172,6 +1292,9 @@ const styles = StyleSheet.create({
     minHeight: 40,
     justifyContent: 'center',
     paddingHorizontal: 18,
+  },
+  confirmCorrectionButton: {
+    backgroundColor: adminPalette.blue,
   },
   confirmRejectText: {
     ...typography.button,

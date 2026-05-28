@@ -8,8 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
+import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 import type { VerificationUpload } from '@/types/onboarding.types';
-import type { CreateVerificationRequestInput, VerificationIdType } from '@/types/verification.types';
+import type { CreateVerificationRequestInput, VerificationIdType, VerificationStatus } from '@/types/verification.types';
+import { NAME_SUBMISSION_WARNING } from '@/utils/verified-name-policy';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -41,6 +43,8 @@ type VerificationFlowProps = {
   files: SelectedVerificationFiles;
   form: CreateVerificationRequestInput;
   loadingPrefill: boolean;
+  legalNameEdit: LegalNameEditPolicy;
+  latestRequestStatus?: VerificationStatus | null;
   pendingRequestId: string | null;
   rejectedReason?: string | null;
   step: VerificationFlowStep;
@@ -102,6 +106,8 @@ export function FigmaVerificationFlow({
   files,
   form,
   loadingPrefill,
+  legalNameEdit,
+  latestRequestStatus,
   pendingRequestId,
   rejectedReason,
   step,
@@ -157,6 +163,7 @@ export function FigmaVerificationFlow({
         progress={1}>
         <DetailsScreen
           form={form}
+          legalNameEdit={legalNameEdit}
           loading={loadingPrefill}
           onChangeField={onChangeField}
         />
@@ -314,17 +321,19 @@ export function FigmaVerificationFlow({
   }
 
   if (step === 'failure') {
+    const failureCopy = getFailureCopy(latestRequestStatus, rejectedReason);
+
     return (
       <ResultScreen
         danger
         icon="sentiment-dissatisfied"
         iconColor={color.verificationBlue}
-        note={rejectedReason || 'The ID photo is blurry. Please upload a clearer photo where your name and photo are readable.'}
-        noteTitle="Reason for correction"
-        primaryLabel="Resubmit documents"
+        note={failureCopy.note}
+        noteTitle={failureCopy.noteTitle}
+        primaryLabel={failureCopy.primaryLabel}
         secondaryLabel="Contact Support"
-        subtitle="We could not approve the request yet"
-        title="Needs Correction"
+        subtitle={failureCopy.subtitle}
+        title={failureCopy.title}
         onBack={onBack}
         onPrimary={onResubmit}
         onSecondary={onProceedHome}
@@ -501,15 +510,18 @@ function PreflightScreen() {
 
 function DetailsScreen({
   form,
+  legalNameEdit,
   loading,
   onChangeField,
 }: {
   form: CreateVerificationRequestInput;
+  legalNameEdit: LegalNameEditPolicy;
   loading: boolean;
   onChangeField: (field: keyof CreateVerificationRequestInput, value: string | null) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const selectedDate = form.birthdate ? new Date(form.birthdate) : new Date('2000-01-01');
+  const canEditName = legalNameEdit.canEdit;
 
   const onDateChange = (_event: DateTimePickerEvent, date?: Date) => {
     setShowDatePicker(false);
@@ -539,11 +551,13 @@ function DetailsScreen({
         ) : (
           <>
             <FigmaInput
+              editable={canEditName}
               label="First Name"
               onChangeText={(value) => onChangeField('firstName', value)}
               value={form.firstName}
             />
             <FigmaInput
+              editable={canEditName}
               label="Last Name"
               onChangeText={(value) => onChangeField('lastName', value)}
               value={form.lastName}
@@ -561,7 +575,7 @@ function DetailsScreen({
                 value={selectedDate}
               />
             ) : null}
-            <Text style={styles.inlineHelp}>These came from your account. Edit them first if they do not match your ID.</Text>
+            <InfoNote icon={canEditName ? 'info-outline' : 'lock'} text={legalNameEdit.message} />
             <FigmaInput
               keyboardType="phone-pad"
               label="Phone Number"
@@ -750,6 +764,7 @@ function ReviewScreen({
             </Text>
           </ReviewSection>
         </View>
+        <InfoNote text={NAME_SUBMISSION_WARNING} />
         <InfoNote text="Your documents are only visible to authorized barangay admins for verification" />
       </View>
     </>
@@ -903,11 +918,13 @@ function RequirementCard({
 }
 
 function FigmaInput({
+  editable = true,
   keyboardType,
   label,
   onChangeText,
   value,
 }: {
+  editable?: boolean;
   keyboardType?: 'default' | 'phone-pad';
   label: string;
   onChangeText: (value: string) => void;
@@ -917,21 +934,22 @@ function FigmaInput({
     <View style={styles.inputField}>
       {value ? <Text style={styles.inputLabel}>{label}</Text> : null}
       <TextInput
+        editable={editable}
         keyboardType={keyboardType}
         onChangeText={onChangeText}
         placeholder={label}
         placeholderTextColor="#AFAFAF"
-        style={styles.textInput}
+        style={[styles.textInput, !editable && styles.textInputLocked]}
         value={value}
       />
     </View>
   );
 }
 
-function InfoNote({ text }: { text: string }) {
+function InfoNote({ icon = 'info-outline', text }: { icon?: MaterialIconName; text: string }) {
   return (
     <View style={styles.infoNote}>
-      <MaterialIcons color={color.verificationBlue} name="info-outline" size={24} />
+      <MaterialIcons color={color.verificationBlue} name={icon} size={24} />
       <Text style={styles.infoNoteText}>{text}</Text>
     </View>
   );
@@ -1036,6 +1054,26 @@ function ReviewLine({
       <Text style={link ? styles.reviewLink : styles.reviewValue}>{value}</Text>
     </Text>
   );
+}
+
+function getFailureCopy(status: VerificationStatus | null | undefined, reviewerNote: string | null | undefined) {
+  if (status === 'rejected') {
+    return {
+      note: reviewerNote || 'Barangay staff rejected this verification request. Review the reason before submitting again.',
+      noteTitle: 'Reason for rejection',
+      primaryLabel: 'Resubmit documents',
+      subtitle: 'Barangay staff could not verify this submission',
+      title: 'Verification Rejected',
+    };
+  }
+
+  return {
+    note: reviewerNote || 'The name on your profile must match your submitted ID or barangay record. Please correct your full name and resubmit your verification.',
+    noteTitle: 'Reason for correction',
+    primaryLabel: 'Correct and resubmit',
+    subtitle: 'Barangay staff returned this request for correction',
+    title: 'Needs Correction',
+  };
 }
 
 const styles = StyleSheet.create({
@@ -1264,6 +1302,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     minHeight: 24,
     padding: 0,
+  },
+  textInputLocked: {
+    color: color.textMuted,
   },
   dateFieldRow: {
     alignItems: 'center',

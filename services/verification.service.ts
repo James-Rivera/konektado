@@ -11,11 +11,16 @@ import type {
 } from '@/types/verification.types';
 import { sendVerificationSubmittedEmail } from '@/services/verification-email.service';
 import { supabase } from '@/utils/supabase';
+import {
+  getLegalNameEditPolicy,
+  NAME_LOCKED_SERVICE_ERROR,
+} from '@/utils/verified-name-policy';
 
 const VERIFICATION_BUCKET = 'verification-files';
 
 type ProfileRow = {
   birthdate: string | null;
+  barangay_verified_at?: string | null;
   email: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -24,6 +29,7 @@ type ProfileRow = {
   street_address: string | null;
   city: string | null;
   barangay: string | null;
+  verified_at?: string | null;
 };
 
 type PreferencesRow = {
@@ -161,6 +167,30 @@ function buildNotesPayload(input: CreateVerificationRequestInput) {
   });
 }
 
+function hasProfileNameChanged({
+  current,
+  nextFirstName,
+  nextFullName,
+  nextLastName,
+}: {
+  current: Pick<ProfileRow, 'first_name' | 'full_name' | 'last_name'> | null;
+  nextFirstName: string;
+  nextFullName: string;
+  nextLastName: string;
+}) {
+  if (!current) return true;
+
+  const currentFirstName = compactText(current.first_name);
+  const currentLastName = compactText(current.last_name);
+  const currentFullName = compactText(current.full_name) || `${currentFirstName} ${currentLastName}`.trim();
+
+  return (
+    nextFirstName !== currentFirstName ||
+    nextLastName !== currentLastName ||
+    nextFullName !== currentFullName
+  );
+}
+
 async function getCurrentUser() {
   const { data, error } = await supabase.auth.getUser();
 
@@ -180,7 +210,7 @@ export async function getMyVerificationPrefill(): Promise<ServiceResult<Verifica
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('birthdate, email, first_name, last_name, full_name, phone, street_address, city, barangay')
+    .select('birthdate, email, first_name, last_name, full_name, phone, street_address, city, barangay, verified_at, barangay_verified_at')
     .eq('id', user.id)
     .maybeSingle<ProfileRow>();
 
@@ -232,6 +262,11 @@ export async function getMyVerificationPrefill(): Promise<ServiceResult<Verifica
       city: profile?.city ?? 'Santo Tomas',
       barangay: profile?.barangay ?? 'San Pedro',
       servicesOrPurpose,
+      legalNameEdit: getLegalNameEditPolicy({
+        isVerified: Boolean(profile?.barangay_verified_at || profile?.verified_at),
+        reviewerNote: latestRequest?.reviewer_note ?? null,
+        status: latestRequest?.status ?? null,
+      }),
       latestRequest: latestRequest ? mapVerification(latestRequest) : null,
     },
     error: null,
@@ -253,40 +288,79 @@ export async function createVerificationRequest(
     return { data: null, error: userError ?? 'Please sign in again to continue.' };
   }
 
-  const { data: pending, error: pendingError } = await supabase
-    .from('verifications')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('status', 'pending')
-    .limit(1)
-    .maybeSingle<{ id: string }>();
-
-  if (pendingError) {
-    return { data: null, error: pendingError.message };
-  }
-
-  if (pending) {
-    return { data: null, error: 'You already have a pending verification request.' };
-  }
-
-  const fullName = `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .update({
-      first_name: input.firstName.trim(),
-      last_name: input.lastName.trim(),
-      full_name: fullName,
-      birthdate: input.birthdate.trim() || null,
-      phone: input.phone.trim(),
-      street_address: input.streetAddress.trim() || null,
-      city: input.city.trim(),
-      barangay: input.barangay.trim(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', user.id);
+  const [{ data: profile, error: profileError }, { data: latestRequest, error: latestError }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('first_name, last_name, full_name, verified_at, barangay_verified_at')
+      .eq('id', user.id)
+      .maybeSingle<ProfileRow>(),
+    supabase
+      .from('verifications')
+      .select('id, status, notes, reviewer_note, created_at, updated_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<VerificationRow>(),
+  ]);
 
   if (profileError) {
     return { data: null, error: profileError.message };
+  }
+
+  if (latestError) {
+    return { data: null, error: latestError.message };
+  }
+
+  if (latestRequest?.status === 'pending') {
+    return { data: null, error: 'You already have a pending verification request.' };
+  }
+
+  if (latestRequest?.status === 'approved') {
+    return { data: null, error: 'Your profile is already barangay verified. Request a name correction if your verified name is wrong.' };
+  }
+
+  const fullName = `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
+  const legalNameEdit = getLegalNameEditPolicy({
+    isVerified: Boolean(profile?.barangay_verified_at || profile?.verified_at),
+    reviewerNote: latestRequest?.reviewer_note ?? null,
+    status: latestRequest?.status ?? null,
+  });
+  const nameChanged = hasProfileNameChanged({
+    current: profile ?? null,
+    nextFirstName: input.firstName.trim(),
+    nextFullName: fullName,
+    nextLastName: input.lastName.trim(),
+  });
+
+  if (nameChanged && !legalNameEdit.canEdit) {
+    return { data: null, error: NAME_LOCKED_SERVICE_ERROR };
+  }
+
+  const profileUpdate = {
+    birthdate: input.birthdate.trim() || null,
+    phone: input.phone.trim(),
+    street_address: input.streetAddress.trim() || null,
+    city: input.city.trim(),
+    barangay: input.barangay.trim(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: profileUpdateError } = await supabase
+    .from('profiles')
+    .update(
+      legalNameEdit.canEdit
+        ? {
+            ...profileUpdate,
+            first_name: input.firstName.trim(),
+            full_name: fullName,
+            last_name: input.lastName.trim(),
+          }
+        : profileUpdate,
+    )
+    .eq('id', user.id);
+
+  if (profileUpdateError) {
+    return { data: null, error: profileUpdateError.message };
   }
 
   const { data: verification, error: verificationError } = await supabase

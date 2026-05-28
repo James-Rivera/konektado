@@ -45,6 +45,8 @@ import type {
     ProfileCompletionStatus,
     WorkProfileInput,
 } from '@/types/profile.types';
+import type { LegalNameEditPolicy } from '@/types/legal-name.types';
+import { NAME_CORRECTION_REQUEST_EXPLANATION } from '@/utils/verified-name-policy';
 
 type FormMode = ProfileCompletionMode;
 type ProfileFocusTarget =
@@ -391,11 +393,15 @@ export default function CompleteProfileScreen() {
               {mode === 'core' ? (
                 <CoreForm
                   avatarUrl={avatarUrl}
+                  legalNameEdit={status?.legalNameEdit ?? null}
                   onTargetLayout={registerTargetLayout}
                   uploadingAvatar={uploadingAvatar}
                   value={core}
                   onChange={setCore}
                   onPickAvatar={pickAvatar}
+                  onRequestNameCorrection={() => {
+                    Alert.alert('Request name correction', NAME_CORRECTION_REQUEST_EXPLANATION);
+                  }}
                 />
               ) : roleLockedByCore ? (
                 <CoreFirstPanel onPress={() => setMode('core')} />
@@ -440,20 +446,25 @@ export default function CompleteProfileScreen() {
 
 function CoreForm({
   avatarUrl,
+  legalNameEdit,
   onTargetLayout,
   uploadingAvatar,
   value,
   onChange,
   onPickAvatar,
+  onRequestNameCorrection,
 }: {
   avatarUrl: string | null;
+  legalNameEdit: LegalNameEditPolicy | null;
   onTargetLayout: (target: ProfileFocusTarget, y: number) => void;
   uploadingAvatar: boolean;
   value: CoreProfileInput;
   onChange: (value: CoreProfileInput) => void;
   onPickAvatar: () => void;
+  onRequestNameCorrection: () => void;
 }) {
   const [areaSheetVisible, setAreaSheetVisible] = useState(false);
+  const canEditName = legalNameEdit?.canEdit ?? true;
 
   return (
     <>
@@ -471,17 +482,25 @@ function CoreForm({
           helper="These details identify your account."
           title="Profile basics">
           <Field
+            editable={canEditName}
             label="First name"
             placeholder="Juan"
             value={value.firstName}
             onChangeText={(firstName) => onChange({ ...value, firstName })}
           />
           <Field
+            editable={canEditName}
             label="Last name"
             placeholder="Dela Cruz"
             value={value.lastName}
             onChangeText={(lastName) => onChange({ ...value, lastName })}
           />
+          {legalNameEdit ? (
+            <NamePolicyNotice
+              policy={legalNameEdit}
+              onRequestNameCorrection={onRequestNameCorrection}
+            />
+          ) : null}
         </AddressSection>
       </SetupSection>
 
@@ -582,6 +601,38 @@ function ProfilePhotoSection({
           {uploading ? 'Uploading...' : avatarUrl ? 'Replace' : 'Add photo'}
         </Text>
       </Pressable>
+    </View>
+  );
+}
+
+function NamePolicyNotice({
+  policy,
+  onRequestNameCorrection,
+}: {
+  policy: LegalNameEditPolicy;
+  onRequestNameCorrection: () => void;
+}) {
+  const locked = !policy.canEdit;
+
+  return (
+    <View style={[styles.namePolicyCard, locked && styles.namePolicyCardLocked]}>
+      <View style={styles.namePolicyIcon}>
+        <MaterialIcons color={locked ? color.warning : color.primary} name={locked ? 'lock' : 'info'} size={18} />
+      </View>
+      <View style={styles.namePolicyCopy}>
+        <Text style={styles.namePolicyText}>{policy.message}</Text>
+        {policy.canRequestCorrection ? (
+          <>
+            <Text style={styles.namePolicyText}>{NAME_CORRECTION_REQUEST_EXPLANATION}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onRequestNameCorrection}
+              style={({ pressed }) => [styles.nameCorrectionButton, pressed && styles.pressed]}>
+              <Text style={styles.nameCorrectionButtonText}>Request name correction</Text>
+            </Pressable>
+          </>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1021,6 +1072,7 @@ function SetupSection({
 
 function Field({
   badge,
+  editable = true,
   label,
   multiline = false,
   onChangeText,
@@ -1028,6 +1080,7 @@ function Field({
   value,
 }: {
   badge?: 'Optional';
+  editable?: boolean;
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
@@ -1047,13 +1100,19 @@ function Field({
         ) : null}
       </View>
       <TextInput
+        editable={editable}
         multiline={multiline}
         onBlur={() => setFocused(false)}
         onChangeText={onChangeText}
         onFocus={() => setFocused(true)}
         placeholder={placeholder}
         placeholderTextColor={color.textSubtle}
-        style={[styles.input, focused && styles.inputFocused, multiline && styles.multilineInput]}
+        style={[
+          styles.input,
+          focused && editable && styles.inputFocused,
+          !editable && styles.inputLocked,
+          multiline && styles.multilineInput,
+        ]}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />
@@ -1354,6 +1413,53 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: color.textMuted,
   },
+  namePolicyCard: {
+    alignItems: 'flex-start',
+    backgroundColor: color.primarySoft,
+    borderColor: 'rgba(27, 118, 229, 0.24)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  namePolicyCardLocked: {
+    backgroundColor: color.warningSoft,
+    borderColor: 'rgba(183, 121, 31, 0.35)',
+  },
+  namePolicyIcon: {
+    alignItems: 'center',
+    backgroundColor: color.white,
+    borderRadius: radius.pill,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
+  namePolicyCopy: {
+    flex: 1,
+    gap: space.xs,
+    minWidth: 0,
+  },
+  namePolicyText: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  nameCorrectionButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: color.white,
+    borderColor: 'rgba(183, 121, 31, 0.35)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    minHeight: 34,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+  },
+  nameCorrectionButtonText: {
+    ...typography.captionMedium,
+    color: color.text,
+  },
   publicHintRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -1449,6 +1555,10 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: color.verificationBlue,
+  },
+  inputLocked: {
+    backgroundColor: color.surfaceAlt,
+    color: color.textMuted,
   },
   multilineInput: {
     minHeight: 104,

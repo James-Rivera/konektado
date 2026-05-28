@@ -13,6 +13,10 @@ import {
 import type { PublicProfileSummary } from '@/types/marketplace.types';
 import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
+import {
+  formatReviewerNoteWithReason,
+  type NeedsCorrectionReason,
+} from '@/utils/verified-name-policy';
 
 const VERIFICATION_BUCKET = 'verification-files';
 const VERIFICATION_FILE_SIGNED_URL_SECONDS = 10 * 60;
@@ -205,15 +209,20 @@ export async function reviewVerificationRequest({
   requestId,
   decision,
   note,
+  reason,
 }: {
   requestId: string;
   decision: 'approved' | 'rejected' | 'needs_more_info';
   note?: string;
+  reason?: NeedsCorrectionReason;
 }): Promise<ServiceResult<VerificationRequestDetail>> {
   const admin = await requireAdmin();
   if (admin.error) return admin;
 
-  const reviewerNote = note?.trim() || null;
+  const reviewerNote = formatReviewerNoteWithReason({
+    note,
+    reason: decision === 'needs_more_info' ? reason : null,
+  });
 
   if (decision !== 'approved' && !reviewerNote) {
     return { data: null, error: 'Enter a reviewer note before saving this review.' };

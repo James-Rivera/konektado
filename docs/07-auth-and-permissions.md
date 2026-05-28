@@ -196,7 +196,11 @@ These role permissions apply after the user's barangay verification is approved 
 - Verification is the identity gate for user-to-user interaction features; Work/Hiring Profile completion is the public-context gate before posting or messaging.
 - The verification page is where heavier requirements belong: contact confirmation, email confirmation, optional phone number, ID, services, credentials, selfie/photo for manual comparison, and supporting details.
 - Verification contact details should reuse onboarding/profile values instead of asking the user to retype them.
-- First name and last name can be edited during verification only to correct mismatches with the user's ID.
+- First name and last name are the current verified/legal-name fields. They can be edited normally only before the user submits for barangay verification.
+- After a verification request is submitted, the verified/legal name is locked in the profile UI, verification UI, service layer, and database trigger. Pending, approved, and rejected users cannot silently change it through generic profile updates.
+- Barangay admins should use `Needs Correction` when a submitted name looks like an honest mismatch with the ID or barangay record. The reason `Name does not match submitted ID` allows the resident to correct their name during the controlled resubmission flow.
+- Barangay admins should use `Rejected` only for suspicious, fake, invalid, or unrelated identity documents.
+- Internal demo/admin-only tooling may override names for presentation data or explicit admin correction, but normal users must not access that pathway.
 - Email is private and used for login, verification updates, support, and account recovery.
 
 ## Public vs Private Data

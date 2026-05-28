@@ -16,7 +16,14 @@ import type { VerificationUpload } from '@/types/onboarding.types';
 import type {
   CreateVerificationRequestInput,
   VerificationIdType,
+  VerificationStatus,
 } from '@/types/verification.types';
+import type { LegalNameEditPolicy } from '@/types/legal-name.types';
+import {
+  getLegalNameEditPolicy,
+  isNameMismatchCorrectionReason,
+  NAME_CORRECTION_MESSAGE,
+} from '@/utils/verified-name-policy';
 
 type VerificationFormState = CreateVerificationRequestInput;
 
@@ -44,6 +51,10 @@ export default function VerificationGateScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [rejectedReason, setRejectedReason] = useState<string | null>(null);
+  const [latestRequestStatus, setLatestRequestStatus] = useState<VerificationStatus | null>(null);
+  const [legalNameEdit, setLegalNameEdit] = useState<LegalNameEditPolicy>(
+    getLegalNameEditPolicy({ status: null }),
+  );
 
   useEffect(() => {
     let active = true;
@@ -64,6 +75,8 @@ export default function VerificationGateScreen() {
       }
 
       const prefill = result.data;
+      setLegalNameEdit(prefill.legalNameEdit);
+      setLatestRequestStatus(prefill.latestRequest?.status ?? null);
 
       setForm({
         ...emptyForm,
@@ -87,7 +100,7 @@ export default function VerificationGateScreen() {
       }
 
       if (prefill.latestRequest?.status === 'rejected' || prefill.latestRequest?.status === 'needs_more_info') {
-        setRejectedReason(prefill.latestRequest.reviewerNote);
+        setRejectedReason(getReturnedVerificationMessage(prefill.latestRequest.status, prefill.latestRequest.reviewerNote));
         setStep('failure');
       }
 
@@ -111,11 +124,18 @@ export default function VerificationGateScreen() {
         if (latest.id !== pendingRequestId) return;
 
         if (latest.status === 'approved') {
+          setLatestRequestStatus(latest.status);
+          setLegalNameEdit(getLegalNameEditPolicy({ status: latest.status, isVerified: true }));
           setStep('success');
         }
 
         if (latest.status === 'rejected' || latest.status === 'needs_more_info') {
-          setRejectedReason(latest.reviewerNote);
+          setLatestRequestStatus(latest.status);
+          setLegalNameEdit(getLegalNameEditPolicy({
+            reviewerNote: latest.reviewerNote,
+            status: latest.status,
+          }));
+          setRejectedReason(getReturnedVerificationMessage(latest.status, latest.reviewerNote));
           setStep('failure');
         }
       });
@@ -265,6 +285,8 @@ export default function VerificationGateScreen() {
       }
 
       setPendingRequestId(result.data.id);
+      setLatestRequestStatus(result.data.status);
+      setLegalNameEdit(getLegalNameEditPolicy({ status: result.data.status }));
       setStep('submitted');
       return;
     }
@@ -291,6 +313,8 @@ export default function VerificationGateScreen() {
       files={selectedFiles}
       form={form}
       loadingPrefill={loadingPrefill}
+      legalNameEdit={legalNameEdit}
+      latestRequestStatus={latestRequestStatus}
       pendingRequestId={pendingRequestId}
       rejectedReason={rejectedReason}
       step={step}
@@ -341,4 +365,12 @@ function getPreviousStep(
   if (step === 'facePhoto') return 'facePrep';
   if (step === 'review') return 'facePhoto';
   return 'intro';
+}
+
+function getReturnedVerificationMessage(status: VerificationStatus, reviewerNote: string | null) {
+  if (status === 'needs_more_info' && isNameMismatchCorrectionReason(reviewerNote)) {
+    return NAME_CORRECTION_MESSAGE;
+  }
+
+  return reviewerNote;
 }
