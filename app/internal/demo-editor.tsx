@@ -69,7 +69,7 @@ import type { JobStatus, RateType } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
-type EditorSection = 'profile' | 'jobs' | 'services' | 'verification' | 'photos' | 'activity';
+type EditorSection = 'overview' | 'profile' | 'jobs' | 'services' | 'photos' | 'verification' | 'activity';
 
 const USER_FILTERS: { label: string; value: InternalDemoUserFilter }[] = [
   { label: 'All', value: 'all' },
@@ -82,11 +82,12 @@ const USER_FILTERS: { label: string; value: InternalDemoUserFilter }[] = [
 ];
 
 const SECTIONS: { icon: MaterialIconName; label: string; value: EditorSection }[] = [
+  { icon: 'dashboard', label: 'Overview', value: 'overview' },
   { icon: 'person', label: 'Profile', value: 'profile' },
   { icon: 'work-outline', label: 'Jobs', value: 'jobs' },
   { icon: 'handyman', label: 'Services', value: 'services' },
+  { icon: 'photo-library', label: 'Photos', value: 'photos' },
   { icon: 'verified-user', label: 'Verification', value: 'verification' },
-  { icon: 'photo-library', label: 'Public Photos', value: 'photos' },
   { icon: 'forum', label: 'Activity', value: 'activity' },
 ];
 
@@ -111,7 +112,8 @@ export default function InternalDemoContentEditorScreen() {
   const [users, setUsers] = useState<EditableUserListItem[]>([]);
   const [selectedUser, setSelectedUser] = useState<EditableUserDetail | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [section, setSection] = useState<EditorSection>('profile');
+  const [section, setSection] = useState<EditorSection>('overview');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [filter, setFilter] = useState<InternalDemoUserFilter>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -163,7 +165,7 @@ export default function InternalDemoContentEditorScreen() {
       }
 
       setAccess(accessResult.data);
-      await loadUsers({ autoSelect: true });
+      await loadUsers();
       if (active) setLoading(false);
     })();
 
@@ -202,6 +204,27 @@ export default function InternalDemoContentEditorScreen() {
   const refreshAll = async () => {
     await loadUsers();
     if (selectedUserId) await loadSelectedUser(selectedUserId);
+  };
+
+  const selectUser = (userId: string) => {
+    setSelectedUserId(userId);
+    setSelectedUser(null);
+    setSection('overview');
+    setPickerOpen(false);
+  };
+
+  const previewPublicProfile = (user: EditableUserDetail) => {
+    if (user.roles.includes('worker')) {
+      router.push({ pathname: '/worker/[workerId]' as never, params: { workerId: user.id } } as never);
+      return;
+    }
+
+    if (user.roles.includes('client')) {
+      router.push({ pathname: '/client/[clientId]' as never, params: { clientId: user.id } } as never);
+      return;
+    }
+
+    Alert.alert('Preview public profile', 'This resident does not have a worker or client role to preview yet.');
   };
 
   const signOut = () => {
@@ -269,23 +292,24 @@ export default function InternalDemoContentEditorScreen() {
         {message ? <InlineNotice tone="success">{message}</InlineNotice> : null}
         {errorMessage ? <InlineNotice tone="danger">{errorMessage}</InlineNotice> : null}
 
-        <View style={[styles.workspace, desktop && styles.workspaceDesktop, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <View style={[styles.userPane, desktop && styles.userPaneDesktop]}>
+        <View style={[styles.workspace, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          {!selectedUserId ? (
+          <View style={styles.browsePane}>
             <UserList
+              cardActionLabel="Edit demo user"
               filter={filter}
+              headerSubtitle="Search the protected demo user pool, then open one account into the focused editor."
+              headerTitle="Find a demo account"
               onFilterChange={setFilter}
               onSearchChange={setSearch}
-              onSelect={(userId) => {
-                setSelectedUserId(userId);
-                setSection('profile');
-              }}
+              onSelect={selectUser}
               search={search}
               selectedUserId={selectedUserId}
               users={filteredUsers}
             />
           </View>
-
-          <View style={[styles.editorPane, desktop && styles.editorPaneDesktop]}>
+          ) : (
+          <View style={styles.editorPane}>
             {!selectedUser ? (
               <CenterState
                 body={loadingDetail ? 'Loading selected user...' : 'Choose a resident from the list.'}
@@ -293,9 +317,23 @@ export default function InternalDemoContentEditorScreen() {
                 title={loadingDetail ? 'Loading editor' : 'No user selected'}
               />
             ) : (
-              <ScrollView contentContainerStyle={styles.editorContent} keyboardShouldPersistTaps="handled">
-                <SelectedUserHeader user={selectedUser} />
-                <SectionTabs section={section} onChange={setSection} />
+              <ScrollView
+                contentContainerStyle={[styles.editorContent, desktop && styles.editorContentDesktop]}
+                keyboardShouldPersistTaps="handled">
+                <SelectedUserHeader
+                  onChangeUser={() => setPickerOpen(true)}
+                  onPreview={() => previewPublicProfile(selectedUser)}
+                  onRefresh={() => void refreshAll()}
+                  user={selectedUser}
+                />
+                <SectionTabs compact={!desktop} section={section} onChange={setSection} />
+                {section === 'overview' ? (
+                  <DemoUserOverview
+                    onPreview={() => previewPublicProfile(selectedUser)}
+                    onSectionChange={setSection}
+                    user={selectedUser}
+                  />
+                ) : null}
                 {section === 'profile' ? (
                   <ProfileEditor
                     onSaved={async (nextMessage) => {
@@ -329,14 +367,29 @@ export default function InternalDemoContentEditorScreen() {
               </ScrollView>
             )}
           </View>
+          )}
         </View>
+        <UserPickerModal
+          filter={filter}
+          onClose={() => setPickerOpen(false)}
+          onFilterChange={setFilter}
+          onSearchChange={setSearch}
+          onSelect={selectUser}
+          search={search}
+          selectedUserId={selectedUserId}
+          users={filteredUsers}
+          visible={pickerOpen}
+        />
       </View>
     </SafeAreaView>
   );
 }
 
 function UserList({
+  cardActionLabel = 'Edit demo user',
   filter,
+  headerSubtitle,
+  headerTitle,
   onFilterChange,
   onSearchChange,
   onSelect,
@@ -344,7 +397,10 @@ function UserList({
   selectedUserId,
   users,
 }: {
+  cardActionLabel?: string;
   filter: InternalDemoUserFilter;
+  headerSubtitle?: string;
+  headerTitle?: string;
   onFilterChange: (value: InternalDemoUserFilter) => void;
   onSearchChange: (value: string) => void;
   onSelect: (userId: string) => void;
@@ -354,6 +410,12 @@ function UserList({
 }) {
   return (
     <View style={styles.userListWrap}>
+      {headerTitle ? (
+        <View style={styles.userListIntro}>
+          <Text style={styles.userListTitle}>{headerTitle}</Text>
+          {headerSubtitle ? <Text style={styles.userListSubtitle}>{headerSubtitle}</Text> : null}
+        </View>
+      ) : null}
       <View style={styles.searchBox}>
         <MaterialIcons color={adminPalette.faint} name="search" size={19} />
         <TextInput
@@ -382,6 +444,7 @@ function UserList({
           users.map((user) => (
             <UserCard
               key={`internal-user-${user.id}`}
+              actionLabel={cardActionLabel}
               onPress={() => onSelect(user.id)}
               selected={selectedUserId === user.id}
               user={user}
@@ -396,19 +459,18 @@ function UserList({
 }
 
 function UserCard({
+  actionLabel,
   onPress,
   selected,
   user,
 }: {
+  actionLabel: string;
   onPress: () => void;
   selected: boolean;
   user: EditableUserListItem;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.userCard, selected && styles.userCardSelected, pressed && styles.pressed]}>
+    <View style={[styles.userCard, selected && styles.userCardSelected]}>
       <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={48} />
       <View style={styles.userCardCopy}>
         <View style={styles.userNameRow}>
@@ -423,31 +485,86 @@ function UserCard({
           <CountPill label="Photos" value={user.publicPhotosCount} />
           <CountPill label="Reviews" value={user.reviewsCount} />
         </View>
+        <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.userCardAction, pressed && styles.pressed]}>
+          <Text style={styles.userCardActionText}>{actionLabel}</Text>
+          <MaterialIcons color={adminPalette.blue} name="arrow-forward" size={16} />
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
-function SelectedUserHeader({ user }: { user: EditableUserDetail }) {
+function SelectedUserHeader({
+  onChangeUser,
+  onPreview,
+  onRefresh,
+  user,
+}: {
+  onChangeUser: () => void;
+  onPreview: () => void;
+  onRefresh: () => void;
+  user: EditableUserDetail;
+}) {
   return (
     <View style={styles.selectedHeader}>
-      <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={58} />
-      <View style={styles.selectedCopy}>
-        <Text style={styles.selectedTitle}>{user.fullName}</Text>
-        <Text style={styles.selectedSubtitle}>{user.roleLabel} · {user.locationLabel}</Text>
+      <View style={styles.selectedIdentityRow}>
+        <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={70} />
+        <View style={styles.selectedCopy}>
+          <View style={styles.selectedTitleRow}>
+            <Text style={styles.selectedTitle}>{user.fullName}</Text>
+            <AdminStatusBadge label={user.verificationLabel} tone={toneForVerification(user.verificationStatus)} />
+          </View>
+          <View style={styles.selectedMetaGrid}>
+            <MetaLine icon="badge" text={user.roleLabel} />
+            <MetaLine icon="place" text={user.locationLabel} />
+          </View>
+        </View>
       </View>
-      <AdminStatusBadge label={user.verificationLabel} tone={toneForVerification(user.verificationStatus)} />
+      <View style={styles.selectedStatsRow}>
+        <CountPill label="Jobs" value={user.publicJobsCount} />
+        <CountPill label="Services" value={user.publicServicesCount} />
+        <CountPill label="Photos" value={user.publicPhotosCount} />
+        <CountPill label="Reviews" value={user.reviewsCount} />
+      </View>
+      <View style={styles.selectedActions}>
+        <HeaderAction icon="switch-account" label="Change user" onPress={onChangeUser} />
+        <HeaderAction icon="visibility" label="Preview public profile" onPress={onPreview} />
+        <HeaderAction icon="refresh" label="Refresh" onPress={onRefresh} />
+      </View>
     </View>
   );
 }
 
 function SectionTabs({
+  compact,
   onChange,
   section,
 }: {
+  compact: boolean;
   onChange: (section: EditorSection) => void;
   section: EditorSection;
 }) {
+  if (compact) {
+    return (
+      <View style={styles.sectionCardGrid}>
+        {SECTIONS.map((item) => {
+          const active = item.value === section;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              key={item.value}
+              onPress={() => onChange(item.value)}
+              style={({ pressed }) => [styles.sectionCard, active && styles.sectionCardActive, pressed && styles.pressed]}>
+              <MaterialIcons color={active ? adminPalette.blue : adminPalette.faint} name={item.icon} size={20} />
+              <Text style={[styles.sectionCardText, active && styles.sectionCardTextActive]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
     <ScrollView horizontal contentContainerStyle={styles.sectionTabs} showsHorizontalScrollIndicator={false}>
       {SECTIONS.map((item) => {
@@ -465,6 +582,159 @@ function SectionTabs({
         );
       })}
     </ScrollView>
+  );
+}
+
+function HeaderAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: MaterialIconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}>
+      <MaterialIcons color={adminPalette.blue} name={icon} size={18} />
+      <Text style={styles.headerActionText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function UserPickerModal({
+  filter,
+  onClose,
+  onFilterChange,
+  onSearchChange,
+  onSelect,
+  search,
+  selectedUserId,
+  users,
+  visible,
+}: {
+  filter: InternalDemoUserFilter;
+  onClose: () => void;
+  onFilterChange: (value: InternalDemoUserFilter) => void;
+  onSearchChange: (value: string) => void;
+  onSelect: (userId: string) => void;
+  search: string;
+  selectedUserId: string | null;
+  users: EditableUserListItem[];
+  visible: boolean;
+}) {
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <View style={styles.pickerBackdrop}>
+        <Pressable accessibilityLabel="Close user picker" style={styles.pickerScrim} onPress={onClose} />
+        <SafeAreaView edges={['top', 'bottom']} style={styles.pickerPanel}>
+          <View style={styles.pickerHeader}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.pickerTitle}>Change demo user</Text>
+              <Text style={styles.pickerSubtitle}>Select another account without keeping the list beside the editor.</Text>
+            </View>
+            <Pressable accessibilityRole="button" onPress={onClose} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <MaterialIcons color={adminPalette.blue} name="close" size={22} />
+            </Pressable>
+          </View>
+          <UserList
+            cardActionLabel="Open editor"
+            filter={filter}
+            onFilterChange={onFilterChange}
+            onSearchChange={onSearchChange}
+            onSelect={onSelect}
+            search={search}
+            selectedUserId={selectedUserId}
+            users={users}
+          />
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+function DemoUserOverview({
+  onPreview,
+  onSectionChange,
+  user,
+}: {
+  onPreview: () => void;
+  onSectionChange: (section: EditorSection) => void;
+  user: EditableUserDetail;
+}) {
+  const readinessItems = getReadinessItems(user);
+
+  return (
+    <EditorPanel title="Overview">
+      <Notice icon="info">
+        Use this overview to prepare the selected account for presentation. The checklist is guidance only and does not block saving.
+      </Notice>
+      <View style={styles.overviewGrid}>
+        <DemoReadinessChecklist items={readinessItems} />
+        <View style={styles.quickActionGrid}>
+          <QuickActionCard icon="person" label="Edit profile" onPress={() => onSectionChange('profile')} />
+          <QuickActionCard icon="work-outline" label="Manage jobs" onPress={() => onSectionChange('jobs')} />
+          <QuickActionCard icon="handyman" label="Manage services" onPress={() => onSectionChange('services')} />
+          <QuickActionCard icon="photo-library" label="Manage photos" onPress={() => onSectionChange('photos')} />
+          <QuickActionCard icon="verified-user" label="Review verification" onPress={() => onSectionChange('verification')} />
+          <QuickActionCard icon="visibility" label="Preview public profile" onPress={onPreview} />
+        </View>
+      </View>
+      <LockedFields
+        rows={[
+          ['Selected account', user.fullName],
+          ['Role/mode', user.roleLabel],
+          ['Address summary', user.locationLabel],
+          ['Verification', user.verificationLabel],
+        ]}
+      />
+    </EditorPanel>
+  );
+}
+
+function DemoReadinessChecklist({
+  items,
+}: {
+  items: { complete: boolean; helper: string; label: string }[];
+}) {
+  return (
+    <View style={styles.readinessCard}>
+      <RecordHeader icon="assignment-turned-in" title="Demo readiness" subtitle="Non-blocking presentation checklist" />
+      <View style={styles.readinessList}>
+        {items.map((item) => (
+          <View key={item.label} style={styles.readinessRow}>
+            <MaterialIcons
+              color={item.complete ? adminPalette.successDeep : adminPalette.faint}
+              name={item.complete ? 'check-circle' : 'radio-button-unchecked'}
+              size={20}
+            />
+            <View style={styles.flex}>
+              <Text style={styles.readinessLabel}>{item.label}</Text>
+              <Text style={styles.readinessHelper}>{item.helper}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function QuickActionCard({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: MaterialIconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.quickActionCard, pressed && styles.pressed]}>
+      <View style={styles.quickActionIcon}>
+        <MaterialIcons color={adminPalette.blue} name={icon} size={21} />
+      </View>
+      <Text style={styles.quickActionText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -1476,6 +1746,42 @@ function makeInitialServicePayload(user: EditableUserDetail): CreateEditableServ
   };
 }
 
+function getReadinessItems(user: EditableUserDetail) {
+  const profileBasicsComplete = Boolean(user.profile.fullName && (user.profile.barangay || user.profile.city) && user.profile.about);
+  const photoPresent = Boolean(user.profile.avatarUrl);
+  const hasJobOrService = user.jobs.length + user.jobDrafts.length + user.services.length > 0;
+  const verificationIntentional = user.verificationStatus === 'verified' || user.verificationStatus === 'pending' || user.verifications.length > 0;
+  const previewReady = photoPresent && hasJobOrService && profileBasicsComplete;
+
+  return [
+    {
+      complete: profileBasicsComplete,
+      helper: profileBasicsComplete ? 'Name, location, and profile copy are present.' : 'Add name, location, and a short bio.',
+      label: 'Profile basics complete',
+    },
+    {
+      complete: photoPresent,
+      helper: photoPresent ? 'A public avatar is set.' : 'Add a public photo that is not an ID or verification file.',
+      label: 'Public photo/avatar present',
+    },
+    {
+      complete: hasJobOrService,
+      helper: hasJobOrService ? 'This account has marketplace content prepared.' : 'Create at least one job, draft, or service.',
+      label: 'Has at least one job or service',
+    },
+    {
+      complete: verificationIntentional,
+      helper: verificationIntentional ? `Current state: ${user.verificationLabel}.` : 'Review whether this demo user should be pending, verified, or unverified.',
+      label: 'Verification status set intentionally',
+    },
+    {
+      complete: previewReady,
+      helper: previewReady ? 'Ready for a public preview pass.' : 'Open the public profile after the basics and content are in place.',
+      label: 'Public preview reviewed',
+    },
+  ];
+}
+
 async function chooseAndUploadPublicImage(target: 'job_photo' | 'service_photo') {
   const result = await DocumentPicker.getDocumentAsync({
     copyToCacheDirectory: true,
@@ -1940,29 +2246,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   workspace: {
+    alignSelf: 'center',
     flex: 1,
     gap: 12,
-    padding: 12,
-  },
-  workspaceDesktop: {
-    alignSelf: 'center',
-    flexDirection: 'row',
     maxWidth: 1280,
+    padding: 12,
     width: '100%',
   },
-  userPane: {
-    backgroundColor: color.white,
-    borderColor: adminPalette.line,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    maxHeight: 360,
-    overflow: 'hidden',
-  },
-  userPaneDesktop: {
-    flex: 0.42,
-    maxHeight: '100%' as never,
-  },
-  editorPane: {
+  browsePane: {
     backgroundColor: color.white,
     borderColor: adminPalette.line,
     borderRadius: radius.md,
@@ -1970,11 +2261,30 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  editorPaneDesktop: {
-    flex: 0.58,
+  editorPane: {
+    flex: 1,
   },
   userListWrap: {
     flex: 1,
+  },
+  userListIntro: {
+    borderBottomColor: adminPalette.line,
+    borderBottomWidth: 1,
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  userListTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  userListSubtitle: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 18,
   },
   searchBox: {
     alignItems: 'center',
@@ -2050,7 +2360,7 @@ const styles = StyleSheet.create({
   },
   userCardCopy: {
     flex: 1,
-    gap: 5,
+    gap: 8,
     minWidth: 0,
   },
   userNameRow: {
@@ -2064,6 +2374,23 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 15,
     lineHeight: 20,
+  },
+  userCardAction: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: adminPalette.blueSoft,
+    borderColor: adminPalette.blueLine,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  userCardActionText: {
+    color: adminPalette.blue,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
   },
   metaLine: {
     alignItems: 'center',
@@ -2105,29 +2432,72 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   editorContent: {
-    gap: 14,
-    padding: 16,
+    gap: 18,
+    paddingBottom: 24,
+  },
+  editorContentDesktop: {
+    paddingHorizontal: 12,
   },
   selectedHeader: {
+    backgroundColor: color.white,
+    borderColor: adminPalette.line,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 16,
+    padding: 18,
+  },
+  selectedIdentityRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 14,
   },
   selectedCopy: {
     flex: 1,
-    minWidth: 0,
+    gap: 8,
+    minWidth: 220,
+  },
+  selectedTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   selectedTitle: {
     color: adminPalette.ink,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 24,
+    lineHeight: 30,
   },
-  selectedSubtitle: {
-    color: adminPalette.muted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 13,
-    lineHeight: 18,
+  selectedMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  selectedStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  selectedActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  headerAction: {
+    alignItems: 'center',
+    borderColor: adminPalette.blueLine,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 7,
+    minHeight: 40,
+    paddingHorizontal: 14,
+  },
+  headerActionText: {
+    color: adminPalette.blue,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
   },
   sectionTabs: {
     gap: 8,
@@ -2155,7 +2525,38 @@ const styles = StyleSheet.create({
     color: adminPalette.blue,
     fontFamily: 'Satoshi-Bold',
   },
+  sectionCardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  sectionCard: {
+    alignItems: 'center',
+    backgroundColor: color.white,
+    borderColor: adminPalette.line,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 46,
+    minWidth: 148,
+    paddingHorizontal: 12,
+  },
+  sectionCardActive: {
+    backgroundColor: adminPalette.blueSoft,
+    borderColor: adminPalette.blueLine,
+  },
+  sectionCardText: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 13,
+  },
+  sectionCardTextActive: {
+    color: adminPalette.blue,
+    fontFamily: 'Satoshi-Bold',
+  },
   editorPanel: {
+    backgroundColor: color.white,
     borderColor: adminPalette.line,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -2175,13 +2576,119 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   panelBody: {
-    gap: 14,
-    padding: 14,
+    gap: 18,
+    padding: 18,
   },
   panelFooter: {
+    backgroundColor: color.white,
     borderTopColor: adminPalette.line,
     borderTopWidth: 1,
+    padding: 16,
+    ...(Platform.OS === 'web' ? { bottom: 0, position: 'sticky' as never, zIndex: 2 } : {}),
+  },
+  overviewGrid: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  readinessCard: {
+    borderColor: adminPalette.line,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flex: 1,
+    gap: 12,
+    minWidth: 280,
+    padding: 12,
+  },
+  readinessList: {
+    gap: 12,
+  },
+  readinessRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  readinessLabel: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  readinessHelper: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  quickActionGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    minWidth: 280,
+  },
+  quickActionCard: {
+    alignItems: 'center',
+    borderColor: adminPalette.line,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 58,
+    minWidth: 180,
+    padding: 12,
+  },
+  quickActionIcon: {
+    alignItems: 'center',
+    backgroundColor: adminPalette.blueSoft,
+    borderRadius: radius.sm,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  quickActionText: {
+    color: adminPalette.ink,
+    flex: 1,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  pickerBackdrop: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  pickerScrim: {
+    backgroundColor: 'rgba(17, 24, 39, 0.35)',
+    flex: 1,
+  },
+  pickerPanel: {
+    backgroundColor: color.white,
+    borderLeftColor: adminPalette.line,
+    borderLeftWidth: 1,
+    maxWidth: 520,
+    width: '92%',
+  },
+  pickerHeader: {
+    alignItems: 'center',
+    borderBottomColor: adminPalette.line,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
     padding: 14,
+  },
+  pickerTitle: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  pickerSubtitle: {
+    color: adminPalette.muted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 17,
   },
   fieldWrap: {
     flex: 1,
