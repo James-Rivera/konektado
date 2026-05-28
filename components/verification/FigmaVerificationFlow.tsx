@@ -575,7 +575,7 @@ function DetailsScreen({
                 value={selectedDate}
               />
             ) : null}
-            <InfoNote icon={canEditName ? 'info-outline' : 'lock'} text={legalNameEdit.message} />
+            <NameStatusNote policy={legalNameEdit} />
             <FigmaInput
               keyboardType="phone-pad"
               label="Phone Number"
@@ -955,6 +955,26 @@ function InfoNote({ icon = 'info-outline', text }: { icon?: MaterialIconName; te
   );
 }
 
+function NameStatusNote({ policy }: { policy: LegalNameEditPolicy }) {
+  if (policy.state === 'draft') {
+    return <Text style={styles.inlineHelp}>{policy.message}</Text>;
+  }
+
+  const isVerified = policy.state === 'verified';
+  const iconName: MaterialIconName = policy.canEdit ? 'info-outline' : isVerified ? 'verified-user' : 'lock';
+  const iconColor = policy.canEdit ? color.verificationBlue : isVerified ? color.success : color.textSubtle;
+
+  return (
+    <View style={styles.nameStatusNote}>
+      <MaterialIcons color={iconColor} name={iconName} size={16} />
+      <Text style={styles.nameStatusText}>
+        {isVerified ? <Text style={styles.nameStatusTitle}>Verified name. </Text> : null}
+        {policy.message}
+      </Text>
+    </View>
+  );
+}
+
 function FooterStack({
   children,
   helper,
@@ -1068,7 +1088,7 @@ function getFailureCopy(status: VerificationStatus | null | undefined, reviewerN
   }
 
   return {
-    note: reviewerNote || 'The name on your profile must match your submitted ID or barangay record. Please correct your full name and resubmit your verification.',
+    note: reviewerNote || 'The name on your profile must match your submitted barangay certificate. Please correct it and resubmit.',
     noteTitle: 'Reason for correction',
     primaryLabel: 'Correct and resubmit',
     subtitle: 'Barangay staff returned this request for correction',
@@ -1327,6 +1347,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     paddingHorizontal: 3,
+  },
+  nameStatusNote: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 3,
+  },
+  nameStatusText: {
+    color: color.textMuted,
+    flex: 1,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  nameStatusTitle: {
+    color: color.text,
+    fontFamily: 'Satoshi-Medium',
   },
   infoNote: {
     alignItems: 'center',

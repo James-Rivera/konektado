@@ -612,25 +612,27 @@ function NamePolicyNotice({
   policy: LegalNameEditPolicy;
   onRequestNameCorrection: () => void;
 }) {
-  const locked = !policy.canEdit;
+  if (policy.state === 'draft') return null;
+
+  const isVerified = policy.state === 'verified';
+  const iconName = policy.canEdit ? 'info-outline' : isVerified ? 'verified-user' : 'lock';
+  const iconColor = policy.canEdit ? color.primary : isVerified ? color.success : color.textSubtle;
 
   return (
-    <View style={[styles.namePolicyCard, locked && styles.namePolicyCardLocked]}>
+    <View style={styles.namePolicyNote}>
       <View style={styles.namePolicyIcon}>
-        <MaterialIcons color={locked ? color.warning : color.primary} name={locked ? 'lock' : 'info'} size={18} />
+        <MaterialIcons color={iconColor} name={iconName} size={16} />
       </View>
       <View style={styles.namePolicyCopy}>
+        {isVerified ? <Text style={styles.namePolicyTitle}>Verified name</Text> : null}
         <Text style={styles.namePolicyText}>{policy.message}</Text>
         {policy.canRequestCorrection ? (
-          <>
-            <Text style={styles.namePolicyText}>{NAME_CORRECTION_REQUEST_EXPLANATION}</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onRequestNameCorrection}
-              style={({ pressed }) => [styles.nameCorrectionButton, pressed && styles.pressed]}>
-              <Text style={styles.nameCorrectionButtonText}>Request name correction</Text>
-            </Pressable>
-          </>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onRequestNameCorrection}
+            style={({ pressed }) => [styles.nameCorrectionButton, pressed && styles.pressed]}>
+            <Text style={styles.nameCorrectionButtonText}>Request correction</Text>
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -1413,33 +1415,29 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: color.textMuted,
   },
-  namePolicyCard: {
-    alignItems: 'flex-start',
-    backgroundColor: color.primarySoft,
-    borderColor: 'rgba(27, 118, 229, 0.24)',
-    borderRadius: radius.md,
-    borderWidth: 1,
+  namePolicyNote: {
+    alignItems: 'center',
     flexDirection: 'row',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-  },
-  namePolicyCardLocked: {
-    backgroundColor: color.warningSoft,
-    borderColor: 'rgba(183, 121, 31, 0.35)',
+    gap: space.xs,
+    paddingTop: 2,
   },
   namePolicyIcon: {
     alignItems: 'center',
-    backgroundColor: color.white,
-    borderRadius: radius.pill,
-    height: 28,
+    height: 18,
     justifyContent: 'center',
-    width: 28,
+    width: 18,
   },
   namePolicyCopy: {
+    alignItems: 'center',
     flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: space.xs,
     minWidth: 0,
+  },
+  namePolicyTitle: {
+    ...typography.captionMedium,
+    color: color.text,
   },
   namePolicyText: {
     ...typography.caption,
@@ -1448,17 +1446,12 @@ const styles = StyleSheet.create({
   nameCorrectionButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: color.white,
-    borderColor: 'rgba(183, 121, 31, 0.35)',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    minHeight: 34,
     justifyContent: 'center',
-    paddingHorizontal: space.md,
+    minHeight: 20,
   },
   nameCorrectionButtonText: {
     ...typography.captionMedium,
-    color: color.text,
+    color: color.primary,
   },
   publicHintRow: {
     alignItems: 'center',

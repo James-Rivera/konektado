@@ -2,17 +2,17 @@ import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 import type { VerificationStatus } from '@/types/verification.types';
 
 export const NAME_SUBMISSION_WARNING =
-  "Make sure your full name matches your valid ID or barangay record. You won't be able to change it after submitting for verification.";
+  "Make sure your full name matches your barangay certificate. You won't be able to change it after submitting for verification.";
 export const NAME_PENDING_MESSAGE =
-  'Your name is under barangay review and cannot be changed right now.';
+  'Your name is under review and cannot be changed right now.';
 export const NAME_VERIFIED_MESSAGE =
-  'This name was verified by Barangay San Pedro. To protect trust and prevent impersonation, verified names cannot be changed directly.';
+  'Changes require barangay review.';
 export const NAME_CORRECTION_MESSAGE =
-  'The name on your profile must match your submitted ID or barangay record. Please correct your full name and resubmit your verification.';
+  'The name on your profile must match your submitted barangay certificate. Please correct it and resubmit.';
 export const NAME_REJECTED_MESSAGE =
-  'Your last verification was rejected. Your verified/legal name cannot be changed silently from profile editing.';
+  'Your verified name cannot be changed from profile editing.';
 export const NAME_CORRECTION_REQUEST_EXPLANATION =
-  'Use this only for typos, legal name updates, or incorrect registration details. Barangay staff will review the request before your verified name changes.';
+  'Use this for typos, legal name updates, or incorrect registration details. Barangay staff will review the request before your verified name changes. Please contact barangay staff to request a verified name correction.';
 export const NAME_LOCKED_SERVICE_ERROR =
   'Your verified/legal name is locked after barangay verification submission. Barangay staff must return the request for name correction before you can change it.';
 
