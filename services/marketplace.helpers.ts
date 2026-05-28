@@ -23,6 +23,8 @@ export type ProfileRow = {
   street: string | null;
   subdivision_area: string | null;
   city: string | null;
+  province?: string | null;
+  public_location_label?: string | null;
   about: string | null;
   avatar_url: string | null;
   availability: string | null;
@@ -190,6 +192,25 @@ export function formatPublicLocation({
   if (barangayText) return barangayText;
 
   return cityText || 'Brgy. San Pedro, Santo Tomas';
+}
+
+export function formatPublicProfileLocation({
+  barangay,
+  city,
+  province,
+}: {
+  barangay?: string | null;
+  city?: string | null;
+  province?: string | null;
+}) {
+  const barangayText = formatBarangayDisplay(barangay);
+  const cityText = compactText(city);
+  const provinceText = compactText(province);
+
+  if (barangayText && cityText) return `${barangayText}, ${cityText}`;
+  if (barangayText) return barangayText;
+  if (cityText && provinceText) return `${cityText}, ${provinceText}`;
+  return cityText || provinceText || 'Brgy. San Pedro, Santo Tomas';
 }
 
 export function formatPrivateLocation({
@@ -576,16 +597,13 @@ export function mapProfile(row: ProfileRow | null | undefined): PublicProfileSum
     firstName: row.first_name,
     lastName: row.last_name,
     barangay: row.barangay,
-    purokSitio: row.purok_sitio,
-    street: row.street,
-    subdivisionArea: row.subdivision_area,
     city: row.city,
-    approximateLocation: formatApproximateLocation({
+    province: row.province ?? null,
+    publicLocationLabel: compactText(row.public_location_label) || null,
+    approximateLocation: compactText(row.public_location_label) || formatPublicProfileLocation({
       barangay: row.barangay,
-      purokSitio: row.purok_sitio,
-      street: row.street,
-      subdivisionArea: row.subdivision_area,
       city: row.city,
+      province: row.province,
     }),
     about: row.about,
     avatarUrl: row.avatar_url,
@@ -608,11 +626,7 @@ export async function loadPublicProfiles(userIds: string[]) {
   if (!ids.length) return new Map<string, PublicProfileSummary>();
 
   const { data } = await supabase
-    .from('profiles')
-    .select(
-      'id, full_name, first_name, last_name, barangay, purok_sitio, street, subdivision_area, city, about, avatar_url, availability, verified_at, barangay_verified_at',
-    )
-    .in('id', ids);
+    .rpc('get_public_profile_summaries', { p_user_ids: ids });
 
   const profiles = new Map(
     ((data as ProfileRow[] | null) ?? [])

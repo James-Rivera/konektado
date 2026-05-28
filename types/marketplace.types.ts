@@ -31,10 +31,9 @@ export type PublicProfileSummary = {
   firstName: string | null;
   lastName: string | null;
   barangay: string | null;
-  purokSitio: string | null;
-  street: string | null;
-  subdivisionArea: string | null;
   city: string | null;
+  province: string | null;
+  publicLocationLabel: string | null;
   approximateLocation: string | null;
   about: string | null;
   avatarUrl: string | null;
