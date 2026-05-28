@@ -106,8 +106,6 @@ export async function getPublicWorkerProfile(
         formatPublicLocation({
           barangay: profile.barangay,
           city: profile.city,
-          street: profile.street,
-          subdivisionArea: profile.subdivisionArea,
         }),
       about: compactText(profile.about) || null,
       availability: compactText(profile.availability) || null,

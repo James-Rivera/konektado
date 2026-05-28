@@ -60,9 +60,9 @@ Purpose: Shared user profile and resident identity details.
 | `birthdate` | `date` | Private or limited visibility. |
 | `province` | `text` | Fixed to `Batangas` for the current service area. |
 | `barangay` | `text` | Fixed raw value `San Pedro` for MVP; display as `Brgy. San Pedro`. |
-| `purok_sitio` | `text` | Legacy optional field kept for backward compatibility; no longer collected in address setup. |
-| `street` | `text` | Public approximate street/road if provided. |
-| `subdivision_area` | `text` | Public approximate subdivision/area if provided. |
+| `purok_sitio` | `text` | Legacy optional field kept for backward compatibility; not exposed directly in public profile summaries. |
+| `street` | `text` | Area / street / purok / sitio detail for owner/admin profile context; not exposed directly in public profile summaries. |
+| `subdivision_area` | `text` | Additional area detail for owner/admin profile context; not exposed directly in public profile summaries. |
 | `block_lot` | `text` | Private/admin-only address detail. |
 | `house_number` | `text` | Private/admin-only house number or building name. |
 | `landmark_note` | `text` | Private/admin-only landmark or note. |
@@ -87,7 +87,7 @@ Important constraints:
 
 - `id` must equal `auth.uid()` for owner writes.
 - Public search should not expose birthdate, full street address, house number, block/lot, landmark/address note, private phone/contact data, ID URLs, credential URLs, or verification document fields.
-- Public search/cards may show approximate location only: barangay/city, street/road plus barangay, or subdivision/area plus barangay.
+- Public profile search/cards may show only a safe computed location label such as barangay/city. Raw street, subdivision/area, purok/sitio, house number, block/lot, landmark/address notes, private contact data, and verification document fields must not be exposed through public profile summaries.
 - `barangay_verified_at` should only be written by admin verification actions.
 - Verification selfie, ID files, certificates, and admin notes must never be copied into public profile fields or `avatar_url`.
 

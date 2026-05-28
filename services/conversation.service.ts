@@ -132,10 +132,12 @@ function mapInboxProfile(
     firstName: row[`${role}_first_name`],
     lastName: row[`${role}_last_name`],
     barangay: row[`${role}_barangay`],
-    purokSitio: null,
-    street: null,
-    subdivisionArea: null,
     city: row[`${role}_city`],
+    province: null,
+    publicLocationLabel: formatPublicLocation({
+      barangay: row[`${role}_barangay`],
+      city: row[`${role}_city`],
+    }),
     approximateLocation: formatPublicLocation({
       barangay: row[`${role}_barangay`],
       city: row[`${role}_city`],

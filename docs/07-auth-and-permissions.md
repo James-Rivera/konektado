@@ -205,10 +205,12 @@ These role permissions apply after the user's barangay verification is approved 
 
 ## Public vs Private Data
 
+Public marketplace/profile screens must read profile identity through the safe public profile summary RPC, not by selecting directly from `profiles`. Direct full-row `profiles` reads are reserved for the profile owner, barangay admins, and explicitly guarded internal tooling. Public profile summaries expose a computed public location label only; raw street, subdivision/area, and purok/sitio fields stay out of public profile summary responses.
+
 Public-safe provider fields:
 
 - Display name.
-- Approximate location such as barangay, purok/sitio, or street.
+- Approximate profile location label such as barangay and city.
 - Public profile headline and bio.
 - Offered or needed service categories.
 - Service area and preferred schedule text.

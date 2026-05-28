@@ -35,7 +35,7 @@ Failure states:
 2. User selects intended role: find work or hire someone (2 options only).
 3. App collects basic profile identity.
 4. App collects current area as a separate selector step: fixed supported area `Brgy. San Pedro, Santo Tomas, Batangas`.
-5. App collects specific address details separately: public street/road or subdivision/area, and optional private block/lot, house number/building name, and landmark/note.
+5. App collects specific address details separately for profile completion, admin review, and private coordination; public resident/profile summaries show only a safe approximate location label.
 6. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both). Provider and client service setup both use one clean screen with selector rows for setup, categories, services, and optional custom text; detailed choices happen in bottom sheets. Provider work setup is stored separately. Client help setup only filters the temporary selection UI and does not store a separate needed delivery mode.
 7. App shows review.
 8. App saves onboarding and shows complete.
@@ -49,7 +49,7 @@ Rules:
 - Do not overload first-time onboarding with all profile, ID, credential, and service details.
 - Do not collect certificates, ID documents, selfie/photo uploads, or verification files during first onboarding.
 - First onboarding is complete when `user_preferences.onboarding_completed_at` is set and the profile has basic identity: first name, last name or full name, city, and barangay.
-- Exact address fields are collected for verification/admin review or private coordination. Public surfaces show only approximate location such as `Brgy. San Pedro, Santo Tomas`, street/road plus barangay, or subdivision/area plus barangay. House number, block/lot, landmark/address notes, private contact data, and verification document URLs are never shown publicly.
+- Exact address fields are collected for verification/admin review or private coordination. Public resident/profile summaries show only a safe approximate label such as `Brgy. San Pedro, Santo Tomas`. Raw street/road, subdivision/area, purok/sitio, house number, block/lot, landmark/address notes, private contact data, and verification document URLs are never shown publicly through profile summaries.
 - The first entry experience should help users understand Konektado quickly.
 - Service preference choices personalize browsing; they are not verification proof.
 - Provider work setup is stored separately as `on_site`, `online`, or `both`. Official service choices stay in taxonomy service arrays, while custom service text stays in custom service arrays for admin review.
