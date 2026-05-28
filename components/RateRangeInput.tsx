@@ -20,6 +20,9 @@ type RateRangeInputProps = {
   helperText?: string;
   error?: string;
   previewPrefix?: string;
+  showNegotiableToggle?: boolean;
+  showPreview?: boolean;
+  showRateTypeOptions?: boolean;
   onMinChange: (value: string) => void;
   onMaxChange: (value: string) => void;
   onRateTypeChange: (value: RateType) => void;
@@ -44,6 +47,9 @@ export function RateRangeInput({
   helperText = 'Set a fair expected range. Final price can still depend on task size, distance, materials, and agreement.',
   error,
   previewPrefix,
+  showNegotiableToggle = true,
+  showPreview = true,
+  showRateTypeOptions = true,
   onMinChange,
   onMaxChange,
   onRateTypeChange,
@@ -87,23 +93,25 @@ export function RateRangeInput({
         </View>
       </View>
 
-      <View style={styles.chipWrap}>
-        {MARKETPLACE_RATE_TYPE_OPTIONS.map((option) => {
-          const active = option.value === rateType;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              key={option.value}
-              onPress={() => onRateTypeChange(option.value)}
-              style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {showRateTypeOptions ? (
+        <View style={styles.chipWrap}>
+          {MARKETPLACE_RATE_TYPE_OPTIONS.map((option) => {
+            const active = option.value === rateType;
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                key={option.value}
+                onPress={() => onRateTypeChange(option.value)}
+                style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
-      {onNegotiableChange ? (
+      {showNegotiableToggle && onNegotiableChange ? (
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: negotiable }}
@@ -119,10 +127,12 @@ export function RateRangeInput({
         </Pressable>
       ) : null}
 
-      <View style={styles.previewBox}>
-        <Text style={styles.previewLabel}>{previewPrefix ?? 'Preview'}</Text>
-        <Text style={styles.previewText}>{preview}</Text>
-      </View>
+      {showPreview ? (
+        <View style={styles.previewBox}>
+          <Text style={styles.previewLabel}>{previewPrefix ?? 'Preview'}</Text>
+          <Text style={styles.previewText}>{preview}</Text>
+        </View>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );

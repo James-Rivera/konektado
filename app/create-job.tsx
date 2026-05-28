@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
+import { BottomSheet } from '@/components/BottomSheet';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
@@ -51,15 +52,25 @@ const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'experienced', label: 'Experienced' },
 ];
 
-type WorkersNeededOption = '1' | '2' | '3' | '4';
+type WorkersNeededOption = '1' | '2' | '3' | '4' | '5';
 type TimeBlock = 'morning' | 'afternoon' | 'evening' | 'anytime' | 'to_coordinate';
 type ScheduleFlexibility = 'fixed' | 'flexible';
 
 const WORKERS_NEEDED_OPTIONS: { value: WorkersNeededOption; label: string }[] = [
-  { value: '1', label: '1' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3' },
-  { value: '4', label: '4+' },
+  { value: '1', label: '1 worker' },
+  { value: '2', label: '2 workers' },
+  { value: '3', label: '3 workers' },
+  { value: '4', label: '4 workers' },
+  { value: '5', label: '5+ workers' },
+];
+
+const ADDITIONAL_DETAIL_OPTIONS = [
+  'Bring own tools',
+  'Experience preferred',
+  'Urgent task',
+  'Flexible schedule',
+  'Contact first before visiting',
+  'Other',
 ];
 
 const TIME_BLOCK_OPTIONS: { value: TimeBlock; label: string }[] = [
@@ -225,9 +236,15 @@ function getSchedulePreview(draft: JobDraft) {
 
 function formatWorkersNeededText(value: string) {
   const parsed = parsePositiveNumber(value);
-  if (!parsed || Number.isNaN(parsed)) return 'Choose how many workers you need.';
-  if (parsed >= 4) return 'Needs 4+ workers';
-  return `Needs ${parsed} worker${parsed === 1 ? '' : 's'}`;
+  if (!parsed || Number.isNaN(parsed)) return 'Select number of workers';
+  if (parsed >= 5) return '5+ workers';
+  return `${parsed} worker${parsed === 1 ? '' : 's'}`;
+}
+
+function getWorkersNeededPickerLabel(value: string) {
+  const parsed = parsePositiveNumber(value);
+  if (!parsed || Number.isNaN(parsed)) return '';
+  return parsed >= 5 ? '5+ workers' : `${parsed} worker${parsed === 1 ? '' : 's'}`;
 }
 
 function parseScheduleText(value: string): Pick<
@@ -374,7 +391,7 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
     budgetMax: record.budgetMax ? String(record.budgetMax) : '',
     rateType: record.rateType,
     budgetNegotiable: record.budgetNegotiable,
-    workersNeeded: record.workersNeeded ? String(Math.min(record.workersNeeded, 4)) : '',
+    workersNeeded: record.workersNeeded ? String(Math.min(record.workersNeeded, 5)) : '',
     scheduleText: record.scheduleText ?? '',
     ...schedule,
     experienceLevel: record.experienceLevel,
@@ -410,6 +427,8 @@ export default function CreateJobScreen() {
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
+  const [workerPickerVisible, setWorkerPickerVisible] = useState(false);
+  const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [photoFolderId] = useState(() => `draft-${Date.now()}`);
@@ -425,7 +444,7 @@ export default function CreateJobScreen() {
     privateLocationNotes: '',
     budgetMin: '',
     budgetMax: '',
-    rateType: 'per_project',
+    rateType: 'per_job',
     budgetNegotiable: false,
     workersNeeded: '',
     scheduleText: '',
@@ -488,6 +507,10 @@ export default function CreateJobScreen() {
 
   const selectedTagsText = useMemo(() => draft.tags.join(', '), [draft.tags]);
   const tagOptions = useMemo(() => getContextTagsForCategory(draft.category), [draft.category]);
+  const additionalDetailOptions = useMemo(
+    () => Array.from(new Set([...ADDITIONAL_DETAIL_OPTIONS, ...tagOptions])),
+    [tagOptions],
+  );
   const serviceOptions = useMemo(() => getServicesForCategory(draft.category), [draft.category]);
   const selectedDate = useMemo(
     () => parseDateValue(draft.jobDate) ?? getTodayAtStart(),
@@ -532,6 +555,7 @@ export default function CreateJobScreen() {
 
   const selectWorkersNeeded = (value: WorkersNeededOption) => {
     updateDraft('workersNeeded', value);
+    setWorkerPickerVisible(false);
   };
 
   const selectTimeBlock = (value: TimeBlock) => {
@@ -727,7 +751,7 @@ export default function CreateJobScreen() {
           showsVerticalScrollIndicator={false}>
           <Section
             helper="Start by describing the type of help you need."
-            title="Job basics">
+            title="What work do you need?">
             <CurrentUserIdentityRow subtitle="Creating a job post" />
 
             {draft.photoUrls.length ? (
@@ -835,17 +859,6 @@ export default function CreateJobScreen() {
               <FieldError message={errors.serviceNeeded} />
             </View>
 
-            <View style={styles.group}>
-              <View style={styles.rowBetween}>
-                <View style={styles.flex}>
-                  <Text style={styles.label}>Tags</Text>
-                  <Text style={styles.smallHelper}>Choose up to 4 tags that describe the job.</Text>
-                </View>
-              </View>
-              <ChipWrap items={tagOptions} selected={draft.tags} onPress={toggleTag} />
-              <Text style={styles.smallHelper}>{selectedTagsText || 'No tags selected'}</Text>
-            </View>
-
             <FormInput
               error={errors.title}
               label="Job title"
@@ -857,7 +870,7 @@ export default function CreateJobScreen() {
 
           <Section
             helper="Add the details workers need before they message you."
-            title="Explain the work">
+            title="Job details">
             <FormInput
               error={errors.description}
               label="Job description / additional notes"
@@ -866,48 +879,6 @@ export default function CreateJobScreen() {
               placeholder="What needs to be done?"
               value={draft.description}
             />
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Workers needed</Text>
-              <Text style={styles.smallHelper}>How many people do you need for this job?</Text>
-              <ChipWrap
-                items={WORKERS_NEEDED_OPTIONS.map((option) => option.label)}
-                selected={[
-                  Number(draft.workersNeeded) >= 4
-                    ? '4+'
-                    : WORKERS_NEEDED_OPTIONS.find((option) => option.value === draft.workersNeeded)?.label ?? '',
-                ].filter(Boolean)}
-                onPress={(label) => selectWorkersNeeded(label === '4+' ? '4' : (label as WorkersNeededOption))}
-              />
-              <Text style={styles.summaryText}>{formatWorkersNeededText(draft.workersNeeded)}</Text>
-              <FieldError message={errors.workersNeeded} />
-            </View>
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Preferred experience</Text>
-              <ChipWrap
-                items={EXPERIENCE_OPTIONS.map((option) => option.label)}
-                selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
-                onPress={(label) =>
-                  updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
-                }
-              />
-            </View>
-
-            <ToggleRow
-              description="Show that a certificate is preferred or required for this job."
-              label="Certification preferred"
-              onValueChange={(value) => updateDraft('certificationRequired', value)}
-              value={draft.certificationRequired}
-            />
-            {draft.certificationRequired ? (
-              <FormInput
-                label="Certification note"
-                onChangeText={(value) => updateDraft('certificationNote', value)}
-                placeholder="Example: TESDA certificate preferred"
-                value={draft.certificationNote}
-              />
-            ) : null}
           </Section>
 
           <View
@@ -916,11 +887,32 @@ export default function CreateJobScreen() {
               scrollToBudgetRange();
             }}>
             <Section
-              helper="Use a range so workers know what to expect."
-              title="Budget">
+              helper="Choose the worker count and the amount you can offer."
+              title="Workers and budget">
+              <View style={styles.group}>
+                <Text style={styles.label}>How many workers do you need?</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setWorkerPickerVisible(true)}
+                  style={({ pressed }) => [
+                    styles.selectBox,
+                    errors.workersNeeded && styles.inputErrorBorder,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text
+                    style={[styles.selectText, !draft.workersNeeded && styles.placeholderText]}
+                    numberOfLines={1}>
+                    {getWorkersNeededPickerLabel(draft.workersNeeded) || 'Select number of workers'}
+                  </Text>
+                  <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+                </Pressable>
+                <Text style={styles.smallHelper}>{formatWorkersNeededText(draft.workersNeeded)}</Text>
+                <FieldError message={errors.workersNeeded} />
+              </View>
               <RateRangeInput
                 error={errors.budgetMin}
-                label="Budget range"
+                helperText="Enter the amount you can offer. Final payment can still be discussed with the worker."
+                label="Estimated budget"
                 maxLabel="Maximum budget"
                 maxValue={draft.budgetMax}
                 minLabel="Minimum budget"
@@ -932,13 +924,16 @@ export default function CreateJobScreen() {
                 onRateTypeChange={(value) => updateDraft('rateType', value)}
                 previewPrefix="Budget preview"
                 rateType={draft.rateType}
+                showNegotiableToggle={false}
+                showPreview={false}
+                showRateTypeOptions={false}
               />
             </Section>
           </View>
 
           <Section
-            helper="Choose when the job should happen, or coordinate it later."
-            title="Schedule">
+            helper="Choose when and where the job should happen."
+            title="Schedule and location">
             <View style={styles.group}>
               <Text style={styles.label}>Job date</Text>
               <Pressable
@@ -1031,11 +1026,7 @@ export default function CreateJobScreen() {
               <Text style={styles.smallHelper}>Loaded from an older draft. Choose a date or time block to replace it.</Text>
             ) : null}
             <FieldError message={errors.scheduleText} />
-          </Section>
 
-          <Section
-            helper="Set the public barangay and private arrival details."
-            title="Location and privacy">
             <View style={styles.group}>
               <Text style={styles.label}>Barangay / general location</Text>
               <Pressable
@@ -1070,26 +1061,78 @@ export default function CreateJobScreen() {
           </Section>
 
           <Section
-            helper="Control how workers can respond after the main job details are clear."
-            title="Listing options">
-            <ToggleRow
-              description="Let workers ask questions before you choose who to hire."
-              label="Allow messages before hiring"
-              onValueChange={(value) => updateDraft('allowMessages', value)}
-              value={draft.allowMessages}
-            />
-            <ToggleRow
-              description="Send a quick reply when someone messages."
-              label="Auto-reply"
-              onValueChange={(value) => updateDraft('autoReplyEnabled', value)}
-              value={draft.autoReplyEnabled}
-            />
-            <ToggleRow
-              description="Hide this post after the start time or when all workers are accepted."
-              label="Auto-close post"
-              onValueChange={(value) => updateDraft('autoCloseEnabled', value)}
-              value={draft.autoCloseEnabled}
-            />
+            helper="Choose optional details workers can scan quickly."
+            title="Additional details">
+            <View style={styles.group}>
+              <Text style={styles.label}>Additional details</Text>
+              <Text style={styles.smallHelper}>Choose up to 4 details that describe the job.</Text>
+              <ChipWrap items={additionalDetailOptions} selected={draft.tags} onPress={toggleTag} />
+              <Text style={styles.smallHelper}>{selectedTagsText || 'No details selected'}</Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: moreOptionsVisible }}
+              onPress={() => setMoreOptionsVisible((visible) => !visible)}
+              style={({ pressed }) => [styles.moreOptionsButton, pressed && styles.pressed]}>
+              <View style={styles.flex}>
+                <Text style={styles.moreOptionsTitle}>More options</Text>
+                <Text style={styles.smallHelper}>Experience, certificates, and message settings.</Text>
+              </View>
+              <MaterialIcons
+                color={color.verificationBlue}
+                name={moreOptionsVisible ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={24}
+              />
+            </Pressable>
+
+            {moreOptionsVisible ? (
+              <View style={styles.moreOptionsContent}>
+                <View style={styles.group}>
+                  <Text style={styles.label}>Preferred experience</Text>
+                  <ChipWrap
+                    items={EXPERIENCE_OPTIONS.map((option) => option.label)}
+                    selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
+                    onPress={(label) =>
+                      updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
+                    }
+                  />
+                </View>
+
+                <ToggleRow
+                  description="Show that a certificate is preferred or required for this job."
+                  label="Certification preferred"
+                  onValueChange={(value) => updateDraft('certificationRequired', value)}
+                  value={draft.certificationRequired}
+                />
+                {draft.certificationRequired ? (
+                  <FormInput
+                    label="Certification note"
+                    onChangeText={(value) => updateDraft('certificationNote', value)}
+                    placeholder="Example: TESDA certificate preferred"
+                    value={draft.certificationNote}
+                  />
+                ) : null}
+                <ToggleRow
+                  description="Let workers ask questions before you choose who to hire."
+                  label="Allow messages before hiring"
+                  onValueChange={(value) => updateDraft('allowMessages', value)}
+                  value={draft.allowMessages}
+                />
+                <ToggleRow
+                  description="Send a quick reply when someone messages."
+                  label="Auto-reply"
+                  onValueChange={(value) => updateDraft('autoReplyEnabled', value)}
+                  value={draft.autoReplyEnabled}
+                />
+                <ToggleRow
+                  description="Hide this post after the start time or when all workers are accepted."
+                  label="Auto-close post"
+                  onValueChange={(value) => updateDraft('autoCloseEnabled', value)}
+                  value={draft.autoCloseEnabled}
+                />
+              </View>
+            ) : null}
           </Section>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1132,7 +1175,50 @@ export default function CreateJobScreen() {
         title="Choose barangay"
         visible={barangayPickerVisible}
       />
+      <WorkerCountPickerSheet
+        onClose={() => setWorkerPickerVisible(false)}
+        onSelect={selectWorkersNeeded}
+        selectedValue={draft.workersNeeded}
+        visible={workerPickerVisible}
+      />
     </SafeAreaView>
+  );
+}
+
+function WorkerCountPickerSheet({
+  selectedValue,
+  visible,
+  onClose,
+  onSelect,
+}: {
+  selectedValue: string;
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (value: WorkersNeededOption) => void;
+}) {
+  return (
+    <BottomSheet maxHeight="42%" onClose={onClose} visible={visible}>
+      <View style={styles.workerPickerHeader}>
+        <Text style={styles.workerPickerTitle}>How many workers do you need?</Text>
+        <Text style={styles.smallHelper}>Select number of workers</Text>
+      </View>
+      <View style={styles.workerOptionList}>
+        {WORKERS_NEEDED_OPTIONS.map((option) => {
+          const active = selectedValue === option.value || (Number(selectedValue) >= 5 && option.value === '5');
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              key={option.value}
+              onPress={() => onSelect(option.value)}
+              style={({ pressed }) => [styles.workerOptionRow, active && styles.workerOptionRowActive, pressed && styles.pressed]}>
+              <Text style={[styles.workerOptionText, active && styles.workerOptionTextActive]}>{option.label}</Text>
+              {active ? <MaterialIcons color={color.verificationBlue} name="check" size={20} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -1641,6 +1727,54 @@ const styles = StyleSheet.create({
   previewText: {
     ...typography.bodyMedium,
     color: color.text,
+  },
+  moreOptionsButton: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    justifyContent: 'space-between',
+    minHeight: 54,
+    padding: space.md,
+  },
+  moreOptionsContent: {
+    gap: space.md,
+  },
+  moreOptionsTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  workerPickerHeader: {
+    gap: space.xs,
+  },
+  workerPickerTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+  },
+  workerOptionList: {
+    gap: space.xs,
+  },
+  workerOptionRow: {
+    alignItems: 'center',
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 46,
+    paddingVertical: space.md,
+  },
+  workerOptionRowActive: {
+    borderBottomColor: color.primary,
+  },
+  workerOptionText: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  workerOptionTextActive: {
+    color: color.verificationBlue,
+    fontFamily: 'Satoshi-Bold',
   },
   editLink: {
     ...typography.body,

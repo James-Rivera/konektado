@@ -278,7 +278,7 @@ export default function RegisterScreen() {
         </View>
         <View style={styles.languageOptionDisabled}>
           <Text style={styles.languageOptionTextMuted}>Filipino</Text>
-          <Text style={styles.languageOptionMetaMuted}>Coming Soon</Text>
+          <Text style={styles.languageOptionMetaMuted}>Coming soon</Text>
         </View>
         <PrimaryButton label="Done" onPress={() => setLanguageSheetVisible(false)} />
       </BottomSheet>

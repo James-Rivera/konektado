@@ -78,14 +78,14 @@ Rules:
 
 1. Unverified user starts verification from a locked action, profile prompt, or verification page.
 2. App shows the Figma verification intro explaining what verification unlocks.
-3. App shows the Figma "Before you continue" requirements: valid ID, clear face photo, and good lighting.
+3. App shows the Figma "Before you continue" requirements: Barangay Certificate recommended, another valid ID allowed as fallback, clear face photo, and good lighting.
 4. App shows account details with onboarding/profile data prefilled.
 5. User confirms or edits first name, last name, date of birth, and contact number so they match the document.
 6. App shows the contact-code UI from Figma for contact confirmation. MVP does not add SMS OTP; this is a visual/contact-confirmation step until provider-backed OTP is added.
-7. User selects ID type: Barangay Certificate, National ID, Driver's License, or Passport.
+7. User selects document to submit: Barangay Certificate is recommended; National ID, Driver's License, or Passport remain allowed fallback valid IDs for barangay staff review.
 8. If Barangay Certificate is selected, user uploads the certificate. Otherwise, user uploads ID front and ID back. Camera capture can be added as a verification-polish task, but file/image picker upload is the current MVP path.
 9. App shows face-photo guidance, then user uploads a clear face photo for manual barangay comparison. Camera selfie capture is planned but should not block the verified Post slice.
-10. App shows the Figma review and submit screen so the user can check personal details, ID type, uploaded files, face photo, and barangay before submission.
+10. App shows the Figma review and submit screen so the user can check personal details, document type, uploaded files, face photo, and barangay before submission.
 11. App uploads selected files to Supabase Storage, creates a pending row in the current live `verifications` table, and links metadata in `verification_files`.
 12. Face photo currently uses `file_type = other` because the live table only accepts the initial file-type values.
 13. User sees a pending verification state and remains in viewer mode.

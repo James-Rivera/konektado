@@ -289,7 +289,7 @@ function PublicSummaryCard({
           {verified ? (
             <View style={styles.verifiedBadge}>
               <MaterialIcons color="#2F7D32" name="verified" size={14} />
-              <Text style={styles.verifiedText}>Barangay Verified</Text>
+              <Text style={styles.verifiedText}>Verified</Text>
             </View>
           ) : null}
           <View style={styles.roleBadge}>
