@@ -304,12 +304,14 @@ export default function InternalDemoContentEditorScreen() {
                 contentContainerStyle={[styles.editorContent, desktop && styles.editorContentDesktop]}
                 keyboardShouldPersistTaps="handled">
                 <SelectedUserHeader
+                  compact={!desktop}
                   onChangeUser={() => setPickerOpen(true)}
                   onPreview={() => previewPublicProfile(selectedUser)}
                   onRefresh={() => void refreshAll()}
+                  onSectionChange={setSection}
+                  section={section}
                   user={selectedUser}
                 />
-                <SectionTabs compact={!desktop} section={section} onChange={setSection} />
                 {section === 'overview' ? (
                   <DemoUserOverview
                     onPreview={() => previewPublicProfile(selectedUser)}
@@ -380,19 +382,9 @@ function CompactContextBar({
   return (
     <View style={styles.contextBar}>
       <View style={styles.contextMain}>
-        <Text numberOfLines={1} style={styles.contextTitle}>Internal Demo Content Editor</Text>
-        <View style={styles.contextSecurityLine}>
-          <MaterialIcons
-            color={access.whitelistConfigured ? adminPalette.successDeep : adminPalette.orange}
-            name="security"
-            size={15}
-          />
-          <Text numberOfLines={1} style={styles.contextSecurityText}>
-            {access.whitelistConfigured
-              ? `Admin + whitelist: ${access.email ?? access.userId}`
-              : 'Admin guard active. Add whitelist env vars for stricter access.'}
-          </Text>
-        </View>
+        <Text numberOfLines={1} style={styles.contextTitle}>
+          Konektado · Demo Editor | Admin: {access.email ?? access.userId}
+        </Text>
       </View>
       <View style={styles.contextActions}>
         <Pressable
@@ -524,42 +516,66 @@ function UserCard({
 }
 
 function SelectedUserHeader({
+  compact,
   onChangeUser,
   onPreview,
   onRefresh,
+  onSectionChange,
+  section,
   user,
 }: {
+  compact: boolean;
   onChangeUser: () => void;
   onPreview: () => void;
   onRefresh: () => void;
+  onSectionChange: (section: EditorSection) => void;
+  section: EditorSection;
   user: EditableUserDetail;
 }) {
+  const email = getRequiredEmailLabel(user);
+
   return (
     <View style={styles.selectedHeader}>
       <View style={styles.selectedIdentityRow}>
-        <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={48} />
-        <View style={styles.selectedCopy}>
-          <View style={styles.selectedTitleRow}>
-            <Text style={styles.selectedTitle}>{user.fullName}</Text>
-            <AdminStatusBadge label={user.verificationLabel} tone={toneForVerification(user.verificationStatus)} />
-          </View>
-          <View style={styles.selectedMetaGrid}>
-            <MetaLine icon="badge" text={user.roleLabel} />
-            <MetaLine icon="place" text={user.locationLabel} />
+        <View style={styles.selectedPersonRow}>
+          <UserAvatar avatarUrl={user.avatarUrl} name={user.fullName} size={40} />
+          <View style={styles.selectedCopy}>
+            <View style={styles.selectedTitleRow}>
+              <Text numberOfLines={1} style={styles.selectedTitle}>{user.fullName}</Text>
+              <AdminStatusBadge label={user.verificationLabel} tone={toneForVerification(user.verificationStatus)} />
+            </View>
+            <Text numberOfLines={1} style={styles.selectedEmail}>{email}</Text>
           </View>
         </View>
+        <View style={styles.selectedIdentityFacts}>
+          <IdentityFact label="Role" value={user.roleLabel} />
+          <IdentityFact label="Address" value={user.locationLabel} />
+          <IdentityFact label="Verification" value={user.verificationLabel} />
+        </View>
       </View>
-      <View style={styles.selectedStatsRow}>
-        <CountPill label="Jobs" value={user.publicJobsCount} />
-        <CountPill label="Services" value={user.publicServicesCount} />
-        <CountPill label="Photos" value={user.publicPhotosCount} />
-        <CountPill label="Reviews" value={user.reviewsCount} />
+      <View style={styles.selectedToolsRow}>
+        <View style={styles.selectedStatsRow}>
+          <CountPill label="Jobs" value={user.publicJobsCount} />
+          <CountPill label="Services" value={user.publicServicesCount} />
+          <CountPill label="Photos" value={user.publicPhotosCount} />
+          <CountPill label="Reviews" value={user.reviewsCount} />
+        </View>
+        <View style={styles.selectedActions}>
+          <HeaderAction icon="switch-account" label="Change user" onPress={onChangeUser} />
+          <HeaderAction icon="visibility" label="Preview" onPress={onPreview} />
+          <HeaderAction icon="refresh" label="Refresh" onPress={onRefresh} />
+        </View>
       </View>
-      <View style={styles.selectedActions}>
-        <HeaderAction icon="switch-account" label="Change user" onPress={onChangeUser} />
-        <HeaderAction icon="visibility" label="Preview public profile" onPress={onPreview} />
-        <HeaderAction icon="refresh" label="Refresh" onPress={onRefresh} />
-      </View>
+      <SectionTabs compact={compact} section={section} onChange={onSectionChange} />
+    </View>
+  );
+}
+
+function IdentityFact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.identityFact}>
+      <Text style={styles.identityFactLabel}>{label}</Text>
+      <Text numberOfLines={1} style={styles.identityFactValue}>{value}</Text>
     </View>
   );
 }
@@ -712,6 +728,7 @@ function DemoUserOverview({
       <LockedFields
         rows={[
           ['Selected account', user.fullName],
+          ['Email', getRequiredEmailLabel(user)],
           ['Role/mode', user.roleLabel],
           ['Address summary', user.locationLabel],
           ['Verification', user.verificationLabel],
@@ -851,6 +868,7 @@ function ProfileEditor({
       footer={
         <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Profile'} onPress={() => void save()} />
       }
+      hideHeader
       title="Profile">
       <TwoColumn>
         <Field label="First name" onChangeText={(value) => setForm({ ...form, firstName: value })} value={form.firstName} />
@@ -894,9 +912,12 @@ function ProfileEditor({
       </View>
       <LockedFields
         rows={[
+          ['Full name', form.fullName || user.fullName],
+          ['Email', form.email || getRequiredEmailLabel(user)],
+          ['Role/mode', user.roleLabel],
+          ['Address', user.locationLabel],
+          ['Verification status', user.verificationLabel],
           ['Auth/Profile ID', user.id],
-          ['Cached auth email', form.email ?? 'Not shown'],
-          ['Roles', user.roleLabel],
           ['Created', formatDate(form.createdAt)],
           ['Updated', formatDate(form.updatedAt)],
         ]}
@@ -1938,17 +1959,21 @@ function SelectChips({
 function EditorPanel({
   children,
   footer,
+  hideHeader,
   title,
 }: {
   children: ReactNode;
   footer?: ReactNode;
+  hideHeader?: boolean;
   title: string;
 }) {
   return (
     <View style={styles.editorPanel}>
-      <View style={styles.panelHeader}>
-        <Text style={styles.panelTitle}>{title}</Text>
-      </View>
+      {hideHeader ? null : (
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>{title}</Text>
+        </View>
+      )}
       <View style={styles.panelBody}>{children}</View>
       {footer ? <View style={styles.panelFooter}>{footer}</View> : null}
     </View>
@@ -2191,6 +2216,10 @@ function formatRange(min: number | null, max: number | null, rateType: RateType)
   return `Up to ${prefix} ${max?.toLocaleString()} ${formatOption(rateType).toLowerCase()}`;
 }
 
+function getRequiredEmailLabel(user: EditableUserDetail) {
+  return user.profile.email || 'Missing email in profile row';
+}
+
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -2225,46 +2254,33 @@ const styles = StyleSheet.create({
     borderBottomColor: adminPalette.line,
     borderBottomWidth: 1,
     flexDirection: 'row',
-    gap: 12,
-    minHeight: 54,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    gap: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   contextMain: {
     flex: 1,
-    gap: 2,
     minWidth: 0,
   },
   contextTitle: {
     color: adminPalette.ink,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 17,
-    lineHeight: 22,
-  },
-  contextSecurityLine: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  contextSecurityText: {
-    color: adminPalette.muted,
-    flex: 1,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 14,
+    lineHeight: 18,
   },
   contextActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   contextIconButton: {
     alignItems: 'center',
     borderColor: adminPalette.line,
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: 36,
+    height: 30,
     justifyContent: 'center',
-    width: 36,
+    width: 30,
   },
   internalHeader: {
     alignItems: 'center',
@@ -2323,9 +2339,9 @@ const styles = StyleSheet.create({
   workspace: {
     alignSelf: 'center',
     flex: 1,
-    gap: 8,
+    gap: 6,
     maxWidth: 1280,
-    padding: 8,
+    padding: 6,
     width: '100%',
   },
   browsePane: {
@@ -2507,30 +2523,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   editorContent: {
-    gap: 10,
-    paddingBottom: 18,
+    gap: 6,
+    paddingBottom: 12,
   },
   editorContentDesktop: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   selectedHeader: {
     backgroundColor: color.white,
     borderColor: adminPalette.line,
     borderRadius: radius.md,
     borderWidth: 1,
-    gap: 8,
-    padding: 10,
+    gap: 6,
+    padding: 8,
   },
   selectedIdentityRow: {
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+  },
+  selectedPersonRow: {
+    alignItems: 'center',
+    flex: 1.2,
+    flexDirection: 'row',
+    gap: 8,
+    minWidth: 260,
   },
   selectedCopy: {
     flex: 1,
-    gap: 4,
-    minWidth: 220,
+    gap: 1,
+    minWidth: 0,
   },
   selectedTitleRow: {
     alignItems: 'center',
@@ -2541,13 +2564,42 @@ const styles = StyleSheet.create({
   selectedTitle: {
     color: adminPalette.ink,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 18,
-    lineHeight: 23,
+    fontSize: 16,
+    lineHeight: 20,
   },
-  selectedMetaGrid: {
+  selectedEmail: {
+    color: adminPalette.blueDeep,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  selectedIdentityFacts: {
+    flex: 1.8,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 6,
+    minWidth: 320,
+  },
+  identityFact: {
+    borderColor: adminPalette.line,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    minHeight: 34,
+    minWidth: 132,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  identityFactLabel: {
+    color: adminPalette.faint,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  identityFactValue: {
+    color: adminPalette.ink,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 11,
+    lineHeight: 14,
   },
   selectedStatsRow: {
     flexDirection: 'row',
@@ -2559,6 +2611,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  selectedToolsRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
   headerAction: {
     alignItems: 'center',
     borderColor: adminPalette.blueLine,
@@ -2566,8 +2625,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: 6,
-    minHeight: 34,
-    paddingHorizontal: 11,
+    minHeight: 30,
+    paddingHorizontal: 10,
   },
   headerActionText: {
     color: adminPalette.blue,
@@ -2577,7 +2636,7 @@ const styles = StyleSheet.create({
   sectionTabs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 5,
   },
   sectionTab: {
     alignItems: 'center',
@@ -2585,9 +2644,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 6,
-    minHeight: 32,
-    paddingHorizontal: 10,
+    gap: 5,
+    minHeight: 28,
+    paddingHorizontal: 9,
   },
   sectionTabActive: {
     backgroundColor: adminPalette.blueSoft,
@@ -2653,8 +2712,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   panelBody: {
-    gap: 14,
-    padding: 14,
+    gap: 10,
+    padding: 10,
   },
   panelFooter: {
     backgroundColor: color.white,
