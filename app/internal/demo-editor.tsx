@@ -383,23 +383,24 @@ function CompactContextBar({
     <View style={styles.contextBar}>
       <View style={styles.contextMain}>
         <Text numberOfLines={1} style={styles.contextTitle}>
-          Konektado · Demo Editor | Admin: {access.email ?? access.userId}
+          Konektado {'\u00B7'} Demo Editor
         </Text>
       </View>
+      <Text numberOfLines={1} style={styles.contextAdminEmail}>{access.email ?? access.userId}</Text>
       <View style={styles.contextActions}>
         <Pressable
           accessibilityLabel="Refresh internal demo editor"
           accessibilityRole="button"
           onPress={onRefresh}
           style={({ pressed }) => [styles.contextIconButton, pressed && styles.pressed]}>
-          <MaterialIcons color={adminPalette.blue} name="refresh" size={20} />
+          <MaterialIcons color={color.white} name="refresh" size={18} />
         </Pressable>
         <Pressable
           accessibilityLabel="Log out of internal demo editor"
           accessibilityRole="button"
           onPress={onSignOut}
           style={({ pressed }) => [styles.contextIconButton, pressed && styles.pressed]}>
-          <MaterialIcons color={adminPalette.blue} name="logout" size={20} />
+          <MaterialIcons color={color.white} name="logout" size={18} />
         </Pressable>
       </View>
     </View>
@@ -2250,24 +2251,34 @@ const styles = StyleSheet.create({
   },
   contextBar: {
     alignItems: 'center',
-    backgroundColor: color.white,
-    borderBottomColor: adminPalette.line,
+    backgroundColor: adminPalette.blue,
+    borderBottomColor: adminPalette.blueDeep,
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: 10,
-    minHeight: 40,
-    paddingHorizontal: 12,
+    height: 44,
+    paddingHorizontal: 14,
     paddingVertical: 4,
+    ...(Platform.OS === 'web' ? { position: 'sticky' as never, top: 0, zIndex: 20 } : {}),
   },
   contextMain: {
     flex: 1,
     minWidth: 0,
   },
   contextTitle: {
-    color: adminPalette.ink,
+    color: color.white,
     fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 19,
+  },
+  contextAdminEmail: {
+    color: color.white,
+    flexShrink: 1,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    maxWidth: 360,
+    opacity: 0.92,
   },
   contextActions: {
     flexDirection: 'row',
@@ -2275,7 +2286,7 @@ const styles = StyleSheet.create({
   },
   contextIconButton: {
     alignItems: 'center',
-    borderColor: adminPalette.line,
+    borderColor: 'rgba(255,255,255,0.35)',
     borderRadius: radius.pill,
     borderWidth: 1,
     height: 30,
