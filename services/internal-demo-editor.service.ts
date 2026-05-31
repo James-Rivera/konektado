@@ -1,6 +1,11 @@
 import { File as ExpoFile } from 'expo-file-system';
 
-import { MVP_SERVICE_CATEGORIES, MVP_SERVICE_OPTIONS, getStoredMvpServiceOption } from '@/constants/service-taxonomy';
+import {
+  MVP_SERVICE_CATEGORIES,
+  MVP_SERVICE_OPTIONS,
+  getServicesForMvpCategory,
+  getStoredMvpServiceOption,
+} from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
 import {
   formatCanonicalAdminVerificationLabel,
@@ -133,13 +138,23 @@ export type EditableJob = {
   ownerId: string;
   title: string;
   description: string;
+  tags: string[];
   category: string;
   serviceNeeded: string;
   barangay: string;
   locationText: string;
   budgetMin: number | null;
   budgetMax: number | null;
+  budgetNegotiable: boolean;
   rateType: RateType;
+  workersNeeded: number | null;
+  scheduleText: string;
+  experienceLevel: string;
+  certificationRequired: boolean;
+  certificationNote: string;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoCloseEnabled: boolean;
   status: JobStatus;
   photoUrls: string[];
   createdAt: string;
@@ -151,13 +166,23 @@ export type EditableJobDraft = {
   userId: string;
   title: string;
   description: string;
+  tags: string[];
   category: string;
   serviceNeeded: string;
   barangay: string;
   locationText: string;
   budgetMin: number | null;
   budgetMax: number | null;
+  budgetNegotiable: boolean;
   rateType: RateType;
+  workersNeeded: number | null;
+  scheduleText: string;
+  experienceLevel: string;
+  certificationRequired: boolean;
+  certificationNote: string;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoCloseEnabled: boolean;
   photoUrls: string[];
   createdAt: string;
   updatedAt: string;
@@ -168,12 +193,22 @@ export type EditableService = {
   providerId: string;
   title: string;
   description: string;
+  tags: string[];
   category: string;
   barangay: string;
   locationText: string;
   rateMin: number | null;
   rateMax: number | null;
+  rateNegotiable: boolean;
   rateType: RateType;
+  yearsExperience: number | null;
+  availabilityText: string;
+  experienceLevel: string;
+  certificationAvailable: boolean;
+  certificationNote: string;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoPauseEnabled: boolean;
   isActive: boolean;
   photoUrls: string[];
   createdAt: string;
@@ -267,34 +302,54 @@ export type UpdateEditableProfilePayload = {
 };
 
 export type UpdateEditableJobPayload = {
+  allowMessages?: boolean;
+  autoCloseEnabled?: boolean;
+  autoReplyEnabled?: boolean;
   barangay?: string | null;
   budgetMax?: number | null;
   budgetMin?: number | null;
+  budgetNegotiable?: boolean;
   category?: string | null;
+  certificationNote?: string | null;
+  certificationRequired?: boolean;
   description?: string | null;
+  experienceLevel?: string | null;
   locationText?: string | null;
   photoUrls?: string[];
   rateType?: RateType | string | null;
+  scheduleText?: string | null;
   serviceNeeded?: string | null;
   status?: JobStatus;
+  tags?: string[];
   title?: string | null;
+  workersNeeded?: number | null;
 };
 
 export type EditableConversationStatus = (typeof EDITABLE_CONVERSATION_STATUSES)[number];
 export type EditableReportStatus = (typeof EDITABLE_REPORT_STATUSES)[number];
 
 export type CreateEditableJobPayload = {
+  allowMessages: boolean;
+  autoCloseEnabled: boolean;
+  autoReplyEnabled: boolean;
   barangay?: string | null;
   budgetMax?: number | null;
   budgetMin?: number | null;
+  budgetNegotiable: boolean;
   category: string;
+  certificationNote?: string | null;
+  certificationRequired: boolean;
   description: string;
+  experienceLevel: string;
   locationText?: string | null;
   photoUrls?: string[];
   rateType: RateType;
+  scheduleText?: string | null;
   serviceNeeded: string;
   status: JobStatus;
+  tags: string[];
   title: string;
+  workersNeeded?: number | null;
 };
 
 export type CreateEditableJobResult =
@@ -302,29 +357,49 @@ export type CreateEditableJobResult =
   | { kind: 'draft'; record: EditableJobDraft };
 
 export type UpdateEditableServicePayload = {
+  allowMessages?: boolean;
+  autoPauseEnabled?: boolean;
+  autoReplyEnabled?: boolean;
+  availabilityText?: string | null;
   barangay?: string | null;
   category?: string | null;
+  certificationAvailable?: boolean;
+  certificationNote?: string | null;
   description?: string | null;
+  experienceLevel?: string | null;
   isActive?: boolean;
   locationText?: string | null;
   photoUrls?: string[];
   rateMax?: number | null;
   rateMin?: number | null;
+  rateNegotiable?: boolean;
   rateType?: RateType | string | null;
+  tags?: string[];
   title?: string | null;
+  yearsExperience?: number | null;
 };
 
 export type CreateEditableServicePayload = {
+  allowMessages: boolean;
+  autoPauseEnabled: boolean;
+  autoReplyEnabled: boolean;
+  availabilityText?: string | null;
   barangay?: string | null;
   category: string;
+  certificationAvailable: boolean;
+  certificationNote?: string | null;
   description: string;
+  experienceLevel: string;
   isActive: boolean;
   locationText?: string | null;
   photoUrls?: string[];
   rateMax?: number | null;
   rateMin?: number | null;
+  rateNegotiable: boolean;
   rateType: RateType;
+  tags: string[];
   title: string;
+  yearsExperience?: number | null;
 };
 
 export type UpdateVerificationNotesPayload = {
@@ -380,45 +455,72 @@ type VerificationFileRow = {
 };
 
 type JobRow = {
+  allow_messages?: boolean | null;
+  auto_close_enabled?: boolean | null;
+  auto_reply_enabled?: boolean | null;
+  budget_negotiable?: boolean | null;
   budget_max: number | null;
   budget_min: number | null;
   category: string | null;
+  certification_note?: string | null;
+  certification_required?: boolean | null;
   client_id: string | null;
   created_at: string;
   description: string | null;
+  experience_level?: string | null;
   id: string;
   location_text: string | null;
   owner_id: string;
   photo_urls: string[] | null;
   rate_type: string | null;
+  schedule_text?: string | null;
   service_needed: string | null;
   status: JobStatus;
+  tags?: string[] | null;
   title: string;
   updated_at: string;
   barangay: string | null;
+  workers_needed?: number | null;
 };
 
 type JobDraftRow = {
+  allow_messages?: boolean | null;
+  auto_close_enabled?: boolean | null;
+  auto_reply_enabled?: boolean | null;
   barangay: string | null;
+  budget_negotiable?: boolean | null;
   budget_max: number | null;
   budget_min: number | null;
   category: string | null;
+  certification_note?: string | null;
+  certification_required?: boolean | null;
   created_at: string;
   description: string | null;
+  experience_level?: string | null;
   id: string;
   location_text: string | null;
   photo_urls: string[] | null;
   rate_type: string | null;
+  schedule_text?: string | null;
   service_needed: string | null;
+  tags?: string[] | null;
   title: string | null;
   updated_at: string;
   user_id: string;
+  workers_needed?: number | null;
 };
 
 type ServiceRow = {
+  allow_messages?: boolean | null;
+  auto_pause_enabled?: boolean | null;
+  auto_reply_enabled?: boolean | null;
+  availability_text?: string | null;
   category: string;
+  certification_available?: boolean | null;
+  certification_note?: string | null;
   created_at: string;
   description: string | null;
+  experience_level?: string | null;
   id: string;
   is_active: boolean | null;
   location_text: string | null;
@@ -426,10 +528,13 @@ type ServiceRow = {
   provider_id: string;
   rate_max: number | null;
   rate_min: number | null;
+  rate_negotiable?: boolean | null;
   rate_type: string | null;
+  tags?: string[] | null;
   title: string;
   updated_at: string;
   barangay: string | null;
+  years_experience?: number | null;
 };
 
 type ReviewRow = {
@@ -465,11 +570,11 @@ type MessageCountRow = {
 const PROFILE_COLUMNS =
   'id, email, full_name, first_name, last_name, barangay, purok_sitio, street, subdivision_area, city, about, avatar_url, availability, preferred_contact_method, verified_at, barangay_verified_at, created_at, updated_at';
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, barangay, location_text, budget_min, budget_max, rate_type, status, photo_urls, created_at, updated_at';
+  'id, owner_id, client_id, title, description, tags, category, service_needed, barangay, location_text, budget_min, budget_max, budget_negotiable, rate_type, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, status, photo_urls, created_at, updated_at';
 const JOB_DRAFT_COLUMNS =
-  'id, user_id, title, description, category, service_needed, barangay, location_text, budget_min, budget_max, rate_type, photo_urls, created_at, updated_at';
+  'id, user_id, title, description, tags, category, service_needed, barangay, location_text, budget_min, budget_max, budget_negotiable, rate_type, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, photo_urls, created_at, updated_at';
 const SERVICE_COLUMNS =
-  'id, provider_id, title, description, category, barangay, location_text, rate_min, rate_max, rate_type, is_active, photo_urls, created_at, updated_at';
+  'id, provider_id, title, description, tags, category, barangay, location_text, rate_min, rate_max, rate_negotiable, rate_type, years_experience, availability_text, experience_level, certification_available, certification_note, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, photo_urls, created_at, updated_at';
 const VERIFICATION_COLUMNS = 'id, user_id, status, notes, reviewer_note, created_at, updated_at';
 const VERIFICATION_FILE_COLUMNS = 'id, verification_id, credential_id, file_type, file_path, url, created_at';
 
@@ -803,49 +908,76 @@ function mapProfile(row: ProfileRow): EditableProfile {
 
 function mapJob(row: JobRow): EditableJob {
   return {
+    allowMessages: row.allow_messages ?? true,
+    autoCloseEnabled: row.auto_close_enabled ?? false,
+    autoReplyEnabled: row.auto_reply_enabled ?? false,
     barangay: row.barangay ?? '',
     budgetMax: row.budget_max ?? null,
     budgetMin: row.budget_min ?? null,
+    budgetNegotiable: row.budget_negotiable ?? false,
     category: row.category ?? '',
+    certificationNote: row.certification_note ?? '',
+    certificationRequired: row.certification_required ?? false,
     createdAt: row.created_at,
     description: row.description ?? '',
+    experienceLevel: row.experience_level ?? 'any',
     id: row.id,
     locationText: row.location_text ?? row.barangay ?? '',
     ownerId: row.client_id ?? row.owner_id,
     photoUrls: row.photo_urls ?? [],
     rateType: normalizeRateType(row.rate_type),
+    scheduleText: row.schedule_text ?? '',
     serviceNeeded: row.service_needed ?? '',
     status: row.status,
+    tags: row.tags ?? [],
     title: row.title,
     updatedAt: row.updated_at,
+    workersNeeded: row.workers_needed ?? null,
   };
 }
 
 function mapJobDraft(row: JobDraftRow): EditableJobDraft {
   return {
+    allowMessages: row.allow_messages ?? true,
+    autoCloseEnabled: row.auto_close_enabled ?? false,
+    autoReplyEnabled: row.auto_reply_enabled ?? false,
     barangay: row.barangay ?? '',
     budgetMax: row.budget_max ?? null,
     budgetMin: row.budget_min ?? null,
+    budgetNegotiable: row.budget_negotiable ?? false,
     category: row.category ?? '',
+    certificationNote: row.certification_note ?? '',
+    certificationRequired: row.certification_required ?? false,
     createdAt: row.created_at,
     description: row.description ?? '',
+    experienceLevel: row.experience_level ?? 'any',
     id: row.id,
     locationText: row.location_text ?? row.barangay ?? '',
     photoUrls: row.photo_urls ?? [],
     rateType: normalizeRateType(row.rate_type),
+    scheduleText: row.schedule_text ?? '',
     serviceNeeded: row.service_needed ?? '',
+    tags: row.tags ?? [],
     title: row.title ?? '',
     updatedAt: row.updated_at,
     userId: row.user_id,
+    workersNeeded: row.workers_needed ?? null,
   };
 }
 
 function mapService(row: ServiceRow): EditableService {
   return {
+    allowMessages: row.allow_messages ?? true,
+    autoPauseEnabled: row.auto_pause_enabled ?? false,
+    autoReplyEnabled: row.auto_reply_enabled ?? false,
+    availabilityText: row.availability_text ?? '',
     barangay: row.barangay ?? '',
     category: row.category,
+    certificationAvailable: row.certification_available ?? false,
+    certificationNote: row.certification_note ?? '',
     createdAt: row.created_at,
     description: row.description ?? '',
+    experienceLevel: row.experience_level ?? 'any',
     id: row.id,
     isActive: Boolean(row.is_active),
     locationText: row.location_text ?? row.barangay ?? '',
@@ -853,9 +985,12 @@ function mapService(row: ServiceRow): EditableService {
     providerId: row.provider_id,
     rateMax: row.rate_max ?? null,
     rateMin: row.rate_min ?? null,
+    rateNegotiable: row.rate_negotiable ?? false,
     rateType: normalizeRateType(row.rate_type),
+    tags: row.tags ?? [],
     title: row.title,
     updatedAt: row.updated_at,
+    yearsExperience: row.years_experience ?? null,
   };
 }
 
@@ -1023,6 +1158,32 @@ function validateActiveRateBounds(min: number | null | undefined, max: number | 
   return null;
 }
 
+function validatePositiveWholeNumber(value: number | null | undefined, label: string) {
+  if (value === null || value === undefined) return null;
+  if (!Number.isInteger(value) || value <= 0) return `${label} must be a positive whole number.`;
+  return null;
+}
+
+function validatePositiveNumber(value: number | null | undefined, label: string) {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value <= 0) return `${label} must be a positive number.`;
+  return null;
+}
+
+function validateExperienceLevel(value: string | null | undefined) {
+  return ['any', 'beginner', 'intermediate', 'experienced'].includes(compactText(value));
+}
+
+function cleanTextList(values: string[] | null | undefined) {
+  return Array.from(new Set((values ?? []).map(compactText).filter(Boolean))).slice(0, 4);
+}
+
+function getValidJobService(category: string, serviceNeeded: string) {
+  const storedService = getStoredMvpServiceOption(serviceNeeded);
+  if (!storedService) return null;
+  return getServicesForMvpCategory(category).includes(storedService) ? storedService : null;
+}
+
 async function getEditableOwnerStatus(userId: string): Promise<ServiceResult<InternalDemoVerificationStatus>> {
   const [profileResult, verificationResult] = await Promise.all([
     supabase
@@ -1147,45 +1308,79 @@ export async function updateEditableJob(jobId: string, payload: UpdateEditableJo
   const title = compactText(payload.title ?? current.title);
   const description = compactText(payload.description ?? current.description);
   const category = compactText(payload.category ?? current.category);
-  const serviceNeeded = compactText(payload.serviceNeeded ?? current.service_needed);
+  const serviceNeeded = getValidJobService(category, compactText(payload.serviceNeeded ?? current.service_needed));
   const budgetMin = payload.budgetMin === undefined ? current.budget_min : payload.budgetMin;
   const budgetMax = payload.budgetMax === undefined ? current.budget_max : payload.budgetMax;
+  const budgetNegotiable = payload.budgetNegotiable ?? current.budget_negotiable ?? false;
   const rateType = normalizeRateType(payload.rateType ?? current.rate_type);
+  const workersNeeded = payload.workersNeeded === undefined ? current.workers_needed ?? null : payload.workersNeeded;
+  const scheduleText = compactText(payload.scheduleText ?? current.schedule_text);
+  const experienceLevel = compactText(payload.experienceLevel ?? current.experience_level) || 'any';
+  const certificationRequired = payload.certificationRequired ?? current.certification_required ?? false;
+  const certificationNote = compactText(payload.certificationNote ?? current.certification_note);
+  const allowMessages = payload.allowMessages ?? current.allow_messages ?? true;
+  const autoReplyEnabled = payload.autoReplyEnabled ?? current.auto_reply_enabled ?? false;
+  const autoCloseEnabled = payload.autoCloseEnabled ?? current.auto_close_enabled ?? false;
+  const tags = cleanTextList(payload.tags ?? current.tags);
   const photoUrls = payload.photoUrls ?? current.photo_urls ?? [];
+  const barangay = compactText(payload.barangay ?? current.barangay);
+  const locationText = compactText(payload.locationText ?? current.location_text) || barangay;
 
   if (!title) return { data: null, error: 'Enter a job title.' };
   if (!description) return { data: null, error: 'Enter a job description.' };
   if (!MVP_SERVICE_CATEGORIES.includes(category as never)) return { data: null, error: 'Choose a valid job category.' };
-  if (!getStoredMvpServiceOption(serviceNeeded)) return { data: null, error: 'Choose a valid service needed.' };
+  if (!serviceNeeded) return { data: null, error: 'Choose a service needed that belongs to the selected job category.' };
+  if (!validateExperienceLevel(experienceLevel)) return { data: null, error: 'Choose a valid experience level.' };
+  const workersError = validatePositiveWholeNumber(workersNeeded, 'Workers needed');
+  if (workersError) return { data: null, error: workersError };
   const rateError = ACTIVE_JOB_STATUSES.has(nextStatus)
     ? validateActiveRateBounds(budgetMin, budgetMax, 'Budget')
     : validateRateBounds(budgetMin, budgetMax, 'Budget');
   if (rateError) return { data: null, error: rateError };
-  const visibleValidation = validateDemoContent({ barangay: payload.barangay ?? '', description, locationText: payload.locationText ?? '', serviceNeeded, title });
+  const visibleValidation = validateDemoContent({
+    barangay,
+    category,
+    certificationNote,
+    description,
+    locationText,
+    scheduleText,
+    serviceNeeded,
+    tags: tags.join(' '),
+    title,
+  });
   if (visibleValidation.error) return visibleValidation;
   const photoValidation = validatePublicPhotoUrls(photoUrls);
   if (photoValidation.error) return photoValidation;
 
   const closedAt = ['completed', 'closed', 'cancelled'].includes(nextStatus) ? new Date().toISOString() : null;
-  const locationText = compactText(payload.locationText ?? current.location_text) || compactText(payload.barangay ?? current.barangay);
 
   const { data, error } = await supabase
     .from('jobs')
     .update({
-      barangay: compactText(payload.barangay ?? current.barangay) || null,
+      allow_messages: allowMessages,
+      auto_close_enabled: autoCloseEnabled,
+      auto_reply_enabled: autoReplyEnabled,
+      barangay: barangay || null,
       budget_max: budgetMax,
       budget_min: budgetMin,
+      budget_negotiable: budgetNegotiable,
       category,
+      certification_note: certificationNote || null,
+      certification_required: certificationRequired,
       closed_at: closedAt,
       description,
+      experience_level: experienceLevel,
       location: locationText || null,
       location_text: locationText || null,
       photo_urls: photoUrls.map(compactText).filter(Boolean),
       public_location_text: locationText || null,
       rate_type: rateType,
+      schedule_text: scheduleText || null,
       service_needed: serviceNeeded,
       status: nextStatus,
+      tags,
       title,
+      workers_needed: workersNeeded,
     })
     .eq('id', cleanJobId)
     .select(JOB_COLUMNS)
@@ -1215,30 +1410,37 @@ export async function createEditableJob(
   const title = compactText(payload.title);
   const description = compactText(payload.description);
   const category = compactText(payload.category);
-  const serviceNeeded = compactText(payload.serviceNeeded);
+  const serviceNeeded = getValidJobService(category, compactText(payload.serviceNeeded));
   const budgetMin = payload.budgetMin ?? null;
   const budgetMax = payload.budgetMax ?? null;
+  const workersNeeded = payload.workersNeeded ?? null;
+  const scheduleText = compactText(payload.scheduleText);
+  const experienceLevel = compactText(payload.experienceLevel) || 'any';
+  const certificationNote = compactText(payload.certificationNote);
+  const tags = cleanTextList(payload.tags);
   const rateType = normalizeRateType(payload.rateType);
   const photoUrls = payload.photoUrls ?? [];
   const locationText = compactText(payload.locationText) || compactText(payload.barangay) || 'Barangay San Pedro';
 
   if (!title) return { data: null, error: 'Enter a job title.' };
   if (!description) return { data: null, error: 'Enter a job description.' };
-  if (ownerVerified && ACTIVE_JOB_STATUSES.has(nextStatus) && !MVP_SERVICE_CATEGORIES.includes(category as never)) {
-    return { data: null, error: 'Choose a valid job category before making this job active.' };
-  }
-  if (ownerVerified && ACTIVE_JOB_STATUSES.has(nextStatus) && !getStoredMvpServiceOption(serviceNeeded)) {
-    return { data: null, error: 'Choose a valid service needed before making this job active.' };
-  }
+  if (!MVP_SERVICE_CATEGORIES.includes(category as never)) return { data: null, error: 'Choose a valid job category.' };
+  if (!serviceNeeded) return { data: null, error: 'Choose a service needed that belongs to the selected job category.' };
+  if (!validateExperienceLevel(experienceLevel)) return { data: null, error: 'Choose a valid experience level.' };
+  const workersError = validatePositiveWholeNumber(workersNeeded, 'Workers needed');
+  if (workersError) return { data: null, error: workersError };
   const rateError = ownerVerified && ACTIVE_JOB_STATUSES.has(nextStatus)
     ? validateActiveRateBounds(budgetMin, budgetMax, 'Budget')
     : validateRateBounds(budgetMin, budgetMax, 'Budget');
   if (rateError) return { data: null, error: rateError };
   const visibleValidation = validateDemoContent({
     barangay: payload.barangay ?? '',
+    certificationNote,
     description,
     locationText,
+    scheduleText,
     serviceNeeded,
+    tags: tags.join(' '),
     title,
   });
   if (visibleValidation.error) return visibleValidation;
@@ -1253,13 +1455,23 @@ export async function createEditableJob(
           barangay: compactText(payload.barangay) || 'Barangay San Pedro',
           budgetMax,
           budgetMin,
+          budgetNegotiable: payload.budgetNegotiable,
           category,
+          certificationNote,
+          certificationRequired: payload.certificationRequired,
           description,
+          experienceLevel,
           locationText,
           photoUrls: photoUrls.map(compactText).filter(Boolean),
           rateType,
+          scheduleText,
           serviceNeeded,
+          tags,
           title,
+          workersNeeded,
+          allowMessages: payload.allowMessages,
+          autoReplyEnabled: payload.autoReplyEnabled,
+          autoCloseEnabled: payload.autoCloseEnabled,
         },
       })
       .single<JobDraftRow>();
@@ -1275,14 +1487,24 @@ export async function createEditableJob(
         barangay: compactText(payload.barangay) || 'Barangay San Pedro',
         budgetMax,
         budgetMin,
+        budgetNegotiable: payload.budgetNegotiable,
         category,
+        certificationNote,
+        certificationRequired: payload.certificationRequired,
         description,
+        experienceLevel,
         locationText,
         photoUrls: photoUrls.map(compactText).filter(Boolean),
         rateType,
+        scheduleText,
         serviceNeeded,
         status: nextStatus,
+        tags,
         title,
+        workersNeeded,
+        allowMessages: payload.allowMessages,
+        autoReplyEnabled: payload.autoReplyEnabled,
+        autoCloseEnabled: payload.autoCloseEnabled,
       },
     })
     .single<JobRow>();
@@ -1326,36 +1548,66 @@ export async function updateEditableService(
   const category = compactText(payload.category ?? current.category);
   const rateMin = payload.rateMin === undefined ? current.rate_min : payload.rateMin;
   const rateMax = payload.rateMax === undefined ? current.rate_max : payload.rateMax;
+  const rateNegotiable = payload.rateNegotiable ?? current.rate_negotiable ?? false;
   const rateType = normalizeRateType(payload.rateType ?? current.rate_type);
+  const yearsExperience = payload.yearsExperience === undefined ? current.years_experience ?? null : payload.yearsExperience;
+  const availabilityText = compactText(payload.availabilityText ?? current.availability_text);
+  const experienceLevel = compactText(payload.experienceLevel ?? current.experience_level) || 'any';
+  const certificationAvailable = payload.certificationAvailable ?? current.certification_available ?? false;
+  const certificationNote = compactText(payload.certificationNote ?? current.certification_note);
+  const allowMessages = payload.allowMessages ?? current.allow_messages ?? true;
+  const autoReplyEnabled = payload.autoReplyEnabled ?? current.auto_reply_enabled ?? false;
+  const autoPauseEnabled = payload.autoPauseEnabled ?? current.auto_pause_enabled ?? false;
+  const tags = cleanTextList(payload.tags ?? current.tags);
   const photoUrls = payload.photoUrls ?? current.photo_urls ?? [];
+  const barangay = compactText(payload.barangay ?? current.barangay);
+  const locationText = compactText(payload.locationText ?? current.location_text) || barangay;
 
   if (!title) return { data: null, error: 'Enter a service title.' };
   if (!description) return { data: null, error: 'Enter a service description.' };
-  if (nextActive && !MVP_SERVICE_OPTIONS.includes(category as never)) {
-    return { data: null, error: 'Choose a valid service category before making this service active.' };
-  }
+  if (!MVP_SERVICE_OPTIONS.includes(category as never)) return { data: null, error: 'Choose a valid service category.' };
+  if (!validateExperienceLevel(experienceLevel)) return { data: null, error: 'Choose a valid experience level.' };
+  const experienceError = validatePositiveNumber(yearsExperience, 'Years of experience');
+  if (experienceError) return { data: null, error: experienceError };
   const rateError = nextActive ? validateActiveRateBounds(rateMin, rateMax, 'Rate') : validateRateBounds(rateMin, rateMax, 'Rate');
   if (rateError) return { data: null, error: rateError };
-  const visibleValidation = validateDemoContent({ barangay: payload.barangay ?? '', category, description, locationText: payload.locationText ?? '', title });
+  const visibleValidation = validateDemoContent({
+    availabilityText,
+    barangay,
+    category,
+    certificationNote,
+    description,
+    locationText,
+    tags: tags.join(' '),
+    title,
+  });
   if (visibleValidation.error) return visibleValidation;
   const photoValidation = validatePublicPhotoUrls(photoUrls);
   if (photoValidation.error) return photoValidation;
 
-  const locationText = compactText(payload.locationText ?? current.location_text) || compactText(payload.barangay ?? current.barangay);
-
   const { data, error } = await supabase
     .from('services')
     .update({
-      barangay: compactText(payload.barangay ?? current.barangay) || null,
+      allow_messages: allowMessages,
+      auto_pause_enabled: autoPauseEnabled,
+      auto_reply_enabled: autoReplyEnabled,
+      availability_text: availabilityText || null,
+      barangay: barangay || null,
       category,
+      certification_available: certificationAvailable,
+      certification_note: certificationNote || null,
       description,
+      experience_level: experienceLevel,
       is_active: nextActive,
       location_text: locationText || null,
       photo_urls: photoUrls.map(compactText).filter(Boolean),
       rate_max: rateMax,
       rate_min: rateMin,
+      rate_negotiable: rateNegotiable,
       rate_type: rateType,
+      tags,
       title,
+      years_experience: yearsExperience,
     })
     .eq('id', cleanServiceId)
     .select(SERVICE_COLUMNS)
@@ -1385,6 +1637,11 @@ export async function createEditableService(
   const category = compactText(payload.category);
   const rateMin = payload.rateMin ?? null;
   const rateMax = payload.rateMax ?? null;
+  const yearsExperience = payload.yearsExperience ?? null;
+  const availabilityText = compactText(payload.availabilityText);
+  const experienceLevel = compactText(payload.experienceLevel) || 'any';
+  const certificationNote = compactText(payload.certificationNote);
+  const tags = cleanTextList(payload.tags);
   const rateType = normalizeRateType(payload.rateType);
   const photoUrls = payload.photoUrls ?? [];
   const locationText = compactText(payload.locationText) || compactText(payload.barangay) || 'Barangay San Pedro';
@@ -1392,13 +1649,19 @@ export async function createEditableService(
   if (!title) return { data: null, error: 'Enter a service title.' };
   if (!description) return { data: null, error: 'Enter a service description.' };
   if (!MVP_SERVICE_OPTIONS.includes(category as never)) return { data: null, error: 'Choose a valid service category.' };
+  if (!validateExperienceLevel(experienceLevel)) return { data: null, error: 'Choose a valid experience level.' };
+  const experienceError = validatePositiveNumber(yearsExperience, 'Years of experience');
+  if (experienceError) return { data: null, error: experienceError };
   const rateError = nextActive ? validateActiveRateBounds(rateMin, rateMax, 'Rate') : validateRateBounds(rateMin, rateMax, 'Rate');
   if (rateError) return { data: null, error: rateError };
   const visibleValidation = validateDemoContent({
+    availabilityText,
     barangay: payload.barangay ?? '',
     category,
+    certificationNote,
     description,
     locationText,
+    tags: tags.join(' '),
     title,
   });
   if (visibleValidation.error) return visibleValidation;
@@ -1410,14 +1673,24 @@ export async function createEditableService(
       p_payload: {
         barangay: compactText(payload.barangay) || 'Barangay San Pedro',
         category,
+        certificationAvailable: payload.certificationAvailable,
+        certificationNote,
         description,
+        experienceLevel,
         isActive: nextActive,
         locationText,
         photoUrls: photoUrls.map(compactText).filter(Boolean),
         rateMax,
         rateMin,
+        rateNegotiable: payload.rateNegotiable,
         rateType,
+        tags,
         title,
+        yearsExperience,
+        availabilityText,
+        allowMessages: payload.allowMessages,
+        autoReplyEnabled: payload.autoReplyEnabled,
+        autoPauseEnabled: payload.autoPauseEnabled,
       },
       p_provider_id: cleanProviderId,
     })
