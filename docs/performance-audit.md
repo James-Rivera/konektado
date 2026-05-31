@@ -4,6 +4,61 @@
 
 Current status note: the root-cause sections below are the original audit baseline. Phases 1-4 and post-Phase-4 stabilization have since addressed messaging freshness, Search/Home query behavior, Home/Search virtualization, shared profile state, and onboarding routing. Treat the later Implementation Status, phase notes, P1 reconciliation, and `docs/stabilization-audit.md` as the current status source.
 
+## 2026-05-31 Progressive Slowdown Audit Update
+
+### Findings
+
+| File / area | Symptom | Root cause | User impact | Risk | Proposed fix |
+| --- | --- | --- | --- | --- | --- |
+| `components/home/HomeFeedCard.tsx`, `components/search/SearchWorkerResultCard.tsx`, `components/WorkerCard.tsx`, detail/message/profile avatars | Remote avatars and feed photos can take a long time to appear and may reload across navigation. | Stable Supabase/public URLs were rendered with React Native `Image`, which gives less predictable disk caching/fade behavior than `expo-image`. | Image-heavy feeds can feel stuck even when text data has loaded. | High | Use a shared `expo-image` wrapper with disk cache, stable recycling keys, fade-in transitions, and initials/fallback UI for avatars. |
+| `app/(tabs)/index.tsx` | Returning to Home can look like a full refresh. | Home always reloaded jobs/services on focus and set feed loading, even when prior content was still valid. | Repeated tab switching feels slower and causes unnecessary skeleton work. | High | Add short-lived Home feed cache, stale-while-refresh behavior, and in-flight request deduping. |
+| `app/(tabs)/index.tsx`, `app/(tabs)/search.tsx` | Long result lists can feel heavy on lower-end Android. | `FlatList` virtualization existed, but render/window props were not tuned for image-heavy cards. | More JS/render work than needed during scrolling. | Medium | Tune `initialNumToRender`, `maxToRenderPerBatch`, `windowSize`, and clipped subview removal. |
+| `services/profile-photo.service.ts`, `services/job-photo.service.ts`, `services/service-photo.service.ts` | Small avatars/cards may download original phone-sized uploads. | Upload helpers stored the selected file as-is and only saved one public URL. | Slow image downloads and excess bandwidth, especially on mobile data. | Medium | Completed: normalize new public image uploads before storage; defer separate thumbnail/detail schema columns until a measured need exists. |
+| `services/job.service.ts`, `services/service-profile.service.ts` | Home/Search list loads still wait on base rows, visibility checks, profile summaries, avatar visibility, and stats. | Privacy-safe discovery is implemented as several dependent service calls rather than a list-ready RPC/view. | Acceptable for MVP data, but latency grows with row count/history. | Medium | Cache public profile summaries briefly and consider list-ready RPCs/denormalized stats only after real query profiling. |
+| `app/(tabs)/messages.tsx`, `app/conversation/[conversationId].tsx` | Very large inboxes or long threads can still degrade. | These screens still use `ScrollView`; realtime subscription cleanup is present, but list virtualization remains deferred. | Progressive slowdown in large chat histories. | Medium | Defer chat virtualization until keyboard/realtime behavior can be manually QA'd. |
+
+### Completed Fixes In This Pass
+
+- Added `components/CachedRemoteImage.tsx`, a shared `expo-image` wrapper using disk cache, stable `recyclingKey`, and a short fade transition.
+- Migrated high-traffic remote images to cached rendering:
+  - Home feed avatars and feed photos.
+  - Search worker avatars.
+  - Legacy worker/job card photos.
+  - Job detail photo and poster avatar.
+  - Messages inbox and conversation header avatars.
+  - Current profile, public profile, and profile setup avatars.
+- Job/service photo thumbnails shown after upload.
+- Added public upload optimization for new profile avatars, job photos, and service photos using `expo-image-manipulator`.
+- New public avatar uploads are resized to a 640px maximum side and JPEG-compressed before saving to `profiles.avatar_url`.
+- New public job/service uploads are resized to a 1400px maximum side and JPEG-compressed before saving to `photo_urls`.
+- Internal demo editor local public image uploads now use the same public optimization helper before storing profile avatars, job photos, and service photos.
+- Internal demo editor pasted external image URLs remain supported as a demo shortcut, but they are saved as-is and are not compressed.
+- Private verification files, credential documents, and signed verification URLs remain outside the public image optimization path.
+- Added display URL selection helpers so avatar/card/detail paths can prefer future thumbnail/detail variants while falling back to today's URL fields.
+- Home feed now keeps cached content visible during a background refresh for a short TTL instead of showing feed skeletons every focus.
+- Home feed refreshes are deduped while an equivalent request is already in flight.
+- Home and Search `FlatList` render windows are tuned for smoother Android scrolling.
+- The previous Home setup prompt fix remains in place: conditional setup/profile/verification prompts render nothing while eligibility is unknown.
+
+### Remaining Risks
+
+- Existing uploaded images may still be large original files. `expo-image` caching helps repeat loads, and new uploads are now resized/compressed, but old records will stay large until manually replaced or migrated.
+- Pasted external URLs, including those entered through the internal demo editor, can still point to large remote images because the app does not download and re-upload them.
+- Separate thumbnail/detail URL columns were not added in this pass because the current schema exposes only `avatar_url` and `photo_urls`; adding parallel arrays would widen service/RPC/admin/moderation contracts without a measured need.
+- Public discovery still performs multiple privacy-safe service-layer steps. This should be optimized with measured Supabase query plans or list-ready RPCs, not by weakening visibility/privacy rules.
+- Messages inbox and conversation thread virtualization are still deferred because chat keyboard behavior, optimistic sends, realtime inserts, and scroll-to-bottom behavior need careful manual QA.
+- No real-device timing profile was captured during this pass.
+
+### Manual Android QA
+
+- Open Home cold and confirm text/card content appears before slow images finish.
+- Switch Home -> Search -> Messages -> Home repeatedly; Home should keep existing feed content instead of flashing a full feed reload within the cache window.
+- Scroll an image-heavy Home feed on 360x800, 390x844, and 430x932.
+- Open Search Workers with profile photos, scroll quickly, and confirm avatars fade in or fall back without blocking card text.
+- Open Job Detail with a photo and poster avatar, then return and reopen; cached images should be faster.
+- Open Messages and a conversation with avatars; switch away and back repeatedly and confirm no duplicate realtime behavior or visual slowdown.
+- Test a broken/slow avatar URL and confirm initials/fallbacks remain visible.
+
 The main performance problems are not caused by one single slow screen. They come from a few repeated patterns:
 
 - Messaging uses optimistic local sends, but message fetching and conversation preview reconciliation are incomplete. There is no realtime subscription for `messages` or `conversations`, incoming messages do not update while a screen stays mounted, and preview updates only cover conversations already in local memory.

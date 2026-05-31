@@ -1,9 +1,11 @@
-import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile, type ProfileRecord } from '@/hooks/use-profile';
 import { isPresenceActive } from '@/services/marketplace.helpers';
+import { getAvatarDisplayUrl } from '@/utils/image-processing';
 
 type CurrentUserIdentityRowProps = {
   showEmail?: boolean;
@@ -24,12 +26,13 @@ export function CurrentUserIdentityRow({
   const displayName = getProfileDisplayName(profile);
   const secondaryText = showEmail ? profile?.email ?? 'Signed in account' : subtitle;
   const avatarSize = size === 'lg' ? 54 : 46;
+  const avatarUrl = getAvatarDisplayUrl({ avatarUrl: profile?.avatar_url });
 
   return (
     <View style={[styles.row, style]}>
       <View style={[styles.avatar, { height: avatarSize, width: avatarSize }]}>
-        {profile?.avatar_url ? (
-          <Image resizeMode="cover" source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+        {avatarUrl ? (
+          <CachedRemoteImage uri={avatarUrl} style={styles.avatarImage} />
         ) : (
           <Text style={[styles.avatarText, size === 'lg' && styles.avatarTextLarge]}>
             {getProfileInitials(displayName)}

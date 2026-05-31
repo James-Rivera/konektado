@@ -849,12 +849,16 @@ export default function SearchScreen() {
           ref={listRef}
           contentContainerStyle={[styles.content, { paddingTop: controlsHeight }]}
           data={listRows}
+          initialNumToRender={8}
           keyExtractor={keyExtractor}
           keyboardShouldPersistTaps="handled"
+          maxToRenderPerBatch={8}
           onScroll={handleScroll}
+          removeClippedSubviews
           renderItem={renderSearchRow}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
+          windowSize={7}
         />
 
         <SearchFiltersSheet

@@ -5,7 +5,6 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
-    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -18,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { NoticeBanner } from '@/components/NoticeBanner';
@@ -46,6 +46,7 @@ import type {
     WorkProfileInput,
 } from '@/types/profile.types';
 import type { LegalNameEditPolicy } from '@/types/legal-name.types';
+import { getAvatarDisplayUrl } from '@/utils/image-processing';
 import { NAME_CORRECTION_REQUEST_EXPLANATION } from '@/utils/verified-name-policy';
 
 type FormMode = ProfileCompletionMode;
@@ -573,12 +574,14 @@ function ProfilePhotoSection({
   uploading: boolean;
   onPickAvatar: () => void;
 }) {
+  const displayAvatarUrl = getAvatarDisplayUrl({ avatarUrl });
+
   return (
     <View style={styles.photoSectionStack}>
       <View style={styles.photoSection}>
         <View style={styles.photoPreview}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.photoImage} />
+          {displayAvatarUrl ? (
+            <CachedRemoteImage uri={displayAvatarUrl} style={styles.photoImage} />
           ) : (
             <Text style={styles.photoInitials}>{getInitials(name || 'Konektado resident')}</Text>
           )}

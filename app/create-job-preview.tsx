@@ -20,6 +20,7 @@ import {
     isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
+import { getCardImageUrl } from '@/utils/image-processing';
 
 type JobDraft = {
   title: string;
@@ -284,7 +285,7 @@ export default function CreateJobPreviewScreen() {
             <JobCard
               clientRatingText="Preview listing"
               description={draft.description}
-              imageUrl={draft.photoUrls[0]}
+              imageUrl={getCardImageUrl({ imageUrl: draft.photoUrls[0] })}
               jobsPostedText={workersNeeded ? `${workersNeeded} worker${workersNeeded === 1 ? '' : 's'} needed` : 'Workers to coordinate'}
               location={draft.barangay || 'Barangay San Pedro'}
               postedAt="Posted just now"

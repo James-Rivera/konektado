@@ -23,6 +23,7 @@ import {
 } from '@/services/profile-completion.service';
 import { createService } from '@/services/service-profile.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
+import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
 
 type ServiceDraft = {
   allowMessages: boolean;
@@ -245,13 +246,13 @@ export default function CreateServicePreviewScreen() {
 
           <View style={styles.previewFrame}>
             <WorkerCard
-              avatarUrl={profile?.avatar_url}
+              avatarUrl={getAvatarDisplayUrl({ avatarUrl: profile?.avatar_url })}
               headline={formatServicePostTitle({
                 title: draft.title,
                 category: draft.category,
                 cue: 'offers',
               })}
-              imageUrl={draft.photoUrls?.[0]}
+              imageUrl={getCardImageUrl({ imageUrl: draft.photoUrls?.[0] })}
               isActive={isPresenceActive(draft.availability || profile?.availability)}
               jobsDoneText="Jobs after publish"
               location={draft.locationText || profile?.barangay || 'Barangay San Pedro'}

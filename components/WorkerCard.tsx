@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, typography } from '@/constants/theme';
 
@@ -44,6 +45,12 @@ export function WorkerCard({
   onViewProfile,
   onSave,
 }: WorkerCardProps) {
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
+
   return (
     <Pressable
       accessibilityLabel={`${name} worker profile`}
@@ -54,8 +61,12 @@ export function WorkerCard({
         <View style={styles.headerRow}>
           <View style={styles.identityRow}>
             <View style={styles.avatar}>
-              {avatarUrl ? (
-                <Image resizeMode="cover" source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              {avatarUrl && !avatarFailed ? (
+                <CachedRemoteImage
+                  onError={() => setAvatarFailed(true)}
+                  uri={avatarUrl}
+                  style={styles.avatarImage}
+                />
               ) : (
                 <Text style={styles.avatarText}>{getInitials(name)}</Text>
               )}
@@ -127,10 +138,9 @@ function WorkerPhoto({ imageUrl }: { imageUrl: string }) {
   }
 
   return (
-    <Image
+    <CachedRemoteImage
       onError={() => setFailed(true)}
-      resizeMode="cover"
-      source={{ uri: imageUrl }}
+      uri={imageUrl}
       style={styles.photo}
     />
   );

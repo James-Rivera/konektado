@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
@@ -402,7 +402,7 @@ export default function CreateServiceScreen() {
               <ScrollView horizontal contentContainerStyle={styles.photoStrip} showsHorizontalScrollIndicator={false}>
                 {photoUrls.map((url, index) => (
                   <View key={`${url}-${index}`} style={styles.photoTile}>
-                    <Image resizeMode="cover" source={{ uri: url }} style={styles.photoThumb} />
+                    <CachedRemoteImage uri={url} style={styles.photoThumb} />
                     <Pressable
                       accessibilityLabel={`Remove photo ${index + 1}`}
                       accessibilityRole="button"
