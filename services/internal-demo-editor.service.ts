@@ -15,7 +15,10 @@ import {
 } from '@/services/content-visibility.service';
 import { compactText, formatPublicLocation, isCurrentUserAdmin, normalizeRateType } from '@/services/marketplace.helpers';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
-import { optimizePublicImageForUpload } from '@/utils/image-processing';
+import {
+  optimizePublicImageForUpload,
+  readPublicImageUploadBody,
+} from '@/utils/image-processing';
 import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
 
@@ -1070,24 +1073,37 @@ export async function updateEditableProfile(
   const fullName = compactText(payload.fullName);
   const firstName = compactText(payload.firstName);
   const lastName = compactText(payload.lastName);
-  if (!fullName && !firstName && !lastName) {
+  const allNameFieldsProvided =
+    payload.fullName !== undefined &&
+    payload.firstName !== undefined &&
+    payload.lastName !== undefined;
+  if (allNameFieldsProvided && !fullName && !firstName && !lastName) {
     return { data: null, error: 'Enter a public name for this profile.' };
   }
 
-  const updatePayload = {
-    about: compactText(payload.about) || null,
-    avatar_url: compactText(payload.avatarUrl) || null,
-    availability: compactText(payload.availability) || null,
-    barangay: compactText(payload.barangay) || null,
-    city: compactText(payload.city) || null,
-    first_name: firstName || null,
-    full_name: fullName || [firstName, lastName].filter(Boolean).join(' ') || null,
-    last_name: lastName || null,
-    preferred_contact_method: compactText(payload.preferredContactMethod) || null,
-    purok_sitio: compactText(payload.purokSitio) || null,
-    street: compactText(payload.street) || null,
-    subdivision_area: compactText(payload.subdivisionArea) || null,
-  };
+  const updatePayload: Record<string, string | null> = {};
+  if (payload.about !== undefined) updatePayload.about = compactText(payload.about) || null;
+  if (payload.avatarUrl !== undefined) updatePayload.avatar_url = compactText(payload.avatarUrl) || null;
+  if (payload.availability !== undefined) updatePayload.availability = compactText(payload.availability) || null;
+  if (payload.barangay !== undefined) updatePayload.barangay = compactText(payload.barangay) || null;
+  if (payload.city !== undefined) updatePayload.city = compactText(payload.city) || null;
+  if (payload.firstName !== undefined) updatePayload.first_name = firstName || null;
+  if (payload.fullName !== undefined) {
+    updatePayload.full_name = fullName || [firstName, lastName].filter(Boolean).join(' ') || null;
+  }
+  if (payload.lastName !== undefined) updatePayload.last_name = lastName || null;
+  if (payload.preferredContactMethod !== undefined) {
+    updatePayload.preferred_contact_method = compactText(payload.preferredContactMethod) || null;
+  }
+  if (payload.purokSitio !== undefined) updatePayload.purok_sitio = compactText(payload.purokSitio) || null;
+  if (payload.street !== undefined) updatePayload.street = compactText(payload.street) || null;
+  if (payload.subdivisionArea !== undefined) {
+    updatePayload.subdivision_area = compactText(payload.subdivisionArea) || null;
+  }
+
+  if (!Object.keys(updatePayload).length) {
+    return { data: null, error: 'Choose at least one profile field to update.' };
+  }
 
   const { data, error } = await supabase
     .from('profiles')
@@ -1715,16 +1731,28 @@ export async function uploadPublicDemoImage(
 
     const fileName = normalizeFileName(optimizedAsset.name, `${targetType}.jpg`);
     const path = `${access.data.userId}/internal-demo/${targetType}-${Date.now()}-${fileName}`;
-    const uploadBody = await getFileUploadBody(optimizedAsset, fileName);
-    if (uploadBody.error || !uploadBody.data) return { data: null, error: uploadBody.error ?? 'Could not read this image.' };
+    let uploadBody: PublicDemoImageUploadBody;
+    try {
+      uploadBody = await readPublicImageUploadBody(optimizedAsset);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : null;
+      return {
+        data: null,
+        error: `Image preparation failed after optimization. ${message || 'Try choosing the file again.'}`,
+      };
+    }
 
-    const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.data.body, {
-      contentType: uploadBody.data.contentType,
+    const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.body, {
+      contentType: uploadBody.contentType,
       upsert: false,
     });
 
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: `Storage upload failed. ${error.message}` };
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    if (!data.publicUrl) {
+      await supabase.storage.from(bucket).remove([path]);
+      return { data: null, error: 'Storage upload finished, but the public image URL could not be created.' };
+    }
     return { data: data.publicUrl, error: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : null;

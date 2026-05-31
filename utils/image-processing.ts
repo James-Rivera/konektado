@@ -1,9 +1,10 @@
 import { File } from 'expo-file-system';
 import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator';
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
 
 const MB = 1024 * 1024;
 const MAX_PUBLIC_SOURCE_IMAGE_BYTES = 25 * MB;
+const PUBLIC_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
 
 type PublicImagePurpose = 'avatar' | 'marketplace-photo';
 
@@ -22,6 +23,11 @@ type OptimizedPublicImage = {
   size?: number;
   uri: string;
   width?: number;
+};
+
+export type PublicImageUploadBody = {
+  body: ArrayBuffer;
+  contentType: string;
 };
 
 const PUBLIC_IMAGE_CONFIG: Record<
@@ -59,6 +65,11 @@ function isSupportedPublicImageMime(mimeType: string | null | undefined) {
   return /^image\/(jpeg|jpg|png|webp|heic|heif)$/i.test(mimeType);
 }
 
+function getFileExtension(value: string | null | undefined) {
+  const cleanValue = compactText(value).split('?')[0] ?? '';
+  return cleanValue.includes('.') ? cleanValue.split('.').pop()?.toLowerCase() ?? '' : '';
+}
+
 function getLocalImageSize(uri: string) {
   return new Promise<{ height: number; width: number } | null>((resolve) => {
     Image.getSize(
@@ -89,6 +100,8 @@ function getResizeAction({
 }
 
 function getFileSize(uri: string) {
+  if (Platform.OS === 'web') return undefined;
+
   try {
     return new File(uri).size;
   } catch {
@@ -96,8 +109,41 @@ function getFileSize(uri: string) {
   }
 }
 
+export async function readPublicImageUploadBody(
+  asset: PublicImageAsset,
+): Promise<PublicImageUploadBody> {
+  const contentType = compactText(asset.mimeType) || 'image/jpeg';
+
+  if (/^(blob:|data:|https?:\/\/)/i.test(asset.uri)) {
+    const response = await fetch(asset.uri);
+    if (!response.ok) {
+      throw new Error(`Could not read ${asset.name || 'image'}.`);
+    }
+
+    return {
+      body: await response.arrayBuffer(),
+      contentType: response.headers.get('content-type') || contentType,
+    };
+  }
+
+  const localFile = new File(asset.uri);
+  return {
+    body: await localFile.arrayBuffer(),
+    contentType,
+  };
+}
+
 export function getPublicImageValidationError(asset: PublicImageAsset) {
+  if (!asset.uri) {
+    return 'Choose an image file first.';
+  }
+
   if (!isSupportedPublicImageMime(asset.mimeType)) {
+    return 'Choose a JPEG, PNG, WebP, HEIC, or HEIF image.';
+  }
+
+  const extension = getFileExtension(asset.name ?? asset.uri);
+  if (!asset.mimeType && extension && !PUBLIC_IMAGE_EXTENSIONS.has(extension)) {
     return 'Choose a JPEG, PNG, WebP, HEIC, or HEIF image.';
   }
 
