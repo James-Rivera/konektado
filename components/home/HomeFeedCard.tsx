@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
@@ -258,10 +259,9 @@ function Avatar({
   return (
     <View style={styles.avatar}>
       {imageUrl && !failed ? (
-        <Image
+        <CachedRemoteImage
           onError={() => setFailed(true)}
-          resizeMode="cover"
-          source={{ uri: imageUrl }}
+          uri={imageUrl}
           style={styles.avatarImage}
         />
       ) : (
@@ -288,10 +288,9 @@ function FeedPhoto({ imageUrl }: { imageUrl: string }) {
   }
 
   return (
-    <Image
+    <CachedRemoteImage
       onError={() => setFailed(true)}
-      resizeMode="cover"
-      source={{ uri: imageUrl }}
+      uri={imageUrl}
       style={styles.photo}
     />
   );

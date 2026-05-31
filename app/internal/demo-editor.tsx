@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -20,6 +20,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdminStatusBadge, adminPalette, type AdminTone } from '@/components/admin/AdminShell';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { MVP_SERVICE_CATEGORIES, MVP_SERVICE_OPTIONS, getServicesForMvpCategory } from '@/constants/service-taxonomy';
 import { color, radius } from '@/constants/theme';
 import {
@@ -37,6 +38,7 @@ import {
   getInternalDemoEditorAccess,
   listEditableUsers,
   moderateEditablePublicPhoto,
+  removePublicDemoImage,
   updateEditableConversationStatus,
   updateEditableJob,
   updateEditableProfile,
@@ -66,6 +68,7 @@ import {
   type PublicDemoImageAsset,
 } from '@/services/internal-demo-editor.service';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
+import { getPublicImageValidationError } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
@@ -820,8 +823,11 @@ function ProfileEditor({
   user: EditableUserDetail;
 }) {
   const [form, setForm] = useState<EditableProfile>(user.profile);
-  const [saving, setSaving] = useState(false);
   const [pendingImage, setPendingImage] = useState<PublicDemoImageAsset | null>(null);
+  const [savingStage, setSavingStage] = useState<'profile' | 'photo-upload' | 'photo-save' | null>(null);
+  const saveActiveRef = useRef(false);
+  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
+  const saving = Boolean(savingStage);
 
   useEffect(() => {
     setForm(user.profile);
@@ -829,23 +835,40 @@ function ProfileEditor({
   }, [user.id, user.profile]);
 
   const chooseImage = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
-      type: ['image/jpeg', 'image/png', 'image/webp'],
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    setPendingImage({
-      mimeType: asset.mimeType ?? null,
-      name: asset.name ?? null,
-      size: asset.size ?? null,
-      uri: asset.uri,
-    });
+    if (saveActiveRef.current) return;
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: false,
+        type: ['image/jpeg', 'image/png', 'image/webp'],
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      const nextImage = {
+        mimeType: asset.mimeType ?? null,
+        name: asset.name ?? null,
+        size: asset.size ?? null,
+        uri: asset.uri,
+      };
+      const validationError = getPublicImageValidationError(nextImage);
+      if (validationError) {
+        showErrorToast(validationError);
+        return;
+      }
+      setPendingImage(nextImage);
+      showInfoToast('Image selected. Press Save Profile to optimize, upload, and save it.');
+    } catch {
+      showErrorToast('Image selection failed. Try choosing the file again.');
+    }
   };
 
   const save = async () => {
-    setSaving(true);
+    if (saveActiveRef.current) return;
+
+    saveActiveRef.current = true;
+    setSavingStage('profile');
+    showInfoToast('Saving profile details...');
     const result = await updateEditableProfile(user.id, {
       about: form.about,
       avatarUrl: form.avatarUrl,
@@ -862,30 +885,44 @@ function ProfileEditor({
     });
 
     if (result.error || !result.data) {
-      setSaving(false);
-      Alert.alert('Save profile', result.error ?? 'Could not save profile.');
+      saveActiveRef.current = false;
+      setSavingStage(null);
+      showErrorToast(result.error ?? 'Profile details could not be saved.');
       return;
     }
 
+    let savedProfile = result.data;
     if (pendingImage) {
+      setSavingStage('photo-upload');
+      showInfoToast('Optimizing and uploading profile photo...');
       const uploaded = await uploadPublicDemoImage(pendingImage, 'profile_photo');
       if (uploaded.error || !uploaded.data) {
-        setSaving(false);
-        Alert.alert('Profile saved', uploaded.error ?? 'Profile details were saved, but the photo upload failed.');
+        saveActiveRef.current = false;
+        setSavingStage(null);
+        showErrorToast(uploaded.error ?? 'Profile details were saved, but the photo upload failed.');
         await onSaved('Profile saved; photo upload failed');
         return;
       }
 
+      setSavingStage('photo-save');
+      showInfoToast('Saving the uploaded photo to the selected demo user...');
       const photoResult = await updateEditableProfile(user.id, { avatarUrl: uploaded.data });
       if (photoResult.error || !photoResult.data) {
-        setSaving(false);
-        Alert.alert('Profile saved', photoResult.error ?? 'Profile details were saved, but the photo URL could not be updated.');
+        await cleanupPublicImageUrls([uploaded.data]);
+        saveActiveRef.current = false;
+        setSavingStage(null);
+        showErrorToast(photoResult.error ?? 'The upload was removed because the profile photo URL could not be saved.');
         await onSaved('Profile saved; photo update failed');
         return;
       }
+      savedProfile = photoResult.data;
     }
 
-    setSaving(false);
+    setForm(savedProfile);
+    setPendingImage(null);
+    saveActiveRef.current = false;
+    setSavingStage(null);
+    showSuccessToast(pendingImage ? 'Profile photo uploaded and saved.' : 'Profile saved.');
     await onSaved('Profile saved');
   };
 
@@ -894,7 +931,19 @@ function ProfileEditor({
   return (
     <EditorPanel
       footer={
-        <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Profile'} onPress={() => void save()} />
+        <SaveButton
+          disabled={saving}
+          label={
+            savingStage === 'photo-upload'
+              ? 'Uploading photo...'
+              : savingStage === 'photo-save'
+                ? 'Saving photo...'
+                : savingStage === 'profile'
+                  ? 'Saving profile...'
+                  : 'Save Profile'
+          }
+          onPress={() => void save()}
+        />
       }
       hideHeader
       title="Profile">
@@ -931,13 +980,28 @@ function ProfileEditor({
       </TwoColumn>
       <View style={styles.compactPhotoBlock}>
         <View style={styles.photoEditorRow}>
-          {previewUrl ? <Image source={{ uri: previewUrl }} style={styles.profilePreviewCompact} /> : <UserAvatar avatarUrl={null} name={form.fullName} size={58} />}
+          {previewUrl ? (
+            <Image
+              onError={() => showErrorToast('Profile photo preview failed. Try another image or check the pasted URL.')}
+              source={{ uri: previewUrl }}
+              style={styles.profilePreviewCompact}
+            />
+          ) : (
+            <UserAvatar avatarUrl={null} name={form.fullName} size={58} />
+          )}
           <View style={styles.flex}>
             <Text style={styles.lockedLabel}>Public profile photo</Text>
-            <Text style={styles.helperText}>Use public images only. Verification files and IDs stay private.</Text>
-            <Pressable accessibilityRole="button" onPress={chooseImage} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+            <Text style={styles.helperText}>
+              Use public images only. Uploads are compressed; pasted external URLs are saved as-is and are not compressed.
+            </Text>
+            {pendingImage ? <Text style={styles.helperText}>Selected image will be saved when you press Save Profile.</Text> : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={chooseImage}
+              style={({ pressed }) => [styles.secondaryButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
               <MaterialIcons color={adminPalette.blue} name="upload" size={18} />
-              <Text style={styles.secondaryButtonText}>Choose image</Text>
+              <Text style={styles.secondaryButtonText}>{savingStage === 'photo-upload' ? 'Uploading...' : 'Choose image'}</Text>
             </Pressable>
           </View>
         </View>
@@ -1014,24 +1078,52 @@ function NewJobForm({
 }) {
   const [form, setForm] = useState<CreateEditableJobPayload>(() => makeInitialJobPayload(user));
   const [saving, setSaving] = useState(false);
+  const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([]);
+  const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('job_photo', 'Job photo');
   const serviceOptions = getServicesForMvpCategory(form.category);
 
-  useEffect(() => setForm(makeInitialJobPayload(user)), [user]);
+  useEffect(() => {
+    setForm(makeInitialJobPayload(user));
+    setUploadedPhotoUrls([]);
+  }, [user]);
 
   const addPhoto = async () => {
-    const uploaded = await chooseAndUploadPublicImage('job_photo');
-    if (uploaded) setForm((current) => ({ ...current, photoUrls: [...(current.photoUrls ?? []), uploaded] }));
+    const uploaded = await chooseAndUpload();
+    if (uploaded) {
+      setUploadedPhotoUrls((current) => [...current, uploaded]);
+      setForm((current) => ({ ...current, photoUrls: [...(current.photoUrls ?? []), uploaded] }));
+    }
   };
 
   const save = async () => {
-    setSaving(true);
-    const result = await createEditableJob(user.id, form);
-    setSaving(false);
-    if (result.error || !result.data) {
-      Alert.alert('Create job', result.error ?? 'Could not create this job.');
+    if (uploadingPhoto) {
+      showErrorToast('Wait for the job photo upload to finish before saving.');
       return;
     }
+
+    setSaving(true);
+    const result = await createEditableJob(user.id, form);
+    if (result.error || !result.data) {
+      await cleanupPublicImageUrls(uploadedPhotoUrls);
+      setForm((current) => ({
+        ...current,
+        photoUrls: (current.photoUrls ?? []).filter((url) => !uploadedPhotoUrls.includes(url)),
+      }));
+      setUploadedPhotoUrls([]);
+      setSaving(false);
+      showErrorToast(result.error ?? 'Could not create this job.');
+      return;
+    }
+    await cleanupPublicImageUrls(uploadedPhotoUrls.filter((url) => !(form.photoUrls ?? []).includes(url)));
+    setUploadedPhotoUrls([]);
+    setSaving(false);
     await onSaved(result.data.kind === 'draft' ? 'Job saved as draft' : 'Job created');
+  };
+
+  const cancel = async () => {
+    await cleanupPublicImageUrls(uploadedPhotoUrls);
+    setUploadedPhotoUrls([]);
+    onCancel();
   };
 
   return (
@@ -1080,15 +1172,17 @@ function NewJobForm({
         rateType={form.rateType}
       />
       <PhotoUrlEditor
-        addLabel="Add job photo"
+        addLabel={uploadingPhoto ? 'Uploading...' : 'Add job photo'}
+        disabled={saving || uploadingPhoto}
         onAdd={() => void addPhoto()}
         onChange={(photoUrls) => setForm({ ...form, photoUrls })}
+        onPreviewError={showErrorToast}
         photoUrls={form.photoUrls ?? []}
         stablePrefix={`${user.id}-new-job`}
       />
       <View style={styles.actionRow}>
-        <SaveButton disabled={saving} label={saving ? 'Creating...' : 'Create Job'} onPress={() => void save()} />
-        <Pressable accessibilityRole="button" disabled={saving} onPress={onCancel} style={({ pressed }) => [styles.secondaryButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+        <SaveButton disabled={saving || uploadingPhoto} label={saving ? 'Creating...' : 'Create Job'} onPress={() => void save()} />
+        <Pressable accessibilityRole="button" disabled={saving || uploadingPhoto} onPress={() => void cancel()} style={({ pressed }) => [styles.secondaryButton, (saving || uploadingPhoto) && styles.disabled, pressed && !saving && !uploadingPhoto && styles.pressed]}>
           <Text style={styles.secondaryButtonText}>Cancel</Text>
         </Pressable>
       </View>
@@ -1120,23 +1214,45 @@ function JobForm({
 }) {
   const [form, setForm] = useState(job);
   const [saving, setSaving] = useState(false);
+  const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([]);
+  const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('job_photo', 'Job photo');
   const serviceOptions = getServicesForMvpCategory(form.category);
 
-  useEffect(() => setForm(job), [job]);
+  useEffect(() => {
+    setForm(job);
+    setUploadedPhotoUrls([]);
+  }, [job]);
 
   const addPhoto = async () => {
-    const uploaded = await chooseAndUploadPublicImage('job_photo');
-    if (uploaded) setForm((current) => ({ ...current, photoUrls: [...current.photoUrls, uploaded] }));
+    const uploaded = await chooseAndUpload();
+    if (uploaded) {
+      setUploadedPhotoUrls((current) => [...current, uploaded]);
+      setForm((current) => ({ ...current, photoUrls: [...current.photoUrls, uploaded] }));
+    }
   };
 
   const save = async () => {
-    setSaving(true);
-    const result = await updateEditableJob(job.id, form);
-    setSaving(false);
-    if (result.error || !result.data) {
-      Alert.alert('Save job', result.error ?? 'Could not save this job.');
+    if (uploadingPhoto) {
+      showErrorToast('Wait for the job photo upload to finish before saving.');
       return;
     }
+
+    setSaving(true);
+    const result = await updateEditableJob(job.id, form);
+    if (result.error || !result.data) {
+      await cleanupPublicImageUrls(uploadedPhotoUrls);
+      setForm((current) => ({
+        ...current,
+        photoUrls: current.photoUrls.filter((url) => !uploadedPhotoUrls.includes(url)),
+      }));
+      setUploadedPhotoUrls([]);
+      setSaving(false);
+      showErrorToast(result.error ?? 'Could not save this job.');
+      return;
+    }
+    await cleanupPublicImageUrls(uploadedPhotoUrls.filter((url) => !form.photoUrls.includes(url)));
+    setUploadedPhotoUrls([]);
+    setSaving(false);
     await onSaved('Job saved');
   };
 
@@ -1197,15 +1313,17 @@ function JobForm({
         rateType={form.rateType}
       />
       <PhotoUrlEditor
-        addLabel="Add job photo"
+        addLabel={uploadingPhoto ? 'Uploading...' : 'Add job photo'}
+        disabled={saving || uploadingPhoto}
         onAdd={() => void addPhoto()}
         onChange={(photoUrls) => setForm({ ...form, photoUrls })}
+        onPreviewError={showErrorToast}
         photoUrls={form.photoUrls}
         stablePrefix={`${user.id}-job-${job.id}`}
       />
       <View style={styles.actionRow}>
-        <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Job'} onPress={() => void save()} />
-        <Pressable accessibilityRole="button" disabled={saving} onPress={confirmDeactivate} style={({ pressed }) => [styles.dangerButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+        <SaveButton disabled={saving || uploadingPhoto} label={saving ? 'Saving...' : 'Save Job'} onPress={() => void save()} />
+        <Pressable accessibilityRole="button" disabled={saving || uploadingPhoto} onPress={confirmDeactivate} style={({ pressed }) => [styles.dangerButton, (saving || uploadingPhoto) && styles.disabled, pressed && !saving && !uploadingPhoto && styles.pressed]}>
           <Text style={styles.dangerButtonText}>Deactivate</Text>
         </Pressable>
       </View>
@@ -1264,23 +1382,51 @@ function NewServiceForm({
 }) {
   const [form, setForm] = useState<CreateEditableServicePayload>(() => makeInitialServicePayload(user));
   const [saving, setSaving] = useState(false);
+  const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([]);
+  const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('service_photo', 'Service photo');
 
-  useEffect(() => setForm(makeInitialServicePayload(user)), [user]);
+  useEffect(() => {
+    setForm(makeInitialServicePayload(user));
+    setUploadedPhotoUrls([]);
+  }, [user]);
 
   const addPhoto = async () => {
-    const uploaded = await chooseAndUploadPublicImage('service_photo');
-    if (uploaded) setForm((current) => ({ ...current, photoUrls: [...(current.photoUrls ?? []), uploaded] }));
+    const uploaded = await chooseAndUpload();
+    if (uploaded) {
+      setUploadedPhotoUrls((current) => [...current, uploaded]);
+      setForm((current) => ({ ...current, photoUrls: [...(current.photoUrls ?? []), uploaded] }));
+    }
   };
 
   const save = async () => {
-    setSaving(true);
-    const result = await createEditableService(user.id, form);
-    setSaving(false);
-    if (result.error || !result.data) {
-      Alert.alert('Create service', result.error ?? 'Could not create this service.');
+    if (uploadingPhoto) {
+      showErrorToast('Wait for the service photo upload to finish before saving.');
       return;
     }
+
+    setSaving(true);
+    const result = await createEditableService(user.id, form);
+    if (result.error || !result.data) {
+      await cleanupPublicImageUrls(uploadedPhotoUrls);
+      setForm((current) => ({
+        ...current,
+        photoUrls: (current.photoUrls ?? []).filter((url) => !uploadedPhotoUrls.includes(url)),
+      }));
+      setUploadedPhotoUrls([]);
+      setSaving(false);
+      showErrorToast(result.error ?? 'Could not create this service.');
+      return;
+    }
+    await cleanupPublicImageUrls(uploadedPhotoUrls.filter((url) => !(form.photoUrls ?? []).includes(url)));
+    setUploadedPhotoUrls([]);
+    setSaving(false);
     await onSaved(user.verificationStatus === 'verified' ? 'Service created' : 'Service saved inactive');
+  };
+
+  const cancel = async () => {
+    await cleanupPublicImageUrls(uploadedPhotoUrls);
+    setUploadedPhotoUrls([]);
+    onCancel();
   };
 
   return (
@@ -1326,15 +1472,17 @@ function NewServiceForm({
         rateType={form.rateType}
       />
       <PhotoUrlEditor
-        addLabel="Add service photo"
+        addLabel={uploadingPhoto ? 'Uploading...' : 'Add service photo'}
+        disabled={saving || uploadingPhoto}
         onAdd={() => void addPhoto()}
         onChange={(photoUrls) => setForm({ ...form, photoUrls })}
+        onPreviewError={showErrorToast}
         photoUrls={form.photoUrls ?? []}
         stablePrefix={`${user.id}-new-service`}
       />
       <View style={styles.actionRow}>
-        <SaveButton disabled={saving} label={saving ? 'Creating...' : 'Create Service'} onPress={() => void save()} />
-        <Pressable accessibilityRole="button" disabled={saving} onPress={onCancel} style={({ pressed }) => [styles.secondaryButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+        <SaveButton disabled={saving || uploadingPhoto} label={saving ? 'Creating...' : 'Create Service'} onPress={() => void save()} />
+        <Pressable accessibilityRole="button" disabled={saving || uploadingPhoto} onPress={() => void cancel()} style={({ pressed }) => [styles.secondaryButton, (saving || uploadingPhoto) && styles.disabled, pressed && !saving && !uploadingPhoto && styles.pressed]}>
           <Text style={styles.secondaryButtonText}>Cancel</Text>
         </Pressable>
       </View>
@@ -1353,22 +1501,44 @@ function ServiceForm({
 }) {
   const [form, setForm] = useState(service);
   const [saving, setSaving] = useState(false);
+  const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([]);
+  const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('service_photo', 'Service photo');
 
-  useEffect(() => setForm(service), [service]);
+  useEffect(() => {
+    setForm(service);
+    setUploadedPhotoUrls([]);
+  }, [service]);
 
   const addPhoto = async () => {
-    const uploaded = await chooseAndUploadPublicImage('service_photo');
-    if (uploaded) setForm((current) => ({ ...current, photoUrls: [...current.photoUrls, uploaded] }));
+    const uploaded = await chooseAndUpload();
+    if (uploaded) {
+      setUploadedPhotoUrls((current) => [...current, uploaded]);
+      setForm((current) => ({ ...current, photoUrls: [...current.photoUrls, uploaded] }));
+    }
   };
 
   const save = async () => {
-    setSaving(true);
-    const result = await updateEditableService(service.id, form);
-    setSaving(false);
-    if (result.error || !result.data) {
-      Alert.alert('Save service', result.error ?? 'Could not save this service.');
+    if (uploadingPhoto) {
+      showErrorToast('Wait for the service photo upload to finish before saving.');
       return;
     }
+
+    setSaving(true);
+    const result = await updateEditableService(service.id, form);
+    if (result.error || !result.data) {
+      await cleanupPublicImageUrls(uploadedPhotoUrls);
+      setForm((current) => ({
+        ...current,
+        photoUrls: current.photoUrls.filter((url) => !uploadedPhotoUrls.includes(url)),
+      }));
+      setUploadedPhotoUrls([]);
+      setSaving(false);
+      showErrorToast(result.error ?? 'Could not save this service.');
+      return;
+    }
+    await cleanupPublicImageUrls(uploadedPhotoUrls.filter((url) => !form.photoUrls.includes(url)));
+    setUploadedPhotoUrls([]);
+    setSaving(false);
     await onSaved('Service saved');
   };
 
@@ -1433,15 +1603,17 @@ function ServiceForm({
         rateType={form.rateType}
       />
       <PhotoUrlEditor
-        addLabel="Add service photo"
+        addLabel={uploadingPhoto ? 'Uploading...' : 'Add service photo'}
+        disabled={saving || uploadingPhoto}
         onAdd={() => void addPhoto()}
         onChange={(photoUrls) => setForm({ ...form, photoUrls })}
+        onPreviewError={showErrorToast}
         photoUrls={form.photoUrls}
         stablePrefix={`${user.id}-service-${service.id}`}
       />
       <View style={styles.actionRow}>
-        <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Service'} onPress={() => void save()} />
-        <Pressable accessibilityRole="button" disabled={saving} onPress={confirmDeactivate} style={({ pressed }) => [styles.dangerButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+        <SaveButton disabled={saving || uploadingPhoto} label={saving ? 'Saving...' : 'Save Service'} onPress={() => void save()} />
+        <Pressable accessibilityRole="button" disabled={saving || uploadingPhoto} onPress={confirmDeactivate} style={({ pressed }) => [styles.dangerButton, (saving || uploadingPhoto) && styles.disabled, pressed && !saving && !uploadingPhoto && styles.pressed]}>
           <Text style={styles.dangerButtonText}>Deactivate</Text>
         </Pressable>
       </View>
@@ -1946,47 +2118,102 @@ function getReadinessItems(user: EditableUserDetail) {
   ];
 }
 
-async function chooseAndUploadPublicImage(target: 'job_photo' | 'service_photo') {
-  const result = await DocumentPicker.getDocumentAsync({
-    copyToCacheDirectory: true,
-    multiple: false,
-    type: ['image/jpeg', 'image/png', 'image/webp'],
-  });
-  if (result.canceled || !result.assets?.[0]) return null;
-  const asset = result.assets[0];
-  const uploaded = await uploadPublicDemoImage({
-    mimeType: asset.mimeType ?? null,
-    name: asset.name ?? null,
-    size: asset.size ?? null,
-    uri: asset.uri,
-  }, target);
-  if (uploaded.error || !uploaded.data) {
-    Alert.alert('Public photo', uploaded.error ?? 'Could not upload this photo.');
-    return null;
+type PublicPhotoUploadAttempt =
+  | { status: 'cancelled' }
+  | { message: string; status: 'error' }
+  | { status: 'success'; url: string };
+
+function usePublicImageUpload(target: 'job_photo' | 'service_photo', label: string) {
+  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
+  const uploadActiveRef = useRef(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const chooseAndUpload = async () => {
+    if (uploadActiveRef.current) return null;
+
+    uploadActiveRef.current = true;
+    setUploadingPhoto(true);
+    showInfoToast(`Optimizing and uploading ${label.toLowerCase()}...`);
+    const attempt = await chooseAndUploadPublicImage(target);
+    uploadActiveRef.current = false;
+    setUploadingPhoto(false);
+
+    if (attempt.status === 'error') {
+      showErrorToast(attempt.message);
+      return null;
+    }
+    if (attempt.status === 'cancelled') return null;
+
+    showSuccessToast(`${label} uploaded. Press Save below to keep it on this record.`);
+    return attempt.url;
+  };
+
+  return { chooseAndUpload, showErrorToast, uploadingPhoto };
+}
+
+async function chooseAndUploadPublicImage(
+  target: 'job_photo' | 'service_photo',
+): Promise<PublicPhotoUploadAttempt> {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      multiple: false,
+      type: ['image/jpeg', 'image/png', 'image/webp'],
+    });
+    if (result.canceled || !result.assets?.[0]) return { status: 'cancelled' };
+    const asset = result.assets[0];
+    const uploaded = await uploadPublicDemoImage({
+      mimeType: asset.mimeType ?? null,
+      name: asset.name ?? null,
+      size: asset.size ?? null,
+      uri: asset.uri,
+    }, target);
+    if (uploaded.error || !uploaded.data) {
+      return { message: uploaded.error ?? 'Could not upload this photo.', status: 'error' };
+    }
+    return { status: 'success', url: uploaded.data };
+  } catch {
+    return { message: 'Image selection failed. Try choosing the file again.', status: 'error' };
   }
-  return uploaded.data;
+}
+
+async function cleanupPublicImageUrls(urls: string[]) {
+  const uniqueUrls = Array.from(new Set(urls.filter(Boolean)));
+  await Promise.all(uniqueUrls.map((url) => removePublicDemoImage(url)));
 }
 
 function PhotoUrlEditor({
   addLabel,
+  disabled = false,
   onAdd,
   onChange,
+  onPreviewError,
   photoUrls,
   stablePrefix,
 }: {
   addLabel: string;
+  disabled?: boolean;
   onAdd: () => void;
   onChange: (urls: string[]) => void;
+  onPreviewError?: (message: string) => void;
   photoUrls: string[];
   stablePrefix: string;
 }) {
   return (
     <View style={styles.fieldWrap}>
       <Text style={styles.label}>Public photos</Text>
+      <Text style={styles.helperText}>
+        Uploaded files are optimized and staged in this form. Press Save below to keep record changes. Pasted external URLs
+        are saved as-is and are not compressed.
+      </Text>
       <View style={styles.photoStrip}>
         {photoUrls.map((url, index) => (
           <View key={`${stablePrefix}-photo-${index}`} style={styles.photoUrlTile}>
-            <Image source={{ uri: url }} style={styles.photoUrlImage} />
+            <Image
+              onError={() => onPreviewError?.('Photo preview failed. Check the pasted URL or upload the image again.')}
+              source={{ uri: url }}
+              style={styles.photoUrlImage}
+            />
             <Pressable
               accessibilityLabel={`Remove photo ${index + 1}`}
               accessibilityRole="button"
@@ -1996,7 +2223,11 @@ function PhotoUrlEditor({
             </Pressable>
           </View>
         ))}
-        <Pressable accessibilityRole="button" onPress={onAdd} style={({ pressed }) => [styles.addPhotoTile, pressed && styles.pressed]}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={disabled}
+          onPress={onAdd}
+          style={({ pressed }) => [styles.addPhotoTile, disabled && styles.disabled, pressed && !disabled && styles.pressed]}>
           <MaterialIcons color={adminPalette.blue} name="add-photo-alternate" size={22} />
           <Text style={styles.addPhotoText}>{addLabel}</Text>
         </Pressable>

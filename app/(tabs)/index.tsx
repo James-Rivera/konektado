@@ -15,7 +15,6 @@ import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
-import { Skeleton } from '@/components/Skeleton';
 import { homeFilters, type HomeFilter } from '@/constants/demo-data';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
@@ -59,6 +58,7 @@ import type {
   ProfileCompletionMode,
   ProfileCompletionStatus,
 } from '@/types/profile.types';
+import { getCardImageUrl } from '@/utils/image-processing';
 
 type HomeJobFeedItem = {
   key: string;
@@ -79,8 +79,24 @@ type HomeWorkerFeedItem = {
 };
 
 type HomeFeedItem = HomeJobFeedItem | HomeWorkerFeedItem;
+type HomeFeedSources = { jobs: HomeJobFeedItem[]; workers: HomeWorkerFeedItem[] };
 
 const HOME_FEED_LIMIT = 30;
+const HOME_FEED_CACHE_TTL_MS = 60 * 1000;
+
+let homeFeedCache:
+  | {
+      loadedAt: number;
+      sources: HomeFeedSources;
+      userId: string | null;
+    }
+  | null = null;
+let homeFeedInFlight:
+  | {
+      promise: Promise<HomeFeedSources>;
+      userId: string | null;
+    }
+  | null = null;
 
 function mapHomeFilterToFeedType(filter: HomeFilter): HomeFeedType {
   if (filter === 'Jobs') return 'jobs';
@@ -127,7 +143,7 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
     ),
     primaryActionLabel: 'View Job',
     avatarUrl: job.client?.avatarUrl,
-    imageUrl: job.photoUrls[0],
+    imageUrl: getCardImageUrl({ imageUrl: job.photoUrls[0] }),
     isOnline: isPresenceActive(job.client?.availability),
   };
 }
@@ -164,9 +180,53 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
     tags: Array.from(new Set([category, ...service.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag)].filter(Boolean))),
     primaryActionLabel: 'View Profile',
     avatarUrl: getPublicProfileAvatarUrl(service.provider),
-    imageUrl: service.photoUrls[0],
+    imageUrl: getCardImageUrl({ imageUrl: service.photoUrls[0] }),
     isOnline: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
   };
+}
+
+function loadHomeFeedSources(userId: string | null) {
+  if (homeFeedInFlight && homeFeedInFlight.userId === userId) {
+    return homeFeedInFlight.promise;
+  }
+
+  const promise = Promise.all([
+    searchJobs({ limit: HOME_FEED_LIMIT }),
+    searchServices({ limit: HOME_FEED_LIMIT }),
+  ]).then(([jobsResult, servicesResult]) => {
+    if (jobsResult.error || servicesResult.error) {
+      throw new Error(jobsResult.error ?? servicesResult.error ?? 'Could not load posts right now.');
+    }
+
+    const jobs =
+      jobsResult.data?.map((job) => ({
+        key: `job-${job.id}`,
+        type: 'job' as const,
+        itemId: job.id,
+        cardProps: mapJobToHomeFeedCard(job),
+        createdAt: job.createdAt,
+        job,
+      })) ?? [];
+
+    const workers =
+      servicesResult.data?.map((service) => ({
+        key: `service-${service.id}`,
+        type: 'worker' as const,
+        itemId: service.id,
+        cardProps: mapServiceToHomeFeedCard(service),
+        createdAt: service.createdAt,
+        service,
+      })) ?? [];
+
+    return { jobs, workers };
+  }).finally(() => {
+    if (homeFeedInFlight?.promise === promise) {
+      homeFeedInFlight = null;
+    }
+  });
+
+  homeFeedInFlight = { promise, userId };
+  return promise;
 }
 
 export default function HomeScreen() {
@@ -186,8 +246,10 @@ export default function HomeScreen() {
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [optionalSetupDismissed, setOptionalSetupDismissed] = useState(false);
-  const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
-  const [completionLoading, setCompletionLoading] = useState(true);
+  const [profileCompletionStatus, setProfileCompletionStatus] =
+    useState<ProfileCompletionStatus | null>(null);
+  const [isCheckingSetupStatus, setIsCheckingSetupStatus] = useState(false);
+  const [hasLoadedSetupStatus, setHasLoadedSetupStatus] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
@@ -229,17 +291,20 @@ export default function HomeScreen() {
       };
     }
 
-    setCompletionLoading(true);
+    setIsCheckingSetupStatus(true);
+    setHasLoadedSetupStatus(false);
     getMyProfileCompletion()
       .then((result) => {
         if (!active) return;
-        setCompletion(result.error ? null : result.data);
+        setProfileCompletionStatus(result.error ? null : result.data);
       })
       .catch(() => {
-        if (active) setCompletion(null);
+        if (active) setProfileCompletionStatus(null);
       })
       .finally(() => {
-        if (active) setCompletionLoading(false);
+        if (!active) return;
+        setIsCheckingSetupStatus(false);
+        setHasLoadedSetupStatus(true);
       });
 
     return () => {
@@ -280,49 +345,42 @@ export default function HomeScreen() {
       };
     }
 
+    const userId = profile?.id ?? null;
+    const cachedFeed =
+      homeFeedCache && homeFeedCache.userId === userId ? homeFeedCache : null;
+    const cacheIsFresh =
+      cachedFeed ? Date.now() - cachedFeed.loadedAt < HOME_FEED_CACHE_TTL_MS : false;
+
+    if (cachedFeed) {
+      setFeedSources(cachedFeed.sources);
+      setFeedLoading(false);
+      setFeedError(null);
+    }
+
+    if (cacheIsFresh) {
+      return () => {
+        active = false;
+      };
+    }
+
     const requestId = feedRequestRef.current + 1;
     feedRequestRef.current = requestId;
-    setFeedLoading(true);
+    setFeedLoading(!cachedFeed);
     setFeedError(null);
 
-    Promise.all([
-      searchJobs({ limit: HOME_FEED_LIMIT }),
-      searchServices({ limit: HOME_FEED_LIMIT }),
-    ]).then(([jobsResult, servicesResult]) => {
+    loadHomeFeedSources(userId).then((sources) => {
       if (!active || requestId !== feedRequestRef.current) return;
 
-      if (jobsResult.error || servicesResult.error) {
-        setFeedSources({ jobs: [], workers: [] });
-        setFeedError(jobsResult.error ?? servicesResult.error ?? 'Could not load posts right now.');
-        setFeedLoading(false);
-        return;
-      }
-
-      const jobs =
-        jobsResult.data?.map((job) => ({
-          key: `job-${job.id}`,
-          type: 'job' as const,
-          itemId: job.id,
-          cardProps: mapJobToHomeFeedCard(job),
-          createdAt: job.createdAt,
-          job,
-        })) ?? [];
-
-      const workers =
-        servicesResult.data?.map((service) => ({
-          key: `service-${service.id}`,
-          type: 'worker' as const,
-          itemId: service.id,
-          cardProps: mapServiceToHomeFeedCard(service),
-          createdAt: service.createdAt,
-          service,
-        })) ?? [];
-
-      setFeedSources({ jobs, workers });
+      homeFeedCache = {
+        loadedAt: Date.now(),
+        sources,
+        userId,
+      };
+      setFeedSources(sources);
       setFeedLoading(false);
-    }).catch(() => {
+    }).catch((error) => {
       if (!active || requestId !== feedRequestRef.current) return;
-      setFeedError('Could not load posts right now.');
+      setFeedError(error instanceof Error ? error.message : 'Could not load posts right now.');
       setFeedLoading(false);
     });
 
@@ -362,13 +420,16 @@ export default function HomeScreen() {
     () =>
       getHomeSetupNudge({
         activeRole: profile?.active_role,
-        completion,
+        completion: profileCompletionStatus,
         optionalSetupDismissed,
         preferences,
         selectedFilter,
       }),
-    [completion, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
+    [profileCompletionStatus, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
   );
+  const needsProfileSetup = Boolean(setupNudge);
+  const shouldShowSetupPrompt =
+    hasLoadedSetupStatus && !isCheckingSetupStatus && needsProfileSetup;
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -516,9 +577,7 @@ export default function HomeScreen() {
   const renderListHeader = useCallback(
     () => (
       <>
-        {completionLoading ? (
-          <VerificationBannerSkeleton />
-        ) : setupNudge ? (
+        {shouldShowSetupPrompt && setupNudge ? (
           <HomeSetupNudge
             actionLabel={setupNudge.actionLabel}
             body={setupNudge.body}
@@ -535,11 +594,11 @@ export default function HomeScreen() {
       </>
     ),
     [
-      completionLoading,
       openSetupAction,
       activeFeedFilterCount,
       openFeedFilters,
       setupNudge,
+      shouldShowSetupPrompt,
     ],
   );
 
@@ -596,14 +655,18 @@ export default function HomeScreen() {
         <FlatList
           contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}
           data={feed}
+          initialNumToRender={6}
           ItemSeparatorComponent={FeedSeparator}
           keyExtractor={keyExtractor}
           ListFooterComponent={renderListFooter}
           ListHeaderComponent={renderListHeader}
+          maxToRenderPerBatch={6}
           onScroll={handleScroll}
+          removeClippedSubviews
           renderItem={renderFeedItem}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
+          windowSize={7}
         />
         <HomeFeedFiltersSheet
           filters={draftFeedFilters}
@@ -839,21 +902,6 @@ function fallbackVerificationAction(): ProfileCompletionAction {
   };
 }
 
-function VerificationBannerSkeleton() {
-  return (
-    <View style={styles.bannerSkeleton}>
-      <View style={styles.bannerSkeletonHeader}>
-        <Skeleton height={24} width={24} borderRadius={12} />
-        <View style={styles.bannerSkeletonCopy}>
-          <Skeleton height={15} width="64%" />
-          <Skeleton height={12} width="92%" />
-        </View>
-      </View>
-      <Skeleton height={34} width="100%" borderRadius={17} />
-    </View>
-  );
-}
-
 function HomeFeedCardSkeleton({
   kind,
   loadingImage = false,
@@ -908,24 +956,6 @@ const styles = StyleSheet.create({
   },
   skeletonFeed: {
     gap: 2,
-  },
-  bannerSkeleton: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 14,
-    margin: 18,
-    padding: 16,
-  },
-  bannerSkeletonHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  bannerSkeletonCopy: {
-    flex: 1,
-    gap: 8,
   },
   emptyText: {
     ...typography.body,

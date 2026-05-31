@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps, ReactNode } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
@@ -11,6 +12,7 @@ import type {
   ProfileModeCompletion,
   ProfileVerificationStatus,
 } from '@/types/profile.types';
+import { getAvatarDisplayUrl } from '@/utils/image-processing';
 
 export type ProfileMode = 'work' | 'hiring';
 type ProfileCompletionCardMode = ProfileCompletionMode;
@@ -100,12 +102,14 @@ export function ProfileHero({
   presenceActive: boolean;
   stepsLabel?: string;
 }) {
+  const displayAvatarUrl = getAvatarDisplayUrl({ avatarUrl });
+
   return (
     <View style={styles.heroBand}>
       <View style={styles.heroRow}>
         <View style={styles.avatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          {displayAvatarUrl ? (
+            <CachedRemoteImage uri={displayAvatarUrl} style={styles.avatarImage} />
           ) : (
             <Text style={styles.avatarText}>{initials}</Text>
           )}

@@ -69,25 +69,25 @@ const idTypeOptions: {
   value: VerificationIdType;
 }[] = [
   {
-    description: 'Recommended',
+    description: 'Recommended document',
     icon: 'workspace-premium',
     title: 'Barangay Certificate',
     value: 'barangay_certificate',
   },
   {
-    description: 'Physical or eGovPH Digital ID',
+    description: 'Allowed fallback if you do not have a barangay certificate.',
     icon: 'badge',
     title: 'National ID',
     value: 'national_id',
   },
   {
-    description: 'Accepted government ID with photo.',
+    description: 'Allowed fallback if you do not have a barangay certificate.',
     icon: 'directions-car',
     title: "Driver's License",
     value: 'drivers_license',
   },
   {
-    description: 'Accepted government ID with photo.',
+    description: 'Allowed fallback if you do not have a barangay certificate.',
     icon: 'article',
     title: 'Passport',
     value: 'passport',
@@ -488,9 +488,9 @@ function PreflightScreen() {
         <Text style={styles.centerSectionTitle}>What you will need</Text>
         <View style={styles.cardStack}>
           <RequirementCard
-            icon="badge"
-            title="A valid government ID"
-            description="Accepted IDs: National ID, Driver's License, UMID, Passport + more"
+            icon="workspace-premium"
+            title="Barangay certificate or valid ID"
+            description="Barangay Certificate is recommended. If you do not have one, you may submit another valid ID for barangay staff to review."
           />
           <RequirementCard
             icon="photo-camera"
@@ -663,8 +663,8 @@ function IdTypeScreen({
   return (
     <>
       <CenteredTitle
-        subtitle="Choose the document you will submit for manual barangay review."
-        title="Select ID type"
+        subtitle="Upload your barangay certificate or another valid ID."
+        title="Document to submit"
       />
       <View style={styles.idOptions}>
         {idTypeOptions.map((option) => (
@@ -743,7 +743,7 @@ function ReviewScreen({
             <ReviewLine label="Email:" value={form.email || 'Not provided'} />
           </ReviewSection>
           <ReviewSection title="Documents">
-            <ReviewLine label="ID Type:" value={idTypeLabels[form.idType]} />
+            <ReviewLine label="Document to submit:" value={idTypeLabels[form.idType]} />
             {usesCertificate ? (
               <ReviewLine link label="Certificate:" value={files.certificate ? 'Uploaded' : 'Missing'} />
             ) : (

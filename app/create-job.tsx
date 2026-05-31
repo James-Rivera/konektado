@@ -14,11 +14,12 @@ import {
   Text,
   TextInput,
   View,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
+import { BottomSheet } from '@/components/BottomSheet';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
@@ -51,31 +52,55 @@ const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'experienced', label: 'Experienced' },
 ];
 
-type WorkersNeededOption = '1' | '2' | '3' | '4';
-type TimeBlock = 'morning' | 'afternoon' | 'evening' | 'anytime' | 'to_coordinate';
+type WorkersNeededOption = '1' | '2' | '3' | '4' | '5';
+type TimeBlock = 'morning' | 'afternoon' | 'evening' | 'anytime';
+type TimePreference = TimeBlock | 'exact';
 type ScheduleFlexibility = 'fixed' | 'flexible';
 
 const WORKERS_NEEDED_OPTIONS: { value: WorkersNeededOption; label: string }[] = [
-  { value: '1', label: '1' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3' },
-  { value: '4', label: '4+' },
+  { value: '1', label: '1 worker' },
+  { value: '2', label: '2 workers' },
+  { value: '3', label: '3 workers' },
+  { value: '4', label: '4 workers' },
+  { value: '5', label: '5+ workers' },
 ];
 
-const TIME_BLOCK_OPTIONS: { value: TimeBlock; label: string }[] = [
+const ADDITIONAL_DETAIL_OPTIONS = [
+  'Bring own tools',
+  'Experience preferred',
+  'Urgent task',
+  'Contact first before visiting',
+  'Materials provided',
+  'Heavy lifting',
+  'Outdoor work',
+  'Other',
+];
+
+const TIME_PREFERENCE_OPTIONS: { value: TimePreference; label: string }[] = [
   { value: 'morning', label: 'Morning' },
   { value: 'afternoon', label: 'Afternoon' },
   { value: 'evening', label: 'Evening' },
   { value: 'anytime', label: 'Anytime' },
-  { value: 'to_coordinate', label: 'To coordinate' },
+  { value: 'exact', label: 'Set exact time' },
 ];
 
 const SCHEDULE_FLEXIBILITY_OPTIONS: { value: ScheduleFlexibility; label: string }[] = [
-  { value: 'fixed', label: 'Fixed schedule' },
-  { value: 'flexible', label: 'Flexible / can coordinate' },
+  { value: 'fixed', label: 'Must be this time' },
+  { value: 'flexible', label: 'Can coordinate' },
+];
+
+const BUDGET_PRESET_OPTIONS = [
+  { label: 'PHP 300-500', min: '300', max: '500' },
+  { label: 'PHP 500-1,000', min: '500', max: '1000' },
+  { label: 'PHP 1,000-2,000', min: '1000', max: '2000' },
+  { label: 'PHP 2,000+', min: '2000', max: '3000' },
 ];
 
 const DEFAULT_EXACT_TIME = '08:00';
+
+function normalizeQuickDetailTags(tags: string[]) {
+  return Array.from(new Set(tags.filter((tag) => tag !== 'Flexible schedule'))).slice(0, 4);
+}
 
 type JobDraft = {
   title: string;
@@ -172,6 +197,15 @@ function getTimePickerDate(value: string) {
   return date;
 }
 
+function inferTimeBlockFromExactTime(value: string): TimeBlock | '' {
+  const [rawHours] = value.split(':').map(Number);
+  if (!Number.isFinite(rawHours)) return '';
+  if (rawHours >= 5 && rawHours < 12) return 'morning';
+  if (rawHours >= 12 && rawHours < 18) return 'afternoon';
+  if (rawHours >= 18 && rawHours < 24) return 'evening';
+  return '';
+}
+
 function formatExactTime(value: string) {
   const [rawHours, rawMinutes] = value.split(':').map(Number);
   if (!Number.isFinite(rawHours) || !Number.isFinite(rawMinutes)) return value;
@@ -195,39 +229,52 @@ function parseExactTimeLabel(value: string) {
 }
 
 function getTimeBlockLabel(value: TimeBlock | '') {
-  return TIME_BLOCK_OPTIONS.find((option) => option.value === value)?.label ?? '';
+  return TIME_PREFERENCE_OPTIONS.find((option) => option.value === value)?.label ?? '';
+}
+
+function getTimePreferenceLabel(draft: Pick<JobDraft, 'exactTimeNeeded' | 'preferredTimeBlock'>) {
+  if (draft.exactTimeNeeded) return 'Set exact time';
+  return getTimeBlockLabel(draft.preferredTimeBlock);
 }
 
 function getFlexibilityLabel(value: ScheduleFlexibility) {
-  return value === 'fixed' ? 'Fixed' : 'Flexible';
+  return value === 'fixed' ? 'Must be this time' : 'Can coordinate';
 }
 
 function buildScheduleText(draft: JobDraft) {
-  if (draft.preferredTimeBlock === 'to_coordinate') return 'Schedule to coordinate';
   if (!draft.jobDate) return draft.legacyScheduleText.trim();
 
   const dateText = formatScheduleDate(draft.jobDate);
   const flexibilityText = getFlexibilityLabel(draft.scheduleFlexibility);
 
+  // The database keeps one schedule_text field, so the new structured UI is folded
+  // into a readable summary while preferredTimeBlock preserves the inferred block in state.
   if (draft.exactTimeNeeded && draft.exactTime) {
-    return `${dateText} ${formatExactTime(draft.exactTime)} ${flexibilityText}`;
+    return `${dateText} · ${formatExactTime(draft.exactTime)} · ${flexibilityText}`;
   }
 
-  const blockText = getTimeBlockLabel(draft.preferredTimeBlock || 'anytime');
-  return `${dateText} ${blockText} ${flexibilityText}`;
+  const blockText = getTimeBlockLabel(draft.preferredTimeBlock);
+  if (!blockText) return draft.legacyScheduleText.trim();
+  return `${dateText} · ${blockText} · ${flexibilityText}`;
 }
 
 function getSchedulePreview(draft: JobDraft) {
   const scheduleText = buildScheduleText(draft);
   if (scheduleText) return scheduleText;
-  return 'Choose a date or coordinate the schedule with the worker.';
+  return 'Choose a date and time preference.';
 }
 
 function formatWorkersNeededText(value: string) {
   const parsed = parsePositiveNumber(value);
-  if (!parsed || Number.isNaN(parsed)) return 'Choose how many workers you need.';
-  if (parsed >= 4) return 'Needs 4+ workers';
-  return `Needs ${parsed} worker${parsed === 1 ? '' : 's'}`;
+  if (!parsed || Number.isNaN(parsed)) return 'Select number of workers';
+  if (parsed >= 5) return '5+ workers';
+  return `${parsed} worker${parsed === 1 ? '' : 's'}`;
+}
+
+function getWorkersNeededPickerLabel(value: string) {
+  const parsed = parsePositiveNumber(value);
+  if (!parsed || Number.isNaN(parsed)) return '';
+  return parsed >= 5 ? '5+ workers' : `${parsed} worker${parsed === 1 ? '' : 's'}`;
 }
 
 function parseScheduleText(value: string): Pick<
@@ -248,12 +295,13 @@ function parseScheduleText(value: string): Pick<
   if (scheduleText.toLowerCase() === 'schedule to coordinate') {
     return {
       ...base,
-      legacyScheduleText: '',
-      preferredTimeBlock: 'to_coordinate',
+      preferredTimeBlock: 'anytime',
     };
   }
 
-  const match = scheduleText.match(/^([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})\s+(.+?)\s+(Fixed|Flexible)$/);
+  const match = scheduleText.match(
+    /^([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})(?:\s+·\s+|\s+)(.+?)(?:\s+·\s+|\s+)(Fixed|Flexible|Must be this time|Can coordinate)$/,
+  );
   if (!match) return base;
 
   const parsedDate = new Date(match[1]);
@@ -262,15 +310,19 @@ function parseScheduleText(value: string): Pick<
   const dateValue = formatDateValue(parsedDate);
   const detail = match[2];
   const exactTime = parseExactTimeLabel(detail);
-  const block = TIME_BLOCK_OPTIONS.find((option) => option.label === detail)?.value ?? '';
+  const blockOption = TIME_PREFERENCE_OPTIONS.find(
+    (option): option is { value: TimeBlock; label: string } =>
+      option.value !== 'exact' && option.label === detail,
+  );
+  const block = blockOption?.value ?? '';
 
   return {
     legacyScheduleText: '',
     jobDate: dateValue,
-    preferredTimeBlock: exactTime ? '' : block,
+    preferredTimeBlock: exactTime ? inferTimeBlockFromExactTime(exactTime) : block,
     exactTimeNeeded: Boolean(exactTime),
     exactTime,
-    scheduleFlexibility: match[3] === 'Fixed' ? 'fixed' : 'flexible',
+    scheduleFlexibility: ['Fixed', 'Must be this time'].includes(match[3]) ? 'fixed' : 'flexible',
   };
 }
 
@@ -305,16 +357,20 @@ function validateDraft(draft: JobDraft) {
     errors.workersNeeded = 'Enter a valid worker count or leave it blank.';
   }
 
-  if (draft.jobDate) {
-    if (!parseDateValue(draft.jobDate)) {
-      errors.scheduleText = 'Choose a valid job date.';
-    } else if (isPastDateValue(draft.jobDate)) {
-      errors.scheduleText = 'Choose today or a future date.';
-    }
+  if (!draft.jobDate) {
+    errors.scheduleText = 'Choose a job date.';
+  } else if (!parseDateValue(draft.jobDate)) {
+    errors.scheduleText = 'Choose a valid job date.';
+  } else if (isPastDateValue(draft.jobDate)) {
+    errors.scheduleText = 'Choose today or a future date.';
   }
 
-  if (draft.exactTimeNeeded && !draft.exactTime) {
+  if (!errors.scheduleText && draft.exactTimeNeeded && !draft.exactTime) {
     errors.scheduleText = 'Choose the exact time needed.';
+  }
+
+  if (!errors.scheduleText && !draft.exactTimeNeeded && !draft.preferredTimeBlock) {
+    errors.scheduleText = 'Choose a time preference.';
   }
 
   return errors;
@@ -336,7 +392,7 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
     description: draft.description,
     category: draft.category,
     serviceNeeded: draft.serviceNeeded,
-    tags: draft.tags,
+    tags: normalizeQuickDetailTags(draft.tags),
     photoUrls: draft.photoUrls,
     barangay: draft.barangay,
     locationText: draft.locationText,
@@ -365,7 +421,7 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
     description: record.description ?? '',
     category: record.category ?? '',
     serviceNeeded: record.serviceNeeded ?? '',
-    tags: record.tags,
+    tags: normalizeQuickDetailTags(record.tags),
     photoUrls: record.photoUrls ?? [],
     barangay: record.barangay ?? '',
     locationText: record.locationText ?? '',
@@ -374,7 +430,7 @@ function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
     budgetMax: record.budgetMax ? String(record.budgetMax) : '',
     rateType: record.rateType,
     budgetNegotiable: record.budgetNegotiable,
-    workersNeeded: record.workersNeeded ? String(Math.min(record.workersNeeded, 4)) : '',
+    workersNeeded: record.workersNeeded ? String(Math.min(record.workersNeeded, 5)) : '',
     scheduleText: record.scheduleText ?? '',
     ...schedule,
     experienceLevel: record.experienceLevel,
@@ -410,6 +466,8 @@ export default function CreateJobScreen() {
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
+  const [workerPickerVisible, setWorkerPickerVisible] = useState(false);
+  const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [photoFolderId] = useState(() => `draft-${Date.now()}`);
@@ -425,7 +483,7 @@ export default function CreateJobScreen() {
     privateLocationNotes: '',
     budgetMin: '',
     budgetMax: '',
-    rateType: 'per_project',
+    rateType: 'per_job',
     budgetNegotiable: false,
     workersNeeded: '',
     scheduleText: '',
@@ -488,7 +546,18 @@ export default function CreateJobScreen() {
 
   const selectedTagsText = useMemo(() => draft.tags.join(', '), [draft.tags]);
   const tagOptions = useMemo(() => getContextTagsForCategory(draft.category), [draft.category]);
+  const additionalDetailOptions = useMemo(
+    () => Array.from(new Set([...ADDITIONAL_DETAIL_OPTIONS, ...tagOptions])).filter((tag) => tag !== 'Flexible schedule'),
+    [tagOptions],
+  );
   const serviceOptions = useMemo(() => getServicesForCategory(draft.category), [draft.category]);
+  const selectedBudgetPreset = useMemo(
+    () =>
+      BUDGET_PRESET_OPTIONS.find(
+        (option) => option.min === draft.budgetMin && option.max === draft.budgetMax,
+      )?.label ?? '',
+    [draft.budgetMax, draft.budgetMin],
+  );
   const selectedDate = useMemo(
     () => parseDateValue(draft.jobDate) ?? getTodayAtStart(),
     [draft.jobDate],
@@ -532,13 +601,16 @@ export default function CreateJobScreen() {
 
   const selectWorkersNeeded = (value: WorkersNeededOption) => {
     updateDraft('workersNeeded', value);
+    setWorkerPickerVisible(false);
   };
 
-  const selectTimeBlock = (value: TimeBlock) => {
+  const selectTimePreference = (value: TimePreference) => {
     updateScheduleDraft({
-      preferredTimeBlock: value,
-      exactTimeNeeded: value === 'to_coordinate' ? false : draft.exactTimeNeeded,
-      exactTime: value === 'to_coordinate' ? '' : draft.exactTime,
+      preferredTimeBlock: value === 'exact'
+        ? inferTimeBlockFromExactTime(draft.exactTime)
+        : value,
+      exactTimeNeeded: value === 'exact',
+      exactTime: value === 'exact' ? draft.exactTime : '',
     });
   };
 
@@ -558,9 +630,22 @@ export default function CreateJobScreen() {
     setTimePickerVisible(false);
     if (!date) return;
 
+    const exactTime = formatTimeValue(date);
     updateScheduleDraft({
-      exactTime: formatTimeValue(date),
+      exactTime,
+      preferredTimeBlock: inferTimeBlockFromExactTime(exactTime),
     });
+  };
+
+  const selectBudgetPreset = (label: string) => {
+    const preset = BUDGET_PRESET_OPTIONS.find((option) => option.label === label);
+    if (!preset) return;
+    setDraft((current) => ({
+      ...current,
+      budgetMin: preset.min,
+      budgetMax: preset.max,
+    }));
+    setErrors((current) => ({ ...current, budgetMin: undefined, budgetMax: undefined }));
   };
 
   const selectCategory = (categoryName: string) => {
@@ -727,7 +812,7 @@ export default function CreateJobScreen() {
           showsVerticalScrollIndicator={false}>
           <Section
             helper="Start by describing the type of help you need."
-            title="Job basics">
+            title="What work do you need?">
             <CurrentUserIdentityRow subtitle="Creating a job post" />
 
             {draft.photoUrls.length ? (
@@ -738,7 +823,7 @@ export default function CreateJobScreen() {
                   showsHorizontalScrollIndicator={false}>
                   {draft.photoUrls.map((url, index) => (
                     <View key={`${url}-${index}`} style={styles.photoTile}>
-                      <Image resizeMode="cover" source={{ uri: url }} style={styles.photoThumb} />
+                      <CachedRemoteImage uri={url} style={styles.photoThumb} />
                       <Pressable
                         accessibilityLabel={`Remove photo ${index + 1}`}
                         accessibilityRole="button"
@@ -835,17 +920,6 @@ export default function CreateJobScreen() {
               <FieldError message={errors.serviceNeeded} />
             </View>
 
-            <View style={styles.group}>
-              <View style={styles.rowBetween}>
-                <View style={styles.flex}>
-                  <Text style={styles.label}>Tags</Text>
-                  <Text style={styles.smallHelper}>Choose up to 4 tags that describe the job.</Text>
-                </View>
-              </View>
-              <ChipWrap items={tagOptions} selected={draft.tags} onPress={toggleTag} />
-              <Text style={styles.smallHelper}>{selectedTagsText || 'No tags selected'}</Text>
-            </View>
-
             <FormInput
               error={errors.title}
               label="Job title"
@@ -857,7 +931,7 @@ export default function CreateJobScreen() {
 
           <Section
             helper="Add the details workers need before they message you."
-            title="Explain the work">
+            title="Job details">
             <FormInput
               error={errors.description}
               label="Job description / additional notes"
@@ -866,48 +940,6 @@ export default function CreateJobScreen() {
               placeholder="What needs to be done?"
               value={draft.description}
             />
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Workers needed</Text>
-              <Text style={styles.smallHelper}>How many people do you need for this job?</Text>
-              <ChipWrap
-                items={WORKERS_NEEDED_OPTIONS.map((option) => option.label)}
-                selected={[
-                  Number(draft.workersNeeded) >= 4
-                    ? '4+'
-                    : WORKERS_NEEDED_OPTIONS.find((option) => option.value === draft.workersNeeded)?.label ?? '',
-                ].filter(Boolean)}
-                onPress={(label) => selectWorkersNeeded(label === '4+' ? '4' : (label as WorkersNeededOption))}
-              />
-              <Text style={styles.summaryText}>{formatWorkersNeededText(draft.workersNeeded)}</Text>
-              <FieldError message={errors.workersNeeded} />
-            </View>
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Preferred experience</Text>
-              <ChipWrap
-                items={EXPERIENCE_OPTIONS.map((option) => option.label)}
-                selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
-                onPress={(label) =>
-                  updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
-                }
-              />
-            </View>
-
-            <ToggleRow
-              description="Show that a certificate is preferred or required for this job."
-              label="Certification preferred"
-              onValueChange={(value) => updateDraft('certificationRequired', value)}
-              value={draft.certificationRequired}
-            />
-            {draft.certificationRequired ? (
-              <FormInput
-                label="Certification note"
-                onChangeText={(value) => updateDraft('certificationNote', value)}
-                placeholder="Example: TESDA certificate preferred"
-                value={draft.certificationNote}
-              />
-            ) : null}
           </Section>
 
           <View
@@ -916,11 +948,32 @@ export default function CreateJobScreen() {
               scrollToBudgetRange();
             }}>
             <Section
-              helper="Use a range so workers know what to expect."
-              title="Budget">
+              helper="Choose the worker count and the amount you can offer."
+              title="Workers and budget">
+              <View style={styles.group}>
+                <Text style={styles.label}>How many workers do you need?</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setWorkerPickerVisible(true)}
+                  style={({ pressed }) => [
+                    styles.selectBox,
+                    errors.workersNeeded && styles.inputErrorBorder,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text
+                    style={[styles.selectText, !draft.workersNeeded && styles.placeholderText]}
+                    numberOfLines={1}>
+                    {getWorkersNeededPickerLabel(draft.workersNeeded) || 'Select number of workers'}
+                  </Text>
+                  <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+                </Pressable>
+                <Text style={styles.smallHelper}>{formatWorkersNeededText(draft.workersNeeded)}</Text>
+                <FieldError message={errors.workersNeeded} />
+              </View>
               <RateRangeInput
                 error={errors.budgetMin}
-                label="Budget range"
+                helperText="Enter the amount you can offer. Final payment can still be discussed with the worker."
+                label="Estimated budget"
                 maxLabel="Maximum budget"
                 maxValue={draft.budgetMax}
                 minLabel="Minimum budget"
@@ -932,13 +985,24 @@ export default function CreateJobScreen() {
                 onRateTypeChange={(value) => updateDraft('rateType', value)}
                 previewPrefix="Budget preview"
                 rateType={draft.rateType}
+                showNegotiableToggle={false}
+                showPreview={false}
+                showRateTypeOptions={false}
               />
+              <View style={styles.group}>
+                <Text style={styles.label}>Quick budget ranges</Text>
+                <ChipWrap
+                  items={BUDGET_PRESET_OPTIONS.map((option) => option.label)}
+                  selected={[selectedBudgetPreset].filter(Boolean)}
+                  onPress={selectBudgetPreset}
+                />
+              </View>
             </Section>
           </View>
 
           <Section
-            helper="Choose when the job should happen, or coordinate it later."
-            title="Schedule">
+            helper="Choose when and where the job should happen."
+            title="Schedule and location">
             <View style={styles.group}>
               <Text style={styles.label}>Job date</Text>
               <Pressable
@@ -962,51 +1026,37 @@ export default function CreateJobScreen() {
             </View>
 
             <View style={styles.group}>
-              <Text style={styles.label}>Preferred time block</Text>
+              <Text style={styles.label}>Time preference</Text>
               <ChipWrap
-                items={TIME_BLOCK_OPTIONS.map((option) => option.label)}
-                selected={[getTimeBlockLabel(draft.preferredTimeBlock)].filter(Boolean)}
+                items={TIME_PREFERENCE_OPTIONS.map((option) => option.label)}
+                selected={[getTimePreferenceLabel(draft)].filter(Boolean)}
                 onPress={(label) =>
-                  selectTimeBlock(TIME_BLOCK_OPTIONS.find((option) => option.label === label)?.value ?? 'anytime')
+                  selectTimePreference(TIME_PREFERENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'anytime')
                 }
               />
             </View>
 
-            {draft.preferredTimeBlock !== 'to_coordinate' ? (
-              <>
-                <ToggleRow
-                  description="Turn this on only when the worker needs a specific start time."
-                  label="Exact time needed"
-                  onValueChange={(value) =>
-                    updateScheduleDraft({
-                      exactTimeNeeded: value,
-                    })
-                  }
-                  value={draft.exactTimeNeeded}
-                />
-                {draft.exactTimeNeeded ? (
-                  <View style={styles.group}>
-                    <Text style={styles.label}>Exact time</Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setTimePickerVisible(true)}
-                      style={({ pressed }) => [styles.selectBox, errors.scheduleText && styles.inputErrorBorder, pressed && styles.pressed]}>
-                      <Text style={[styles.selectText, !draft.exactTime && styles.placeholderText]} numberOfLines={1}>
-                        {draft.exactTime ? formatExactTime(draft.exactTime) : 'Choose exact time'}
-                      </Text>
-                      <MaterialIcons color={color.verificationBlue} name="schedule" size={20} />
-                    </Pressable>
-                    {timePickerVisible ? (
-                      <DateTimePicker
-                        display="default"
-                        mode="time"
-                        onChange={onExactTimeChange}
-                        value={selectedTime}
-                      />
-                    ) : null}
-                  </View>
+            {draft.exactTimeNeeded ? (
+              <View style={styles.group}>
+                <Text style={styles.label}>Exact time</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setTimePickerVisible(true)}
+                  style={({ pressed }) => [styles.selectBox, errors.scheduleText && styles.inputErrorBorder, pressed && styles.pressed]}>
+                  <Text style={[styles.selectText, !draft.exactTime && styles.placeholderText]} numberOfLines={1}>
+                    {draft.exactTime ? formatExactTime(draft.exactTime) : 'Choose exact time'}
+                  </Text>
+                  <MaterialIcons color={color.verificationBlue} name="schedule" size={20} />
+                </Pressable>
+                {timePickerVisible ? (
+                  <DateTimePicker
+                    display="default"
+                    mode="time"
+                    onChange={onExactTimeChange}
+                    value={selectedTime}
+                  />
                 ) : null}
-              </>
+              </View>
             ) : null}
 
             <View style={styles.group}>
@@ -1031,11 +1081,7 @@ export default function CreateJobScreen() {
               <Text style={styles.smallHelper}>Loaded from an older draft. Choose a date or time block to replace it.</Text>
             ) : null}
             <FieldError message={errors.scheduleText} />
-          </Section>
 
-          <Section
-            helper="Set the public barangay and private arrival details."
-            title="Location and privacy">
             <View style={styles.group}>
               <Text style={styles.label}>Barangay / general location</Text>
               <Pressable
@@ -1070,26 +1116,76 @@ export default function CreateJobScreen() {
           </Section>
 
           <Section
-            helper="Control how workers can respond after the main job details are clear."
-            title="Listing options">
-            <ToggleRow
-              description="Let workers ask questions before you choose who to hire."
-              label="Allow messages before hiring"
-              onValueChange={(value) => updateDraft('allowMessages', value)}
-              value={draft.allowMessages}
-            />
-            <ToggleRow
-              description="Send a quick reply when someone messages."
-              label="Auto-reply"
-              onValueChange={(value) => updateDraft('autoReplyEnabled', value)}
-              value={draft.autoReplyEnabled}
-            />
-            <ToggleRow
-              description="Hide this post after the start time or when all workers are accepted."
-              label="Auto-close post"
-              onValueChange={(value) => updateDraft('autoCloseEnabled', value)}
-              value={draft.autoCloseEnabled}
-            />
+            helper="Choose up to 4 quick tags that help workers understand the job."
+            title="Additional details">
+            <View style={styles.group}>
+              <ChipWrap items={additionalDetailOptions} selected={draft.tags} onPress={toggleTag} />
+              <Text style={styles.smallHelper}>{selectedTagsText || 'No quick details added yet'}</Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: moreOptionsVisible }}
+              onPress={() => setMoreOptionsVisible((visible) => !visible)}
+              style={({ pressed }) => [styles.moreOptionsButton, pressed && styles.pressed]}>
+              <View style={styles.flex}>
+                <Text style={styles.moreOptionsTitle}>More options</Text>
+                <Text style={styles.smallHelper}>Experience, certificates, and message settings.</Text>
+              </View>
+              <MaterialIcons
+                color={color.verificationBlue}
+                name={moreOptionsVisible ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={24}
+              />
+            </Pressable>
+
+            {moreOptionsVisible ? (
+              <View style={styles.moreOptionsContent}>
+                <View style={styles.group}>
+                  <Text style={styles.label}>Preferred experience</Text>
+                  <ChipWrap
+                    items={EXPERIENCE_OPTIONS.map((option) => option.label)}
+                    selected={[EXPERIENCE_OPTIONS.find((option) => option.value === draft.experienceLevel)?.label ?? 'Any level']}
+                    onPress={(label) =>
+                      updateDraft('experienceLevel', EXPERIENCE_OPTIONS.find((option) => option.label === label)?.value ?? 'any')
+                    }
+                  />
+                </View>
+
+                <ToggleRow
+                  description="Tell workers that a certificate is preferred for this job."
+                  label="Certification preferred"
+                  onValueChange={(value) => updateDraft('certificationRequired', value)}
+                  value={draft.certificationRequired}
+                />
+                {draft.certificationRequired ? (
+                  <FormInput
+                    label="Certification note"
+                    onChangeText={(value) => updateDraft('certificationNote', value)}
+                    placeholder="Example: TESDA certificate preferred"
+                    value={draft.certificationNote}
+                  />
+                ) : null}
+                <ToggleRow
+                  description="Let workers ask questions before you choose who to hire."
+                  label="Allow messages before hiring"
+                  onValueChange={(value) => updateDraft('allowMessages', value)}
+                  value={draft.allowMessages}
+                />
+                <ToggleRow
+                  description="Send a quick reply when someone messages."
+                  label="Auto-reply"
+                  onValueChange={(value) => updateDraft('autoReplyEnabled', value)}
+                  value={draft.autoReplyEnabled}
+                />
+                <ToggleRow
+                  description="Hide this post after the start time or once workers are accepted."
+                  label="Auto-close post"
+                  onValueChange={(value) => updateDraft('autoCloseEnabled', value)}
+                  value={draft.autoCloseEnabled}
+                />
+              </View>
+            ) : null}
           </Section>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1132,7 +1228,50 @@ export default function CreateJobScreen() {
         title="Choose barangay"
         visible={barangayPickerVisible}
       />
+      <WorkerCountPickerSheet
+        onClose={() => setWorkerPickerVisible(false)}
+        onSelect={selectWorkersNeeded}
+        selectedValue={draft.workersNeeded}
+        visible={workerPickerVisible}
+      />
     </SafeAreaView>
+  );
+}
+
+function WorkerCountPickerSheet({
+  selectedValue,
+  visible,
+  onClose,
+  onSelect,
+}: {
+  selectedValue: string;
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (value: WorkersNeededOption) => void;
+}) {
+  return (
+    <BottomSheet maxHeight="42%" onClose={onClose} visible={visible}>
+      <View style={styles.workerPickerHeader}>
+        <Text style={styles.workerPickerTitle}>How many workers do you need?</Text>
+        <Text style={styles.smallHelper}>Select number of workers</Text>
+      </View>
+      <View style={styles.workerOptionList}>
+        {WORKERS_NEEDED_OPTIONS.map((option) => {
+          const active = selectedValue === option.value || (Number(selectedValue) >= 5 && option.value === '5');
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              key={option.value}
+              onPress={() => onSelect(option.value)}
+              style={({ pressed }) => [styles.workerOptionRow, active && styles.workerOptionRowActive, pressed && styles.pressed]}>
+              <Text style={[styles.workerOptionText, active && styles.workerOptionTextActive]}>{option.label}</Text>
+              {active ? <MaterialIcons color={color.verificationBlue} name="check" size={20} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -1641,6 +1780,54 @@ const styles = StyleSheet.create({
   previewText: {
     ...typography.bodyMedium,
     color: color.text,
+  },
+  moreOptionsButton: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    justifyContent: 'space-between',
+    minHeight: 54,
+    padding: space.md,
+  },
+  moreOptionsContent: {
+    gap: space.md,
+  },
+  moreOptionsTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  workerPickerHeader: {
+    gap: space.xs,
+  },
+  workerPickerTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+  },
+  workerOptionList: {
+    gap: space.xs,
+  },
+  workerOptionRow: {
+    alignItems: 'center',
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 46,
+    paddingVertical: space.md,
+  },
+  workerOptionRowActive: {
+    borderBottomColor: color.primary,
+  },
+  workerOptionText: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  workerOptionTextActive: {
+    color: color.verificationBlue,
+    fontFamily: 'Satoshi-Bold',
   },
   editLink: {
     ...typography.body,

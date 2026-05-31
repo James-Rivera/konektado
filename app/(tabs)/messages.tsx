@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
-    Image,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 
 import { AppHeader } from '@/components/AppHeader';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { EmptyState } from '@/components/EmptyState';
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonAvatar } from '@/components/Skeleton';
@@ -402,10 +402,9 @@ const MessageRow = memo(function MessageRow({
       style={({ pressed }) => [styles.messageRow, pressed && styles.pressed]}>
       <View style={styles.avatar}>
         {avatarUrl && !avatarFailed ? (
-          <Image
+          <CachedRemoteImage
             onError={() => setAvatarFailed(true)}
-            resizeMode="cover"
-            source={{ uri: avatarUrl }}
+            uri={avatarUrl}
             style={styles.avatarImage}
           />
         ) : (
