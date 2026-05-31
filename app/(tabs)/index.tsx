@@ -15,7 +15,6 @@ import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
-import { Skeleton } from '@/components/Skeleton';
 import { homeFilters, type HomeFilter } from '@/constants/demo-data';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
@@ -186,8 +185,10 @@ export default function HomeScreen() {
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [optionalSetupDismissed, setOptionalSetupDismissed] = useState(false);
-  const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
-  const [completionLoading, setCompletionLoading] = useState(true);
+  const [profileCompletionStatus, setProfileCompletionStatus] =
+    useState<ProfileCompletionStatus | null>(null);
+  const [isCheckingSetupStatus, setIsCheckingSetupStatus] = useState(false);
+  const [hasLoadedSetupStatus, setHasLoadedSetupStatus] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
@@ -229,17 +230,20 @@ export default function HomeScreen() {
       };
     }
 
-    setCompletionLoading(true);
+    setIsCheckingSetupStatus(true);
+    setHasLoadedSetupStatus(false);
     getMyProfileCompletion()
       .then((result) => {
         if (!active) return;
-        setCompletion(result.error ? null : result.data);
+        setProfileCompletionStatus(result.error ? null : result.data);
       })
       .catch(() => {
-        if (active) setCompletion(null);
+        if (active) setProfileCompletionStatus(null);
       })
       .finally(() => {
-        if (active) setCompletionLoading(false);
+        if (!active) return;
+        setIsCheckingSetupStatus(false);
+        setHasLoadedSetupStatus(true);
       });
 
     return () => {
@@ -362,13 +366,16 @@ export default function HomeScreen() {
     () =>
       getHomeSetupNudge({
         activeRole: profile?.active_role,
-        completion,
+        completion: profileCompletionStatus,
         optionalSetupDismissed,
         preferences,
         selectedFilter,
       }),
-    [completion, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
+    [profileCompletionStatus, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
   );
+  const needsProfileSetup = Boolean(setupNudge);
+  const shouldShowSetupPrompt =
+    hasLoadedSetupStatus && !isCheckingSetupStatus && needsProfileSetup;
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -516,9 +523,7 @@ export default function HomeScreen() {
   const renderListHeader = useCallback(
     () => (
       <>
-        {completionLoading ? (
-          <VerificationBannerSkeleton />
-        ) : setupNudge ? (
+        {shouldShowSetupPrompt && setupNudge ? (
           <HomeSetupNudge
             actionLabel={setupNudge.actionLabel}
             body={setupNudge.body}
@@ -535,11 +540,11 @@ export default function HomeScreen() {
       </>
     ),
     [
-      completionLoading,
       openSetupAction,
       activeFeedFilterCount,
       openFeedFilters,
       setupNudge,
+      shouldShowSetupPrompt,
     ],
   );
 
@@ -839,21 +844,6 @@ function fallbackVerificationAction(): ProfileCompletionAction {
   };
 }
 
-function VerificationBannerSkeleton() {
-  return (
-    <View style={styles.bannerSkeleton}>
-      <View style={styles.bannerSkeletonHeader}>
-        <Skeleton height={24} width={24} borderRadius={12} />
-        <View style={styles.bannerSkeletonCopy}>
-          <Skeleton height={15} width="64%" />
-          <Skeleton height={12} width="92%" />
-        </View>
-      </View>
-      <Skeleton height={34} width="100%" borderRadius={17} />
-    </View>
-  );
-}
-
 function HomeFeedCardSkeleton({
   kind,
   loadingImage = false,
@@ -908,24 +898,6 @@ const styles = StyleSheet.create({
   },
   skeletonFeed: {
     gap: 2,
-  },
-  bannerSkeleton: {
-    backgroundColor: color.background,
-    borderColor: color.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 14,
-    margin: 18,
-    padding: 16,
-  },
-  bannerSkeletonHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  bannerSkeletonCopy: {
-    flex: 1,
-    gap: 8,
   },
   emptyText: {
     ...typography.body,
