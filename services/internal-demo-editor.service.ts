@@ -15,17 +15,22 @@ import {
 } from '@/services/content-visibility.service';
 import { compactText, formatPublicLocation, isCurrentUserAdmin, normalizeRateType } from '@/services/marketplace.helpers';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
+import {
+  optimizePublicImageForUpload,
+  readPublicImageUploadBody,
+} from '@/utils/image-processing';
 import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
 
 const INTERNAL_ALLOWED_EMAILS = parseEnvList(process.env.EXPO_PUBLIC_INTERNAL_DEMO_EDITOR_EMAILS);
 const INTERNAL_ALLOWED_USER_IDS = parseEnvList(process.env.EXPO_PUBLIC_INTERNAL_DEMO_EDITOR_USER_IDS);
-const MAX_PUBLIC_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PUBLIC_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_PRIVATE_VERIFICATION_FILE_BYTES = 10 * 1024 * 1024;
 const SIGNED_VERIFICATION_URL_SECONDS = 5 * 60;
-const PUBLIC_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const PUBLIC_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
+const PUBLIC_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+const PUBLIC_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
 const PRIVATE_DOCUMENT_BUCKET = 'verification-files';
+const PUBLIC_IMAGE_BUCKETS = new Set(['profile-photos', 'job-photos', 'service-photos']);
 const EDITABLE_VERIFICATION_FILE_TYPES = ['id_front', 'id_back', 'certification', 'experience', 'other'] as const;
 
 const BANNED_VISIBLE_WORDS = [
@@ -1068,24 +1073,37 @@ export async function updateEditableProfile(
   const fullName = compactText(payload.fullName);
   const firstName = compactText(payload.firstName);
   const lastName = compactText(payload.lastName);
-  if (!fullName && !firstName && !lastName) {
+  const allNameFieldsProvided =
+    payload.fullName !== undefined &&
+    payload.firstName !== undefined &&
+    payload.lastName !== undefined;
+  if (allNameFieldsProvided && !fullName && !firstName && !lastName) {
     return { data: null, error: 'Enter a public name for this profile.' };
   }
 
-  const updatePayload = {
-    about: compactText(payload.about) || null,
-    avatar_url: compactText(payload.avatarUrl) || null,
-    availability: compactText(payload.availability) || null,
-    barangay: compactText(payload.barangay) || null,
-    city: compactText(payload.city) || null,
-    first_name: firstName || null,
-    full_name: fullName || [firstName, lastName].filter(Boolean).join(' ') || null,
-    last_name: lastName || null,
-    preferred_contact_method: compactText(payload.preferredContactMethod) || null,
-    purok_sitio: compactText(payload.purokSitio) || null,
-    street: compactText(payload.street) || null,
-    subdivision_area: compactText(payload.subdivisionArea) || null,
-  };
+  const updatePayload: Record<string, string | null> = {};
+  if (payload.about !== undefined) updatePayload.about = compactText(payload.about) || null;
+  if (payload.avatarUrl !== undefined) updatePayload.avatar_url = compactText(payload.avatarUrl) || null;
+  if (payload.availability !== undefined) updatePayload.availability = compactText(payload.availability) || null;
+  if (payload.barangay !== undefined) updatePayload.barangay = compactText(payload.barangay) || null;
+  if (payload.city !== undefined) updatePayload.city = compactText(payload.city) || null;
+  if (payload.firstName !== undefined) updatePayload.first_name = firstName || null;
+  if (payload.fullName !== undefined) {
+    updatePayload.full_name = fullName || [firstName, lastName].filter(Boolean).join(' ') || null;
+  }
+  if (payload.lastName !== undefined) updatePayload.last_name = lastName || null;
+  if (payload.preferredContactMethod !== undefined) {
+    updatePayload.preferred_contact_method = compactText(payload.preferredContactMethod) || null;
+  }
+  if (payload.purokSitio !== undefined) updatePayload.purok_sitio = compactText(payload.purokSitio) || null;
+  if (payload.street !== undefined) updatePayload.street = compactText(payload.street) || null;
+  if (payload.subdivisionArea !== undefined) {
+    updatePayload.subdivision_area = compactText(payload.subdivisionArea) || null;
+  }
+
+  if (!Object.keys(updatePayload).length) {
+    return { data: null, error: 'Choose at least one profile field to update.' };
+  }
 
   const { data, error } = await supabase
     .from('profiles')
@@ -1700,25 +1718,58 @@ export async function uploadPublicDemoImage(
   const validation = validatePublicImageAsset(file);
   if (validation.error) return validation;
 
-  const bucket = targetType === 'profile_photo' ? 'profile-photos' : targetType === 'job_photo' ? 'job-photos' : 'service-photos';
-  const fileName = normalizeFileName(file.name ?? '', `${targetType}.jpg`);
-  const path = `${access.data.userId}/internal-demo/${targetType}-${Date.now()}-${fileName}`;
-
   try {
-    const uploadBody = await getFileUploadBody(file, fileName);
-    if (uploadBody.error || !uploadBody.data) return { data: null, error: uploadBody.error ?? 'Could not read this image.' };
+    const bucket = targetType === 'profile_photo' ? 'profile-photos' : targetType === 'job_photo' ? 'job-photos' : 'service-photos';
+    const purpose = targetType === 'profile_photo' ? 'avatar' : 'marketplace-photo';
+    const optimizedAsset = await optimizePublicImageForUpload(file, purpose);
+    if (!optimizedAsset.optimized) {
+      return {
+        data: null,
+        error: 'Could not optimize this public image. Try a smaller JPG or PNG file.',
+      };
+    }
 
-    const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.data.body, {
-      contentType: uploadBody.data.contentType,
+    const fileName = normalizeFileName(optimizedAsset.name, `${targetType}.jpg`);
+    const path = `${access.data.userId}/internal-demo/${targetType}-${Date.now()}-${fileName}`;
+    let uploadBody: PublicDemoImageUploadBody;
+    try {
+      uploadBody = await readPublicImageUploadBody(optimizedAsset);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : null;
+      return {
+        data: null,
+        error: `Image preparation failed after optimization. ${message || 'Try choosing the file again.'}`,
+      };
+    }
+
+    const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.body, {
+      contentType: uploadBody.contentType,
       upsert: false,
     });
 
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: `Storage upload failed. ${error.message}` };
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    if (!data.publicUrl) {
+      await supabase.storage.from(bucket).remove([path]);
+      return { data: null, error: 'Storage upload finished, but the public image URL could not be created.' };
+    }
     return { data: data.publicUrl, error: null };
-  } catch {
-    return { data: null, error: `Could not upload ${file.name || 'image'}.` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : null;
+    return { data: null, error: message || `Could not upload ${file.name || 'image'}.` };
   }
+}
+
+export async function removePublicDemoImage(publicUrl: string): Promise<ServiceResult<void>> {
+  const access = await requireInternalAccess();
+  if (access.error) return { data: null, error: access.error };
+
+  const location = getPublicStorageObjectFromUrl(publicUrl);
+  if (!location) return { data: undefined, error: null };
+
+  const { error } = await supabase.storage.from(location.bucket).remove([location.path]);
+  if (error) return { data: null, error: error.message };
+  return { data: undefined, error: null };
 }
 
 async function getFileUploadBody(
@@ -1751,7 +1802,7 @@ function validatePrivateVerificationFileAsset(file: PrivateVerificationFileAsset
 function validatePublicImageAsset(file: PublicDemoImageAsset): ServiceResult<void> {
   if (!file.uri) return { data: null, error: 'Choose an image file first.' };
   if (file.size && file.size > MAX_PUBLIC_IMAGE_BYTES) {
-    return { data: null, error: 'Choose an image under 5 MB.' };
+    return { data: null, error: 'Choose an image under 25 MB.' };
   }
 
   const mimeType = compactText(file.mimeType).toLowerCase();
@@ -1805,6 +1856,17 @@ function getStoragePathFromPublicUrl(imageUrl: string) {
   const pathStart = markerIndex + marker.length;
   const path = imageUrl.slice(pathStart).split('?')[0];
   return path ? decodeURIComponent(path) : null;
+}
+
+function getPublicStorageObjectFromUrl(imageUrl: string) {
+  const storagePath = getStoragePathFromPublicUrl(imageUrl);
+  if (!storagePath) return null;
+
+  const [bucket, ...pathParts] = storagePath.split('/');
+  const path = pathParts.join('/');
+  if (!bucket || !path || !PUBLIC_IMAGE_BUCKETS.has(bucket)) return null;
+
+  return { bucket, path };
 }
 
 export function getBannedVisibleWords() {

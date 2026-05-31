@@ -183,6 +183,7 @@ These role permissions apply after the user's barangay verification is approved 
 - Photo Hide writes an admin moderation action and sets content visibility to `hidden`; public screens must stop rendering the image.
 - Photo Clear writes an admin moderation action and sets content visibility back to `visible`.
 - Public photo moderation does not physically delete storage files in the current phase.
+- Public job/service photo storage owners may delete only their own staged objects so cancelled edits and failed database saves can clean up uploaded files.
 - Admin moderation reasons and notes must never be exposed in normal public app queries.
 
 ## Verification Rules

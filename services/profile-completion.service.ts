@@ -1024,7 +1024,7 @@ function buildVerificationStatus({
   if (isVerified) {
     return {
       status: 'approved',
-      label: 'Barangay Verified',
+      label: 'Verified',
       description: 'Your official barangay verification is approved.',
       reviewerNote: latestVerification?.reviewer_note ?? null,
       submittedAt: latestVerification?.created_at ?? null,

@@ -1,10 +1,11 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { MoreActionsSheet } from '@/components/MoreActionsSheet';
@@ -32,6 +33,7 @@ import {
 } from '@/services/profile-completion.service';
 import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
+import { getAvatarDisplayUrl, getDetailImageUrl } from '@/utils/image-processing';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -130,8 +132,8 @@ export default function JobDetailScreen() {
   const jobStatus = job.status;
   const workersNeeded = job.workersNeeded ?? 1;
   const acceptedCount = job.acceptedProviderId ? 1 : 0;
-  const jobImageUrl = job.photoUrls?.[0] ?? null;
-  const clientAvatarUrl = job.client?.avatarUrl ?? null;
+  const jobImageUrl = getDetailImageUrl({ imageUrl: job.photoUrls?.[0] });
+  const clientAvatarUrl = getAvatarDisplayUrl({ avatarUrl: job.client?.avatarUrl });
   const location = getMarketplaceLocation(job);
   const displayServiceNeeded = getDisplayLabelForMvpService(job.serviceNeeded) || job.serviceNeeded;
   const jobTags = Array.from(
@@ -390,7 +392,7 @@ export default function JobDetailScreen() {
           {jobImageUrl ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Photos</Text>
-              <Image resizeMode="cover" source={{ uri: jobImageUrl }} style={styles.detailPhoto} />
+              <CachedRemoteImage uri={jobImageUrl} style={styles.detailPhoto} />
             </View>
           ) : null}
 
@@ -424,10 +426,9 @@ export default function JobDetailScreen() {
                 <View style={styles.posterInfo}>
                   <View style={styles.avatar}>
                     {clientAvatarUrl && !avatarFailed ? (
-                      <Image
+                      <CachedRemoteImage
                         onError={() => setAvatarFailed(true)}
-                        resizeMode="cover"
-                        source={{ uri: clientAvatarUrl }}
+                        uri={clientAvatarUrl}
                         style={styles.avatarImage}
                       />
                     ) : (

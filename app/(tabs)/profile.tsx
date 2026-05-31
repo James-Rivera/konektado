@@ -175,7 +175,7 @@ export default function ProfileScreen() {
             <ProfileHero
               avatarUrl={completion?.core.avatarUrl ?? profile?.avatar_url}
               badgeIcon={getVerificationBadgeIcon(completion)}
-              badgeLabel={completion?.verification.label ?? (isVerified ? 'Barangay Verified' : 'Verification needed')}
+              badgeLabel={completion?.verification.label ?? (isVerified ? 'Verified' : 'Verification needed')}
               badgeTone={isVerified ? 'success' : 'warning'}
               initials={getInitials(displayName)}
               location={publicLocation}
@@ -380,7 +380,7 @@ function WorkProfileContent({
 
   return (
     <>
-      <ProfileSection title="Profile Builder">
+      <ProfileSection title="Complete profile">
         {shouldShowVerificationPanel(completion) ? (
           <VerificationStatusPanel status={completion.verification} onAction={onAction} />
         ) : null}
@@ -503,7 +503,7 @@ function HiringProfileContent({
 
   return (
     <>
-      <ProfileSection title="Profile Builder">
+      <ProfileSection title="Complete profile">
         {shouldShowVerificationPanel(completion) ? (
           <VerificationStatusPanel status={completion.verification} onAction={onAction} />
         ) : null}

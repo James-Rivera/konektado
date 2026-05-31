@@ -1,8 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ReactNode } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
@@ -20,6 +21,7 @@ import type {
   PublicClientProfile,
   PublicWorkerProfile,
 } from '@/types/marketplace.types';
+import { getAvatarDisplayUrl } from '@/utils/image-processing';
 
 type ProfileCta = {
   disabled?: boolean;
@@ -266,11 +268,13 @@ function PublicSummaryCard({
   roleLabel: string;
   verified: boolean;
 }) {
+  const displayAvatarUrl = getAvatarDisplayUrl({ avatarUrl });
+
   return (
     <View style={styles.summaryCard}>
       <View style={styles.avatar}>
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+        {displayAvatarUrl ? (
+          <CachedRemoteImage uri={displayAvatarUrl} style={styles.avatarImage} />
         ) : (
           <Text style={styles.avatarText}>{getInitials(name)}</Text>
         )}
@@ -289,7 +293,7 @@ function PublicSummaryCard({
           {verified ? (
             <View style={styles.verifiedBadge}>
               <MaterialIcons color="#2F7D32" name="verified" size={14} />
-              <Text style={styles.verifiedText}>Barangay Verified</Text>
+              <Text style={styles.verifiedText}>Verified</Text>
             </View>
           ) : null}
           <View style={styles.roleBadge}>

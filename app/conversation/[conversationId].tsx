@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
-    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
@@ -312,10 +312,9 @@ export default function ConversationDetailScreen() {
           </Pressable>
           <View style={styles.headerAvatar}>
             {avatarUrl && !avatarFailed ? (
-              <Image
+              <CachedRemoteImage
                 onError={() => setAvatarFailed(true)}
-                resizeMode="cover"
-                source={{ uri: avatarUrl }}
+                uri={avatarUrl}
                 style={styles.headerAvatarImage}
               />
             ) : (

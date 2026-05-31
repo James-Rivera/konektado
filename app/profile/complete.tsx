@@ -5,7 +5,6 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
-    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -18,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { NoticeBanner } from '@/components/NoticeBanner';
@@ -46,6 +46,7 @@ import type {
     WorkProfileInput,
 } from '@/types/profile.types';
 import type { LegalNameEditPolicy } from '@/types/legal-name.types';
+import { getAvatarDisplayUrl } from '@/utils/image-processing';
 import { NAME_CORRECTION_REQUEST_EXPLANATION } from '@/utils/verified-name-policy';
 
 type FormMode = ProfileCompletionMode;
@@ -573,34 +574,46 @@ function ProfilePhotoSection({
   uploading: boolean;
   onPickAvatar: () => void;
 }) {
+  const displayAvatarUrl = getAvatarDisplayUrl({ avatarUrl });
+
   return (
-    <View style={styles.photoSection}>
-      <View style={styles.photoPreview}>
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.photoImage} />
-        ) : (
-          <Text style={styles.photoInitials}>{getInitials(name || 'Konektado resident')}</Text>
-        )}
+    <View style={styles.photoSectionStack}>
+      <View style={styles.photoSection}>
+        <View style={styles.photoPreview}>
+          {displayAvatarUrl ? (
+            <CachedRemoteImage uri={displayAvatarUrl} style={styles.photoImage} />
+          ) : (
+            <Text style={styles.photoInitials}>{getInitials(name || 'Konektado resident')}</Text>
+          )}
+        </View>
+        <View style={styles.photoCopy}>
+          <Text style={styles.photoTitle}>Profile photo</Text>
+          <Text style={styles.photoBody}>
+            Use a clear, recent photo of your face.
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          disabled={uploading}
+          onPress={onPickAvatar}
+          style={({ pressed }) => [
+            styles.photoAction,
+            uploading && styles.disabled,
+            pressed && !uploading && styles.pressed,
+          ]}>
+          <Text style={styles.photoActionText}>
+            {uploading ? 'Uploading...' : avatarUrl ? 'Replace' : 'Add photo'}
+          </Text>
+        </Pressable>
       </View>
-      <View style={styles.photoCopy}>
-        <Text style={styles.photoTitle}>Profile photo</Text>
-        <Text style={styles.photoBody}>
-          Add a clear photo so neighbors can recognize and trust who they are talking to.
+      <View style={styles.photoGuide}>
+        <Text style={styles.photoGuideText}>
+          Good: clear face, bright lighting, only you, recent photo.
+        </Text>
+        <Text style={styles.photoGuideText}>
+          Not accepted: group photo, blurry or dark photo, ID/document photo, cartoon/anime/avatar, face covered, heavily edited photo.
         </Text>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        disabled={uploading}
-        onPress={onPickAvatar}
-        style={({ pressed }) => [
-          styles.photoAction,
-          uploading && styles.disabled,
-          pressed && !uploading && styles.pressed,
-        ]}>
-        <Text style={styles.photoActionText}>
-          {uploading ? 'Uploading...' : avatarUrl ? 'Replace' : 'Add photo'}
-        </Text>
-      </Pressable>
     </View>
   );
 }
@@ -617,6 +630,7 @@ function NamePolicyNotice({
   const isVerified = policy.state === 'verified';
   const iconName = policy.canEdit ? 'info-outline' : isVerified ? 'verified-user' : 'lock';
   const iconColor = policy.canEdit ? color.primary : isVerified ? color.success : color.textSubtle;
+  const message = isVerified ? 'Verified name. Changes require barangay review.' : policy.message;
 
   return (
     <View style={styles.namePolicyNote}>
@@ -624,8 +638,7 @@ function NamePolicyNotice({
         <MaterialIcons color={iconColor} name={iconName} size={16} />
       </View>
       <View style={styles.namePolicyCopy}>
-        {isVerified ? <Text style={styles.namePolicyTitle}>Verified name</Text> : null}
-        <Text style={styles.namePolicyText}>{policy.message}</Text>
+        <Text style={styles.namePolicyText}>{message}</Text>
         {policy.canRequestCorrection ? (
           <Pressable
             accessibilityRole="button"
@@ -1260,6 +1273,9 @@ const styles = StyleSheet.create({
   setupSectionCompact: {
     paddingVertical: space.md,
   },
+  photoSectionStack: {
+    gap: space.md,
+  },
   photoSection: {
     alignItems: 'flex-start',
     flexDirection: 'row',
@@ -1296,6 +1312,18 @@ const styles = StyleSheet.create({
     color: color.text,
   },
   photoBody: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  photoGuide: {
+    backgroundColor: color.primarySoft,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: space.xs,
+    padding: space.md,
+  },
+  photoGuideText: {
     ...typography.caption,
     color: color.textMuted,
   },

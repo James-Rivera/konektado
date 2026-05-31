@@ -11,6 +11,7 @@ import type {
     ServiceSearchResult,
 } from '@/types/marketplace.types';
 import { applyPublicPhotoVisibilityToProfiles } from '@/services/content-visibility.service';
+import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
 export type ProfileRow = {
@@ -606,7 +607,7 @@ export function mapProfile(row: ProfileRow | null | undefined): PublicProfileSum
       province: row.province,
     }),
     about: row.about,
-    avatarUrl: row.avatar_url,
+    avatarUrl: getAvatarDisplayUrl({ avatarUrl: row.avatar_url }),
     availability: row.availability,
     barangayVerifiedAt: row.barangay_verified_at,
     verifiedAt: row.verified_at,
@@ -614,7 +615,7 @@ export function mapProfile(row: ProfileRow | null | undefined): PublicProfileSum
 }
 
 export function getPublicProfileAvatarUrl(profile: PublicProfileSummary | null | undefined) {
-  return compactText(profile?.avatarUrl) || null;
+  return getAvatarDisplayUrl({ avatarUrl: profile?.avatarUrl });
 }
 
 export function isPublicProfileVerified(profile: PublicProfileSummary | null | undefined) {
@@ -797,7 +798,7 @@ export function adaptJobToCardProps(job: JobSummary): JobCardProps {
     clientRatingText: formatClientRatingText(job),
     jobsPostedText: formatClientJobsPostedText(job),
     location: getMarketplaceLocation(job),
-    imageUrl: job.photoUrls[0],
+    imageUrl: getCardImageUrl({ imageUrl: job.photoUrls[0] }),
     showActionRow: false,
   };
 }
@@ -824,7 +825,7 @@ export function adaptServiceToCardProps(
     ratingText: formatServiceRatingText(service),
     jobsDoneText: formatServiceJobsDoneText(service, service.completedJobsCount),
     location: getMarketplaceLocation(service),
-    imageUrl: service.photoUrls[0],
+    imageUrl: getCardImageUrl({ imageUrl: service.photoUrls[0] }),
     isActive: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
   };
 }

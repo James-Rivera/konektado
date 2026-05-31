@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { color, radius, typography } from '@/constants/theme';
 
 export type JobCardProps = {
@@ -122,10 +123,9 @@ function JobPhoto({ imageUrl }: { imageUrl: string }) {
   }
 
   return (
-    <Image
+    <CachedRemoteImage
       onError={() => setFailed(true)}
-      resizeMode="cover"
-      source={{ uri: imageUrl }}
+      uri={imageUrl}
       style={styles.photo}
     />
   );

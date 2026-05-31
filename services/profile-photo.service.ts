@@ -1,7 +1,10 @@
-import { File } from 'expo-file-system';
-
 import type { ServiceResult } from '@/services/auth.service';
 import { getCurrentUserId } from '@/services/marketplace.helpers';
+import {
+  normalizePublicImageFileName,
+  optimizePublicImageForUpload,
+  readPublicImageUploadBody,
+} from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
 const PROFILE_PHOTO_BUCKET = 'profile-photos';
@@ -10,6 +13,7 @@ export type ProfilePhotoAsset = {
   uri: string;
   name?: string | null;
   mimeType?: string | null;
+  size?: number | null;
 };
 
 function compactText(value: string | null | undefined) {
@@ -17,8 +21,7 @@ function compactText(value: string | null | undefined) {
 }
 
 function normalizeFileName(value: string, fallback: string) {
-  const trimmed = compactText(value) || fallback;
-  return trimmed.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 90);
+  return normalizePublicImageFileName(compactText(value), fallback);
 }
 
 export async function uploadProfilePhoto(
@@ -29,19 +32,22 @@ export async function uploadProfilePhoto(
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
   try {
-    const localFile = new File(asset.uri);
-    const fileBuffer = await localFile.arrayBuffer();
-    const path = `${user.data}/avatar-${Date.now()}-${normalizeFileName(asset.name ?? '', 'profile-photo')}`;
+    const optimizedAsset = await optimizePublicImageForUpload(asset, 'avatar');
+    if (!optimizedAsset.optimized) {
+      return { data: null, error: 'Image optimization failed. Try a smaller JPG, PNG, or WebP photo.' };
+    }
+    const uploadBody = await readPublicImageUploadBody(optimizedAsset);
+    const path = `${user.data}/avatar-${Date.now()}-${normalizeFileName(optimizedAsset.name, 'profile-photo')}`;
 
     const { error: uploadError } = await supabase.storage
       .from(PROFILE_PHOTO_BUCKET)
-      .upload(path, fileBuffer, {
-        contentType: asset.mimeType ?? 'image/jpeg',
+      .upload(path, uploadBody.body, {
+        contentType: uploadBody.contentType,
         upsert: false,
       });
 
     if (uploadError) {
-      return { data: null, error: uploadError.message };
+      return { data: null, error: `Storage upload failed. ${uploadError.message}` };
     }
 
     const { data } = supabase.storage.from(PROFILE_PHOTO_BUCKET).getPublicUrl(path);
@@ -53,11 +59,12 @@ export async function uploadProfilePhoto(
 
     if (profileError) {
       await supabase.storage.from(PROFILE_PHOTO_BUCKET).remove([path]);
-      return { data: null, error: profileError.message };
+      return { data: null, error: `Profile photo save failed. ${profileError.message}` };
     }
 
     return { data: avatarUrl, error: null };
-  } catch {
-    return { data: null, error: `Could not upload ${asset.name || 'profile photo'}.` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : null;
+    return { data: null, error: message || `Could not upload ${asset.name || 'profile photo'}.` };
   }
 }

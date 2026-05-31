@@ -1,7 +1,10 @@
-import { File } from 'expo-file-system';
-
 import type { ServiceResult } from '@/services/auth.service';
 import { getCurrentUserId } from '@/services/marketplace.helpers';
+import {
+  normalizePublicImageFileName,
+  optimizePublicImageForUpload,
+  readPublicImageUploadBody,
+} from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
 const JOB_PHOTO_BUCKET = 'job-photos';
@@ -18,8 +21,7 @@ function compactText(value: string | null | undefined) {
 }
 
 function normalizeFileName(value: string, fallback: string) {
-  const trimmed = compactText(value) || fallback;
-  return trimmed.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 90);
+  return normalizePublicImageFileName(compactText(value), fallback);
 }
 
 export async function uploadJobPhotos({
@@ -38,26 +40,30 @@ export async function uploadJobPhotos({
 
   for (const [index, asset] of assets.entries()) {
     try {
-      const localFile = new File(asset.uri);
-      const fileBuffer = await localFile.arrayBuffer();
+      const optimizedAsset = await optimizePublicImageForUpload(asset, 'marketplace-photo');
+      if (!optimizedAsset.optimized) {
+        return { data: null, error: 'Image optimization failed. Try a smaller JPG, PNG, or WebP photo.' };
+      }
+      const uploadBody = await readPublicImageUploadBody(optimizedAsset);
       const path = `${user.data}/${safeFolderId}/${Date.now()}-${index}-${normalizeFileName(
-        asset.name ?? '',
+        optimizedAsset.name,
         `photo-${index + 1}`,
       )}`;
 
-      const { error: uploadError } = await supabase.storage.from(JOB_PHOTO_BUCKET).upload(path, fileBuffer, {
-        contentType: asset.mimeType ?? 'image/jpeg',
+      const { error: uploadError } = await supabase.storage.from(JOB_PHOTO_BUCKET).upload(path, uploadBody.body, {
+        contentType: uploadBody.contentType,
         upsert: false,
       });
 
       if (uploadError) {
-        return { data: null, error: uploadError.message };
+        return { data: null, error: `Storage upload failed. ${uploadError.message}` };
       }
 
       const { data } = supabase.storage.from(JOB_PHOTO_BUCKET).getPublicUrl(path);
       uploads.push(data.publicUrl);
-    } catch {
-      return { data: null, error: `Could not upload ${asset.name || 'photo'}.` };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : null;
+      return { data: null, error: message || `Could not upload ${asset.name || 'photo'}.` };
     }
   }
 
