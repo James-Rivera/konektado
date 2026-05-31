@@ -70,6 +70,32 @@ import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 type EditorSection = 'overview' | 'profile' | 'jobs' | 'services' | 'photos' | 'verification' | 'activity';
+type JobListingFieldsPatch = Partial<Pick<
+  CreateEditableJobPayload,
+  | 'allowMessages'
+  | 'autoCloseEnabled'
+  | 'autoReplyEnabled'
+  | 'budgetNegotiable'
+  | 'certificationNote'
+  | 'certificationRequired'
+  | 'experienceLevel'
+  | 'scheduleText'
+  | 'tags'
+  | 'workersNeeded'
+>>;
+type ServiceListingFieldsPatch = Partial<Pick<
+  CreateEditableServicePayload,
+  | 'allowMessages'
+  | 'autoPauseEnabled'
+  | 'autoReplyEnabled'
+  | 'availabilityText'
+  | 'certificationAvailable'
+  | 'certificationNote'
+  | 'experienceLevel'
+  | 'rateNegotiable'
+  | 'tags'
+  | 'yearsExperience'
+>>;
 
 const USER_FILTERS: { label: string; value: InternalDemoUserFilter }[] = [
   { label: 'All', value: 'all' },
@@ -92,6 +118,7 @@ const SECTIONS: { icon: MaterialIconName; label: string; value: EditorSection }[
 ];
 
 const CONTACT_OPTIONS = ['app_message', 'phone', 'email'];
+const EXPERIENCE_LEVEL_OPTIONS = ['any', 'beginner', 'intermediate', 'experienced'];
 
 type PublicPhotoModerationItem = {
   id: string;
@@ -1020,7 +1047,10 @@ function NewJobForm({
         <SelectChips label="Service needed" onSelect={(value) => setForm({ ...form, serviceNeeded: value })} options={serviceOptions.length ? serviceOptions : [...MVP_SERVICE_OPTIONS]} value={form.serviceNeeded} />
       </TwoColumn>
       <TwoColumn>
-        <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText ?? ''} />
+        <Field label="Barangay" onChangeText={(value) => setForm({ ...form, barangay: value })} value={form.barangay ?? ''} />
+        <Field label="Public location text" onChangeText={(value) => setForm({ ...form, locationText: value })} value={form.locationText ?? ''} />
+      </TwoColumn>
+      <TwoColumn>
         {user.verificationStatus === 'verified' ? (
           <SelectChips label="Status" onSelect={(value) => setForm({ ...form, status: value as JobStatus })} options={getEditableJobStatuses()} value={form.status} />
         ) : (
@@ -1030,6 +1060,17 @@ function NewJobForm({
           </View>
         )}
       </TwoColumn>
+      <JobListingFields
+        form={form}
+        onChange={(patch) =>
+          setForm({
+            ...form,
+            ...patch,
+            certificationNote: patch.certificationNote ?? form.certificationNote,
+            scheduleText: patch.scheduleText ?? form.scheduleText,
+          })
+        }
+      />
       <RateFields
         max={form.budgetMax ?? null}
         min={form.budgetMin ?? null}
@@ -1110,6 +1151,13 @@ function JobForm({
     await onSaved('Job deactivated');
   };
 
+  const confirmDeactivate = () => {
+    Alert.alert('Deactivate this job?', 'This hides the job from public discovery. You can reactivate it later by changing its status.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Deactivate', style: 'destructive', onPress: () => void deactivate() },
+    ]);
+  };
+
   return (
     <View style={styles.recordCard}>
       <RecordHeader icon="work-outline" title={job.title || 'Job listing'} subtitle={`${formatStatus(job.status)} · ${formatDate(job.updatedAt)}`} />
@@ -1123,9 +1171,23 @@ function JobForm({
         <SelectChips label="Service needed" onSelect={(value) => setForm({ ...form, serviceNeeded: value })} options={serviceOptions.length ? serviceOptions : [...MVP_SERVICE_OPTIONS]} value={form.serviceNeeded} />
       </TwoColumn>
       <TwoColumn>
-        <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText} />
+        <Field label="Barangay" onChangeText={(value) => setForm({ ...form, barangay: value })} value={form.barangay} />
+        <Field label="Public location text" onChangeText={(value) => setForm({ ...form, locationText: value })} value={form.locationText} />
+      </TwoColumn>
+      <TwoColumn>
         <SelectChips label="Status" onSelect={(value) => setForm({ ...form, status: value as JobStatus })} options={getEditableJobStatuses()} value={form.status} />
       </TwoColumn>
+      <JobListingFields
+        form={form}
+        onChange={(patch) =>
+          setForm({
+            ...form,
+            ...patch,
+            certificationNote: patch.certificationNote ?? form.certificationNote,
+            scheduleText: patch.scheduleText ?? form.scheduleText,
+          })
+        }
+      />
       <RateFields
         max={form.budgetMax}
         min={form.budgetMin}
@@ -1143,7 +1205,7 @@ function JobForm({
       />
       <View style={styles.actionRow}>
         <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Job'} onPress={() => void save()} />
-        <Pressable accessibilityRole="button" disabled={saving} onPress={() => void deactivate()} style={({ pressed }) => [styles.dangerButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+        <Pressable accessibilityRole="button" disabled={saving} onPress={confirmDeactivate} style={({ pressed }) => [styles.dangerButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
           <Text style={styles.dangerButtonText}>Deactivate</Text>
         </Pressable>
       </View>
@@ -1241,8 +1303,20 @@ function NewServiceForm({
         )}
       </TwoColumn>
       <TwoColumn>
-        <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText ?? ''} />
+        <Field label="Barangay" onChangeText={(value) => setForm({ ...form, barangay: value })} value={form.barangay ?? ''} />
+        <Field label="Public location text" onChangeText={(value) => setForm({ ...form, locationText: value })} value={form.locationText ?? ''} />
       </TwoColumn>
+      <ServiceListingFields
+        form={form}
+        onChange={(patch) =>
+          setForm({
+            ...form,
+            ...patch,
+            availabilityText: patch.availabilityText ?? form.availabilityText,
+            certificationNote: patch.certificationNote ?? form.certificationNote,
+          })
+        }
+      />
       <RateFields
         max={form.rateMax ?? null}
         min={form.rateMin ?? null}
@@ -1309,6 +1383,13 @@ function ServiceForm({
     await onSaved('Service deactivated');
   };
 
+  const confirmDeactivate = () => {
+    Alert.alert('Deactivate this service?', 'This hides the service from public discovery. You can reactivate it later from this editor.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Deactivate', style: 'destructive', onPress: () => void deactivate() },
+    ]);
+  };
+
   return (
     <View style={styles.recordCard}>
       <RecordHeader icon="handyman" title={service.title || 'Service listing'} subtitle={`${service.isActive ? 'Active' : 'Inactive'} · ${formatDate(service.updatedAt)}`} />
@@ -1329,8 +1410,20 @@ function ServiceForm({
         )}
       </TwoColumn>
       <TwoColumn>
-        <Field label="Location/barangay" onChangeText={(value) => setForm({ ...form, locationText: value, barangay: value })} value={form.locationText} />
+        <Field label="Barangay" onChangeText={(value) => setForm({ ...form, barangay: value })} value={form.barangay} />
+        <Field label="Public location text" onChangeText={(value) => setForm({ ...form, locationText: value })} value={form.locationText} />
       </TwoColumn>
+      <ServiceListingFields
+        form={form}
+        onChange={(patch) =>
+          setForm({
+            ...form,
+            ...patch,
+            availabilityText: patch.availabilityText ?? form.availabilityText,
+            certificationNote: patch.certificationNote ?? form.certificationNote,
+          })
+        }
+      />
       <RateFields
         max={form.rateMax}
         min={form.rateMin}
@@ -1348,7 +1441,7 @@ function ServiceForm({
       />
       <View style={styles.actionRow}>
         <SaveButton disabled={saving} label={saving ? 'Saving...' : 'Save Service'} onPress={() => void save()} />
-        <Pressable accessibilityRole="button" disabled={saving} onPress={() => void deactivate()} style={({ pressed }) => [styles.dangerButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
+        <Pressable accessibilityRole="button" disabled={saving} onPress={confirmDeactivate} style={({ pressed }) => [styles.dangerButton, saving && styles.disabled, pressed && !saving && styles.pressed]}>
           <Text style={styles.dangerButtonText}>Deactivate</Text>
         </Pressable>
       </View>
@@ -1769,17 +1862,25 @@ function makeInitialJobPayload(user: EditableUserDetail): CreateEditableJobPaylo
   const location = user.profile.barangay || user.locationLabel || 'Barangay San Pedro';
 
   return {
+    allowMessages: true,
+    autoCloseEnabled: false,
+    autoReplyEnabled: false,
     barangay: location,
     budgetMax: 800,
     budgetMin: 400,
+    budgetNegotiable: false,
     category,
+    certificationRequired: false,
     description: '',
+    experienceLevel: 'any',
     locationText: location,
     photoUrls: [],
     rateType: 'per_service',
     serviceNeeded,
     status: user.verificationStatus === 'verified' ? 'open' : 'cancelled',
+    tags: [],
     title: '',
+    workersNeeded: 1,
   };
 }
 
@@ -1788,16 +1889,24 @@ function makeInitialServicePayload(user: EditableUserDetail): CreateEditableServ
   const location = user.profile.barangay || user.locationLabel || 'Barangay San Pedro';
 
   return {
+    allowMessages: true,
+    autoPauseEnabled: false,
+    autoReplyEnabled: false,
     barangay: location,
     category,
+    certificationAvailable: false,
     description: '',
+    experienceLevel: 'any',
     isActive: user.verificationStatus === 'verified',
     locationText: location,
     photoUrls: [],
     rateMax: 800,
     rateMin: 400,
+    rateNegotiable: false,
     rateType: 'per_service',
+    tags: [],
     title: '',
+    yearsExperience: null,
   };
 }
 
@@ -1899,6 +2008,106 @@ function PhotoUrlEditor({
         value={photoUrls.join('\n')}
       />
     </View>
+  );
+}
+
+function JobListingFields({
+  form,
+  onChange,
+}: {
+  form: CreateEditableJobPayload | EditableJob;
+  onChange: (patch: JobListingFieldsPatch) => void;
+}) {
+  return (
+    <>
+      <TextListField label="Tags (up to 4, one per line)" onChange={(tags) => onChange({ tags })} values={form.tags} />
+      <TwoColumn>
+        <Field label="Schedule" onChangeText={(scheduleText) => onChange({ scheduleText })} value={form.scheduleText ?? ''} />
+        <Field keyboardType="numeric" label="Workers needed" onChangeText={(value) => onChange({ workersNeeded: parseAmount(value) })} value={form.workersNeeded ? String(form.workersNeeded) : ''} />
+      </TwoColumn>
+      <TwoColumn>
+        <SelectChips label="Experience level" onSelect={(experienceLevel) => onChange({ experienceLevel })} options={EXPERIENCE_LEVEL_OPTIONS} value={form.experienceLevel} />
+        <BooleanChips label="Budget negotiable" onSelect={(budgetNegotiable) => onChange({ budgetNegotiable })} value={form.budgetNegotiable} />
+      </TwoColumn>
+      <TwoColumn>
+        <BooleanChips label="Certification preferred" onSelect={(certificationRequired) => onChange({ certificationRequired })} value={form.certificationRequired} />
+        <Field label="Certification note" onChangeText={(certificationNote) => onChange({ certificationNote })} value={form.certificationNote ?? ''} />
+      </TwoColumn>
+      <TwoColumn>
+        <BooleanChips label="Allow messages" onSelect={(allowMessages) => onChange({ allowMessages })} value={form.allowMessages} />
+        <BooleanChips label="Auto reply" onSelect={(autoReplyEnabled) => onChange({ autoReplyEnabled })} value={form.autoReplyEnabled} />
+        <BooleanChips label="Auto close" onSelect={(autoCloseEnabled) => onChange({ autoCloseEnabled })} value={form.autoCloseEnabled} />
+      </TwoColumn>
+    </>
+  );
+}
+
+function ServiceListingFields({
+  form,
+  onChange,
+}: {
+  form: CreateEditableServicePayload | EditableService;
+  onChange: (patch: ServiceListingFieldsPatch) => void;
+}) {
+  return (
+    <>
+      <TextListField label="Tags (up to 4, one per line)" onChange={(tags) => onChange({ tags })} values={form.tags} />
+      <TwoColumn>
+        <Field label="Availability" onChangeText={(availabilityText) => onChange({ availabilityText })} value={form.availabilityText ?? ''} />
+        <Field keyboardType="numeric" label="Years of experience" onChangeText={(value) => onChange({ yearsExperience: parseAmount(value) })} value={form.yearsExperience ? String(form.yearsExperience) : ''} />
+      </TwoColumn>
+      <TwoColumn>
+        <SelectChips label="Experience level" onSelect={(experienceLevel) => onChange({ experienceLevel })} options={EXPERIENCE_LEVEL_OPTIONS} value={form.experienceLevel} />
+        <BooleanChips label="Rate negotiable" onSelect={(rateNegotiable) => onChange({ rateNegotiable })} value={form.rateNegotiable} />
+      </TwoColumn>
+      <TwoColumn>
+        <BooleanChips label="Certification available" onSelect={(certificationAvailable) => onChange({ certificationAvailable })} value={form.certificationAvailable} />
+        <Field label="Certification note" onChangeText={(certificationNote) => onChange({ certificationNote })} value={form.certificationNote ?? ''} />
+      </TwoColumn>
+      <TwoColumn>
+        <BooleanChips label="Allow messages" onSelect={(allowMessages) => onChange({ allowMessages })} value={form.allowMessages} />
+        <BooleanChips label="Auto reply" onSelect={(autoReplyEnabled) => onChange({ autoReplyEnabled })} value={form.autoReplyEnabled} />
+        <BooleanChips label="Auto pause" onSelect={(autoPauseEnabled) => onChange({ autoPauseEnabled })} value={form.autoPauseEnabled} />
+      </TwoColumn>
+    </>
+  );
+}
+
+function BooleanChips({
+  label,
+  onSelect,
+  value,
+}: {
+  label: string;
+  onSelect: (value: boolean) => void;
+  value: boolean;
+}) {
+  return (
+    <SelectChips
+      label={label}
+      onSelect={(nextValue) => onSelect(nextValue === 'yes')}
+      options={['yes', 'no']}
+      value={value ? 'yes' : 'no'}
+    />
+  );
+}
+
+function TextListField({
+  label,
+  onChange,
+  values,
+}: {
+  label: string;
+  onChange: (values: string[]) => void;
+  values: string[];
+}) {
+  return (
+    <Field
+      label={label}
+      multiline
+      onChangeText={(value) => onChange(value.split('\n').map((item) => item.trim()).filter(Boolean).slice(0, 4))}
+      value={values.join('\n')}
+    />
   );
 }
 
