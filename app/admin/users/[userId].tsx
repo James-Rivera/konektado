@@ -226,7 +226,7 @@ function ProfileSummary({ user }: { user: AdminUserDetail }) {
       <View style={styles.summaryRows}>
         <AdminInfoRow icon="verified-user" label="Verification" value={user.verificationLabel} />
         <AdminInfoRow icon="chat-bubble-outline" label="Preferred contact" value={user.preferredContactMethod ?? 'Not set'} />
-        <AdminInfoRow icon="event-available" label="Availability" value={user.availability ?? 'Not set'} />
+        <AdminInfoRow icon="event-available" label="Response expectation" value={user.availability ?? 'Not set'} />
         <AdminInfoRow icon="notes" label="About" value={user.about ?? 'Not provided'} />
       </View>
     </View>

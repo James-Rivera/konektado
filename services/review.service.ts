@@ -155,3 +155,51 @@ export async function listProfileReviews(userId: string): Promise<ServiceResult<
 
   return { data: await mapReviewRows((data as ReviewRow[] | null) ?? []), error: null };
 }
+
+export async function listWorkerReviews(userId: string): Promise<ServiceResult<Review[]>> {
+  const { data: jobs, error: jobsError } = await supabase
+    .from('jobs')
+    .select('id')
+    .eq('accepted_provider_id', userId)
+    .in('status', ['completed', 'closed']);
+
+  if (jobsError) return { data: null, error: jobsError.message };
+
+  const jobIds = ((jobs as { id: string }[] | null) ?? []).map((job) => job.id);
+  if (!jobIds.length) return { data: [], error: null };
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(REVIEW_COLUMNS)
+    .eq('reviewee_id', userId)
+    .in('job_id', jobIds)
+    .order('created_at', { ascending: false });
+
+  if (error) return { data: null, error: error.message };
+
+  return { data: await mapReviewRows((data as ReviewRow[] | null) ?? []), error: null };
+}
+
+export async function listClientReviews(userId: string): Promise<ServiceResult<Review[]>> {
+  const { data: jobs, error: jobsError } = await supabase
+    .from('jobs')
+    .select('id')
+    .or(`owner_id.eq.${userId},client_id.eq.${userId}`)
+    .in('status', ['completed', 'closed']);
+
+  if (jobsError) return { data: null, error: jobsError.message };
+
+  const jobIds = ((jobs as { id: string }[] | null) ?? []).map((job) => job.id);
+  if (!jobIds.length) return { data: [], error: null };
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select(REVIEW_COLUMNS)
+    .eq('reviewee_id', userId)
+    .in('job_id', jobIds)
+    .order('created_at', { ascending: false });
+
+  if (error) return { data: null, error: error.message };
+
+  return { data: await mapReviewRows((data as ReviewRow[] | null) ?? []), error: null };
+}

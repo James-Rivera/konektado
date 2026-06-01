@@ -40,22 +40,12 @@ export function getProfileCompletionDestination(
         pathname: '/create-service',
         params: { returnTo: 'profile' },
       };
-    case 'edit_service_rate':
-      return action.targetId
-        ? {
-            type: 'route',
-            pathname: '/create-service',
-            params: {
-              serviceId: action.targetId,
-              returnTo: 'profile',
-              focus: 'rate-range',
-            },
-          }
-        : {
-            type: 'route',
-            pathname: '/profile/complete',
-            params: { mode: 'work', focus: 'rate-range' },
-          };
+    case 'edit_work_profile':
+      return {
+        type: 'route',
+        pathname: '/profile/complete',
+        params: { mode: 'work', focus: action.id },
+      };
     case 'edit_availability':
       return {
         type: 'route',
@@ -78,6 +68,7 @@ export function getProfileCompletionDestination(
         type: 'route',
         pathname: '/profile/credentials',
       };
+    case 'edit_coordination_style':
     case 'edit_hiring_preferences':
       return {
         type: 'route',
@@ -89,9 +80,7 @@ export function getProfileCompletionDestination(
       return {
         type: 'route',
         pathname: '/create-job',
-        params: action.id === 'post-ready-budget'
-          ? { returnTo: 'profile', focus: 'budget-range' }
-          : { returnTo: 'profile' },
+        params: { returnTo: 'profile' },
       };
     default:
       return {

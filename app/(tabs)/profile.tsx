@@ -28,6 +28,7 @@ import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { listMyCredentials } from '@/services/credential.service';
+import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
 import {
   formatJobBudget,
@@ -38,9 +39,18 @@ import {
 } from '@/services/marketplace.helpers';
 import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
 import { getMyProfileCompletion } from '@/services/profile-completion.service';
-import { listProfileReviews } from '@/services/review.service';
+import { listClientReviews, listWorkerReviews } from '@/services/review.service';
+import { getSavedItems, type SavedItem } from '@/services/saved-items.service';
+import { listMyServiceDrafts } from '@/services/service-draft.service';
 import { listMyServices } from '@/services/service-profile.service';
-import type { CredentialSummary, JobSummary, ProviderService, Review } from '@/types/marketplace.types';
+import type {
+  CredentialSummary,
+  JobDraftSummary,
+  JobSummary,
+  ProviderService,
+  Review,
+  ServiceDraftSummary,
+} from '@/types/marketplace.types';
 import type {
   ProfileCompletionAction,
   ProfileCompletionMode,
@@ -62,8 +72,12 @@ export default function ProfileScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [services, setServices] = useState<ProviderService[]>([]);
+  const [jobDrafts, setJobDrafts] = useState<JobDraftSummary[]>([]);
+  const [serviceDrafts, setServiceDrafts] = useState<ServiceDraftSummary[]>([]);
+  const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
   const [credentials, setCredentials] = useState<CredentialSummary[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [workerReviews, setWorkerReviews] = useState<Review[]>([]);
+  const [clientReviews, setClientReviews] = useState<Review[]>([]);
   const [quickActionsVisible, setQuickActionsVisible] = useState(false);
   const hasLoadedProfileDataRef = useRef(false);
 
@@ -82,10 +96,24 @@ export default function ProfileScreen() {
       getMyProfileCompletion(),
       listMyJobs(),
       listMyServices(),
+      listMyJobDrafts(),
+      listMyServiceDrafts(),
+      getSavedItems(),
       listMyCredentials(),
-      profile?.id ? listProfileReviews(profile.id) : Promise.resolve({ data: [], error: null } as const),
+      profile?.id ? listWorkerReviews(profile.id) : Promise.resolve({ data: [], error: null } as const),
+      profile?.id ? listClientReviews(profile.id) : Promise.resolve({ data: [], error: null } as const),
     ])
-      .then(([completionResult, jobResult, serviceResult, credentialResult, reviewResult]) => {
+      .then(([
+        completionResult,
+        jobResult,
+        serviceResult,
+        jobDraftResult,
+        serviceDraftResult,
+        savedResult,
+        credentialResult,
+        workerReviewResult,
+        clientReviewResult,
+      ]) => {
         if (!active) return;
 
         if (completionResult.error || !completionResult.data) {
@@ -97,8 +125,12 @@ export default function ProfileScreen() {
 
         setJobs(jobResult.error || !jobResult.data ? [] : jobResult.data);
         setServices(serviceResult.error || !serviceResult.data ? [] : serviceResult.data);
+        setJobDrafts(jobDraftResult.error || !jobDraftResult.data ? [] : jobDraftResult.data);
+        setServiceDrafts(serviceDraftResult.error || !serviceDraftResult.data ? [] : serviceDraftResult.data);
+        setSavedItems(savedResult.error || !savedResult.data ? [] : savedResult.data);
         setCredentials(credentialResult.error || !credentialResult.data ? [] : credentialResult.data);
-        setReviews(reviewResult.error || !reviewResult.data ? [] : [...reviewResult.data]);
+        setWorkerReviews(workerReviewResult.error || !workerReviewResult.data ? [] : [...workerReviewResult.data]);
+        setClientReviews(clientReviewResult.error || !clientReviewResult.data ? [] : [...clientReviewResult.data]);
       })
       .catch(() => {
         if (active) {
@@ -127,9 +159,10 @@ export default function ProfileScreen() {
   const isVerified = Boolean(completion?.isVerified || profile?.barangay_verified_at || profile?.verified_at);
   const activeCompletion = mode === 'work' ? completion?.workCompletion : completion?.hiringCompletion;
   const heroCompletion = completion && !completion.coreComplete ? completion.coreCompletion : activeCompletion;
+  const modeAvailability = mode === 'work' ? completion?.work.availability : completion?.hiring.preferredSchedule;
   const metrics = mode === 'work'
-    ? getWorkMetrics({ completion, reviews, services })
-    : getHiringMetrics({ jobs, reviews });
+    ? getWorkMetrics({ completion, reviews: workerReviews, services })
+    : getHiringMetrics({ jobs, reviews: clientReviews });
   const isLoading = profileLoading || dataLoading;
 
   const openCompletion = (nextMode: ProfileCompletionMode) => {
@@ -191,7 +224,7 @@ export default function ProfileScreen() {
               }
               onEdit={() => setQuickActionsVisible(true)}
               photoRecommended={Boolean(completion?.photoRecommended ?? !profile?.avatar_url)}
-              presenceActive={isPresenceActive(profile?.availability)}
+              presenceActive={isPresenceActive(modeAvailability)}
               stepsLabel={getModeStepsLabel(heroCompletion)}>
               <MetricStrip items={metrics} />
             </ProfileHero>
@@ -201,8 +234,10 @@ export default function ProfileScreen() {
                 completion={completion}
                 credentials={credentials}
                 onAction={openProfileAction}
-                reviews={reviews}
+                reviews={workerReviews}
                 services={services}
+                serviceDrafts={serviceDrafts}
+                savedItems={savedItems}
                 onAddCredential={() =>
                   openProfileAction({
                     id: 'credentials',
@@ -229,9 +264,11 @@ export default function ProfileScreen() {
               <HiringProfileContent
                 completion={completion}
                 jobFilter={jobFilter}
+                jobDrafts={jobDrafts}
                 jobs={jobs}
                 onAction={openProfileAction}
-                reviews={reviews}
+                reviews={clientReviews}
+                savedItems={savedItems}
                 onChangeJobFilter={setJobFilter}
                 onCompleteHiring={() => openCompletion('hiring')}
                 onManagePosts={() => router.push('/post/active')}
@@ -361,6 +398,8 @@ function WorkProfileContent({
   onOpenService,
   reviews,
   services,
+  serviceDrafts,
+  savedItems,
 }: {
   completion: ProfileCompletionStatus | null;
   credentials: CredentialSummary[];
@@ -371,12 +410,15 @@ function WorkProfileContent({
   onOpenService: (serviceId: string) => void;
   reviews: Review[];
   services: ProviderService[];
+  serviceDrafts: ServiceDraftSummary[];
+  savedItems: SavedItem[];
 }) {
-  const serviceLabels = uniqueList([
+  const capabilityLabels = uniqueList([
     ...(completion?.work.offeredServices ?? []),
     ...(completion?.work.customOfferedServices ?? []),
-    ...services.map((service) => service.category),
   ]);
+  const work = completion?.work;
+  const activityCount = services.length + serviceDrafts.length + savedItems.length;
 
   return (
     <>
@@ -391,30 +433,50 @@ function WorkProfileContent({
         ) : null}
       </ProfileSection>
 
-      <ProfileSection title="Services" onAdd={onCreateService} onEdit={onManageServices}>
-        {services.length ? (
-          services.slice(0, 4).map((service) => (
-            <ProfileHistoryCard
-              description={service.description || service.availabilityText}
-              footerLeft={service.locationText ?? service.barangay ?? 'Location to coordinate'}
-              footerRight={service.isActive ? 'Active' : 'Paused'}
-              key={service.id}
-              meta={formatServiceRate(service)}
-              onPress={() => onOpenService(service.id)}
-              rightLabel={formatShortDate(service.createdAt)}
-              title={formatServicePostTitle({
-                title: service.title,
-                category: service.category,
-              })}
-            />
-          ))
-        ) : serviceLabels.length ? (
-          <ProfilePillRow values={serviceLabels} />
+      <ProfileSection title="Professional Summary">
+        {work?.headline || work?.bio ? (
+          <ProfileHistoryCard
+            description={work.bio || 'Add a short work bio so clients know how you generally work.'}
+            footerLeft={work.serviceArea || 'Default service area not set'}
+            footerRight={work.availability ? 'Availability set' : 'Availability not set'}
+            meta="Work Profile"
+            title={work.headline || 'Worker summary'}
+          />
+        ) : (
+          <EmptyProfilePanel
+            icon="badge"
+            message="Add a worker headline and bio. Service prices belong in Service Listings."
+            title="No work summary yet"
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Capabilities">
+        {capabilityLabels.length ? (
+          <ProfilePillRow values={capabilityLabels} />
         ) : (
           <EmptyProfilePanel
             icon="handyman"
-            message="Add your first service so nearby residents can find you."
-            title="No services yet"
+            message="Add the broad categories you can generally do. These are not active service posts."
+            title="No capabilities yet"
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Coverage and Availability">
+        {work?.serviceArea || work?.availability ? (
+          <ProfileHistoryCard
+            description={work.availability || 'Default availability not set'}
+            footerLeft={work.serviceArea || 'Default service area not set'}
+            footerRight="Profile default"
+            meta="Used only as a starting point for new listings"
+            title="General work defaults"
+          />
+        ) : (
+          <EmptyProfilePanel
+            icon="schedule"
+            message="Add general coverage and availability. Each Service Listing can still use its own details."
+            title="No work defaults yet"
           />
         )}
       </ProfileSection>
@@ -426,7 +488,7 @@ function WorkProfileContent({
               description={credential.issuer ? `Issued by ${credential.issuer}` : 'Optional trust proof'}
               footerRight={formatCredentialStatus(credential.status)}
               key={credential.id}
-              meta="Optional credential"
+              meta="Trust booster"
               rightLabel={formatShortDate(credential.createdAt)}
               title={credential.title}
             />
@@ -440,15 +502,7 @@ function WorkProfileContent({
         )}
       </ProfileSection>
 
-      <ProfileSection title="Work History">
-        <EmptyProfilePanel
-          icon="work-history"
-          message="No work history yet. Completed jobs will appear here."
-          title="No completed work yet"
-        />
-      </ProfileSection>
-
-      <ProfileSection title="Reviews from Clients">
+      <ProfileSection title="Worker Reputation">
         {reviews.length ? (
           reviews.slice(0, 3).map((review) => (
             <ReviewCard
@@ -457,14 +511,61 @@ function WorkProfileContent({
               dateLabel={formatShortDate(review.createdAt)}
               key={review.id}
               rating={review.rating.toFixed(1)}
-              title="Resident feedback"
+              title="Client feedback"
             />
           ))
         ) : (
           <EmptyProfilePanel
             icon="rate-review"
-            message="Reviews appear after completed marketplace interactions."
-            title="No client reviews yet"
+            message="Reviews appear after completed work."
+            title="No worker reviews yet"
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Marketplace Activity" onAdd={onCreateService} onEdit={onManageServices}>
+        {activityCount ? (
+          <>
+            {services.slice(0, 3).map((service) => (
+              <ProfileHistoryCard
+                description={service.description || service.availabilityText}
+                footerLeft={service.locationText ?? service.barangay ?? 'Location to coordinate'}
+                footerRight={service.isActive ? 'Active' : 'Paused'}
+                key={service.id}
+                meta={formatServiceRate(service)}
+                onPress={() => onOpenService(service.id)}
+                rightLabel={formatShortDate(service.createdAt)}
+                title={formatServicePostTitle({
+                  title: service.title,
+                  category: service.category,
+                })}
+              />
+            ))}
+            {serviceDrafts.slice(0, 2).map((draft) => (
+              <ProfileHistoryCard
+                description={draft.description || 'Draft service listing'}
+                footerLeft={draft.locationText ?? draft.barangay ?? 'Location to coordinate'}
+                footerRight="Draft"
+                key={draft.id}
+                meta={draft.rateMin || draft.rateMax ? 'Listing pricing saved in draft' : 'No listing price yet'}
+                rightLabel={formatShortDate(draft.updatedAt)}
+                title={draft.title || draft.category || 'Untitled service draft'}
+              />
+            ))}
+            {savedItems.length ? (
+              <ProfileHistoryCard
+                description="Saved jobs and providers are marketplace activity, not profile data."
+                footerRight={`${savedItems.length} saved`}
+                meta="Saved content"
+                title="Saved items"
+              />
+            ) : null}
+          </>
+        ) : (
+          <EmptyProfilePanel
+            icon="work-history"
+            message="Active service listings, drafts, completed work, and saved content will appear here."
+            title="No marketplace activity yet"
           />
         )}
       </ProfileSection>
@@ -475,6 +576,7 @@ function WorkProfileContent({
 function HiringProfileContent({
   completion,
   jobFilter,
+  jobDrafts,
   jobs,
   onAction,
   onChangeJobFilter,
@@ -482,9 +584,11 @@ function HiringProfileContent({
   onManagePosts,
   onOpenJob,
   reviews,
+  savedItems,
 }: {
   completion: ProfileCompletionStatus | null;
   jobFilter: JobHistoryFilter;
+  jobDrafts: JobDraftSummary[];
   jobs: JobSummary[];
   onAction: (action: ProfileCompletionAction) => void;
   onChangeJobFilter: (value: JobHistoryFilter) => void;
@@ -492,6 +596,7 @@ function HiringProfileContent({
   onManagePosts: () => void;
   onOpenJob: (jobId: string) => void;
   reviews: Review[];
+  savedItems: SavedItem[];
 }) {
   const neededServices = uniqueList([
     ...(completion?.hiring.neededServices ?? []),
@@ -500,6 +605,8 @@ function HiringProfileContent({
   const activeJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
   const completedJobs = jobs.filter((job) => ['completed', 'closed'].includes(job.status));
   const visibleJobs = jobFilter === 'active' ? activeJobs : completedJobs;
+  const hiring = completion?.hiring;
+  const activityCount = jobs.length + jobDrafts.length + savedItems.length;
 
   return (
     <>
@@ -514,47 +621,55 @@ function HiringProfileContent({
         ) : null}
       </ProfileSection>
 
-      <ProfileSection title="Services Needed" onEdit={onCompleteHiring}>
+      <ProfileSection title="Hiring Summary" onEdit={onCompleteHiring}>
+        {hiring?.headline || hiring?.bio ? (
+          <ProfileHistoryCard
+            description={hiring.bio || 'Add a short intro so workers know what kind of client you are.'}
+            footerLeft={hiring.coordinationStyle || 'Coordination style not set'}
+            footerRight={hiring.preferredSchedule ? 'Schedule set' : 'Schedule not set'}
+            meta="Hiring Profile"
+            title={hiring.headline || 'Client summary'}
+          />
+        ) : (
+          <EmptyProfilePanel
+            icon="assignment-ind"
+            message="Add a hiring intro. Specific job requirements belong in Job Posts."
+            title="No hiring summary yet"
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Common Needs" onEdit={onCompleteHiring}>
         {neededServices.length ? (
           <ProfilePillRow values={neededServices} />
         ) : (
           <EmptyProfilePanel
             icon="assignment"
-            message="Add needed services so workers understand your usual requests."
-            title="No services needed yet"
+            message="Add the broad categories you usually hire for. These are not active job posts."
+            title="No common needs yet"
           />
         )}
       </ProfileSection>
 
-      <ProfileSection title="Job History" onEdit={onManagePosts}>
-        <HistoryFilterTabs active={jobFilter} onChange={onChangeJobFilter} />
-        {visibleJobs.length ? (
-          visibleJobs.slice(0, 4).map((job) => (
-            <ProfileHistoryCard
-              description={job.description}
-              footerLeft={job.locationText ?? job.barangay ?? 'Location to coordinate'}
-              footerRight={job.acceptedProviderId ? 'Worker hired' : formatWorkersNeeded(job)}
-              key={job.id}
-              meta={`${formatJobStatus(job.status)} - ${formatJobBudget(job)}`}
-              onPress={() => onOpenJob(job.id)}
-              rightLabel={formatShortDate(job.createdAt)}
-              title={formatJobPostTitle({
-                title: job.title,
-                serviceNeeded: job.serviceNeeded,
-                category: job.category,
-              })}
-            />
-          ))
+      <ProfileSection title="Coordination Preferences" onEdit={onCompleteHiring}>
+        {hiring?.coordinationStyle || hiring?.preferredSchedule ? (
+          <ProfileHistoryCard
+            description={hiring.coordinationStyle || 'Coordination style not set'}
+            footerLeft={hiring.preferredSchedule || 'General scheduling preference not set'}
+            footerRight="Profile default"
+            meta="Used only as a starting point for new job posts"
+            title="General hiring preferences"
+          />
         ) : (
           <EmptyProfilePanel
-            icon="history"
-            message={jobFilter === 'active' ? 'No active job posts right now.' : 'Completed jobs will appear here.'}
-            title={jobFilter === 'active' ? 'No active jobs' : 'No completed jobs'}
+            icon="schedule"
+            message="Add how you usually coordinate and when you usually hire. Each Job Post can still use its own details."
+            title="No coordination preferences yet"
           />
         )}
       </ProfileSection>
 
-      <ProfileSection title="Reviews from Workers">
+      <ProfileSection title="Client Reputation">
         {reviews.length ? (
           reviews.slice(0, 3).map((review) => (
             <ReviewCard
@@ -563,7 +678,7 @@ function HiringProfileContent({
               dateLabel={formatShortDate(review.createdAt)}
               key={review.id}
               rating={review.rating.toFixed(1)}
-              title="Resident feedback"
+              title="Worker feedback"
             />
           ))
         ) : (
@@ -571,6 +686,55 @@ function HiringProfileContent({
             icon="rate-review"
             message="Worker reviews appear after completed marketplace interactions."
             title="No worker reviews yet"
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Marketplace Activity" onEdit={onManagePosts}>
+        <HistoryFilterTabs active={jobFilter} onChange={onChangeJobFilter} />
+        {activityCount ? (
+          <>
+            {visibleJobs.slice(0, 4).map((job) => (
+              <ProfileHistoryCard
+                description={job.description}
+                footerLeft={job.locationText ?? job.barangay ?? 'Location to coordinate'}
+                footerRight={job.acceptedProviderId ? 'Worker hired' : formatWorkersNeeded(job)}
+                key={job.id}
+                meta={`${formatJobStatus(job.status)} - ${formatJobBudget(job)}`}
+                onPress={() => onOpenJob(job.id)}
+                rightLabel={formatShortDate(job.createdAt)}
+                title={formatJobPostTitle({
+                  title: job.title,
+                  serviceNeeded: job.serviceNeeded,
+                  category: job.category,
+                })}
+              />
+            ))}
+            {jobDrafts.slice(0, 2).map((draft) => (
+              <ProfileHistoryCard
+                description={draft.description || 'Draft job post'}
+                footerLeft={draft.locationText ?? draft.barangay ?? 'Location to coordinate'}
+                footerRight="Draft"
+                key={draft.id}
+                meta={draft.budgetMin || draft.budgetMax ? 'Listing budget saved in draft' : 'No listing budget yet'}
+                rightLabel={formatShortDate(draft.updatedAt)}
+                title={draft.title || draft.serviceNeeded || 'Untitled job draft'}
+              />
+            ))}
+            {savedItems.length ? (
+              <ProfileHistoryCard
+                description="Saved jobs and providers are marketplace activity, not profile data."
+                footerRight={`${savedItems.length} saved`}
+                meta="Saved content"
+                title="Saved items"
+              />
+            ) : null}
+          </>
+        ) : (
+          <EmptyProfilePanel
+            icon="history"
+            message="Active job posts, drafts, completed hires, and saved content will appear here."
+            title="No marketplace activity yet"
           />
         )}
       </ProfileSection>

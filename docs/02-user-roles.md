@@ -12,8 +12,8 @@ All app users are residents or local users by context, but not all users are ver
 
 The user-facing profile model is:
 
-- Work Profile: services offered, rate, availability, completed work, worker reviews.
-- Hiring Profile: jobs posted, workers hired, open jobs, client reviews.
+- Work Profile: worker headline, work bio, general capabilities, default service area, default availability, credentials, completed work, and worker reviews.
+- Hiring Profile: hiring intro, common needs, coordination style, general scheduling preference, completed hires, and client reviews.
 
 The app may still use an `active_role` internally for queries and permissions, but the UI should not feel like two separate accounts.
 
@@ -25,8 +25,8 @@ Service providers are users who offer services to others in Barangay San Pedro.
 
 | Permission | Description |
 | --- | --- |
-| Manage own profile | Add and update name, location, contact, about, and availability. |
-| Manage own services | Create, update, hide, or delete own service profiles. |
+| Manage own profile | Add and update identity, contact preference, about, capabilities, work defaults, credentials, and reputation context. |
+| Manage own services | Create, update, hide, or delete own service listings with listing-owned rates, availability, photos, and message options. |
 | Upload credentials | Add certificates, ID documents, or proof of experience for verification. |
 | Request verification | Submit a barangay verification request. |
 | Browse jobs | View open jobs that clients posted. |
@@ -52,7 +52,7 @@ Clients are users who need services or want to post jobs.
 
 | Permission | Description |
 | --- | --- |
-| Manage own profile | Add and update basic profile and contact details. |
+| Manage own profile | Add and update identity, contact preference, hiring intro, common needs, coordination style, and scheduling preference. |
 | Browse providers | Search providers by service category, location, and availability. |
 | View provider profiles | See public provider details, services, badges, and ratings. |
 | Post jobs | Create simple job posts with title, description, location, budget, and category. |

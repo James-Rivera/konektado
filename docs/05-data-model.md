@@ -2,7 +2,21 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state. `supabase/migrations/20260531120100_public_photo_cleanup_delete_policies.sql` adds owner-scoped delete policies for staged job and service photos so failed or cancelled edits can clean up their own storage objects. `supabase/migrations/20260601090000_service_drafts.sql` adds owner-private service draft persistence with the same verified-or-unverified authoring model as job drafts.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state. `supabase/migrations/20260531120100_public_photo_cleanup_delete_policies.sql` adds owner-scoped delete policies for staged job and service photos so failed or cancelled edits can clean up their own storage objects. `supabase/migrations/20260601090000_service_drafts.sql` adds owner-private service draft persistence with the same verified-or-unverified authoring model as job drafts. `supabase/migrations/20260601103000_profile_ownership_cleanup.sql` adds Hiring Profile coordination style, marks profile-owned pricing/budget fields deprecated, removes profile completion's rate-range constraint, and adds public-safe role-profile summary RPCs.
+
+## Canonical Ownership Map
+
+Profiles describe the resident. Listings describe the current marketplace offer or request.
+
+| Layer | Owns | Must not own |
+| --- | --- | --- |
+| Account | Login identity, auth session, account email | Marketplace readiness or public reputation |
+| Core Profile | Public identity, profile photo, display/legal name, public location, contact preference, resident intro, verification summary | Services, jobs, rates, budgets, requirements, inventory |
+| Work Profile | Worker headline, work bio, broad capability categories, default service area, default availability, credentials, worker reputation | Service listing rates, negotiability, listing photos, exact listing availability, message settings |
+| Hiring Profile | Hiring intro, common needs, coordination style, general scheduling preference, client reputation | Job budgets, job requirements, exact date/time/location, workers needed, message settings |
+| Service Listing | Service title, description, photos, exact category/custom category, rate fields, negotiability, listing availability/location, experience/certification notes, message settings, active/paused state | Core identity, all worker reputation |
+| Job Post | Job title, description, service needed, photos, budget fields, schedule/date/time, workers needed, requirements, exact/private location notes, message settings, status | Core identity, all client reputation |
+| Marketplace Activity | Active services, active jobs, drafts, completed work, completed hires, saved content, conversation/hire/review outcomes | Profile identity or profile completion requirements |
 
 ## Common Types
 
@@ -71,7 +85,7 @@ Purpose: Shared user profile and resident identity details.
 | `preferred_contact_method` | `text` | `app_message`, `phone`, or `email`; public contact data still stays private by default. |
 | `phone` | `text` | Private by default; visible only when user chooses or after job acceptance. |
 | `about` | `text` | Public profile summary. |
-| `availability` | `text` | Public availability or response expectation. |
+| `availability` | `text` | Legacy general response expectation. Do not use as marketplace availability. |
 | `avatar_url` | `text` | Optional public profile-photo storage URL; strongly recommended for recognition, never sourced from private verification files. |
 | `active_role` | `app_role` | Current app mode. |
 | `barangay_verified_at` | `timestamptz` | Set when admin approves barangay verification. |
@@ -149,12 +163,12 @@ Purpose: Role-specific public Work Profile completion details.
 | `headline` | `text` | Public worker headline shown in Profile trust surfaces. |
 | `bio` | `text` | Public worker bio. |
 | `service_area` | `text` | Public area where the provider can work. |
-| `availability` | `text` | Public work availability. |
-| `rate_text` | `text` | Optional public rate note only; not parsed as pricing. |
-| `rate_min` | `numeric` | Required public minimum rate once Work Profile is complete. |
-| `rate_max` | `numeric` | Required public maximum rate once Work Profile is complete; must be greater than or equal to `rate_min`. |
-| `rate_type` | `text` | Pricing unit such as `per_service`, `hourly`, `daily`, `weekly`, `per_project`, `per_job`, `per_visit`, `per_load`, `per_order`, `per_meal`, or `per_session`. Negotiability is stored separately. |
-| `rate_negotiable` | `boolean` | Optional signal that the provider is open to negotiation within the required range. |
+| `availability` | `text` | Default work availability. Used only as a profile default for new blank service drafts. |
+| `rate_text` | `text` | Deprecated archival field. Service listings own rate notes. Profile UI must not write or read this field. |
+| `rate_min` | `numeric` | Deprecated archival field. Service listings own minimum rates. Profile UI must not write or read this field. |
+| `rate_max` | `numeric` | Deprecated archival field. Service listings own maximum rates. Profile UI must not write or read this field. |
+| `rate_type` | `text` | Deprecated archival field. Service listings own pricing units. Profile UI must not write or read this field. |
+| `rate_negotiable` | `boolean` | Deprecated archival field. Service listings own negotiability. Profile UI must not write or read this field. |
 | `custom_offered_services` | `text[]` | Free-text "Others / Specify" values, separate from official taxonomy values. |
 | `custom_service_review_status` | `text` | Barangay/admin review status for custom offered services. |
 | `response_time` | `text` | Optional response expectation. |
@@ -164,10 +178,10 @@ Purpose: Role-specific public Work Profile completion details.
 
 Important constraints:
 
-- Owner can read, insert, and update only their own Work Profile.
+- Owner can read, insert, and update only their own Work Profile. Public surfaces must use public-safe summary RPCs that exclude deprecated pricing fields.
 - Work Profile completion is required before publishing service posts or messaging clients about jobs.
 - Credentials and private verification files are separate from this public profile row.
-- A completed Work Profile must use a valid numeric rate range: `rate_min > 0` and `rate_max >= rate_min`.
+- A completed Work Profile requires a professional summary, capabilities, default service area, and default availability. It must not require rates or active service listings.
 
 ## client_profiles
 
@@ -180,16 +194,18 @@ Purpose: Role-specific public Hiring Profile completion details.
 | `bio` | `text` | Public client intro. |
 | `needed_services` | `text[]` | Public services the client usually needs. |
 | `custom_needed_services` | `text[]` | Free-text "Others / Specify" values, separate from official taxonomy values. |
-| `preferred_schedule` | `text` | Public schedule or coordination preference. |
-| `budget_preference` | `text` | Optional public budget expectation. |
+| `coordination_style` | `text` | General hiring communication and coordination style. |
+| `preferred_schedule` | `text` | General scheduling preference. Used only as a profile default for new blank job drafts. |
+| `budget_preference` | `text` | Deprecated archival field. Job posts own budget ranges and negotiability. Profile UI must not write or read this field. |
 | `profile_completed_at` | `timestamptz` | Set when Hiring Profile required fields are complete. |
 | `created_at` | `timestamptz` | Default `now()`. |
 | `updated_at` | `timestamptz` | Updated on change. |
 
 Important constraints:
 
-- Owner can read, insert, and update only their own Hiring Profile.
+- Owner can read, insert, and update only their own Hiring Profile. Public surfaces must use public-safe summary RPCs that exclude deprecated budget fields.
 - Hiring Profile completion is required before publishing jobs or messaging workers about service posts.
+- A completed Hiring Profile requires a hiring intro, common needs, coordination style, and general scheduling preference. It must not require a budget or active job posts.
 - Onboarding `user_preferences.needed_services` may backfill this row, but preferences remain personalization data rather than verification proof.
 
 ## services

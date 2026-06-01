@@ -16,10 +16,12 @@ import {
   getMarketplaceLocation,
 } from '@/services/marketplace.helpers';
 import type {
+  CredentialSummary,
   JobSummary,
   ProviderService,
   PublicClientProfile,
   PublicWorkerProfile,
+  Review,
 } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl } from '@/utils/image-processing';
 
@@ -108,7 +110,59 @@ export function PublicWorkerProfileView({
           </Section>
         ) : null}
 
-        <Section title={profile.selectedService ? `Other services by ${firstName(profile.fullName)}` : 'Services offered'}>
+        <Section title="Capabilities">
+          {profile.capabilities.length ? (
+            <LimitedTagRow primary={displayService(profile.capabilities[0])} tags={profile.capabilities.slice(1)} />
+          ) : (
+            <EmptyPublicCard
+              icon="handyman"
+              message="This worker has not added capability categories yet."
+              title="No capabilities listed"
+            />
+          )}
+          {profile.serviceArea || profile.availability ? (
+            <DetailRows
+              rows={[
+                { icon: 'location-on', text: profile.serviceArea || 'Service area to coordinate' },
+                { icon: 'schedule', text: profile.availability || 'Availability to coordinate' },
+              ]}
+            />
+          ) : null}
+        </Section>
+
+        <Section title="Credentials">
+          {profile.credentials.length ? (
+            <View style={styles.cardList}>
+              {profile.credentials.slice(0, 3).map((credential) => (
+                <CredentialCard credential={credential} key={credential.id} />
+              ))}
+            </View>
+          ) : (
+            <EmptyPublicCard
+              icon="workspace-premium"
+              message="Approved credentials and trust boosters will appear here."
+              title="No public credentials yet"
+            />
+          )}
+        </Section>
+
+        <Section title="Worker reviews">
+          {profile.reviews.length ? (
+            <View style={styles.cardList}>
+              {profile.reviews.slice(0, 3).map((review) => (
+                <PublicReviewCard key={review.id} review={review} />
+              ))}
+            </View>
+          ) : (
+            <EmptyPublicCard
+              icon="rate-review"
+              message="Reviews appear after completed work."
+              title="No worker reviews yet"
+            />
+          )}
+        </Section>
+
+        <Section title="Marketplace Activity">
           {visibleServices.length ? (
             <View style={styles.cardList}>
               {visibleServices.map((service) => (
@@ -175,7 +229,7 @@ export function PublicClientProfileView({
               { icon: 'star-border', label: 'Rating', value: formatRating(profile.averageRating, profile.reviewCount) },
               { icon: 'rate-review', label: 'Reviews', value: String(profile.reviewCount) },
               { icon: 'business-center', label: 'Jobs posted', value: String(profile.jobsPostedCount) },
-              { icon: 'schedule', label: 'Availability', value: shortValue(profile.availability) },
+              { icon: 'task-alt', label: 'Completed', value: String(profile.completedHiresCount) },
             ]}
           />
         </Section>
@@ -186,7 +240,41 @@ export function PublicClientProfileView({
           </Section>
         ) : null}
 
-        <Section title={profile.selectedJob ? 'Other active job posts' : 'Active job posts'}>
+        <Section title="Hiring Style">
+          {profile.commonNeeds.length ? (
+            <LimitedTagRow primary={displayService(profile.commonNeeds[0])} tags={profile.commonNeeds.slice(1)} />
+          ) : (
+            <EmptyPublicCard
+              icon="assignment"
+              message="This client has not added common hiring needs yet."
+              title="No common needs listed"
+            />
+          )}
+          <DetailRows
+            rows={[
+              { icon: 'chat-bubble-outline', text: profile.coordinationStyle || 'Coordination style to discuss' },
+              { icon: 'schedule', text: profile.preferredSchedule || 'Schedule to coordinate' },
+            ]}
+          />
+        </Section>
+
+        <Section title="Client reviews">
+          {profile.reviews.length ? (
+            <View style={styles.cardList}>
+              {profile.reviews.slice(0, 3).map((review) => (
+                <PublicReviewCard key={review.id} review={review} />
+              ))}
+            </View>
+          ) : (
+            <EmptyPublicCard
+              icon="rate-review"
+              message="Reviews from workers appear after completed hires."
+              title="No client reviews yet"
+            />
+          )}
+        </Section>
+
+        <Section title="Marketplace Activity">
           {profile.activeJobs.length ? (
             <View style={styles.cardList}>
               {profile.activeJobs.map((job) => (
@@ -208,6 +296,39 @@ export function PublicClientProfileView({
       </ScrollView>
       {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={cta} />}
     </View>
+  );
+}
+
+function CredentialCard({ credential }: { credential: CredentialSummary }) {
+  return (
+    <PublicCard>
+      <View style={styles.contextHeaderRow}>
+        <View style={styles.cardCopy}>
+          <Text numberOfLines={2} style={styles.cardTitle}>
+            {credential.title}
+          </Text>
+          <Text style={styles.cardMeta}>{credential.issuer || 'Approved trust booster'}</Text>
+        </View>
+        <MaterialIcons color="#2F7D32" name="verified" size={20} />
+      </View>
+    </PublicCard>
+  );
+}
+
+function PublicReviewCard({ review }: { review: Review }) {
+  return (
+    <PublicCard>
+      <View style={styles.contextHeaderRow}>
+        <View style={styles.cardCopy}>
+          <Text style={styles.cardTitle}>{review.rating.toFixed(1)} rating</Text>
+          <Text style={styles.cardMeta}>From {review.reviewer?.fullName ?? 'Resident'}</Text>
+        </View>
+        <MaterialIcons color={color.brandYellow} name="star" size={20} />
+      </View>
+      <Text numberOfLines={3} style={styles.bodyText}>
+        {review.comment || 'No written feedback.'}
+      </Text>
+    </PublicCard>
   );
 }
 
@@ -592,10 +713,6 @@ function PublicProfileCta({ bottomInset, cta }: { bottomInset: number; cta: Prof
 function formatRating(averageRating: number | null, reviewCount: number) {
   if (averageRating && reviewCount > 0) return `${averageRating.toFixed(1)}`;
   return '-';
-}
-
-function firstName(name: string) {
-  return name.split(' ').filter(Boolean)[0] || 'this worker';
 }
 
 function shortValue(value: string | null | undefined) {

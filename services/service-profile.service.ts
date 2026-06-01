@@ -44,38 +44,43 @@ async function loadProviderStats(providerIds: string[]) {
     return stats;
   }
 
-  const { data: reviews } = await supabase
-    .from('reviews')
-    .select('reviewee_id, rating')
-    .in('reviewee_id', ids);
-
-  const reviewRows =
-    ((reviews as { reviewee_id: string; rating: number }[] | null) ?? []).filter((row) =>
-      ids.includes(row.reviewee_id),
-    );
-
-  for (const providerId of ids) {
-    const providerReviews = reviewRows.filter((row) => row.reviewee_id === providerId);
-    const reviewCount = providerReviews.length;
-    const averageRating = reviewCount
-      ? providerReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
-      : null;
-
-    stats.set(providerId, {
-      averageRating,
-      reviewCount,
-      completedJobsCount: 0,
-    });
-  }
-
   const { data: completedJobs } = await supabase
     .from('jobs')
-    .select('accepted_provider_id, status')
+    .select('id, accepted_provider_id, status')
     .in('accepted_provider_id', ids)
     .in('status', ['completed', 'closed']);
 
-  for (const row of
-    ((completedJobs as { accepted_provider_id: string | null; status: string }[] | null) ?? [])) {
+  const completedRows =
+    ((completedJobs as { id: string; accepted_provider_id: string | null; status: string }[] | null) ?? []);
+  const completedJobIds = completedRows.map((row) => row.id);
+
+  if (completedJobIds.length) {
+    const { data: reviews } = await supabase
+      .from('reviews')
+      .select('job_id, reviewee_id, rating')
+      .in('job_id', completedJobIds)
+      .in('reviewee_id', ids);
+
+    const reviewRows =
+      ((reviews as { job_id: string; reviewee_id: string; rating: number }[] | null) ?? [])
+        .filter((row) => ids.includes(row.reviewee_id));
+
+    for (const providerId of ids) {
+      const providerReviews = reviewRows.filter((row) => row.reviewee_id === providerId);
+      const reviewCount = providerReviews.length;
+      const averageRating = reviewCount
+        ? providerReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
+        : null;
+
+      stats.set(providerId, {
+        ...(stats.get(providerId) ?? { completedJobsCount: 0 }),
+        averageRating,
+        reviewCount,
+      });
+    }
+  }
+
+  for (const row of completedRows) {
     if (!row.accepted_provider_id) continue;
 
     const current = stats.get(row.accepted_provider_id) ?? {

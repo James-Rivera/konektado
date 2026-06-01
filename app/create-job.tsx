@@ -31,12 +31,14 @@ import {
   JOB_CATEGORIES,
   POPULAR_JOB_CATEGORIES,
 } from '@/constants/job-post-options';
+import { getCategoryForMvpService, getStoredMvpServiceOption } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useDraftAutosave } from '@/hooks/use-draft-autosave';
 import { useProfile } from '@/hooks/use-profile';
 import { validateRateRange } from '@/services/marketplace.helpers';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { type JobPhotoAsset, uploadJobPhotos } from '@/services/job-photo.service';
+import { getMyProfileCompletion } from '@/services/profile-completion.service';
 import type {
   ExperienceLevel,
   JobDraftSummary,
@@ -480,6 +482,7 @@ export default function CreateJobScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const budgetRangeOffsetRef = useRef<number | null>(null);
   const handledFocusRef = useRef(false);
+  const defaultsAppliedRef = useRef(false);
   const { profile, loading } = useProfile();
   const profileId = profile?.id ?? null;
   const profileBarangay = profile?.barangay ?? null;
@@ -570,6 +573,46 @@ export default function CreateJobScreen() {
       locationText: current.locationText || barangay,
     }));
   }, [profileId, profileBarangay]);
+
+  useEffect(() => {
+    if (initialDraftId || defaultsAppliedRef.current || loading) return;
+    let active = true;
+
+    getMyProfileCompletion().then((result) => {
+      if (!active || result.error || !result.data) return;
+
+      const { hiring } = result.data;
+      const defaultNeed = hiring.neededServices
+        .map((need) => getStoredMvpServiceOption(need))
+        .find(Boolean);
+      const defaultCategory = getCategoryForMvpService(defaultNeed);
+      const preferredSchedule = hiring.preferredSchedule.trim();
+      defaultsAppliedRef.current = true;
+
+      setDraft((current) => {
+        const canPrefillNeed = Boolean(!current.category && !current.serviceNeeded && defaultNeed && defaultCategory);
+        const canPrefillSchedule = Boolean(
+          !current.jobDate &&
+          !current.preferredTimeBlock &&
+          !current.exactTimeNeeded &&
+          !current.exactTime &&
+          !current.legacyScheduleText &&
+          preferredSchedule,
+        );
+
+        return {
+          ...current,
+          category: canPrefillNeed && defaultCategory ? defaultCategory : current.category,
+          serviceNeeded: canPrefillNeed && defaultNeed ? defaultNeed : current.serviceNeeded,
+          legacyScheduleText: canPrefillSchedule ? preferredSchedule : current.legacyScheduleText,
+        };
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [initialDraftId, loading]);
 
   const autosaveInput = useMemo(() => buildDraftInput(draft), [draft]);
   const { flush: flushDraft } = useDraftAutosave({

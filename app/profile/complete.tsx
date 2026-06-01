@@ -23,7 +23,6 @@ import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerShee
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProfilePhotoGuidelinesSheet } from '@/components/profile/ProfilePhotoGuidelinesSheet';
-import { RateRangeInput } from '@/components/RateRangeInput';
 import { Skeleton } from '@/components/Skeleton';
 import {
     getDisplayLabelForMvpService,
@@ -55,11 +54,13 @@ type ProfileFocusTarget =
   | 'profile-photo'
   | 'shared-profile'
   | 'contact-preference'
+  | 'work-summary'
+  | 'capabilities'
   | 'service-area'
   | 'availability'
-  | 'rate-range'
   | 'hiring-intro'
   | 'needed-services'
+  | 'coordination-style'
   | 'preferred-schedule';
 
 const CONTACT_METHOD_OPTIONS = [
@@ -82,7 +83,6 @@ const emptyCore: CoreProfileInput = {
   city: 'Santo Tomas',
   preferredContactMethod: '',
   about: '',
-  availability: '',
 };
 
 const emptyWork: WorkProfileInput = {
@@ -91,11 +91,6 @@ const emptyWork: WorkProfileInput = {
   offeredServices: [],
   serviceArea: '',
   availability: '',
-  rateText: '',
-  rateMin: '',
-  rateMax: '',
-  rateType: 'per_service',
-  rateNegotiable: false,
   customOfferedServices: [],
 };
 
@@ -104,8 +99,8 @@ const emptyHiring: HiringProfileInput = {
   bio: '',
   neededServices: [],
   customNeededServices: [],
+  coordinationStyle: '',
   preferredSchedule: '',
-  budgetPreference: '',
 };
 
 function getParamValue(value: string | string[] | undefined) {
@@ -126,11 +121,13 @@ function normalizeFocusTarget(value: string | string[] | undefined): ProfileFocu
     focus === 'profile-photo' ||
     focus === 'shared-profile' ||
     focus === 'contact-preference' ||
+    focus === 'work-summary' ||
+    focus === 'capabilities' ||
     focus === 'service-area' ||
     focus === 'availability' ||
-    focus === 'rate-range' ||
     focus === 'hiring-intro' ||
     focus === 'needed-services' ||
+    focus === 'coordination-style' ||
     focus === 'preferred-schedule'
   ) {
     return focus;
@@ -206,7 +203,6 @@ export default function CompleteProfileScreen() {
       city: nextStatus.core.city,
       preferredContactMethod: nextStatus.core.preferredContactMethod,
       about: nextStatus.core.about,
-      availability: nextStatus.core.availability,
     });
     setWork({
       headline: nextStatus.work.headline,
@@ -214,11 +210,6 @@ export default function CompleteProfileScreen() {
       offeredServices: nextStatus.work.offeredServices,
       serviceArea: nextStatus.work.serviceArea,
       availability: nextStatus.work.availability,
-      rateText: nextStatus.work.rateText,
-      rateMin: nextStatus.work.rateMin,
-      rateMax: nextStatus.work.rateMax,
-      rateType: nextStatus.work.rateType,
-      rateNegotiable: nextStatus.work.rateNegotiable,
       customOfferedServices: nextStatus.work.customOfferedServices,
     });
     setHiring({
@@ -226,8 +217,8 @@ export default function CompleteProfileScreen() {
       bio: nextStatus.hiring.bio,
       neededServices: nextStatus.hiring.neededServices,
       customNeededServices: nextStatus.hiring.customNeededServices,
+      coordinationStyle: nextStatus.hiring.coordinationStyle,
       preferredSchedule: nextStatus.hiring.preferredSchedule,
-      budgetPreference: nextStatus.hiring.budgetPreference,
     });
   };
 
@@ -562,13 +553,6 @@ function CoreForm({
             value={value.about}
             onChangeText={(about) => onChange({ ...value, about })}
           />
-          <Field
-            label="Availability"
-            multiline
-            placeholder="Example: Weekdays after 5 PM, weekends by request"
-            value={value.availability}
-            onChangeText={(availability) => onChange({ ...value, availability })}
-          />
         </AddressSection>
       </SetupSection>
 
@@ -847,7 +831,7 @@ function WorkForm({
 }) {
   return (
     <>
-      <SetupSection>
+      <SetupSection targetId="work-summary" onTargetLayout={onTargetLayout}>
         <Field
           label="Work headline"
           placeholder="Reliable home repair help nearby"
@@ -861,13 +845,16 @@ function WorkForm({
           value={value.bio}
           onChangeText={(bio) => onChange({ ...value, bio })}
         />
+      </SetupSection>
+
+      <SetupSection targetId="capabilities" onTargetLayout={onTargetLayout}>
         <ServiceSelectionField
           customServices={value.customOfferedServices}
-          emptyText="Choose the services you want neighbors to find you for."
-          label="Services offered"
+          emptyText="Choose the capabilities you want neighbors to know you can generally do."
+          label="Capabilities"
           selectedServices={value.offeredServices}
-          sheetDescription="Pick all Konektado service categories you can offer."
-          sheetTitle="Choose Work services"
+          sheetDescription="Pick all Konektado categories you can generally offer."
+          sheetTitle="Choose capabilities"
           onChange={(offeredServices, customOfferedServices) =>
             onChange({ ...value, offeredServices, customOfferedServices })
           }
@@ -885,32 +872,11 @@ function WorkForm({
 
       <SetupSection targetId="availability" onTargetLayout={onTargetLayout}>
         <Field
-          label="Work availability"
+          label="Default availability"
           multiline
           placeholder="Example: Saturday mornings and weekday afternoons"
           value={value.availability}
           onChangeText={(availability) => onChange({ ...value, availability })}
-        />
-      </SetupSection>
-
-      <SetupSection targetId="rate-range" onTargetLayout={onTargetLayout}>
-        <Field
-          label="Rate note"
-          placeholder="Optional: supplies included"
-          value={value.rateText}
-          onChangeText={(rateText) => onChange({ ...value, rateText })}
-        />
-        <RateRangeInput
-          label="Rate range"
-          maxValue={value.rateMax}
-          minValue={value.rateMin}
-          negotiable={value.rateNegotiable}
-          onMaxChange={(rateMax) => onChange({ ...value, rateMax })}
-          onMinChange={(rateMin) => onChange({ ...value, rateMin })}
-          onNegotiableChange={(rateNegotiable) => onChange({ ...value, rateNegotiable })}
-          onRateTypeChange={(rateType) => onChange({ ...value, rateType })}
-          previewPrefix="Service rate"
-          rateType={value.rateType}
         />
       </SetupSection>
     </>
@@ -947,30 +913,34 @@ function HiringForm({
       <SetupSection targetId="needed-services" onTargetLayout={onTargetLayout}>
         <ServiceSelectionField
           customServices={value.customNeededServices}
-          emptyText="Choose the services you usually need help with."
-          label="Services you need"
+          emptyText="Choose the categories you usually hire for."
+          label="Common needs"
           selectedServices={value.neededServices}
-          sheetDescription="Pick all Konektado service categories you usually hire for."
-          sheetTitle="Choose needed services"
+          sheetDescription="Pick the Konektado categories you commonly hire for."
+          sheetTitle="Choose common needs"
           onChange={(neededServices, customNeededServices) =>
             onChange({ ...value, neededServices, customNeededServices })
           }
         />
       </SetupSection>
 
+      <SetupSection targetId="coordination-style" onTargetLayout={onTargetLayout}>
+        <Field
+          label="Coordination style"
+          multiline
+          placeholder="Example: I reply in app messages and prefer confirming details before the visit."
+          value={value.coordinationStyle}
+          onChangeText={(coordinationStyle) => onChange({ ...value, coordinationStyle })}
+        />
+      </SetupSection>
+
       <SetupSection targetId="preferred-schedule" onTargetLayout={onTargetLayout}>
         <Field
-          label="Preferred schedule"
+          label="General scheduling preference"
           multiline
           placeholder="Example: Mornings before work, weekends for bigger jobs"
           value={value.preferredSchedule}
           onChangeText={(preferredSchedule) => onChange({ ...value, preferredSchedule })}
-        />
-        <Field
-          label="Budget preference"
-          placeholder="Optional: I usually coordinate per visit"
-          value={value.budgetPreference}
-          onChangeText={(budgetPreference) => onChange({ ...value, budgetPreference })}
         />
       </SetupSection>
     </>

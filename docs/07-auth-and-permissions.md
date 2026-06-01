@@ -110,15 +110,17 @@ Barangay verification proves the account belongs to a real resident. Public prof
 
 Completion layers:
 
-- Core Profile: public name, preferred contact method, barangay/city, approximate address, private house number or block/lot for admin/private coordination, intro, and availability.
-- Work Profile: worker headline, bio, official taxonomy services, separate custom "Others / Specify" services, service area, availability, rate range/type, and optional rate note.
-- Hiring Profile: client headline, bio, official taxonomy services needed, separate custom "Others / Specify" services, preferred schedule, and optional budget preference.
+- Core Profile: public name, preferred contact method, barangay/city, approximate address, private house number or block/lot for admin/private coordination, resident intro, and verification summary.
+- Work Profile: worker headline, bio, official taxonomy capability categories, separate custom "Others / Specify" capabilities, default service area, default availability, credentials, and worker reputation.
+- Hiring Profile: client headline, bio, common needs, separate custom "Others / Specify" needs, coordination style, general scheduling preference, and client reputation.
 
 Verified/setup state:
 
 - `Unverified`: may browse public content but cannot interact.
 - `Verified · Setup incomplete`: still shows verified identity status and may browse public content, but gated actions route to Complete Profile.
 - `Ready`: verified plus the relevant Work or Hiring Profile is complete for the attempted action.
+
+Profile completion must not query or require active services, active jobs, drafts, saved items, profile-owned rates, or profile-owned budgets. Listings own pricing, budgets, schedules, requirements, message options, and active inventory.
 
 Action gates:
 

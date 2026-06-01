@@ -122,6 +122,23 @@ export async function listMyCredentials(): Promise<ServiceResult<CredentialSumma
   return { data: ((data as CredentialRow[] | null) ?? []).map(mapCredential), error: null };
 }
 
+export async function listApprovedCredentialsForProvider(
+  providerId: string,
+): Promise<ServiceResult<CredentialSummary[]>> {
+  const id = compactText(providerId);
+  if (!id) return { data: [], error: null };
+
+  const { data, error } = await supabase
+    .from('credentials')
+    .select(CREDENTIAL_COLUMNS)
+    .eq('provider_id', id)
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false });
+
+  if (error) return { data: null, error: error.message };
+  return { data: ((data as CredentialRow[] | null) ?? []).map(mapCredential), error: null };
+}
+
 export async function createCredential(
   input: CreateCredentialInput,
 ): Promise<ServiceResult<CredentialSummary>> {

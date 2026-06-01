@@ -158,6 +158,7 @@ Current context:
 - Use Services in UI, not Skills.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.
 - Verification gates posting, messaging, saving if enabled, and reviews.
+- Profiles own identity, capability, preferences, trust, and role reputation. Jobs and Services own rates, budgets, schedules, requirements, message options, and active inventory.
 - Home/Dashboard is currently a Figma-style static/demo mixed jobs/services feed.
 - Home initial filter uses onboarding intent: provider -> Jobs, client -> Services, both/missing -> For you.
 - Konektado uses Satoshi only.

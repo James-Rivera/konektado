@@ -115,9 +115,9 @@ Contact details rules:
 ## Public Profile Completion Flow
 
 1. Verified user opens Profile and sees a trust checklist for Core Profile, Work Profile, and Hiring Profile.
-2. Core Profile collects public name, preferred contact method, approximate location, private block/lot or house-number details, short intro, and availability.
-3. Work Profile collects worker-facing headline, bio, taxonomy services, custom "Others / Specify" text, service area, availability, rate range, and optional rate note.
-4. Hiring Profile collects client-facing headline, bio, taxonomy services needed, custom "Others / Specify" text, preferred schedule, and optional budget preference.
+2. Core Profile collects public name, preferred contact method, approximate location, private block/lot or house-number details, short resident intro, and verification summary.
+3. Work Profile collects worker-facing headline, bio, broad capability categories, custom "Others / Specify" text, default service area, default availability, credentials, and worker reputation context.
+4. Hiring Profile collects client-facing headline, bio, common needs, custom "Others / Specify" text, coordination style, general scheduling preference, and client reputation context.
 5. App saves role-profile rows without changing the user's active role.
 6. When a verified user tries to publish or message without the relevant role profile, the app routes them to `/profile/complete`.
 
@@ -128,13 +128,14 @@ Rules:
 - A verified user with missing Work/Hiring setup stays visibly verified but sees `Verified · Setup incomplete`; they may browse public content but cannot message, hire, apply/post, or review until setup is complete.
 - Verification selfie, ID files, certificate files, and admin notes are private and must never become public profile photos or profile content.
 - A public profile photo is strongly recommended for recognition and trust, but remains optional and must not block completion or marketplace access.
+- Profile completion must not depend on active services, active jobs, budgets, rates, or marketplace inventory. A user with zero listings can still complete Core, Work, and Hiring profiles.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
 - Publishing services and messaging clients about jobs require a completed Work Profile.
 
 ## Service Profile Creation Flow
 
 1. Provider opens Work Profile, Post, or provider setup.
-2. Provider selects work type/service group/specific service from the controlled taxonomy, or uses "Others / Specify" stored as separate custom text for admin review.
+2. Provider selects work type/service group/specific service from the controlled taxonomy, or uses "Others / Specify" stored as separate custom text for admin review. Brand-new blank drafts may prefill category, service area, and availability from Work Profile defaults, but existing drafts and listings stay authoritative.
 3. Provider adds service title, description, availability, experience level, optional certification metadata, a minimum/maximum rate range, rate type, and optional negotiable flag.
 4. Provider may attach credentials related to the service.
 5. After the first meaningful edit, the app creates or updates an owner-private `service_drafts` row through the shared debounced autosave path.
@@ -159,7 +160,7 @@ Rules:
 
 1. Client opens Post.
 2. Client taps Create a post and chooses "I need help" from the Figma post-type sheet.
-3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, public approximate location, optional private location notes, optional context tags, budget minimum/maximum, rate type, optional negotiable flag, workers needed, preferred schedule, experience level, certification requirement, and listing options.
+3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, public approximate location, optional private location notes, optional context tags, budget minimum/maximum, rate type, optional negotiable flag, workers needed, preferred schedule, experience level, certification requirement, and listing options. Brand-new blank drafts may prefill common need and general scheduling preference from Hiring Profile defaults, but existing drafts and jobs stay authoritative.
 4. App validates Job Category, Service Needed, title, description, public location, numeric optional fields, and a valid required range where `budget_min > 0` and `budget_min <= budget_max`.
 5. After the first meaningful edit, the app creates or updates an owner-private `job_drafts` row through the shared debounced autosave path. It flushes any pending save before showing Preview.
 6. App shows the Figma Preview screen with safety reminders.

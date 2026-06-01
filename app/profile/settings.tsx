@@ -64,13 +64,13 @@ export default function ProfileSettingsScreen() {
           <SettingsRow
             icon="handyman"
             title="Work Profile"
-            subtitle="Services, availability, service area, and rate range"
+            subtitle="Capabilities, service area, availability, and credentials"
             onPress={() => router.push({ pathname: '/profile/complete', params: { mode: 'work' } })}
           />
           <SettingsRow
             icon="assignment"
             title="Hiring Profile"
-            subtitle="Needed services and hiring preferences"
+            subtitle="Common needs, coordination style, and scheduling preferences"
             onPress={() => router.push({ pathname: '/profile/complete', params: { mode: 'hiring' } })}
           />
         </SettingsSection>

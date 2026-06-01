@@ -12,7 +12,7 @@ Konektado exists to make barangay-based service discovery and hiring safer and e
 
 The app should:
 
-- Help residents show selected services, availability, credentials, and contact details.
+- Help residents show identity, capabilities, hiring style, credentials, reputation, and active marketplace listings without mixing profile data and listing data.
 - Help clients find verified local service providers and micro-gig helpers.
 - Help clients post simple jobs that workers can view and respond to through messaging.
 - Help barangay admins verify resident identities and review platform activity.

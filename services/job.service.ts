@@ -60,29 +60,10 @@ async function loadClientStats(clientIds: string[]) {
     return stats;
   }
 
-  const [{ data: reviews }, { data: ownedJobs }, { data: clientJobs }] = await Promise.all([
-    supabase.from('reviews').select('reviewee_id, rating').in('reviewee_id', ids),
+  const [{ data: ownedJobs }, { data: clientJobs }] = await Promise.all([
     supabase.from('jobs').select('id, owner_id, client_id').in('owner_id', ids),
     supabase.from('jobs').select('id, owner_id, client_id').in('client_id', ids),
   ]);
-
-  const reviewRows = ((reviews as { reviewee_id: string; rating: number }[] | null) ?? []).filter(
-    (row) => ids.includes(row.reviewee_id),
-  );
-
-  for (const id of ids) {
-    const clientReviews = reviewRows.filter((row) => row.reviewee_id === id);
-    const reviewCount = clientReviews.length;
-    const averageRating = reviewCount
-      ? clientReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
-      : null;
-
-    stats.set(id, {
-      ...(stats.get(id) ?? { jobsPostedCount: 0 }),
-      averageRating,
-      reviewCount,
-    });
-  }
 
   const jobsByClient = new Map<string, Set<string>>();
   const jobRows = [
@@ -113,6 +94,34 @@ async function loadClientStats(clientIds: string[]) {
       ...current,
       jobsPostedCount: jobs.size,
     });
+  }
+
+  const allJobIds = Array.from(new Set(jobRows.map((job) => job.id)));
+  if (allJobIds.length) {
+    const { data: reviews } = await supabase
+      .from('reviews')
+      .select('job_id, reviewee_id, rating')
+      .in('job_id', allJobIds)
+      .in('reviewee_id', ids);
+
+    const reviewRows = ((reviews as { job_id: string; reviewee_id: string; rating: number }[] | null) ?? [])
+      .filter((row) => ids.includes(row.reviewee_id));
+
+    for (const id of ids) {
+      const clientJobIds = jobsByClient.get(id) ?? new Set<string>();
+      const clientReviews = reviewRows.filter((row) => row.reviewee_id === id && clientJobIds.has(row.job_id));
+      const reviewCount = clientReviews.length;
+      const averageRating = reviewCount
+        ? clientReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
+        : null;
+      const current = stats.get(id) ?? { jobsPostedCount: 0, averageRating: null, reviewCount: 0 };
+
+      stats.set(id, {
+        ...current,
+        averageRating,
+        reviewCount,
+      });
+    }
   }
 
   return stats;

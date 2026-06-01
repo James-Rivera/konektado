@@ -34,6 +34,7 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useDraftAutosave } from '@/hooks/use-draft-autosave';
 import { useProfile } from '@/hooks/use-profile';
 import { validateRateRange } from '@/services/marketplace.helpers';
+import { getMyProfileCompletion } from '@/services/profile-completion.service';
 import { getServiceDraft, saveServiceDraft } from '@/services/service-draft.service';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
 import { getMyService, updateService } from '@/services/service-profile.service';
@@ -104,6 +105,7 @@ export default function CreateServiceScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const rateRangeOffsetRef = useRef<number | null>(null);
   const handledFocusRef = useRef(false);
+  const defaultsAppliedRef = useRef(false);
   const { profile, loading, refresh } = useProfile();
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
@@ -166,6 +168,33 @@ export default function CreateServiceScreen() {
       setLocationBarangay(profile.barangay);
     }
   }, [profile?.barangay]);
+
+  useEffect(() => {
+    if (initialDraftId || serviceId || defaultsAppliedRef.current || loading) return;
+    let active = true;
+
+    getMyProfileCompletion().then((result) => {
+      if (!active || result.error || !result.data) return;
+
+      const { work } = result.data;
+      const defaultService = work.offeredServices[0] ?? null;
+      const customService = !defaultService ? work.customOfferedServices[0] : null;
+      defaultsAppliedRef.current = true;
+
+      setCategory((current) => current || defaultService || (customService ? 'Other service' : current));
+      setCustomCategory((current) => current || customService || current);
+      setAvailability((current) => current || work.availability);
+      setLocationBarangay((current) =>
+        current && current !== profile?.barangay && current !== 'Barangay San Pedro'
+          ? current
+          : work.serviceArea || current,
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [initialDraftId, loading, profile?.barangay, serviceId]);
 
   useEffect(() => {
     if (!serviceId) return;

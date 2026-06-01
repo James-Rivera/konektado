@@ -750,8 +750,8 @@ Use this language consistently:
 | Surface | Should own | Should not own |
 |---|---|---|
 | Core Profile | Identity, contact preferences, barangay/location, profile photo, verification state | Service offer details, job requirements, ratings mixed across roles |
-| Work Profile | Provider bio, offered services, service area, availability, rate range, worker reputation | Client hiring preferences |
-| Hiring Profile | Client bio, needed services, budget/schedule preferences, client reputation | Provider capability |
+| Work Profile | Provider bio, capabilities, default service area, default availability, credentials, worker reputation | Client hiring preferences, service-listing rates or negotiability |
+| Hiring Profile | Client bio, common needs, coordination style, general scheduling preference, client reputation | Provider capability, job-post budgets or requirements |
 | Service Listing | Specific offer, rate, availability, photos, tags, message settings | All provider identity and all provider reputation |
 | Job Post | Specific need, budget, schedule, location, requirements, message settings | All client identity and all client reputation |
 | Conversation | Inquiry details, negotiation, hire/completion/review actions | Profile editing, listing editing beyond contextual links |

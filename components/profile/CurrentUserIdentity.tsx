@@ -17,7 +17,7 @@ type CurrentUserIdentityRowProps = {
 
 export function CurrentUserIdentityRow({
   showEmail = false,
-  showPresence = true,
+  showPresence = false,
   size = 'md',
   style,
   subtitle,

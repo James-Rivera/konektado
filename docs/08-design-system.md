@@ -212,7 +212,7 @@ Examples:
 
 Onboarding should feel guided rather than stop-start. Successful onboarding transitions should move the user forward visually; do not interrupt normal progress with success modals such as "Welcome" or "Onboarding complete".
 
-Remediation prompts should deep-link to the part of the flow that resolves them. If a card says `Set your rate range`, the action should open the correct screen and scroll to the rate range section rather than leaving the user at the top of a long form.
+Remediation prompts should deep-link to the part of the flow that resolves them. Profile prompts should point to identity, capabilities, service area, default availability, coordination style, or scheduling preference. Listing prompts should point to rates, budgets, dates, requirements, and message options.
 
 ### Bottom Sheet
 
@@ -496,18 +496,20 @@ Work Profile should show:
 
 - Worker rating.
 - Jobs done/taken.
-- Hours worked if available.
-- Availability.
-- Services.
-- Work history.
+- Professional summary.
+- Capabilities.
+- Default service area and availability.
+- Credentials.
+- Marketplace Activity as a visually separate area for services, drafts, saved content, and completed work.
 
 Hiring Profile should show:
 
 - Client rating.
 - Workers hired.
-- Jobs posted.
-- Open jobs.
-- Manage job posts CTA.
+- Hiring summary.
+- Common needs.
+- Coordination style and general scheduling preference.
+- Marketplace Activity as a visually separate area for job posts, drafts, saved content, and completed hires.
 - Job history.
 - Reviews from workers.
 

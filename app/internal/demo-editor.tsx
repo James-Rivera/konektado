@@ -970,7 +970,7 @@ function ProfileEditor({
       </TwoColumn>
       <Field label="Bio/about" multiline onChangeText={(value) => setForm({ ...form, about: value })} value={form.about} />
       <TwoColumn>
-        <Field label="Availability" onChangeText={(value) => setForm({ ...form, availability: value })} value={form.availability} />
+        <Field label="Response expectation" onChangeText={(value) => setForm({ ...form, availability: value })} value={form.availability} />
         <SelectChips
           label="Preferred contact"
           onSelect={(value) => setForm({ ...form, preferredContactMethod: value })}

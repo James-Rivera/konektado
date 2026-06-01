@@ -1,4 +1,3 @@
-import type { RateType } from '@/types/marketplace.types';
 import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 
 export type ProfileCompletionMode = 'core' | 'work' | 'hiring';
@@ -21,9 +20,10 @@ export type ProfileCompletionActionKind =
   | 'add_profile_photo'
   | 'edit_contact_preference'
   | 'create_service'
-  | 'edit_service_rate'
   | 'edit_availability'
   | 'edit_service_area'
+  | 'edit_work_profile'
+  | 'edit_coordination_style'
   | 'open_verification'
   | 'add_credential'
   | 'edit_hiring_preferences'
@@ -75,7 +75,6 @@ export type CoreProfileInput = {
   city: string;
   preferredContactMethod: string;
   about: string;
-  availability: string;
 };
 
 export type WorkProfileInput = {
@@ -84,11 +83,6 @@ export type WorkProfileInput = {
   offeredServices: string[];
   serviceArea: string;
   availability: string;
-  rateText: string;
-  rateMin: string;
-  rateMax: string;
-  rateType: RateType;
-  rateNegotiable: boolean;
   customOfferedServices: string[];
 };
 
@@ -97,8 +91,8 @@ export type HiringProfileInput = {
   bio: string;
   neededServices: string[];
   customNeededServices: string[];
+  coordinationStyle: string;
   preferredSchedule: string;
-  budgetPreference: string;
 };
 
 export type ProfileCompletionStatus = {
