@@ -285,6 +285,58 @@ export type CreateServiceInput = {
   autoPauseEnabled?: boolean;
 };
 
+export type ServiceDraftSummary = {
+  id: string;
+  userId: string;
+  category: string | null;
+  customCategory: string | null;
+  title: string | null;
+  description: string | null;
+  tags: string[];
+  photoUrls: string[];
+  yearsExperience: number | null;
+  availabilityText: string | null;
+  rateText: string | null;
+  rateMin: number | null;
+  rateMax: number | null;
+  rateType: RateType;
+  rateNegotiable: boolean;
+  experienceLevel: ExperienceLevel;
+  certificationAvailable: boolean;
+  certificationNote: string | null;
+  barangay: string | null;
+  locationText: string | null;
+  allowMessages: boolean;
+  autoReplyEnabled: boolean;
+  autoPauseEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpsertServiceDraftInput = {
+  category?: string | null;
+  customCategory?: string | null;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[];
+  photoUrls?: string[];
+  yearsExperience?: number | null;
+  availabilityText?: string | null;
+  rateText?: string | null;
+  rateMin?: number | null;
+  rateMax?: number | null;
+  rateType?: RateType;
+  rateNegotiable?: boolean;
+  experienceLevel?: ExperienceLevel;
+  certificationAvailable?: boolean;
+  certificationNote?: string | null;
+  barangay?: string | null;
+  locationText?: string | null;
+  allowMessages?: boolean;
+  autoReplyEnabled?: boolean;
+  autoPauseEnabled?: boolean;
+};
+
 export type ConversationMessage = {
   id: string;
   conversationId: string;

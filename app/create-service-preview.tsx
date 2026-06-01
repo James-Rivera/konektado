@@ -22,6 +22,7 @@ import {
   getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
+import { deleteServiceDraft, saveServiceDraft } from '@/services/service-draft.service';
 import { createService } from '@/services/service-profile.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
@@ -125,24 +126,68 @@ export default function CreateServicePreviewScreen() {
   const { showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{
     draft?: string | string[];
+    draftId?: string | string[];
     returnTo?: string | string[];
   }>();
   const { profile, loading, refresh } = useProfile();
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
+  const [draftId, setDraftId] = useState(getParamValue(params.draftId));
   const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
+  const saveCurrentDraft = async () => {
+    if (!draft) return null;
+
+    const result = await saveServiceDraft({
+      draftId,
+      input: {
+        allowMessages: draft.allowMessages,
+        autoPauseEnabled: draft.autoPauseEnabled,
+        autoReplyEnabled: draft.autoReplyEnabled,
+        availabilityText: draft.availability,
+        category: draft.category,
+        certificationAvailable: draft.certificationAvailable,
+        certificationNote: draft.certificationNote,
+        customCategory: draft.customCategory,
+        description: draft.description,
+        experienceLevel: draft.experienceLevel,
+        locationText: draft.locationText,
+        barangay: draft.locationText,
+        photoUrls: draft.photoUrls,
+        rateText: draft.rate,
+        rateMin: parseNumber(draft.rateMin),
+        rateMax: parseNumber(draft.rateMax),
+        rateType: draft.rateType,
+        rateNegotiable: draft.rateNegotiable,
+        tags: draft.tags,
+        title: draft.title,
+      },
+    });
+
+    if (result.data) setDraftId(result.data.id);
+    return result;
+  };
+
   const publishService = async () => {
     if (!draft || publishing) return;
 
+    setPublishing(true);
+    const saved = await saveCurrentDraft();
+
+    if (saved?.error || !saved?.data) {
+      setPublishing(false);
+      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      return;
+    }
+
     if (!isVerified) {
+      setPublishing(false);
       setGateVisible(true);
       return;
     }
 
-    setPublishing(true);
     const result = await createService({
       category: draft.category,
       customCategory: draft.customCategory,
@@ -185,8 +230,23 @@ export default function CreateServicePreviewScreen() {
     }
 
     showSuccessToast('Service posted');
+    await deleteServiceDraft(saved.data.id);
     await refresh();
     router.replace(returnTo === 'profile' ? '/(tabs)/profile' : '/(tabs)/post');
+  };
+
+  const startVerification = async () => {
+    if (draft && !publishing) {
+      setPublishing(true);
+      const saved = await saveCurrentDraft();
+      setPublishing(false);
+      if (saved?.error || !saved?.data) {
+        Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+        return;
+      }
+    }
+    setGateVisible(false);
+    router.push('/verification');
   };
 
   if (loading) {
@@ -281,10 +341,7 @@ export default function CreateServicePreviewScreen() {
 
         <VerificationGateModal
           onClose={() => setGateVisible(false)}
-          onStartVerification={() => {
-            setGateVisible(false);
-            router.push('/verification');
-          }}
+          onStartVerification={startVerification}
           visible={gateVisible}
         />
       </View>
@@ -298,7 +355,7 @@ function VerificationGateModal({
   visible,
 }: {
   onClose: () => void;
-  onStartVerification: () => void;
+  onStartVerification: () => void | Promise<void>;
   visible: boolean;
 }) {
   return (

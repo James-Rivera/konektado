@@ -12,8 +12,18 @@ import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
 import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketplace.helpers';
+import { listMyServiceDrafts } from '@/services/service-draft.service';
 import { listMyServices } from '@/services/service-profile.service';
-import type { JobDraftSummary, JobSummary, ProviderService } from '@/types/marketplace.types';
+import type {
+  JobDraftSummary,
+  JobSummary,
+  ProviderService,
+  ServiceDraftSummary,
+} from '@/types/marketplace.types';
+
+type PostingDraft =
+  | { kind: 'job'; record: JobDraftSummary }
+  | { kind: 'service'; record: ServiceDraftSummary };
 
 export default function PostScreen() {
   const router = useRouter();
@@ -23,6 +33,7 @@ export default function PostScreen() {
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [drafts, setDrafts] = useState<JobDraftSummary[]>([]);
+  const [serviceDrafts, setServiceDrafts] = useState<ServiceDraftSummary[]>([]);
   const [services, setServices] = useState<ProviderService[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -44,9 +55,10 @@ export default function PostScreen() {
 
       void (async () => {
         try {
-          const [jobResult, draftResult, serviceResult] = await Promise.all([
+          const [jobResult, draftResult, serviceDraftResult, serviceResult] = await Promise.all([
             listMyJobs(),
             listMyJobDrafts(),
+            listMyServiceDrafts(),
             listMyServices(),
           ]);
 
@@ -69,6 +81,12 @@ export default function PostScreen() {
           } else {
             setServices(serviceResult.data);
           }
+
+          if (serviceDraftResult.error || !serviceDraftResult.data) {
+            Alert.alert('Drafts', serviceDraftResult.error ?? 'Could not load service drafts.');
+          } else {
+            setServiceDrafts(serviceDraftResult.data);
+          }
         } catch {
           if (active) {
             Alert.alert('Posts', 'Could not refresh your posts right now.');
@@ -88,6 +106,13 @@ export default function PostScreen() {
   );
 
   const activeServices = services.filter((service) => service.isActive);
+  const postingDrafts: PostingDraft[] = [
+    ...drafts.map((record): PostingDraft => ({ kind: 'job', record })),
+    ...serviceDrafts.map((record): PostingDraft => ({ kind: 'service', record })),
+  ].sort(
+    (left, right) =>
+      new Date(right.record.updatedAt).getTime() - new Date(left.record.updatedAt).getTime(),
+  );
   const inactivePostsCount =
     jobs.filter((job) => ['cancelled', 'closed', 'completed'].includes(job.status)).length +
     services.filter((service) => !service.isActive).length;
@@ -186,13 +211,13 @@ export default function PostScreen() {
             <View style={styles.verificationCopy}>
               <Text style={styles.verificationTitle}>Draft now, verify before publishing</Text>
               <Text style={styles.verificationText}>
-                You can write job posts and keep them as drafts. Barangay verification is required before a post becomes visible.
+                You can write job or service posts and keep them as drafts. Barangay verification is required before a post becomes visible.
               </Text>
             </View>
           </View>
         ) : null}
 
-        {jobs.length === 0 && services.length === 0 && drafts.length === 0 ? (
+        {jobs.length === 0 && services.length === 0 && postingDrafts.length === 0 ? (
           <View style={styles.panel}>
             <Text style={styles.sectionTitle}>Your Posts</Text>
             <Text style={styles.sectionSubtext}>Manage your active posts and drafts.</Text>
@@ -212,18 +237,23 @@ export default function PostScreen() {
                 onPress={() => router.push('/post/active')}
                 value={String(jobs.length + services.length)}
               />
-              <StatBox icon="description" label="Drafts" value={String(drafts.length)} />
+              <StatBox icon="description" label="Drafts" value={String(postingDrafts.length)} />
               <StatBox icon="pause" label="Inactive" value={String(inactivePostsCount)} />
             </View>
 
-            {drafts.length ? (
+            {postingDrafts.length ? (
               <>
                 <Text style={styles.sectionTitle}>Drafts</Text>
-                {drafts.map((draft) => (
+                {postingDrafts.map((draft) => (
                   <DraftCard
                     draft={draft}
-                    key={draft.id}
-                    onPress={() => router.push({ pathname: '/create-job', params: { draftId: draft.id } })}
+                    key={`${draft.kind}-${draft.record.id}`}
+                    onPress={() =>
+                      router.push({
+                        pathname: draft.kind === 'job' ? '/create-job' : '/create-service',
+                        params: { draftId: draft.record.id },
+                      })
+                    }
                   />
                 ))}
               </>
@@ -415,7 +445,10 @@ function RecentPostCard({
   );
 }
 
-function DraftCard({ draft, onPress }: { draft: JobDraftSummary; onPress: () => void }) {
+function DraftCard({ draft, onPress }: { draft: PostingDraft; onPress: () => void }) {
+  const isJob = draft.kind === 'job';
+  const record = draft.record;
+
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.draftCard, pressed && styles.pressed]}>
       <View style={styles.draftIcon}>
@@ -423,11 +456,13 @@ function DraftCard({ draft, onPress }: { draft: JobDraftSummary; onPress: () => 
       </View>
       <View style={styles.draftCopy}>
         <Text numberOfLines={1} style={styles.draftTitle}>
-          {draft.title || 'Untitled job draft'}
+          {record.title || `Untitled ${isJob ? 'job' : 'service'} draft`}
         </Text>
-        <Text style={styles.draftMeta}>Saved {formatDate(draft.updatedAt)}</Text>
+        <Text style={styles.draftMeta}>
+          {isJob ? 'Job draft' : 'Service draft'} - Saved {formatDate(record.updatedAt)}
+        </Text>
         <Text numberOfLines={1} style={styles.draftDescription}>
-          {draft.category || 'Add category'} - {draft.locationText || draft.barangay || 'Add location'}
+          {record.category || 'Add category'} - {record.locationText || record.barangay || 'Add location'}
         </Text>
       </View>
       <View style={styles.draftBadge}>

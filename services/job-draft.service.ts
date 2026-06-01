@@ -1,12 +1,16 @@
 import type { ServiceResult } from '@/services/auth.service';
 import {
+  deleteOwnDraftRow,
+  getOwnDraftRow,
+  listOwnDraftRows,
+  saveOwnDraftRow,
+} from '@/services/marketplace-draft.repository';
+import {
   compactText,
-  getCurrentUserId,
   normalizeExperienceLevel,
   normalizeRateType,
 } from '@/services/marketplace.helpers';
 import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.types';
-import { supabase } from '@/utils/supabase';
 
 const JOB_DRAFT_COLUMNS =
   'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
@@ -103,37 +107,15 @@ function normalizeDraftPayload(input: UpsertJobDraftInput) {
 }
 
 export async function listMyJobDrafts(): Promise<ServiceResult<JobDraftSummary[]>> {
-  const user = await getCurrentUserId();
-  if (user.error) return user;
-  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
-
-  const { data, error } = await supabase
-    .from('job_drafts')
-    .select(JOB_DRAFT_COLUMNS)
-    .eq('user_id', user.data)
-    .order('updated_at', { ascending: false });
-
-  if (error) return { data: null, error: error.message };
-
-  return { data: ((data as JobDraftRow[] | null) ?? []).map(mapDraft), error: null };
+  const result = await listOwnDraftRows<JobDraftRow>('job_drafts', JOB_DRAFT_COLUMNS);
+  if (result.error || !result.data) return { data: null, error: result.error };
+  return { data: result.data.map(mapDraft), error: null };
 }
 
 export async function getJobDraft(draftId: string): Promise<ServiceResult<JobDraftSummary>> {
-  const user = await getCurrentUserId();
-  if (user.error) return user;
-  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
-
-  const { data, error } = await supabase
-    .from('job_drafts')
-    .select(JOB_DRAFT_COLUMNS)
-    .eq('id', draftId)
-    .eq('user_id', user.data)
-    .maybeSingle<JobDraftRow>();
-
-  if (error) return { data: null, error: error.message };
-  if (!data) return { data: null, error: 'Draft not found.' };
-
-  return { data: mapDraft(data), error: null };
+  const result = await getOwnDraftRow<JobDraftRow>('job_drafts', JOB_DRAFT_COLUMNS, draftId);
+  if (result.error || !result.data) return { data: null, error: result.error };
+  return { data: mapDraft(result.data), error: null };
 }
 
 export async function saveJobDraft({
@@ -143,52 +125,18 @@ export async function saveJobDraft({
   draftId?: string | null;
   input: UpsertJobDraftInput;
 }): Promise<ServiceResult<JobDraftSummary>> {
-  const user = await getCurrentUserId();
-  if (user.error) return user;
-  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
-
-  const payload = {
-    ...normalizeDraftPayload(input),
-    updated_at: new Date().toISOString(),
-  };
-
-  if (draftId) {
-    const { data, error } = await supabase
-      .from('job_drafts')
-      .update(payload)
-      .eq('id', draftId)
-      .eq('user_id', user.data)
-      .select(JOB_DRAFT_COLUMNS)
-      .single<JobDraftRow>();
-
-    if (error) return { data: null, error: error.message };
-    return { data: mapDraft(data), error: null };
-  }
-
-  const { data, error } = await supabase
-    .from('job_drafts')
-    .insert({
-      ...payload,
-      user_id: user.data,
-    })
-    .select(JOB_DRAFT_COLUMNS)
-    .single<JobDraftRow>();
-
-  if (error) return { data: null, error: error.message };
-  return { data: mapDraft(data), error: null };
+  const result = await saveOwnDraftRow<JobDraftRow>({
+    table: 'job_drafts',
+    columns: JOB_DRAFT_COLUMNS,
+    draftId,
+    payload: normalizeDraftPayload(input),
+  });
+  if (result.error || !result.data) return { data: null, error: result.error };
+  return { data: mapDraft(result.data), error: null };
 }
 
 export async function deleteJobDraft(draftId: string): Promise<ServiceResult<void>> {
-  const user = await getCurrentUserId();
-  if (user.error) return user;
-  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
-
-  const { error } = await supabase
-    .from('job_drafts')
-    .delete()
-    .eq('id', draftId)
-    .eq('user_id', user.data);
-
-  if (error) return { data: null, error: error.message };
+  const result = await deleteOwnDraftRow('job_drafts', draftId);
+  if (result.error) return { data: null, error: result.error };
   return { data: undefined, error: null };
 }

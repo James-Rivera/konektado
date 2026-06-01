@@ -32,6 +32,7 @@ import {
   POPULAR_JOB_CATEGORIES,
 } from '@/constants/job-post-options';
 import { color, radius, space, typography } from '@/constants/theme';
+import { useDraftAutosave } from '@/hooks/use-draft-autosave';
 import { useProfile } from '@/hooks/use-profile';
 import { validateRateRange } from '@/services/marketplace.helpers';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
@@ -412,6 +413,30 @@ function buildDraftInput(draft: JobDraft): UpsertJobDraftInput {
   };
 }
 
+function hasMeaningfulDraft(input: UpsertJobDraftInput) {
+  return Boolean(
+    input.title?.trim() ||
+      input.description?.trim() ||
+      input.category?.trim() ||
+      input.serviceNeeded?.trim() ||
+      input.tags?.length ||
+      input.photoUrls?.length ||
+      input.privateLocationNotes?.trim() ||
+      input.budgetMin ||
+      input.budgetMax ||
+      input.workersNeeded ||
+      input.scheduleText?.trim() ||
+      input.certificationNote?.trim() ||
+      input.rateType !== 'per_job' ||
+      input.budgetNegotiable ||
+      input.experienceLevel !== 'any' ||
+      input.certificationRequired ||
+      input.allowMessages === false ||
+      input.autoReplyEnabled ||
+      input.autoCloseEnabled
+  );
+}
+
 function draftFromRecord(record: JobDraftSummary | null): JobDraft | null {
   if (!record) return null;
   const schedule = parseScheduleText(record.scheduleText ?? '');
@@ -461,6 +486,7 @@ export default function CreateJobScreen() {
   const [errors, setErrors] = useState<JobDraftErrors>({});
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(initialDraftId));
+  const [draftHydrated, setDraftHydrated] = useState(!initialDraftId);
   const [savingDraft, setSavingDraft] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
@@ -523,6 +549,7 @@ export default function CreateJobScreen() {
         }
       } finally {
         if (active) {
+          setDraftHydrated(true);
           setLoadingDraft(false);
         }
       }
@@ -543,6 +570,17 @@ export default function CreateJobScreen() {
       locationText: current.locationText || barangay,
     }));
   }, [profileId, profileBarangay]);
+
+  const autosaveInput = useMemo(() => buildDraftInput(draft), [draft]);
+  const { flush: flushDraft } = useDraftAutosave({
+    draftId,
+    enabled: !loading && !loadingDraft,
+    hydrated: draftHydrated,
+    input: autosaveInput,
+    isMeaningful: hasMeaningfulDraft,
+    onDraftIdChange: setDraftId,
+    saveDraft: saveJobDraft,
+  });
 
   const selectedTagsText = useMemo(() => draft.tags.join(', '), [draft.tags]);
   const tagOptions = useMemo(() => getContextTagsForCategory(draft.category), [draft.category]);
@@ -744,11 +782,11 @@ export default function CreateJobScreen() {
     if (Object.keys(validation).length) return;
 
     setSavingDraft(true);
-    const saved = await saveJobDraft({ draftId, input: buildDraftInput(nextDraft) });
+    const saved = await flushDraft(buildDraftInput(nextDraft));
     setSavingDraft(false);
 
-    if (saved.error || !saved.data) {
-      Alert.alert('Draft', saved.error ?? 'Could not save this draft.');
+    if (!saved || saved.error || !saved.data) {
+      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
       return;
     }
 

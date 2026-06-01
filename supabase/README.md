@@ -29,6 +29,7 @@ The migrations create the current app baseline:
 - `verification_files`
 - `jobs`
 - `job_drafts`
+- `service_drafts`
 - `services`
 - `conversations`
 - `messages`
@@ -37,7 +38,7 @@ The migrations create the current app baseline:
 - Storage bucket `verification-files`
 
 The current onboarding flow writes to these tables immediately after the user creates a password and picks a role.
-The Post flow also uses `jobs.tags`, `jobs.workers_needed`, `jobs.allow_messages`, `jobs.auto_reply_enabled`, `jobs.auto_close_enabled`, and the private `job_drafts` table for draft persistence before publish.
+The Post flow also uses `jobs.tags`, `jobs.workers_needed`, `jobs.allow_messages`, `jobs.auto_reply_enabled`, `jobs.auto_close_enabled`, and the private `job_drafts` and `service_drafts` tables for owner-only autosave and resume before publish.
 
 ## Verification Emails
 
@@ -142,7 +143,7 @@ The script:
 - preserves `auth.users`, auth identities, migrations, storage bucket configuration, verification files, and credential files
 - updates selected profile display fields with fictional Barangay San Pedro sample content
 - regenerates provider and client profile display fields
-- clears old marketplace/content rows from notifications, reports, reviews, saved items, messages, conversations, job drafts, services, and jobs
+- clears old marketplace/content rows from notifications, reports, reviews, saved items, messages, conversations, job drafts, service drafts, services, and jobs
 - inserts 30 active service listings, 20 open job posts, safe conversations/messages, reviews, and saved items
 - uses current service taxonomy values from `constants/service-taxonomy.ts`
 - uses mixed generated avatar-style profile images with some initials fallbacks

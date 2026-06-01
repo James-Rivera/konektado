@@ -31,11 +31,20 @@ import {
 } from '@/constants/service-post-options';
 import { getCategoryForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
+import { useDraftAutosave } from '@/hooks/use-draft-autosave';
 import { useProfile } from '@/hooks/use-profile';
 import { validateRateRange } from '@/services/marketplace.helpers';
+import { getServiceDraft, saveServiceDraft } from '@/services/service-draft.service';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
 import { getMyService, updateService } from '@/services/service-profile.service';
-import type { ExperienceLevel, ProviderService, RateType } from '@/types/marketplace.types';
+import type {
+  CreateServiceInput,
+  ExperienceLevel,
+  ProviderService,
+  RateType,
+  ServiceDraftSummary,
+  UpsertServiceDraftInput,
+} from '@/types/marketplace.types';
 
 const MAX_SERVICE_PHOTOS = 10;
 
@@ -56,14 +65,39 @@ function parsePositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
+function hasMeaningfulDraft(input: UpsertServiceDraftInput) {
+  return Boolean(
+    input.category?.trim() ||
+      input.customCategory?.trim() ||
+      input.title?.trim() ||
+      input.description?.trim() ||
+      input.tags?.length ||
+      input.photoUrls?.length ||
+      input.availabilityText?.trim() ||
+      input.rateText?.trim() ||
+      input.rateMin ||
+      input.rateMax ||
+      input.certificationNote?.trim() ||
+      input.rateType !== 'per_service' ||
+      input.rateNegotiable ||
+      input.experienceLevel !== 'any' ||
+      input.certificationAvailable ||
+      input.allowMessages === false ||
+      input.autoReplyEnabled ||
+      input.autoPauseEnabled
+  );
+}
+
 export default function CreateServiceScreen() {
   const router = useRouter();
   const { showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{
+    draftId?: string | string[];
     serviceId?: string | string[];
     returnTo?: string | string[];
     focus?: string | string[];
   }>();
+  const initialDraftId = getParamValue(params.draftId);
   const serviceId = getParamValue(params.serviceId);
   const returnTo = getParamValue(params.returnTo);
   const focusTarget = getParamValue(params.focus);
@@ -94,6 +128,9 @@ export default function CreateServiceScreen() {
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
+  const [draftHydrated, setDraftHydrated] = useState(!initialDraftId);
+  const [loadingDraft, setLoadingDraft] = useState(Boolean(initialDraftId));
   const [loadingService, setLoadingService] = useState(Boolean(serviceId));
   const [savingService, setSavingService] = useState(false);
   const [photoFolderId] = useState(() => `service-draft-${Date.now()}`);
@@ -104,7 +141,7 @@ export default function CreateServiceScreen() {
   const serviceGroup = getCategoryForMvpService(category);
 
   const scrollToRateRange = useCallback(() => {
-    if (loading || loadingService || focusTarget !== 'rate-range' || handledFocusRef.current) return;
+    if (loading || loadingDraft || loadingService || focusTarget !== 'rate-range' || handledFocusRef.current) return;
     if (rateRangeOffsetRef.current === null) return;
 
     handledFocusRef.current = true;
@@ -114,7 +151,7 @@ export default function CreateServiceScreen() {
         y: Math.max(rateRangeOffsetRef.current! - space.md, 0),
       });
     });
-  }, [focusTarget, loading, loadingService]);
+  }, [focusTarget, loading, loadingDraft, loadingService]);
 
   useEffect(() => {
     handledFocusRef.current = false;
@@ -173,6 +210,58 @@ export default function CreateServiceScreen() {
     };
   }, [router, serviceId]);
 
+  useEffect(() => {
+    if (!initialDraftId || serviceId) return;
+    let active = true;
+
+    void (async () => {
+      setLoadingDraft(true);
+      try {
+        const result = await getServiceDraft(initialDraftId);
+        if (!active) return;
+
+        if (result.error || !result.data) {
+          Alert.alert('Draft', result.error ?? 'Could not load this draft.');
+        } else {
+          hydrateService(result.data, {
+            setAllowMessages,
+            setAutoPauseEnabled,
+            setAutoReplyEnabled,
+            setAvailability,
+            setCategory,
+            setCertificationAvailable,
+            setCertificationNote,
+            setCustomCategory,
+            setDescription,
+            setExperienceLevel,
+            setLocationBarangay,
+            setPhotoUrls,
+            setRate,
+            setRateMax,
+            setRateMin,
+            setRateNegotiable,
+            setRateType,
+            setTags,
+            setTitle,
+          });
+        }
+      } catch {
+        if (active) {
+          Alert.alert('Draft', 'Could not load this draft right now.');
+        }
+      } finally {
+        if (active) {
+          setDraftHydrated(true);
+          setLoadingDraft(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [initialDraftId, serviceId]);
+
   const selectCategory = (value: string) => {
     setCategory(value);
     setCustomCategory('');
@@ -192,7 +281,7 @@ export default function CreateServiceScreen() {
     });
   };
 
-  const buildServiceInput = () => {
+  const buildServiceDraftInput = useCallback((): UpsertServiceDraftInput => {
     const parsedRateMin = parsePositiveNumber(rateMin);
     const parsedRateMax = parsePositiveNumber(rateMax);
 
@@ -201,9 +290,7 @@ export default function CreateServiceScreen() {
       customCategory: customCategory.trim(),
       title,
       description,
-      tags: Array.from(
-        new Set([serviceGroup, category, ...tags].filter((value): value is string => Boolean(value))),
-      ),
+      tags,
       photoUrls,
       availabilityText: availability,
       rateText: rate,
@@ -220,7 +307,47 @@ export default function CreateServiceScreen() {
       autoReplyEnabled,
       autoPauseEnabled,
     };
-  };
+  }, [
+    allowMessages,
+    autoPauseEnabled,
+    autoReplyEnabled,
+    availability,
+    category,
+    certificationAvailable,
+    certificationNote,
+    customCategory,
+    description,
+    experienceLevel,
+    locationText,
+    photoUrls,
+    rate,
+    rateMax,
+    rateMin,
+    rateNegotiable,
+    rateType,
+    tags,
+    title,
+  ]);
+
+  const serviceDraftInput = useMemo(() => buildServiceDraftInput(), [buildServiceDraftInput]);
+  const { flush: flushDraft } = useDraftAutosave({
+    draftId,
+    enabled: !serviceId && !loading && !loadingDraft,
+    hydrated: draftHydrated,
+    input: serviceDraftInput,
+    isMeaningful: hasMeaningfulDraft,
+    onDraftIdChange: setDraftId,
+    saveDraft: saveServiceDraft,
+  });
+
+  const buildServiceInput = (): CreateServiceInput => ({
+    ...serviceDraftInput,
+    category,
+    title,
+    tags: Array.from(
+      new Set([serviceGroup, category, ...tags].filter((value): value is string => Boolean(value))),
+    ),
+  });
 
   const onNext = async () => {
     if (uploadingPhotos) {
@@ -273,9 +400,19 @@ export default function CreateServiceScreen() {
       return;
     }
 
+    setSavingService(true);
+    const saved = await flushDraft(serviceDraftInput);
+    setSavingService(false);
+
+    if (!saved || saved.error || !saved.data) {
+      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      return;
+    }
+
     router.push({
       pathname: '/create-service-preview',
       params: {
+        draftId: saved.data.id,
         returnTo,
         draft: JSON.stringify({
           allowMessages,
@@ -303,7 +440,7 @@ export default function CreateServiceScreen() {
     });
   };
 
-  if (loading || loadingService) {
+  if (loading || loadingDraft || loadingService) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
         <View style={styles.header}>
@@ -373,7 +510,7 @@ export default function CreateServiceScreen() {
                     <Pressable
                       accessibilityRole="button"
                       disabled={uploadingPhotos}
-                      onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, photoFolderId)}
+                      onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, draftId ?? photoFolderId)}
                       style={({ pressed }) => [
                         styles.photoAddTile,
                         pressed && !uploadingPhotos && styles.pressed,
@@ -392,7 +529,7 @@ export default function CreateServiceScreen() {
               <Pressable
                 accessibilityRole="button"
                 disabled={uploadingPhotos}
-                onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, photoFolderId)}
+                onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, draftId ?? photoFolderId)}
                 style={({ pressed }) => [
                   styles.photoCard,
                   styles.photoCardEmpty,
@@ -706,7 +843,7 @@ function getParamValue(value: string | string[] | undefined) {
 }
 
 function hydrateService(
-  service: ProviderService,
+  service: ProviderService | ServiceDraftSummary,
   setters: {
     setAllowMessages: (value: boolean) => void;
     setAutoPauseEnabled: (value: boolean) => void;
@@ -729,9 +866,9 @@ function hydrateService(
     setTitle: (value: string) => void;
   },
 ) {
-  setters.setCategory(service.category);
+  setters.setCategory(service.category ?? '');
   setters.setCustomCategory(service.customCategory ?? '');
-  setters.setTitle(service.title);
+  setters.setTitle(service.title ?? '');
   setters.setDescription(service.description ?? '');
   setters.setTags(service.tags);
   setters.setAvailability(service.availabilityText ?? '');

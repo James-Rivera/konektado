@@ -137,16 +137,21 @@ Rules:
 2. Provider selects work type/service group/specific service from the controlled taxonomy, or uses "Others / Specify" stored as separate custom text for admin review.
 3. Provider adds service title, description, availability, experience level, optional certification metadata, a minimum/maximum rate range, rate type, and optional negotiable flag.
 4. Provider may attach credentials related to the service.
-5. App validates required fields.
-6. App checks barangay verification and completed Work Profile.
-7. `ServiceProfileService.createService` saves the service.
-8. Service appears on provider public profile, Home feed, and search results if active.
+5. After the first meaningful edit, the app creates or updates an owner-private `service_drafts` row through the shared debounced autosave path.
+6. App validates required fields and flushes any pending autosave before showing Preview.
+7. App shows the service Preview screen while preserving the draft ID and form state.
+8. App flushes the current draft before verification routing or publish.
+9. App checks barangay verification and completed Work Profile.
+10. `ServiceProfileService.createService` saves the public service and deletes the private draft after successful publication.
+11. Service appears on provider public profile, Home feed, and search results if active.
 
 Rules:
 
 - A provider can have multiple services.
 - A service belongs to one provider.
 - Inactive services are hidden from public search.
+- Drafts are stored separately from inactive services and remain owner-private.
+- Verified and unverified authenticated users can leave and resume service drafts from Post.
 - Admin verification belongs to the user/profile, while credentials can support a service.
 - Service posting is blocked until the provider has a completed Work Profile.
 
@@ -156,7 +161,7 @@ Rules:
 2. Client taps Create a post and chooses "I need help" from the Figma post-type sheet.
 3. Client chooses a Job Category and then a category-specific Service Needed, enters title, description, public approximate location, optional private location notes, optional context tags, budget minimum/maximum, rate type, optional negotiable flag, workers needed, preferred schedule, experience level, certification requirement, and listing options.
 4. App validates Job Category, Service Needed, title, description, public location, numeric optional fields, and a valid required range where `budget_min > 0` and `budget_min <= budget_max`.
-5. App saves a private `job_drafts` row before showing Preview.
+5. After the first meaningful edit, the app creates or updates an owner-private `job_drafts` row through the shared debounced autosave path. It flushes any pending save before showing Preview.
 6. App shows the Figma Preview screen with safety reminders.
 7. If the client is not barangay-verified and taps Publish, the app shows the Figma barangay verification gate with Start Verification and Keep Editing Draft actions.
 8. If the client is barangay-verified but missing Hiring Profile details, the app routes to `/profile/complete?mode=hiring`.
@@ -174,12 +179,12 @@ Rules:
 - Payments and job agreements happen outside the app.
 - Jobs should be clear enough for providers to decide whether to message.
 - Closed or cancelled jobs should not accept new interested workers.
-- Service-post builder and preview designs are reference-only for the verified job posting slice.
 - Job photos can be selected, uploaded to storage, and shown in preview and job detail. Renewal rules, auto-reply behavior, ranking, hiring, reviews, and advanced search remain out of this slice.
 - Post UI should avoid Apply/Application wording; workers show interest through Messages.
 - Service Needed is structured data saved separately from category. Tags remain short context/condition descriptors, not service names.
 - Public job cards/details must not show house number, block/lot, private location notes, ID files, private contact data, or sensitive verification details.
 - A user's own jobs are hidden from general Home/Search/browsing, but remain visible in My Posts, Manage Posts, and Profile activity.
+- Job and service builders do not create empty draft rows. They debounce meaningful edits, skip writes during initial hydration, save only changed serialized content, and flush before Preview, backgrounding, or leaving the builder.
 
 ## Job Interest and Messaging Flow
 

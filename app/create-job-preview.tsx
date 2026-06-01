@@ -93,7 +93,7 @@ export default function CreateJobPreviewScreen() {
   const { profile, loading, refresh } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
-  const draftId = getParamValue(params.draftId);
+  const [draftId, setDraftId] = useState(getParamValue(params.draftId));
   const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
@@ -104,7 +104,7 @@ export default function CreateJobPreviewScreen() {
   const saveCurrentDraft = async () => {
     if (!draft) return null;
 
-    return saveJobDraft({
+    const result = await saveJobDraft({
       draftId,
       input: {
         title: draft.title,
@@ -130,9 +130,12 @@ export default function CreateJobPreviewScreen() {
         autoCloseEnabled: draft.autoCloseEnabled,
       },
     });
+
+    if (result.data) setDraftId(result.data.id);
+    return result;
   };
 
-  const publishVerifiedJob = async () => {
+  const publishVerifiedJob = async (draftToDeleteId: string) => {
     if (!draft) return;
 
     const result = await createJob({
@@ -177,9 +180,7 @@ export default function CreateJobPreviewScreen() {
     }
 
     showSuccessToast('Job posted');
-    if (draftId) {
-      await deleteJobDraft(draftId);
-    }
+    await deleteJobDraft(draftToDeleteId);
     await refresh();
     if (returnTo === 'profile') {
       router.replace('/(tabs)/profile');
@@ -196,29 +197,33 @@ export default function CreateJobPreviewScreen() {
     if (!draft || publishing) return;
 
     setPublishing(true);
+    const saved = await saveCurrentDraft();
+
+    if (saved?.error || !saved?.data) {
+      setPublishing(false);
+      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      return;
+    }
 
     if (!isVerified) {
-      const saved = await saveCurrentDraft();
       setPublishing(false);
-
-      if (saved?.error) {
-        Alert.alert('Draft', saved.error);
-        return;
-      }
-
       setGateVisible(true);
       return;
     }
 
-    await publishVerifiedJob();
+    await publishVerifiedJob(saved.data.id);
     setPublishing(false);
   };
 
   const startVerification = async () => {
     if (draft && !publishing) {
       setPublishing(true);
-      await saveCurrentDraft();
+      const saved = await saveCurrentDraft();
       setPublishing(false);
+      if (saved?.error || !saved?.data) {
+        Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+        return;
+      }
     }
     setGateVisible(false);
     router.push('/verification');

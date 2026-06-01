@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state. `supabase/migrations/20260531120000_public_photo_cleanup_delete_policies.sql` adds owner-scoped delete policies for staged job and service photos so failed or cancelled edits can clean up their own storage objects.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state. `supabase/migrations/20260531120100_public_photo_cleanup_delete_policies.sql` adds owner-scoped delete policies for staged job and service photos so failed or cancelled edits can clean up their own storage objects. `supabase/migrations/20260601090000_service_drafts.sql` adds owner-private service draft persistence with the same verified-or-unverified authoring model as job drafts.
 
 ## Common Types
 
@@ -236,6 +236,45 @@ Implementation note:
 
 - The older docs and SQL may still mention `skills` or `provider_profiles.service_type`. The current UI language is Services. For development, prefer a `services` table or map the old `service_type` field into service-style UI until the table is added.
 
+## service_drafts
+
+Purpose: Owner-private service-post drafts. These rows preserve in-progress Service Builder state separately from published or inactive `services` rows.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | Primary key. |
+| `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
+| `category` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `custom_category` | `text` | Optional "Others / Specify" service text. |
+| `title` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `description` | `text` | Optional while drafting. Required before preview/publish in app UI. |
+| `tags` | `text[]` | Optional, maximum 4 in app UI. |
+| `photo_urls` | `text[]` | Optional uploaded photo URLs from the service builder. |
+| `years_experience` | `numeric` | Optional. |
+| `availability_text` | `text` | Optional availability note. |
+| `rate_text` | `text` | Optional public rate note. |
+| `rate_min` | `numeric` | Draft minimum rate. Required before publishing. |
+| `rate_max` | `numeric` | Draft maximum rate. Required before publishing. |
+| `rate_type` | `text` | Canonical marketplace pricing unit. |
+| `rate_negotiable` | `boolean` | Draft copy of the negotiation preference. |
+| `experience_level` | `text` | Draft experience level. |
+| `certification_available` | `boolean` | Safe certification metadata. |
+| `certification_note` | `text` | Optional safe certification note. |
+| `barangay` | `text` | Defaults to the user's barangay or `Barangay San Pedro`. |
+| `location_text` | `text` | Human-readable public location. |
+| `allow_messages` | `boolean` | Draft copy of the listing option. |
+| `auto_reply_enabled` | `boolean` | Draft copy of the listing option. |
+| `auto_pause_enabled` | `boolean` | Draft copy of the listing option. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Updated on edit. |
+
+Important constraints:
+
+- Drafts are owner-private and never appear in Home, Search, service detail, provider browsing, conversations, or admin queues.
+- Both verified and unverified authenticated users can create, update, read, and delete only their own drafts.
+- Publishing a draft creates a real `services` row only after barangay verification and Work Profile completion pass.
+- Inactive `services` rows are not drafts and must not be used as a draft persistence layer.
+
 ## credentials
 
 Purpose: Metadata for certificates, IDs, and proof-of-experience files.
@@ -410,6 +449,7 @@ Important constraints:
 - Drafts are owner-private and never appear in Home, Search, Job Detail, provider browsing, conversations, or admin queues.
 - Both verified and unverified authenticated users can create, update, read, and delete only their own drafts.
 - Publishing a draft creates a real `jobs` row only after barangay verification and Hiring Profile completion pass.
+- Job and service drafts share repository CRUD and debounced autosave lifecycle behavior while keeping domain-specific validation and mapping in their builders.
 
 ## conversations
 

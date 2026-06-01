@@ -89,7 +89,7 @@ Home default filter rules:
 Unverified viewers can:
 
 - Browse limited public jobs, workers, and service posts.
-- Create and edit private job drafts.
+- Create and edit private job and service drafts.
 - Read educational prompts about verification and safe marketplace use.
 - View their own profile and verification status.
 - Submit or resubmit a verification request.
@@ -164,6 +164,7 @@ These role permissions apply after the user's barangay verification is approved 
 | `verification_requests` | Owner and admin can read.                                                                                                                      | Owner can create own request.                    | Admin approves/rejects. Owner can cancel pending request.                                          | Avoid hard delete; use status.                                               |
 | `jobs`                  | Open jobs are readable by authenticated viewers. Owner can read own jobs. Admin can read for moderation.                                       | Verified client owner with completed Hiring Profile only. | Verified job owner can edit own open job. Admin can moderate.                                      | Prefer status `cancelled` or `closed`; hard delete owner/admin only if safe. |
 | `job_drafts`            | Owner can read own drafts only.                                                                                                                | Authenticated owner, verified or unverified.     | Owner can update own drafts.                                                                       | Owner can delete own drafts.                                                |
+| `service_drafts`        | Owner can read own drafts only.                                                                                                                | Authenticated owner, verified or unverified.     | Owner can update own drafts.                                                                       | Owner can delete own drafts.                                                |
 | `conversations`         | Participants can read their own conversations. Job owner can read conversations tied to own jobs. Admin can read for moderation when reported. | Verified user with relevant role profile only.   | Participants can archive/decline where allowed. Job owner can mark hired.                          | Prefer status changes.                                                       |
 | `messages`              | Conversation participants only. Admin can read only for moderation/report workflows.                                                           | Verified sender with relevant role profile only. | Avoid editing messages in MVP.                                                                     | Prefer archive/report over hard delete.                                      |
 | `reviews`               | Public can read approved public reviews.                                                                                                       | Verified job participants only after completion. | Reviewer can edit own review if allowed. Admin can hide/moderate reported reviews.                 | Avoid hard delete; admin moderation preferred.                               |

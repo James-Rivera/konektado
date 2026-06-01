@@ -326,6 +326,7 @@ delete from public.saved_items;
 delete from public.messages;
 delete from public.conversations;
 delete from public.job_drafts;
+delete from public.service_drafts;
 delete from public.services;
 delete from public.jobs;
 

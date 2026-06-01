@@ -61,7 +61,15 @@ Service post flow:
 - Root routing now allows `create-service-preview`.
 - Service form uses one forward action: header `Next`.
 - Service preview owns the final `Post service` action.
-- Unverified service publish attempts route to verification before calling `createService`.
+- Service Builder writes owner-private `service_drafts` rows through the shared debounced autosave lifecycle.
+- Unverified service publish attempts save the draft and route to verification before calling `createService`.
+
+Unified draft persistence:
+
+- Job and Service builders create private drafts only after the first meaningful edit.
+- Both builders debounce changed serialized content, skip writes during initial hydration, and flush before Preview, backgrounding, or route exit.
+- Post lists both draft types and resumes them into the correct builder.
+- Published rows remain separate from drafts; inactive services are not used as a draft layer.
 
 Hosted demo data:
 
@@ -77,16 +85,6 @@ No confirmed P0 code blocker was found in this audit pass.
 Manual QA is still required before demo/user testing because many fixes were validated by lint/typecheck and static inspection, not real-device runs. If manual QA finds any redirect loop, publish failure, duplicate signup bypass, or broken messaging realtime path, that issue should become P0 immediately.
 
 ### P1 — Should Fix Soon
-
-#### Service post draft is route-param only
-
-- Problem: Service post review receives draft data through a JSON route param. Job posts persist drafts through `job_drafts`, but service posts do not have equivalent draft persistence.
-- Evidence from code/docs: `app/create-service.tsx` passes `draft: JSON.stringify(...)` to `/create-service-preview`; `app/create-service-preview.tsx` parses only route params; `app/create-job.tsx` saves through `saveJobDraft`.
-- Affected files: `app/create-service.tsx`, `app/create-service-preview.tsx`, possible future service draft service/table.
-- User impact: Back navigation preserves the form in the current stack, but force-close/reopen, deep links, or oversized params can lose service draft data.
-- Recommended fix: Keep current flow for now, but add service draft persistence if device QA finds data loss or if service posting becomes a demo-critical flow.
-- Risk: Medium if implemented with schema changes; low if deferred and documented.
-- Manual test: Fill a service post with photos, open preview, go back, confirm data remains; background/foreground; force-close and confirm expected behavior is documented.
 
 #### Password reset is only a placeholder
 
@@ -256,7 +254,8 @@ Force-close/reopen behavior:
 Job post flow:
 
 - Form uses header `Next`.
-- `onNext` validates, saves a job draft, and opens `/create-job-preview`.
+- Meaningful edits autosave to an owner-private job draft.
+- `onNext` validates, flushes the job draft, and opens `/create-job-preview`.
 - Preview owns final publish.
 - Unverified users save draft and see a verification gate.
 - Remaining risk: manual QA needed for draft reload, missing fields, photo uploads, and publish deletion of draft.
@@ -264,11 +263,12 @@ Job post flow:
 Service post flow:
 
 - Form uses header `Next`.
-- `onNext` validates required fields and opens `/create-service-preview`.
+- Meaningful edits autosave to an owner-private service draft.
+- `onNext` validates required fields, flushes the service draft, and opens `/create-service-preview`.
 - Preview owns final `Post service`.
 - Root guard now allows preview route.
 - Unverified users route to verification before create service.
-- Remaining risk: service drafts are not persisted outside route params/back stack.
+- Remaining risk: manual QA needed for draft reload, photo uploads, verification return, and publish deletion of draft.
 
 Form `Next`:
 
@@ -281,19 +281,18 @@ Preview/review screens:
 
 Draft preservation:
 
-- Job has persistent drafts.
-- Service preserves form state when returning through normal back navigation, but not across app restart.
+- Job and Service both have owner-private persistent drafts listed in Post.
+- Both builders flush pending changes on background and route exit so drafts survive navigation changes and app restarts.
 
 Missing required fields:
 
 - Job uses field-level errors.
-- Service uses alert validation.
-- This inconsistency is not blocking but can be polished later.
+- Service uses field-level errors aligned with Job Builder.
 
 Verification gates:
 
 - Job publish opens a gate modal for unverified users and saves the draft.
-- Service publish routes to verification; service draft is not persisted.
+- Service publish opens a gate modal for unverified users, saves the draft, and routes to verification.
 
 Navigation after publish:
 
