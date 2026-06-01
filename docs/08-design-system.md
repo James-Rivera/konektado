@@ -500,7 +500,7 @@ Work Profile should show:
 - Capabilities.
 - Default service area and availability.
 - Credentials.
-- Marketplace Activity as a visually separate area for services, drafts, saved content, and completed work.
+- My Services as a visually separate area for service listings, drafts, saved content, and completed work.
 
 Hiring Profile should show:
 
@@ -509,7 +509,7 @@ Hiring Profile should show:
 - Hiring summary.
 - Common needs.
 - Coordination style and general scheduling preference.
-- Marketplace Activity as a visually separate area for job posts, drafts, saved content, and completed hires.
+- My Job Posts as a visually separate area for job posts, drafts, saved content, and completed hires.
 - Job history.
 - Reviews from workers.
 

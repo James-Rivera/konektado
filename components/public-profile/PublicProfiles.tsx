@@ -8,20 +8,20 @@ import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonText } from '@/componen
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import {
-  formatJobBudget,
-  formatJobPostTitle,
-  formatServicePostTitle,
-  formatServiceRate,
-  getExperienceLabel,
-  getMarketplaceLocation,
+    formatJobBudget,
+    formatJobPostTitle,
+    formatServicePostTitle,
+    formatServiceRate,
+    getExperienceLabel,
+    getMarketplaceLocation,
 } from '@/services/marketplace.helpers';
 import type {
-  CredentialSummary,
-  JobSummary,
-  ProviderService,
-  PublicClientProfile,
-  PublicWorkerProfile,
-  Review,
+    CredentialSummary,
+    JobSummary,
+    ProviderService,
+    PublicClientProfile,
+    PublicWorkerProfile,
+    Review,
 } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl } from '@/utils/image-processing';
 
@@ -162,7 +162,7 @@ export function PublicWorkerProfileView({
           )}
         </Section>
 
-        <Section title="Marketplace Activity">
+        <Section title="Services Offered">
           {visibleServices.length ? (
             <View style={styles.cardList}>
               {visibleServices.map((service) => (
@@ -274,7 +274,7 @@ export function PublicClientProfileView({
           )}
         </Section>
 
-        <Section title="Marketplace Activity">
+        <Section title="Job Posts">
           {profile.activeJobs.length ? (
             <View style={styles.cardList}>
               {profile.activeJobs.map((job) => (

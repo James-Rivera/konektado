@@ -8,21 +8,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import {
-  EmptyProfilePanel,
-  HistoryFilterTabs,
-  MetricStrip,
-  ProfileCompletionCard,
-  ProfileHero,
-  ProfileHistoryCard,
-  ProfileLoadingSkeleton,
-  ProfilePillRow,
-  ProfileSection,
-  ProfileSegmentedControl,
-  ProfileTopBar,
-  ReviewCard,
-  VerificationStatusPanel,
-  type MetricItem,
-  type ProfileMode,
+    EmptyProfilePanel,
+    HistoryFilterTabs,
+    MetricStrip,
+    ProfileCompletionCard,
+    ProfileHero,
+    ProfileHistoryCard,
+    ProfileLoadingSkeleton,
+    ProfilePillRow,
+    ProfileSection,
+    ProfileSegmentedControl,
+    ProfileTopBar,
+    ReviewCard,
+    VerificationStatusPanel,
+    type MetricItem,
+    type ProfileMode,
 } from '@/components/profile/ProfilePrimitives';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -31,11 +31,11 @@ import { listMyCredentials } from '@/services/credential.service';
 import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
 import {
-  formatJobBudget,
-  formatJobPostTitle,
-  formatServicePostTitle,
-  formatServiceRate,
-  isPresenceActive,
+    formatJobBudget,
+    formatJobPostTitle,
+    formatServicePostTitle,
+    formatServiceRate,
+    isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
 import { getMyProfileCompletion } from '@/services/profile-completion.service';
@@ -44,17 +44,17 @@ import { getSavedItems, type SavedItem } from '@/services/saved-items.service';
 import { listMyServiceDrafts } from '@/services/service-draft.service';
 import { listMyServices } from '@/services/service-profile.service';
 import type {
-  CredentialSummary,
-  JobDraftSummary,
-  JobSummary,
-  ProviderService,
-  Review,
-  ServiceDraftSummary,
+    CredentialSummary,
+    JobDraftSummary,
+    JobSummary,
+    ProviderService,
+    Review,
+    ServiceDraftSummary,
 } from '@/types/marketplace.types';
 import type {
-  ProfileCompletionAction,
-  ProfileCompletionMode,
-  ProfileCompletionStatus,
+    ProfileCompletionAction,
+    ProfileCompletionMode,
+    ProfileCompletionStatus,
 } from '@/types/profile.types';
 
 type JobHistoryFilter = 'active' | 'completed';
@@ -523,7 +523,7 @@ function WorkProfileContent({
         )}
       </ProfileSection>
 
-      <ProfileSection title="Marketplace Activity" onAdd={onCreateService} onEdit={onManageServices}>
+      <ProfileSection title="My Services" onAdd={onCreateService} onEdit={onManageServices}>
         {activityCount ? (
           <>
             {services.slice(0, 3).map((service) => (
@@ -554,7 +554,7 @@ function WorkProfileContent({
             ))}
             {savedItems.length ? (
               <ProfileHistoryCard
-                description="Saved jobs and providers are marketplace activity, not profile data."
+                description="Saved jobs and providers are listed here so you can return to them later."
                 footerRight={`${savedItems.length} saved`}
                 meta="Saved content"
                 title="Saved items"
@@ -564,8 +564,8 @@ function WorkProfileContent({
         ) : (
           <EmptyProfilePanel
             icon="work-history"
-            message="Active service listings, drafts, completed work, and saved content will appear here."
-            title="No marketplace activity yet"
+            message="Your service listings, drafts, completed work, and saved items will appear here."
+            title="No services yet"
           />
         )}
       </ProfileSection>
@@ -690,7 +690,7 @@ function HiringProfileContent({
         )}
       </ProfileSection>
 
-      <ProfileSection title="Marketplace Activity" onEdit={onManagePosts}>
+      <ProfileSection title="My Job Posts" onEdit={onManagePosts}>
         <HistoryFilterTabs active={jobFilter} onChange={onChangeJobFilter} />
         {activityCount ? (
           <>
@@ -723,7 +723,7 @@ function HiringProfileContent({
             ))}
             {savedItems.length ? (
               <ProfileHistoryCard
-                description="Saved jobs and providers are marketplace activity, not profile data."
+                description="Saved jobs and providers are listed here so you can return to them later."
                 footerRight={`${savedItems.length} saved`}
                 meta="Saved content"
                 title="Saved items"
@@ -733,8 +733,8 @@ function HiringProfileContent({
         ) : (
           <EmptyProfilePanel
             icon="history"
-            message="Active job posts, drafts, completed hires, and saved content will appear here."
-            title="No marketplace activity yet"
+            message="Your job posts, drafts, completed hires, and saved items will appear here."
+            title="No job posts yet"
           />
         )}
       </ProfileSection>
