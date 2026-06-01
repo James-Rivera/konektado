@@ -39,7 +39,7 @@ Preferences are collected in [`app/(onboarding)/job.tsx`](C:\konektado\app\(onbo
 - The screen uses `MVP_SERVICE_OPTIONS` from the taxonomy file.
 - Provider-mode onboarding collects `offeredServices`.
 - Client-mode onboarding collects `neededServices`.
-- The screen helper already frames this as Home personalization: "Choose a few services so Home can show better jobs and workers first."
+- The client screen helper already frames this as Home personalization: "Choose a few services so Home can show better services first."
 
 ### What fields they are saved under
 
@@ -88,7 +88,7 @@ Yes, but only in a lightweight and generic way.
 - calls `getMyUserPreferences()`
 - uses `intent` to pick the default tab
 - combines all preference arrays into one normalized term list
-- scores jobs and workers by text inclusion against `scoreText`
+- scores jobs and service posts by text inclusion against `scoreText`
 - adds a tiny intent boost
 - adds a tiny location phrase boost
 - adds freshness
@@ -171,7 +171,7 @@ For MVP, resolve Home `For you` mode in this order:
 Recommended modes:
 
 - `provider` mode: prioritize jobs
-- `client` mode: prioritize workers/services
+- `client` mode: prioritize services
 - `mixed` mode: mix both with dynamic quotas
 
 This keeps onboarding intent useful while allowing current account mode to matter more once users actively use both sides of the marketplace.
@@ -196,12 +196,12 @@ Recommended ratio for `provider` mode:
 Reason:
 
 - Providers open Home to find work opportunities.
-- The dedicated `Workers` tab already covers worker/service browsing when needed.
+- The dedicated `Services` tab already covers service browsing when needed.
 - A provider-first `For you` feed should feel opportunity-first, not evenly mixed.
 
 ### For clients
 
-`For you` should primarily prioritize workers/services matching selected needed services.
+`For you` should primarily prioritize services matching selected needed services.
 
 Recommended behavior:
 
@@ -214,7 +214,7 @@ Recommended behavior:
 Recommended ratio for `client` mode:
 
 - Top 8 feed items: target around 6 worker/service cards, up to 2 job cards
-- If the user is clearly client-only, it is acceptable for `For you` to be almost entirely workers/services
+- If the user is clearly client-only, it is acceptable for `For you` to be almost entirely services
 
 Reason:
 

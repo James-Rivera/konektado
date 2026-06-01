@@ -63,14 +63,14 @@ This means Search chips are:
 - not driven by live popularity
 - not driven by onboarding preferences
 - not grouped by discovery intent
-- not mode-specific for Find Jobs vs Find Workers
+- not mode-specific for Find Jobs vs Find Services
 - not work-type-aware
 
 ### Whether Home/Search chip logic is shared
 
 It is not.
 
-- Home does not have service discovery chips. It only has `For you`, `Jobs`, and `Workers`.
+- Home has `For you`, `Jobs`, and `Services` quick tabs. Search still needs richer service discovery chips.
 - Search alone has the `Popular services` chip section.
 
 ### Whether onboarding preferences affect Search chips
@@ -108,7 +108,7 @@ Current Search screen usage:
 - only passes `text`
 - does not pass category/barangay filters
 
-#### Workers / services
+#### Services
 
 Source: `services/service-profile.service.ts`
 
@@ -208,7 +208,7 @@ One doc-only inconsistency remains:
 ### P2
 
 - Search chips are labeled `Popular services`, but they are not actually popularity-based.
-- Search chips are identical for Find Jobs and Find Workers even though those modes represent different intents.
+- Search chips are identical for Find Jobs and Find Services even though those modes represent different intents.
 
 ### P3
 
@@ -230,14 +230,14 @@ Behavior:
 - chip taps can still feed the search query
 - structured filters should refine results without replacing text search
 
-### Find Jobs / Find Workers
+### Find Jobs / Find Services
 
 Keep the current segmented control and active-mode-only fetching.
 
 Behavior:
 
 - Find Jobs should prioritize work opportunities
-- Find Workers should prioritize service providers
+- Find Services should prioritize service providers
 - discovery chips and filters should adapt to the active mode
 
 ### Browse by category
@@ -359,7 +359,7 @@ If product wants zero ambiguity, remove this category from Search discovery surf
 
 ### Recommendation
 
-Add one simple work-type filter for both Find Jobs and Find Workers:
+Add one simple work-type filter for both Find Jobs and Find Services:
 
 - `Physical / on-site`
 - `Digital / remote`
@@ -416,7 +416,7 @@ Recommended defaults:
 This should apply in both:
 
 - Find Jobs
-- Find Workers
+- Find Services
 
 Rationale:
 
@@ -439,7 +439,7 @@ If preferences exist:
 - show categories from the user’s matched groups first
 - use role-aware preference source:
   - Find Jobs uses `offered_services`
-  - Find Workers uses `needed_services`
+  - Find Services uses `needed_services`
 
 Example:
 
@@ -470,9 +470,9 @@ Recommended:
 - then specific services under the active group
 - prioritize physical/local group chips by default
 
-### What should show for Find Workers
+### What should show for Find Services
 
-Find Workers should prefer chips that represent the type of help needed from a provider.
+Find Services should prefer chips that represent the type of help needed from a provider.
 
 Recommended:
 
@@ -768,7 +768,7 @@ Why this is safe:
 - derive default work type
 - order groups/categories using:
   - `offered_services` for Find Jobs
-  - `needed_services` for Find Workers
+  - `needed_services` for Find Services
 
 Why this is safe:
 
@@ -808,7 +808,7 @@ Why this is safe:
 ### Digital-only discovery
 
 - onboarding/profile preferences favor digital services
-- open Search in Find Workers
+- open Search in Find Services
 - confirm grouped chips prioritize digital/document groups
 - confirm default work type is `Digital / remote`
 
@@ -826,10 +826,10 @@ Why this is safe:
 - confirm chips and filters affect job queries/results only
 - confirm job cards remain unchanged
 
-### Find Workers
+### Find Services
 
-- switch to Find Workers
-- confirm result fetch still loads workers/services only
+- switch to Find Services
+- confirm result fetch still loads services only
 - confirm chips and filters affect worker queries/results only
 - confirm worker cards remain unchanged
 

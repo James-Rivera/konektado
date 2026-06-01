@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
+import type { ReactNode } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -22,6 +23,7 @@ import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerShee
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
 import { RateRangeInput } from '@/components/RateRangeInput';
+import { Skeleton } from '@/components/Skeleton';
 import {
   getServiceTagsForCategory,
   SERVICE_POST_CATEGORIES,
@@ -44,6 +46,10 @@ const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'experienced', label: 'Experienced' },
 ];
 
+type ServiceDraftErrors = Partial<
+  Record<'category' | 'customCategory' | 'title' | 'description' | 'locationText' | 'rateMin', string>
+>;
+
 function parsePositiveNumber(value: string) {
   if (!value.trim()) return null;
   const parsed = Number(value.replace(/,/g, ''));
@@ -64,7 +70,7 @@ export default function CreateServiceScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const rateRangeOffsetRef = useRef<number | null>(null);
   const handledFocusRef = useRef(false);
-  const { profile, refresh } = useProfile();
+  const { profile, loading, refresh } = useProfile();
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [title, setTitle] = useState('');
@@ -82,20 +88,23 @@ export default function CreateServiceScreen() {
   const [allowMessages, setAllowMessages] = useState(true);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [autoPauseEnabled, setAutoPauseEnabled] = useState(false);
+  const [errors, setErrors] = useState<ServiceDraftErrors>({});
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
+  const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [loadingService, setLoadingService] = useState(Boolean(serviceId));
   const [savingService, setSavingService] = useState(false);
   const [photoFolderId] = useState(() => `service-draft-${Date.now()}`);
   const [locationBarangay, setLocationBarangay] = useState('Barangay San Pedro');
   const locationText = locationBarangay;
-  const tagOptions = getServiceTagsForCategory(category);
+  const tagOptions = useMemo(() => getServiceTagsForCategory(category), [category]);
+  const selectedTagsText = useMemo(() => tags.join(', '), [tags]);
   const serviceGroup = getCategoryForMvpService(category);
 
   const scrollToRateRange = useCallback(() => {
-    if (loadingService || focusTarget !== 'rate-range' || handledFocusRef.current) return;
+    if (loading || loadingService || focusTarget !== 'rate-range' || handledFocusRef.current) return;
     if (rateRangeOffsetRef.current === null) return;
 
     handledFocusRef.current = true;
@@ -105,7 +114,7 @@ export default function CreateServiceScreen() {
         y: Math.max(rateRangeOffsetRef.current! - space.md, 0),
       });
     });
-  }, [focusTarget, loadingService]);
+  }, [focusTarget, loading, loadingService]);
 
   useEffect(() => {
     handledFocusRef.current = false;
@@ -168,6 +177,11 @@ export default function CreateServiceScreen() {
     setCategory(value);
     setCustomCategory('');
     setTags([]);
+    setErrors((current) => ({ ...current, category: undefined, customCategory: undefined }));
+  };
+
+  const clearError = (key: keyof ServiceDraftErrors) => {
+    setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
   const toggleTag = (tag: string) => {
@@ -213,32 +227,27 @@ export default function CreateServiceScreen() {
       Alert.alert('Add Photos', 'Wait for the photos to finish uploading.');
       return;
     }
-    if (!category.trim()) {
-      Alert.alert('Choose a service', 'Pick one service category for this listing.');
-      return;
-    }
-    if (category === 'Other service' && !customCategory.trim()) {
-      Alert.alert('Specify service', 'Describe the service so barangay admins can review it.');
-      return;
-    }
-    if (!title.trim()) {
-      Alert.alert('Add a title', 'Enter a short title for this service listing.');
-      return;
-    }
-    if (!description.trim()) {
-      Alert.alert('Add service details', 'Describe what clients can expect from this service.');
-      return;
-    }
     const serviceInput = buildServiceInput();
+    const validation: ServiceDraftErrors = {};
+    if (!category.trim()) validation.category = 'Choose a service.';
+    if (category === 'Other service' && !customCategory.trim()) {
+      validation.customCategory = 'Describe the service so barangay admins can review it.';
+    }
+    if (!title.trim()) validation.title = 'Enter a short service title.';
+    if (!description.trim()) validation.description = 'Describe what clients can expect from this service.';
+    if (!locationText.trim()) validation.locationText = 'Choose a barangay.';
+
     const rateRange = validateRateRange({
       min: serviceInput.rateMin,
       max: serviceInput.rateMax,
       rateType,
     });
     if (!rateRange.valid) {
-      Alert.alert('Rate range', rateRange.error ?? 'Enter a valid rate range.');
-      return;
+      validation.rateMin = rateRange.error ?? 'Enter a valid rate range.';
     }
+    setErrors(validation);
+
+    if (Object.keys(validation).length) return;
 
     if (serviceId) {
       setSavingService(true);
@@ -294,12 +303,17 @@ export default function CreateServiceScreen() {
     });
   };
 
-  if (loadingService) {
+  if (loading || loadingService) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-        <View style={styles.loadingWrap}>
-          <Text style={styles.loadingText}>Loading service...</Text>
+        <View style={styles.header}>
+          <View style={{ width: 24, height: 24 }} />
+          <Skeleton height={20} width={100} />
+          <View style={{ width: 24, height: 24 }} />
         </View>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <CreateServiceSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -318,267 +332,342 @@ export default function CreateServiceScreen() {
           <Text style={styles.headerTitle}>{serviceId ? 'Edit service' : 'New service post'}</Text>
           <Pressable
             accessibilityRole="button"
-            disabled={savingService}
+            disabled={savingService || uploadingPhotos}
             onPress={onNext}
-            style={({ pressed }) => [savingService && styles.disabled, pressed && !savingService && styles.pressed]}>
+            style={({ pressed }) => [
+              (savingService || uploadingPhotos) && styles.disabled,
+              pressed && !savingService && !uploadingPhotos && styles.pressed,
+            ]}>
             <Text style={styles.headerAction}>
-              {savingService ? 'Saving...' : serviceId ? 'Save' : 'Next'}
+              {uploadingPhotos ? 'Uploading...' : savingService ? 'Saving...' : serviceId ? 'Save' : 'Next'}
             </Text>
           </Pressable>
         </View>
 
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <CurrentUserIdentityRow subtitle={serviceId ? 'Editing a service post' : 'Creating a service post'} />
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <Section
+            helper="Start with one clear service clients can find and understand quickly."
+            title="What service do you offer?">
+            <CurrentUserIdentityRow subtitle={serviceId ? 'Editing a service post' : 'Creating a service post'} />
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Service</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setServicePickerVisible(true)}
-              style={({ pressed }) => [styles.selectBox, pressed && styles.pressed]}>
-              <Text style={[styles.selectText, !category && styles.placeholderText]} numberOfLines={1}>
-                {category || 'Choose a service'}
-              </Text>
-              <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
-            </Pressable>
-            <Text style={styles.helperText}>One service per post. You can create another post for a different service.</Text>
-            {serviceGroup ? <Text style={styles.helperText}>Category: {serviceGroup}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => selectCategory('Other service')}
-              style={({ pressed }) => [
-                styles.chip,
-                category === 'Other service' && styles.chipActive,
-                pressed && styles.pressed,
-              ]}>
-              <Text style={[styles.chipText, category === 'Other service' && styles.chipTextActive]}>
-                Others / Specify
-              </Text>
-            </Pressable>
-            {category === 'Other service' ? (
-              <Field
-                label="Specify service"
-                onChangeText={setCustomCategory}
-                placeholder="Example: Bicycle repair"
-                value={customCategory}
-              />
-            ) : null}
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Tags</Text>
-            <Text style={styles.helperText}>Add up to 4 tags to help people find this service.</Text>
-            {tagOptions.length ? (
-              <View style={styles.chipWrap}>
-                {tagOptions.map((tag) => {
-                  const active = tags.includes(tag);
-                  return (
+            {photoUrls.length ? (
+              <View style={[styles.photoCard, uploadingPhotos && styles.disabled]}>
+                <ScrollView horizontal contentContainerStyle={styles.photoStrip} showsHorizontalScrollIndicator={false}>
+                  {photoUrls.map((url, index) => (
+                    <View key={`${url}-${index}`} style={styles.photoTile}>
+                      <CachedRemoteImage uri={url} style={styles.photoThumb} />
+                      <Pressable
+                        accessibilityLabel={`Remove photo ${index + 1}`}
+                        accessibilityRole="button"
+                        onPress={() => setPhotoUrls((current) => current.filter((item) => item !== url))}
+                        style={({ pressed }) => [styles.photoRemoveButton, pressed && styles.pressed]}>
+                        <MaterialIcons color={color.white} name="close" size={14} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  {photoUrls.length < MAX_SERVICE_PHOTOS ? (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      key={tag}
-                      onPress={() => toggleTag(tag)}
-                      style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}>
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{tag}</Text>
+                      disabled={uploadingPhotos}
+                      onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, photoFolderId)}
+                      style={({ pressed }) => [
+                        styles.photoAddTile,
+                        pressed && !uploadingPhotos && styles.pressed,
+                        uploadingPhotos && styles.disabled,
+                      ]}>
+                      <MaterialIcons color={color.verificationBlue} name="add" size={22} />
+                      <Text style={styles.photoAddText}>Add more</Text>
                     </Pressable>
-                  );
-                })}
+                  ) : null}
+                </ScrollView>
+                <Text style={styles.photoCountText}>
+                  {uploadingPhotos ? 'Uploading photos...' : `${photoUrls.length}/10 photos added`}
+                </Text>
               </View>
             ) : (
-              <View
-                accessibilityLabel="Select a service to show available tags"
-                accessibilityRole="text"
-                style={styles.tagEmptyBox}>
-                <View style={styles.tagEmptyIcon}>
-                  <MaterialIcons color={color.textSubtle} name="local-offer" size={18} />
+              <Pressable
+                accessibilityRole="button"
+                disabled={uploadingPhotos}
+                onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, photoFolderId)}
+                style={({ pressed }) => [
+                  styles.photoCard,
+                  styles.photoCardEmpty,
+                  pressed && !uploadingPhotos && styles.pressed,
+                  uploadingPhotos && styles.disabled,
+                ]}>
+                <View style={styles.photoIcon}>
+                  <MaterialIcons color={color.verificationBlue} name="add-to-photos" size={22} />
                 </View>
-                <Text style={styles.tagEmptyText}>Select a service to show available tags</Text>
-              </View>
+                <Text style={styles.photoTitle}>{uploadingPhotos ? 'Uploading Photos' : 'Add Photos'}</Text>
+              </Pressable>
             )}
-          </View>
+            <Text style={styles.helperText}>
+              <Text style={styles.helperStrong}>Optional</Text>, but photos help clients understand your past work.
+            </Text>
 
-          {photoUrls.length ? (
-            <View style={[styles.photoCard, uploadingPhotos && styles.disabled]}>
-              <ScrollView horizontal contentContainerStyle={styles.photoStrip} showsHorizontalScrollIndicator={false}>
-                {photoUrls.map((url, index) => (
-                  <View key={`${url}-${index}`} style={styles.photoTile}>
-                    <CachedRemoteImage uri={url} style={styles.photoThumb} />
-                    <Pressable
-                      accessibilityLabel={`Remove photo ${index + 1}`}
-                      accessibilityRole="button"
-                      onPress={() => setPhotoUrls((current) => current.filter((item) => item !== url))}
-                      style={({ pressed }) => [styles.photoRemoveButton, pressed && styles.pressed]}>
-                      <MaterialIcons color={color.white} name="close" size={14} />
-                    </Pressable>
-                  </View>
-                ))}
-                {photoUrls.length < MAX_SERVICE_PHOTOS ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={uploadingPhotos}
-                    onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, photoFolderId)}
-                    style={({ pressed }) => [
-                      styles.photoAddTile,
-                      pressed && !uploadingPhotos && styles.pressed,
-                      uploadingPhotos && styles.disabled,
-                    ]}>
-                    <MaterialIcons color={color.verificationBlue} name="add" size={22} />
-                    <Text style={styles.photoAddText}>Add more</Text>
-                  </Pressable>
-                ) : null}
-              </ScrollView>
-              <Text style={styles.photoCountText}>
-                {uploadingPhotos ? 'Uploading photos...' : `${photoUrls.length}/10 photos added`}
-              </Text>
+            <View style={styles.group}>
+              <Text style={styles.label}>Service</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setServicePickerVisible(true)}
+                style={({ pressed }) => [
+                  styles.selectBox,
+                  errors.category && styles.inputErrorBorder,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.selectText, !category && styles.placeholderText]} numberOfLines={1}>
+                  {category || 'Choose a service'}
+                </Text>
+                <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+              </Pressable>
+              <Text style={styles.smallHelper}>One service per post. Create another post for a different service.</Text>
+              {serviceGroup ? <Text style={styles.smallHelper}>Category: {serviceGroup}</Text> : null}
+              <FieldError message={errors.category} />
             </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              disabled={uploadingPhotos}
-              onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, photoFolderId)}
-              style={({ pressed }) => [
-                styles.photoCard,
-                styles.photoCardEmpty,
-                pressed && !uploadingPhotos && styles.pressed,
-                uploadingPhotos && styles.disabled,
-              ]}>
-              <View style={styles.photoIcon}>
-                <MaterialIcons color={color.verificationBlue} name="add-to-photos" size={22} />
-              </View>
-              <Text style={styles.photoTitle}>{uploadingPhotos ? 'Uploading Photos' : 'Add Photos'}</Text>
-            </Pressable>
-          )}
-          <Text style={styles.helperText}>
-            <Text style={styles.helperStrong}>Optional.</Text> Add up to 10 photos to show your past work.
-          </Text>
 
-          <Field
-            label="Service title"
-            onChangeText={setTitle}
-            placeholder="e.g. Home cleaning help"
-            value={title}
-          />
-        <Field
-          label="Description"
-          multiline
-          onChangeText={setDescription}
-          placeholder="Describe your service, tools, and experience"
-          value={description}
-        />
-        <Field
-          label="Availability"
-          onChangeText={setAvailability}
-          placeholder="e.g. Weekends, afternoons"
-          value={availability}
-        />
+            <View style={styles.group}>
+              <Text style={styles.label}>Not listed?</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: category === 'Other service' }}
+                onPress={() => selectCategory('Other service')}
+                style={({ pressed }) => [
+                  styles.chip,
+                  category === 'Other service' && styles.chipActive,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.chipText, category === 'Other service' && styles.chipTextActive]}>
+                  Others / Specify
+                </Text>
+              </Pressable>
+              {category === 'Other service' ? (
+                <Field
+                  error={errors.customCategory}
+                  helperText="Custom services may be reviewed before they are shown widely."
+                  label="Specify service"
+                  onChangeText={(value) => {
+                    setCustomCategory(value);
+                    clearError('customCategory');
+                  }}
+                  placeholder="Example: Bicycle repair"
+                  value={customCategory}
+                />
+              ) : null}
+            </View>
+
+            <Field
+              error={errors.title}
+              label="Service title"
+              onChangeText={(value) => {
+                setTitle(value);
+                clearError('title');
+              }}
+              placeholder="Example: Home cleaning help"
+              value={title}
+            />
+          </Section>
+
+          <Section
+            helper="Explain what clients can expect before they message you."
+            title="Service details">
+            <Field
+              error={errors.description}
+              label="Description"
+              multiline
+              onChangeText={(value) => {
+                setDescription(value);
+                clearError('description');
+              }}
+              placeholder="Describe your service, tools, and experience"
+              value={description}
+            />
+            <View style={styles.group}>
+              <Text style={styles.label}>Helpful tags</Text>
+              <Text style={styles.smallHelper}>Choose up to 4 tags to help clients understand this service.</Text>
+              {tagOptions.length ? (
+                <View style={styles.chipWrap}>
+                  {tagOptions.map((tag) => {
+                    const active = tags.includes(tag);
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        key={tag}
+                        onPress={() => toggleTag(tag)}
+                        style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{tag}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View
+                  accessibilityLabel="Select a service to show available tags"
+                  accessibilityRole="text"
+                  style={styles.tagEmptyBox}>
+                  <View style={styles.tagEmptyIcon}>
+                    <MaterialIcons color={color.textSubtle} name="local-offer" size={18} />
+                  </View>
+                  <Text style={styles.tagEmptyText}>Choose a service to see helpful tags.</Text>
+                </View>
+              )}
+              <Text style={styles.smallHelper}>{selectedTagsText || 'No helpful tags added yet'}</Text>
+            </View>
+          </Section>
+
+          <Section
+            helper="Tell clients when you can help and the barangay you serve."
+            title="Availability and location">
+            <Field
+              helperText="Keep this short and practical so clients know when to message."
+              label="Availability"
+              onChangeText={setAvailability}
+              placeholder="Example: Weekends and weekday afternoons"
+              value={availability}
+            />
+            <View style={styles.group}>
+              <Text style={styles.label}>Barangay / general location</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setBarangayPickerVisible(true)}
+                style={({ pressed }) => [
+                  styles.selectBox,
+                  errors.locationText && styles.inputErrorBorder,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.selectText, !locationText && styles.placeholderText]} numberOfLines={1}>
+                  {locationText || 'Choose barangay'}
+                </Text>
+                <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+              </Pressable>
+              <Text style={styles.smallHelper}>Only your barangay is shown publicly.</Text>
+              <FieldError message={errors.locationText} />
+            </View>
+            <LocationMapPreview />
+          </Section>
+
           <View
             onLayout={(event) => {
               rateRangeOffsetRef.current = event.nativeEvent.layout.y;
               scrollToRateRange();
             }}>
-            <RateRangeInput
-              label="Rate range"
-              maxValue={rateMax}
-              minValue={rateMin}
-              negotiable={rateNegotiable}
-              onMaxChange={setRateMax}
-              onMinChange={setRateMin}
-              onNegotiableChange={setRateNegotiable}
-              onRateTypeChange={setRateType}
-              previewPrefix="Service rate"
-              rateType={rateType}
-            />
+            <Section
+              helper="Set a clear rate range. Final details can still be discussed in Messages."
+              title="Pricing and negotiation">
+              <RateRangeInput
+                error={errors.rateMin}
+                label="Rate range"
+                maxValue={rateMax}
+                minValue={rateMin}
+                negotiable={rateNegotiable}
+                onMaxChange={(value) => {
+                  setRateMax(value);
+                  clearError('rateMin');
+                }}
+                onMinChange={(value) => {
+                  setRateMin(value);
+                  clearError('rateMin');
+                }}
+                onNegotiableChange={setRateNegotiable}
+                onRateTypeChange={setRateType}
+                previewPrefix="Service rate"
+                rateType={rateType}
+              />
+              <Field
+                helperText="Optional. Mention useful details such as supplies or materials."
+                label="Rate note"
+                onChangeText={setRate}
+                placeholder="Example: Cleaning supplies included"
+                value={rate}
+              />
+            </Section>
           </View>
-          <Field
-            label="Rate note"
-            onChangeText={setRate}
-            placeholder="Optional note, e.g. supplies included"
-            value={rate}
-          />
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Experience level</Text>
-            <View style={styles.chipWrap}>
-              {EXPERIENCE_OPTIONS.map((option) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: experienceLevel === option.value }}
-                  key={option.value}
-                  onPress={() => setExperienceLevel(option.value)}
-                  style={({ pressed }) => [
-                    styles.chip,
-                    experienceLevel === option.value && styles.chipActive,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text style={[styles.chipText, experienceLevel === option.value && styles.chipTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          <ToggleRow
-            description="Only safe certificate metadata is shown publicly. Uploaded documents stay private."
-            label="Certification available"
-            onValueChange={setCertificationAvailable}
-            value={certificationAvailable}
-          />
-          {certificationAvailable ? (
-            <Field
-              label="Certification note"
-              onChangeText={setCertificationNote}
-              placeholder="Example: TESDA certificate available for admin review"
-              value={certificationNote}
-            />
-          ) : null}
 
-          <View style={styles.sectionBand}>
-            <View style={styles.rowBetween}>
-              <View style={styles.flex}>
-                <Text style={styles.sectionTitle}>Barangay</Text>
-                <Text style={styles.helperText}>Only your barangay will be shown publicly.</Text>
-              </View>
-            </View>
+          <Section
+            helper="Add optional details only when they help clients decide."
+            title="Additional details">
             <Pressable
               accessibilityRole="button"
-              onPress={() => setBarangayPickerVisible(true)}
-              style={({ pressed }) => [styles.selectBox, pressed && styles.pressed]}>
-              <Text style={[styles.selectText, !locationText && styles.placeholderText]} numberOfLines={1}>
-                {locationText || 'Choose barangay'}
-              </Text>
-              <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+              accessibilityState={{ expanded: moreOptionsVisible }}
+              onPress={() => setMoreOptionsVisible((visible) => !visible)}
+              style={({ pressed }) => [styles.moreOptionsButton, pressed && styles.pressed]}>
+              <View style={styles.flex}>
+                <Text style={styles.moreOptionsTitle}>More options</Text>
+                <Text style={styles.smallHelper}>Experience, certificates, and message settings.</Text>
+              </View>
+              <MaterialIcons
+                color={color.verificationBlue}
+                name={moreOptionsVisible ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={24}
+              />
             </Pressable>
-            <LocationMapPreview />
-          </View>
 
-          <View style={styles.sectionBand}>
-            <Text style={styles.sectionTitle}>Listing Options</Text>
-            <Text style={styles.helperText}>Control how residents can respond to this listing.</Text>
-            <ToggleRow
-              description="Let verified residents contact you from this service listing."
-              label="Allow messages"
-              onValueChange={setAllowMessages}
-              value={allowMessages}
-            />
-            <ToggleRow
-              description="Send a quick reply when someone messages from this listing."
-              label="Auto-reply"
-              onValueChange={setAutoReplyEnabled}
-              value={autoReplyEnabled}
-            />
-            <ToggleRow
-              description="Pause this listing when you are no longer available."
-              label="Pause listing when unavailable"
-              onValueChange={setAutoPauseEnabled}
-              value={autoPauseEnabled}
-            />
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
-          </Pressable>
+            {moreOptionsVisible ? (
+              <View style={styles.moreOptionsContent}>
+                <View style={styles.group}>
+                  <Text style={styles.label}>Experience level</Text>
+                  <View style={styles.chipWrap}>
+                    {EXPERIENCE_OPTIONS.map((option) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: experienceLevel === option.value }}
+                        key={option.value}
+                        onPress={() => setExperienceLevel(option.value)}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          experienceLevel === option.value && styles.chipActive,
+                          pressed && styles.pressed,
+                        ]}>
+                        <Text style={[styles.chipText, experienceLevel === option.value && styles.chipTextActive]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <ToggleRow
+                  description="Only safe certificate details are shown publicly. Uploaded documents stay private."
+                  label="Certification available"
+                  onValueChange={setCertificationAvailable}
+                  value={certificationAvailable}
+                />
+                {certificationAvailable ? (
+                  <Field
+                    label="Certification note"
+                    onChangeText={setCertificationNote}
+                    placeholder="Example: TESDA certificate available for admin review"
+                    value={certificationNote}
+                  />
+                ) : null}
+                <View style={styles.optionsGroup}>
+                  <Text style={styles.optionsTitle}>Listing options</Text>
+                  <Text style={styles.smallHelper}>Control how residents can respond to this service post.</Text>
+                  <ToggleRow
+                    description="Let verified residents contact you from this service post."
+                    label="Allow messages"
+                    onValueChange={setAllowMessages}
+                    value={allowMessages}
+                  />
+                  <ToggleRow
+                    description="Send a quick reply when someone messages from this post."
+                    label="Auto-reply"
+                    onValueChange={setAutoReplyEnabled}
+                    value={autoReplyEnabled}
+                  />
+                  <ToggleRow
+                    description="Pause this post when you are no longer available."
+                    label="Pause post when unavailable"
+                    onValueChange={setAutoPauseEnabled}
+                    value={autoPauseEnabled}
+                  />
+                </View>
+              </View>
+            ) : null}
+          </Section>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -597,7 +686,10 @@ export default function CreateServiceScreen() {
       <BarangayPickerSheet
         description="Only your barangay is shown publicly."
         onClose={() => setBarangayPickerVisible(false)}
-        onSelect={setLocationBarangay}
+        onSelect={(value) => {
+          setLocationBarangay(value);
+          clearError('locationText');
+        }}
         options={['Barangay San Pedro']}
         searchPlaceholder="Search barangay"
         selectedValue={locationText}
@@ -658,8 +750,30 @@ function hydrateService(
   setters.setLocationBarangay(service.locationText ?? service.barangay ?? 'Barangay San Pedro');
 }
 
+function Section({
+  children,
+  helper,
+  title,
+}: {
+  children: ReactNode;
+  helper?: string;
+  title: string;
+}) {
+  return (
+    <View style={styles.sectionBand}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {helper ? <Text style={styles.sectionHelper}>{helper}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 function Field({
   compact,
+  error,
+  helperText,
   keyboardType,
   label,
   multiline,
@@ -668,6 +782,8 @@ function Field({
   value,
 }: {
   compact?: boolean;
+  error?: string;
+  helperText?: string;
   keyboardType?: 'default' | 'numeric';
   label: string;
   multiline?: boolean;
@@ -676,18 +792,73 @@ function Field({
   value: string;
 }) {
   return (
-    <View style={[styles.fieldGroup, compact && styles.flex]}>
+    <View style={[styles.group, compact && styles.flex]}>
       <Text style={styles.label}>{label}</Text>
+      {helperText ? <Text style={styles.smallHelper}>{helperText}</Text> : null}
       <TextInput
         keyboardType={keyboardType}
         multiline={multiline}
         onChangeText={onChangeText}
         placeholderTextColor="#AFAFAF"
         placeholder={placeholder}
-        style={[styles.input, compact && styles.compactInput, multiline && styles.multiline]}
+        style={[
+          styles.input,
+          compact && styles.compactInput,
+          multiline && styles.multiline,
+          error && styles.inputErrorBorder,
+        ]}
+        textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />
+      <FieldError message={error} />
     </View>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <Text style={styles.errorText}>{message}</Text>;
+}
+
+function CreateServiceSkeleton() {
+  return (
+    <>
+      <View style={styles.sectionBand}>
+        <View style={styles.sectionHeader}>
+          <Skeleton height={15} width={176} />
+          <Skeleton height={10} width="86%" />
+        </View>
+        <View style={styles.userRowSkeleton}>
+          <Skeleton height={46} width={46} borderRadius={radius.pill} />
+          <View style={styles.userCopySkeleton}>
+            <Skeleton height={16} width="52%" />
+            <Skeleton height={12} width="38%" />
+          </View>
+        </View>
+        <View style={styles.photoCard}>
+          <Skeleton height={42} width={42} borderRadius={radius.pill} />
+          <Skeleton height={16} width={88} />
+        </View>
+        <Skeleton height={11} width="84%" />
+        {Array.from({ length: 2 }).map((_, index) => (
+          <View key={index} style={styles.group}>
+            <Skeleton height={14} width={index ? 88 : 58} />
+            <Skeleton height={46} width="100%" borderRadius={radius.md} />
+          </View>
+        ))}
+      </View>
+
+      {Array.from({ length: 4 }).map((_, sectionIndex) => (
+        <View key={sectionIndex} style={styles.sectionBand}>
+          <View style={styles.sectionHeader}>
+            <Skeleton height={15} width={sectionIndex === 0 ? 112 : 164} />
+            <Skeleton height={10} width="78%" />
+          </View>
+          <Skeleton height={sectionIndex === 0 ? 100 : 46} width="100%" borderRadius={radius.md} />
+          {sectionIndex < 3 ? <Skeleton height={46} width="100%" borderRadius={radius.md} /> : null}
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -793,12 +964,11 @@ const styles = StyleSheet.create({
     color: color.verificationBlue,
   },
   content: {
-    gap: space.lg,
     paddingHorizontal: space.xl,
     paddingTop: space.md,
     paddingBottom: space['3xl'],
   },
-  fieldGroup: {
+  group: {
     gap: space.sm,
   },
   twoColumn: {
@@ -829,7 +999,11 @@ const styles = StyleSheet.create({
     color: '#AFAFAF',
   },
   helperText: {
-    ...typography.caption,
+    ...typography.tiny,
+    color: color.textMuted,
+  },
+  smallHelper: {
+    ...typography.tiny,
     color: color.textMuted,
   },
   helperStrong: {
@@ -993,8 +1167,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   multiline: {
-    minHeight: 100,
+    minHeight: 123,
     textAlignVertical: 'top',
+  },
+  inputErrorBorder: {
+    borderColor: color.danger,
+  },
+  errorText: {
+    ...typography.caption,
+    color: color.danger,
+    marginTop: space.xs,
   },
   sectionBand: {
     borderTopColor: color.border,
@@ -1003,6 +1185,14 @@ const styles = StyleSheet.create({
     marginHorizontal: -space.xl,
     paddingHorizontal: space.xl,
     paddingVertical: space.lg,
+  },
+  sectionHeader: {
+    gap: space['2xs'],
+    marginBottom: space.xs,
+  },
+  sectionHelper: {
+    ...typography.caption,
+    color: color.textMuted,
   },
   rowBetween: {
     alignItems: 'center',
@@ -1014,6 +1204,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  moreOptionsButton: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    justifyContent: 'space-between',
+    minHeight: 54,
+    padding: space.md,
+  },
+  moreOptionsContent: {
+    gap: space.md,
+  },
+  moreOptionsTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  optionsGroup: {
+    gap: space.md,
+  },
+  optionsTitle: {
     ...typography.bodyMedium,
     color: color.text,
   },
@@ -1081,6 +1296,15 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.6,
+  },
+  userRowSkeleton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.md,
+  },
+  userCopySkeleton: {
+    flex: 1,
+    gap: space['2xs'],
   },
   loadingWrap: {
     alignItems: 'center',

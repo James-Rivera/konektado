@@ -7,7 +7,7 @@ type SearchBarProps = TextInputProps & {
   compact?: boolean;
 };
 
-export function SearchBar({ compact = false, placeholder = 'Search nearby jobs or workers', ...props }: SearchBarProps) {
+export function SearchBar({ compact = false, placeholder = 'Search nearby jobs or services', ...props }: SearchBarProps) {
   return (
     <View style={[styles.container, compact && styles.compact]}>
       <MaterialIcons color={color.textSubtle} name="search" size={20} />

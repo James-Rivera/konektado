@@ -333,7 +333,7 @@ Onboarding:
 Home:
 
 - Confirm default filter matches onboarding intent.
-- Switch For you / Jobs / Workers.
+- Switch For you / Jobs / Services.
 - Scroll a long feed.
 - Confirm bottom tab does not cover last item.
 - Confirm unverified setup/verification banner state.
@@ -341,7 +341,7 @@ Home:
 Search:
 
 - Type quickly and slowly; confirm debounce and stale results.
-- Switch Jobs/Workers.
+- Switch Jobs/Services.
 - Use service chips.
 - Scroll down and confirm search controls collapse while the result header remains sticky.
 - Scroll back to the top and confirm search controls reappear.

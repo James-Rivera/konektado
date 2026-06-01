@@ -13,16 +13,16 @@ Recently completed work:
 - Onboarding completion is based on `user_preferences.onboarding_completed_at` plus basic profile identity.
 - Home's initial filter comes from `user_preferences.intent`:
   - `provider` -> Jobs
-  - `client` -> Workers
+  - `client` -> Services
   - `both` or missing -> For you
 - Dashboard/Home has been rebuilt closer to Figma:
   - Konektado wordmark and notification button in the top header.
-  - For you, Jobs, Workers filters.
+  - For you, Jobs, Services filters.
   - Verification/setup banner for unverified users.
   - Latest in your barangay feed section.
   - Mixed worker/job cards.
 - Search is now a main bottom-navigation tab between Home and Post:
-  - Search owns the prominent "Search nearby jobs or workers" input.
+  - Search owns the prominent "Search nearby jobs or services" input.
   - Home keeps feed filter pills instead of a large persistent search bar.
   - Search uses specialized job and worker result cards.
 - `KonektadoWordmark` is now shared from `components/KonektadoWordmark.tsx` and reused by onboarding/auth/dashboard.
@@ -158,8 +158,8 @@ Current context:
 - Use Services in UI, not Skills.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.
 - Verification gates posting, messaging, saving if enabled, and reviews.
-- Home/Dashboard is currently a Figma-style static/demo mixed jobs/workers feed.
-- Home initial filter uses onboarding intent: provider -> Jobs, client -> Workers, both/missing -> For you.
+- Home/Dashboard is currently a Figma-style static/demo mixed jobs/services feed.
+- Home initial filter uses onboarding intent: provider -> Jobs, client -> Services, both/missing -> For you.
 - Konektado uses Satoshi only.
 - Do not start the Expo dev server automatically; I will run Expo manually.
 

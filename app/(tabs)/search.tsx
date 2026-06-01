@@ -64,7 +64,7 @@ function getParamValue(value: string | string[] | undefined) {
 }
 
 function getInitialMode(filterParam: string | undefined): SearchMode {
-  if (filterParam === 'Workers') return 'workers';
+  if (filterParam === 'Services' || filterParam === 'Workers') return 'workers';
   return 'jobs';
 }
 
@@ -885,7 +885,7 @@ export default function SearchScreen() {
           actions={searchActions}
           onClose={() => setActionsTarget(null)}
           subtitle={actionsTarget?.title}
-          title={actionsTarget?.type === 'job' ? 'Job options' : 'Worker options'}
+          title={actionsTarget?.type === 'job' ? 'Job options' : 'Service options'}
           visible={Boolean(actionsTarget)}
         />
         <ReportSheet
@@ -988,10 +988,10 @@ function getSearchResultsHeading({
     : query.trim();
 
   if (subject) {
-    return `Showing ${subject.toLowerCase()} ${mode === 'jobs' ? 'jobs' : 'workers'} near you`;
+    return `Showing ${subject.toLowerCase()} ${mode === 'jobs' ? 'jobs' : 'services'} near you`;
   }
 
-  return mode === 'jobs' ? 'Showing jobs near you' : 'Showing workers near you';
+  return mode === 'jobs' ? 'Showing jobs near you' : 'Showing services near you';
 }
 
 function normalizeSearchText(value: string) {

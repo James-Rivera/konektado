@@ -135,7 +135,7 @@ Worker details should be person-first:
 
 ## Problem
 
-The current `For you` feed appears visibly grouped by type, such as jobs first and workers second. That makes the feed feel artificial and redundant because dedicated Jobs and Workers filters already exist.
+The current `For you` feed appears visibly grouped by type, such as jobs first and services second. That makes the feed feel artificial and redundant because dedicated Jobs and Services filters already exist.
 
 ## Required behavior
 
@@ -154,9 +154,9 @@ Preferred ranking inputs:
 
 If full recommendation logic is not yet ready, use a simple scored mix:
 
-1. Score jobs and workers based on the current user's onboarding intent and service preferences.
+1. Score jobs and services based on the current user's onboarding intent and service preferences.
 2. Sort by score and freshness.
-3. Interleave result types so the list does not always show all jobs first and all workers second.
+3. Interleave result types so the list does not always show all jobs first and all services second.
 
 Do not use pure random ordering as the main strategy. Random can be used only as a small diversity factor.
 
@@ -223,7 +223,7 @@ Avoid seeded values that read like internal placeholders:
 - Preserve the established card layout where possible; update the meaning of the metadata first.
 - Do not invent Upwork-style application flows. Keep Messages as the main coordination path.
 - Use ratings, review counts, jobs done, and relevance reasons as the main card-supporting signals.
-- Keep Home, Jobs, and Workers distinct:
+- Keep Home, Jobs, and Services distinct:
   - `For you` is mixed and relevance-driven.
   - `Jobs` is job-only.
-  - `Workers` is worker-only.
+  - `Services` is service-post-only.

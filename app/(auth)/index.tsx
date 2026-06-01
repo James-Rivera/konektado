@@ -42,7 +42,7 @@ const INTRO_SLIDES = [
   },
   {
     title: 'Find help or offer services.',
-    subtitle: 'Browse verified jobs and workers, then verify to connect.',
+    subtitle: 'Browse verified jobs and services, then verify to connect.',
     source: require('../../assets/images/onboarding-intro-3-figma.jpg'),
     darkness: 0.32,
   },

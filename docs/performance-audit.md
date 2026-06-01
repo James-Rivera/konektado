@@ -54,7 +54,7 @@ Current status note: the root-cause sections below are the original audit baseli
 - Open Home cold and confirm text/card content appears before slow images finish.
 - Switch Home -> Search -> Messages -> Home repeatedly; Home should keep existing feed content instead of flashing a full feed reload within the cache window.
 - Scroll an image-heavy Home feed on 360x800, 390x844, and 430x932.
-- Open Search Workers with profile photos, scroll quickly, and confirm avatars fade in or fall back without blocking card text.
+- Open Search Services with profile photos, scroll quickly, and confirm avatars fade in or fall back without blocking card text.
 - Open Job Detail with a photo and poster avatar, then return and reopen; cached images should be faster.
 - Open Messages and a conversation with avatars; switch away and back repeatedly and confirm no duplicate realtime behavior or visual slowdown.
 - Test a broken/slow avatar URL and confirm initials/fallbacks remain visible.
@@ -62,7 +62,7 @@ Current status note: the root-cause sections below are the original audit baseli
 The main performance problems are not caused by one single slow screen. They come from a few repeated patterns:
 
 - Messaging uses optimistic local sends, but message fetching and conversation preview reconciliation are incomplete. There is no realtime subscription for `messages` or `conversations`, incoming messages do not update while a screen stays mounted, and preview updates only cover conversations already in local memory.
-- Home tab switching does not refetch from Supabase, so the slow "For you", "Jobs", and "Workers" feeling is more likely render work: unbounded loaded arrays, repeated sorting/scoring, `ScrollView` rendering, image-heavy cards, and broad re-renders.
+- Home tab switching does not refetch from Supabase, so the slow "For you", "Jobs", and "Services" feeling is more likely render work: unbounded loaded arrays, repeated sorting/scoring, `ScrollView` rendering, image-heavy cards, and broad re-renders.
 - Search does refetch too often. It runs both job and service searches on every query/chip change, with no debounce, no server-side text filtering, no limits, and a full skeleton replacement.
 - The data layer overfetches and then filters/transforms in JavaScript. The services load all open jobs or active services, then fetch profiles and stats with extra queries.
 - Profile state is polled independently by the root guard and by every screen that calls `useProfile`, creating recurring background Supabase work.
@@ -76,7 +76,7 @@ This report is documentation only. It does not change app behavior.
 - Some screens show skeletons when they could instead feel instant: confirmed. Starting a job/service conversation already returns a full conversation detail, but the app navigates with only the id and the conversation screen immediately refetches and shows a full skeleton. Search also replaces existing results with skeletons during each query refresh.
 - Sending a message may not immediately appear in the UI: partially confirmed. The conversation screen does optimistically append outgoing messages before the network request, so optimistic UI is present. However, overlapping sends can be overwritten by the post-send full refetch, and the initial message sent by `startJobConversation` or `startServiceConversation` is not emitted into the preview cache before navigation.
 - The conversation/message preview may not immediately show the latest sent message: confirmed. The preview event system is local-only, only updates existing cached conversations, does not subscribe to Supabase changes, and can leave failed local sends as the preview until a refetch.
-- Switching between "For You", "Jobs", and "Workers" feels slow: confirmed as a rendering/data-size issue, not a tab-refetch issue. The Home filter switch only changes local state and recomputes the feed; it does not call Supabase.
+- Switching between "For You", "Jobs", and "Services" feels slow: confirmed as a rendering/data-size issue, not a tab-refetch issue. The Home filter switch only changes local state and recomputes the feed; it does not call Supabase.
 - Some parts of the app feel slower than expected: confirmed. Search overfetches and refetches too often, marketplace services do client-side filtering/stat joins, lists use `ScrollView` instead of virtualized lists, and profile hooks poll repeatedly.
 
 ## Root Cause Ranking
@@ -144,7 +144,7 @@ This report is documentation only. It does not change app behavior.
 
 #### Issue 6: Home filter switching re-renders non-virtualized feed content
 
-- Problem: Switching "For you", "Jobs", and "Workers" feels slow even though it does not refetch.
+- Problem: Switching "For you", "Jobs", and "Services" feels slow even though it does not refetch.
 - Confirmed root cause: The tab switch recomputes a sorted/mixed feed and renders all cards through a `ScrollView`. Home has no `FlatList`, pagination, or virtualization for feed results.
 - Evidence from code: `app/(tabs)/index.tsx:372-382` recomputes `feed`; `app/(tabs)/index.tsx:457-497` renders a `ScrollView` and maps every `feed` item; `app/(tabs)/index.tsx:121-158` repeatedly scores/sorts and uses array shifting for For You mixing.
 - Affected files: `app/(tabs)/index.tsx`, `components/home/HomeFeedCard.tsx`.
@@ -387,7 +387,7 @@ Finding: Preview updates do not insert missing conversations, do not handle remo
 1. Home loads preferences once and sets the initial filter.
 2. Home loads jobs and services once while focused and before `feedLoaded` is true.
 3. "Jobs" sorts `feedSources.jobs`.
-4. "Workers" sorts `feedSources.workers`.
+4. "Services" sorts `feedSources.workers`.
 5. "For you" sorts both arrays and alternates item types.
 
 Finding: Filter switching is local and does not refetch. The likely slowness is sorting/scoring plus rendering all cards in a `ScrollView`, amplified by unbounded query result sizes.
@@ -545,13 +545,13 @@ Likely index candidates based on current code, to verify before adding:
 Implemented changes:
 
 - Search text input now debounces network searches before calling Supabase.
-- Search now fetches only the active mode: Jobs mode calls `searchJobs`, Workers mode calls `searchServices`.
+- Search now fetches only the active mode: Jobs mode calls `searchJobs`, Services mode calls `searchServices`.
 - Search keeps previous results visible while the active mode refreshes. Broad result-list skeletons are used only for the initial load of a mode.
 - Search shows a lightweight "Updating results..." indicator during stale-while-revalidate refreshes.
 - Job and service search calls now accept a bounded `limit`, with Search using 30 rows and Home using 30 rows per source.
 - Job search moved obvious scalar text filtering into Supabase `ilike` filters for title, description, category, service needed, barangay, and location fields, while preserving client-side tag filtering on returned rows.
 - Service search moved obvious scalar text filtering into Supabase `ilike` filters for title, description, category, availability, rate, barangay, and location fields, while preserving client-side tag filtering on returned rows.
-- Home feed now precomputes Jobs, Workers, and For you feed variants when source data or preferences change. Switching Home filters no longer reruns the main scoring/sorting work.
+- Home feed now precomputes Jobs, Services, and For you feed variants when source data or preferences change. Switching Home filters no longer reruns the main scoring/sorting work.
 - Home feed scoring now decorates items with computed scores before sorting, avoiding repeated score recalculation inside the sort comparator.
 
 Validation results:
@@ -563,9 +563,9 @@ Validation results:
 Manual testing checklist:
 
 - Type slowly and quickly in Search; confirm network refresh waits briefly and old results remain visible while updating.
-- Switch Search between Find Jobs and Find Workers; confirm only the active mode refreshes and the inactive mode keeps its cached results until opened.
+- Switch Search between Find Jobs and Find Services; confirm only the active mode refreshes and the inactive mode keeps its cached results until opened.
 - Select and clear popular service chips; confirm results update after debounce without full-list skeleton replacement when prior results exist.
-- Switch Home between For you, Jobs, and Workers; confirm tab switching feels instant and visual design/spacing is unchanged.
+- Switch Home between For you, Jobs, and Services; confirm tab switching feels instant and visual design/spacing is unchanged.
 - Test long Home and Search result lists; confirm scrolling, bottom padding, empty states, and save/message verification gating still behave correctly.
 
 Deferred items:
@@ -598,11 +598,11 @@ Validation results:
 Manual testing checklist:
 
 - Home initial loading skeleton matches final card layout closely, including photo-capable cards.
-- Home For you / Jobs / Workers switching still feels immediate.
+- Home For you / Jobs / Services switching still feels immediate.
 - Home long feed scrolls smoothly.
 - Search initial loading skeleton matches final result layout closely.
 - Search refresh keeps old results visible and shows only the small updating indicator.
-- Search Jobs/Workers mode switching preserves layout and empty states.
+- Search Jobs/Services mode switching preserves layout and empty states.
 - Bottom nav does not cover the last item.
 - Small-screen layout still works on 360x800, 390x844, and 430x932.
 

@@ -63,7 +63,7 @@ export function resolveHomeFeedMode(context: HomeFeedRankingContext): HomeFeedMo
 export function getDefaultHomeFilter(context: HomeFeedRankingContext) {
   const mode = resolveHomeFeedMode(context);
   if (mode === 'provider') return 'Jobs' as const;
-  if (mode === 'client') return 'Workers' as const;
+  if (mode === 'client') return 'Services' as const;
   return 'For you' as const;
 }
 

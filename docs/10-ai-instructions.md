@@ -66,7 +66,7 @@ Onboarding and verification rules:
 - The first onboarding path is role intent -> basic identity/location -> service preferences -> review -> complete -> Home viewer mode.
 - First onboarding completion requires `user_preferences.onboarding_completed_at` plus basic profile identity: first name, last name or full name, city, and barangay.
 - First onboarding must not collect certificates, ID documents, selfie/photo uploads, or verification files.
-- Home default filter comes from `user_preferences.intent`: provider opens Jobs, client opens Workers, both or missing opens For you.
+- Home default filter comes from `user_preferences.intent`: provider opens Jobs, client opens Services, both or missing opens For you.
 - Do not require all ID, services, and credential details before the user can view the app.
 - Use Supabase email OTP signup plus password creation for the MVP; login is email/password.
 - Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing, but the Magic Link and Confirm sign up email templates must include `{{ .Token }}` for the app's email-code flow.

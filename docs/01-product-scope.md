@@ -80,7 +80,7 @@ The coding MVP should prioritize the screens already represented in the current 
 | Tab / Area | Screens |
 | --- | --- |
 | Auth / Onboarding | Splash, login/register, role intent, light profile setup, verification gate. |
-| Home | Dashboard feed, search mode, jobs/workers filters, empty state, verification prompt. |
+| Home | Dashboard feed, search mode, jobs/services filters, empty state, verification prompt. |
 | Post | Post dashboard, create job, offer service, drafts/active/paused states. |
 | Details | Job details, public worker profile, public client profile. |
 | Messages | Locked state, inbox, search contacts/messages, job conversation, service request, empty chat, report/delete dialogs. |
@@ -96,6 +96,6 @@ Demo acceptance standard:
 
 ## Current Implementation Limitations
 
-- Home and Search use live marketplace queries for jobs/workers, hide own public posts from discovery, and use preferences for ordering and filter defaults.
+- Home and Search use live marketplace queries for jobs/services, hide own public posts from discovery, and use preferences for ordering and filter defaults.
 - Locked actions now route to a Figma-matched verification intro and users can submit a pending verification request with contact details, ID files, services/purpose, and supporting files.
 - Verification and marketplace setup are separate UX states. A verified user can browse, but `Verified · Setup incomplete` blocks messaging, hiring, applying/posting, and reviewing until the required Work/Hiring setup is complete.

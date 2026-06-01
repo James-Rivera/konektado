@@ -50,7 +50,7 @@ First onboarding completion means `user_preferences.onboarding_completed_at` is 
 Home uses onboarding intent to choose the first selected feed filter:
 
 - Provider intent opens Home on Jobs.
-- Client intent opens Home on Workers.
+- Client intent opens Home on Services.
 - Both intent, missing intent, or missing preferences open Home on For you.
 
 The heavier information requirements belong in the verification flow, not the first entry flow. Verification should collect or confirm the user's contact details, email, optional phone number, ID documents, services, credentials, selfie/photo for manual comparison, and other barangay-required information.
@@ -123,7 +123,7 @@ Final app navigation:
 
 Core interaction model:
 
-- Home is a mixed discovery feed for jobs and workers.
+- Home is a mixed discovery feed for jobs and service posts.
 - Search is for comparison and filtering.
 - Post is for creating and managing job posts or service visibility.
 - Messages is the main coordination path after a user shows interest.
@@ -141,7 +141,7 @@ Important product language:
 - Prototype: Expo Go / React Native project in this repository.
 - UI source of truth: Figma file for Konektado.
 - Current implementation direction: Expo Router, Supabase Auth, PostgreSQL tables, and React hooks.
-- Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Workers filters, worker/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
+- Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Services filters, service/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
 
 ## Current Implementation Limitations
 

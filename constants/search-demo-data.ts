@@ -1,6 +1,6 @@
 export const searchModeLabels = {
   jobs: 'Find Jobs',
-  workers: 'Find Workers',
+  workers: 'Find Services',
 } as const;
 
 export type SearchMode = keyof typeof searchModeLabels;
@@ -46,6 +46,6 @@ function normalizeValue(value: string) {
 
 export function getWorkerResultsHeading(query: string, selectedService?: string | null) {
   const source = selectedService ?? normalizeValue(query);
-  if (!source) return 'Showing workers near you';
-  return `Showing ${source.toLowerCase()} workers near you`;
+  if (!source) return 'Showing services near you';
+  return `Showing ${source.toLowerCase()} services near you`;
 }

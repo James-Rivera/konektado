@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { Skeleton } from '@/components/Skeleton';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { getProfileDisplayName } from '@/components/profile/CurrentUserIdentity';
@@ -130,13 +131,14 @@ export default function CreateServicePreviewScreen() {
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
   const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
+  const [gateVisible, setGateVisible] = useState(false);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
   const publishService = async () => {
     if (!draft || publishing) return;
 
     if (!isVerified) {
-      router.push('/verification');
+      setGateVisible(true);
       return;
     }
 
@@ -208,7 +210,7 @@ export default function CreateServicePreviewScreen() {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
         <View style={styles.screen}>
-          <Header actionLabel="" onBack={() => router.back()} title="New services post" />
+          <Header actionLabel="" onBack={() => router.back()} title="Preview" />
           <View style={styles.centered}>
             <Text style={styles.title}>Preview unavailable</Text>
             <Text style={styles.bodyMuted}>Go back and complete the service details first.</Text>
@@ -222,19 +224,19 @@ export default function CreateServicePreviewScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
         <Header
-          actionLabel={publishing ? 'Posting...' : 'Post service'}
+          actionLabel={publishing ? 'Publishing...' : 'Publish'}
           disabled={publishing}
           onAction={publishService}
           onBack={() => router.back()}
-          title="New services post"
+          title="Preview"
         />
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.safetyBox}>
             <Text style={styles.safetyTitle}>Before publishing</Text>
-            <SafetyLine text="Don’t include phone numbers in the public text" />
+            <SafetyLine text="No phone number in public text" />
             <SafetyLine text="Only your barangay is shown publicly" />
-            <SafetyLine text="Only verified users can message or connect" />
+            <SafetyLine text="Clients must verify before messaging" />
           </View>
 
           <View style={styles.previewHeader}>
@@ -276,8 +278,45 @@ export default function CreateServicePreviewScreen() {
           <OptionReadout label="Auto-reply" value={draft.autoReplyEnabled ? 'On' : 'Off'} />
           <OptionReadout label="Pause listing when unavailable" value={draft.autoPauseEnabled ? 'On' : 'Off'} />
         </ScrollView>
+
+        <VerificationGateModal
+          onClose={() => setGateVisible(false)}
+          onStartVerification={() => {
+            setGateVisible(false);
+            router.push('/verification');
+          }}
+          visible={gateVisible}
+        />
       </View>
     </SafeAreaView>
+  );
+}
+
+function VerificationGateModal({
+  onClose,
+  onStartVerification,
+  visible,
+}: {
+  onClose: () => void;
+  onStartVerification: () => void;
+  visible: boolean;
+}) {
+  return (
+    <BottomSheet maxHeight="48%" onClose={onClose} visible={visible}>
+      <View style={styles.gateContent}>
+        <MaterialIcons color={color.verificationBlue} name="shield" size={46} />
+        <Text style={styles.gateTitle}>Barangay Verification Required</Text>
+        <Text style={styles.gateText}>
+          To keep services and clients trusted, posting requires <Text style={styles.gateStrong}>barangay verification.</Text>
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onStartVerification} style={styles.gatePrimary}>
+          <Text style={styles.gatePrimaryText}>Start Verification</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={onClose} style={styles.gateSecondary}>
+          <Text style={styles.gateSecondaryText}>Keep Editing Post</Text>
+        </Pressable>
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -314,7 +353,7 @@ function Header({
 function SafetyLine({ text }: { text: string }) {
   return (
     <View style={styles.safetyLine}>
-      <Text style={styles.bullet}>•</Text>
+      <Text style={styles.bullet}>{'\u2022'}</Text>
       <Text style={styles.safetyText}>{text}</Text>
     </View>
   );
@@ -475,7 +514,7 @@ const styles = StyleSheet.create({
   previewFrame: {
     backgroundColor: color.background,
     borderColor: color.border,
-    borderRadius: radius.sm,
+    borderRadius: radius.lg,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -507,5 +546,53 @@ const styles = StyleSheet.create({
   optionValue: {
     ...typography.caption,
     color: color.text,
+  },
+  gateContent: {
+    alignItems: 'center',
+    gap: space.md,
+    width: '100%',
+  },
+  gateTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+    textAlign: 'center',
+  },
+  gateText: {
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    color: color.textMuted,
+    textAlign: 'center',
+  },
+  gateStrong: {
+    fontFamily: 'Satoshi-Bold',
+  },
+  gatePrimary: {
+    alignItems: 'center',
+    backgroundColor: color.primary,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: space.xl,
+    width: '100%',
+  },
+  gatePrimaryText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
+  },
+  gateSecondary: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: space.xl,
+    width: '100%',
+  },
+  gateSecondaryText: {
+    color: color.primary,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 12,
   },
 });

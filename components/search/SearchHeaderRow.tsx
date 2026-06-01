@@ -33,7 +33,7 @@ export function SearchHeaderRow({
           autoCorrect={false}
           autoFocus={autoFocus}
           onChangeText={onChangeText}
-          placeholder="Search nearby jobs or workers"
+          placeholder="Search nearby jobs or services"
           placeholderTextColor={color.textSubtle}
           returnKeyType="search"
           selectionColor={color.primary}

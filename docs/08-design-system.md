@@ -25,9 +25,9 @@ Current Figma direction observed from the dashboard:
 - Green verification badge only where trust state is central, not repeated on every feed card.
 - Rounded pill filters and action buttons.
 - Bottom navigation with Home, Search, Post, Messages, and Profile.
-- Search as a main destination for "Search nearby jobs or workers".
+- Search as a main destination for "Search nearby jobs or services".
 - The Konektado wordmark/header belongs on Home only. Other bottom tabs use clear screen-specific titles where they improve orientation; Search uses the search field and mode control as its header module.
-- Feed sections for jobs and workers.
+- Feed sections for jobs and services.
 - Home feed uses one unified card shell for mixed job and service posts.
 - Post dashboard for creating and managing job/service posts.
 - Messages screens for job/service coordination.
@@ -380,7 +380,7 @@ Rules:
 
 Usage:
 
-- Search nearby jobs or workers.
+- Search nearby jobs or services.
 - Search providers by service category.
 - Search jobs by title/category/location.
 
@@ -388,7 +388,7 @@ Rules:
 
 - Keep search input prominent.
 - On the Search tab, start with the search input rather than a large "Search" title. Use top safe-area padding plus about 12-16px so the input feels intentional, not cramped.
-- Align the search input and Find Jobs / Find Workers segmented control to the same parent width so they read as one search module.
+- Align the search input and Find Jobs / Find Services segmented control to the same parent width so they read as one search module.
 - Pair with filter controls for category, location, and verification status.
 - Search belongs in the bottom navigation as its own intentional discovery destination.
 - Home can use feed filter pills, but should not duplicate Search with a large persistent search bar.
@@ -413,7 +413,7 @@ Rules:
 - Use title-first layout, like a marketplace listing.
 - Use schedule language such as "Starts 3:00 PM" instead of worker availability language.
 - Public job cards do not need a repeated verified badge if interaction is already verification-gated.
-- In Home, use the unified feed card instead of this specialized job card so For you, Jobs, and Workers keep the same visual rhythm. Search and job-focused result lists may continue using this richer job-first card.
+- In Home, use the unified feed card instead of this specialized job card so For you, Jobs, and Services keep the same visual rhythm. Search and job-focused result lists may continue using this richer job-first card.
 
 ### Profile Card
 
@@ -458,7 +458,7 @@ Usage:
 
 - Mixed For you feed.
 - Home Jobs filter.
-- Home Workers filter.
+- Home Services filter.
 
 Rules:
 

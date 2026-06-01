@@ -297,7 +297,7 @@ export default function JobStep() {
         footer={footer}
         helper={
           role === 'client'
-            ? 'Choose a few services so Home can show better workers first.'
+            ? 'Choose a few services so Home can show better services first.'
             : 'This helps Konektado show better jobs and requests.'
         }
         onBack={() => router.back()}

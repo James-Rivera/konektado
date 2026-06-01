@@ -55,12 +55,12 @@ Rules:
 - Provider work setup is stored separately as `on_site`, `online`, or `both`. Official service choices stay in taxonomy service arrays, while custom service text stays in custom service arrays for admin review.
 - Viewer mode is read-only for user-to-user marketplace interactions.
 - Viewer mode still requires a lightweight authenticated account; it is not anonymous public browsing.
-- Provider intent opens Home on Jobs, client intent opens Home on Workers.
+- Provider intent opens Home on Jobs, client intent opens Home on Services.
 - Users can add a second profile (Work Profile or Hiring Profile) later from Profile tab without re-entering full onboarding.
 
 ## Home Discovery Flow
 
-1. User opens Home and sees the existing `For you`, `Jobs`, and `Workers` quick tabs.
+1. User opens Home and sees the existing `For you`, `Jobs`, and `Services` quick tabs.
 2. User can tap the feed filter action beside `Latest in your barangay`.
 3. App opens a lightweight Home-only feed filter sheet for feed type, work/service mode, category, location preference, and sort.
 4. User applies filters and Home updates the already-bounded discovery feed locally.

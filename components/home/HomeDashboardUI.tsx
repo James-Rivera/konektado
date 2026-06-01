@@ -39,11 +39,11 @@ export function HomeSearchBar({ onPress }: { onPress: () => void }) {
   return (
     <View style={styles.searchBand}>
       <Pressable
-        accessibilityLabel="Search nearby jobs or workers"
+        accessibilityLabel="Search nearby jobs or services"
         accessibilityRole="button"
         onPress={onPress}
         style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}>
-        <Text style={styles.searchPlaceholder}>Search nearby jobs or workers</Text>
+        <Text style={styles.searchPlaceholder}>Search nearby jobs or services</Text>
         <MaterialIcons color={color.verificationBlue} name="search" size={24} />
       </Pressable>
     </View>

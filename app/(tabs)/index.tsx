@@ -100,13 +100,13 @@ let homeFeedInFlight:
 
 function mapHomeFilterToFeedType(filter: HomeFilter): HomeFeedType {
   if (filter === 'Jobs') return 'jobs';
-  if (filter === 'Workers') return 'services';
+  if (filter === 'Services') return 'services';
   return 'all';
 }
 
 function mapFeedTypeToHomeFilter(feedType: HomeFeedType): HomeFilter {
   if (feedType === 'jobs') return 'Jobs';
-  if (feedType === 'services') return 'Workers';
+  if (feedType === 'services') return 'Services';
   return 'For you';
 }
 
@@ -407,7 +407,7 @@ export default function HomeScreen() {
 
     return {
       Jobs: filtered.jobs,
-      Workers: filtered.services,
+      Services: filtered.services,
       'For you': filtered.all,
     };
   }, [appliedFeedFilters, feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
@@ -502,7 +502,7 @@ export default function HomeScreen() {
     const searchFilter =
       draftFeedFilters.feedType === 'services' ||
       (draftFeedFilters.feedType === 'all' && homeMode === 'client')
-        ? 'Workers'
+        ? 'Services'
         : 'Jobs';
 
     setFeedFiltersVisible(false);
@@ -568,7 +568,7 @@ export default function HomeScreen() {
         onOpenJob={openJob}
         onOpenService={openService}
         onToggleSaved={() => void toggleFeedSave(item)}
-        workerVariant={selectedFilter === 'Workers' ? 'default' : 'match'}
+        workerVariant={selectedFilter === 'Services' ? 'default' : 'match'}
       />
     ),
     [isPending, isSaved, openJob, openService, selectedFilter, toggleFeedSave],
@@ -607,8 +607,8 @@ export default function HomeScreen() {
       <>
         {feedLoading ? (
           <View style={styles.skeletonFeed}>
-            <HomeFeedCardSkeleton kind={selectedFilter === 'Workers' ? 'worker' : 'job'} loadingImage />
-            <HomeFeedCardSkeleton kind={selectedFilter === 'Workers' ? 'worker' : 'job'} />
+            <HomeFeedCardSkeleton kind={selectedFilter === 'Services' ? 'worker' : 'job'} loadingImage />
+            <HomeFeedCardSkeleton kind={selectedFilter === 'Services' ? 'worker' : 'job'} />
             {selectedFilter === 'For you' ? <HomeFeedCardSkeleton kind="worker" loadingImage /> : null}
           </View>
         ) : null}
@@ -829,7 +829,7 @@ function getHomeSetupNudge({
       action: completion.hiringCompletion.nextRecommendedAction ?? fallbackProfileAction('hiring'),
       actionLabel: 'Complete Hiring Profile',
       title: 'Set up your Hiring Profile',
-      body: 'Add your preferences so Konektado can recommend better workers.',
+      body: 'Add your preferences so Konektado can recommend better services.',
     };
   }
 
@@ -862,7 +862,7 @@ function getHomeSetupContext({
   selectedFilter: HomeFilter;
 }) {
   if (selectedFilter === 'Jobs') return 'provider';
-  if (selectedFilter === 'Workers') return 'client';
+  if (selectedFilter === 'Services') return 'client';
   return resolveHomeFeedMode({ activeRole, preferences });
 }
 

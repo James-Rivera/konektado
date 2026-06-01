@@ -83,7 +83,7 @@ Completion requires `user_preferences.onboarding_completed_at` plus basic profil
 Home default filter rules:
 
 - Provider intent opens Jobs.
-- Client intent opens Workers.
+- Client intent opens Services.
 - Both intent, missing intent, or missing preferences open For you.
 
 Unverified viewers can:
