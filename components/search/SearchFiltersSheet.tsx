@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { SearchRateRangeSlider } from '@/components/search/SearchRateRangeSlider';
 import type {
   DiscoveryGroupKey,
   MvpServiceOption,
@@ -17,7 +18,8 @@ export type SearchDiscoveryFilters = {
   serviceGroup: 'all' | DiscoveryGroupKey;
   service: 'all' | MvpServiceOption;
   locationScope: 'same_barangay' | 'nearby';
-  rateRange: 'any' | 'under_500' | '500_1000' | '1000_2000' | '2000_plus';
+  rateMin: number | null;
+  rateMax: number | null;
   experienceLevel: 'all' | ExperienceLevel;
   certification: 'any' | 'required_or_available';
   verifiedOnly: boolean;
@@ -40,6 +42,7 @@ type SearchFiltersSheetProps = {
     value: SearchDiscoveryFilters[K],
   ) => void;
   onClose: () => void;
+  onRateRangeChange: (minimum: number | null, maximum: number | null) => void;
   onReset: () => void;
 };
 
@@ -52,14 +55,6 @@ const WORK_TYPE_OPTIONS: FilterOption<SearchWorkType>[] = [
 const LOCATION_SCOPE_OPTIONS: FilterOption<SearchDiscoveryFilters['locationScope']>[] = [
   { key: 'same_barangay', label: 'Same barangay' },
   { key: 'nearby', label: 'Nearby area' },
-];
-
-const RATE_RANGE_OPTIONS: FilterOption<SearchDiscoveryFilters['rateRange']>[] = [
-  { key: 'any', label: 'Any rate' },
-  { key: 'under_500', label: 'Under ₱500' },
-  { key: '500_1000', label: '₱500–₱1,000' },
-  { key: '1000_2000', label: '₱1,000–₱2,000' },
-  { key: '2000_plus', label: '₱2,000+' },
 ];
 
 const EXPERIENCE_OPTIONS: FilterOption<SearchDiscoveryFilters['experienceLevel']>[] = [
@@ -80,6 +75,10 @@ const SORT_OPTIONS: FilterOption<SearchDiscoveryFilters['sort']>[] = [
   { key: 'nearby', label: 'Nearby' },
 ];
 
+const RATE_MINIMUM = 0;
+const RATE_MAXIMUM = 5000;
+const RATE_STEP = 100;
+
 export function SearchFiltersSheet({
   filters,
   groups,
@@ -88,6 +87,7 @@ export function SearchFiltersSheet({
   onApply,
   onChange,
   onClose,
+  onRateRangeChange,
   onReset,
 }: SearchFiltersSheetProps) {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -197,15 +197,37 @@ export function SearchFiltersSheet({
         </FilterSection>
 
         <FilterSection title="Rate range">
-          <View style={styles.chipRow}>
-            {RATE_RANGE_OPTIONS.map((option) => (
-              <ChoiceChip
-                key={option.key}
-                label={option.label}
-                selected={filters.rateRange === option.key}
-                onPress={() => onChange('rateRange', option.key)}
-              />
-            ))}
+          <Text style={styles.sectionHelper}>Adjust the rate you want to see.</Text>
+          <View style={styles.rateAnyRow}>
+            <ChoiceChip
+              label="Any rate"
+              selected={isAnyRate(filters)}
+              onPress={() => onRateRangeChange(null, null)}
+            />
+          </View>
+          <View style={styles.selectedRangeBlock}>
+            <Text style={styles.selectedRangeLabel}>Selected range</Text>
+            <Text style={styles.selectedRangeValue}>{formatSelectedRateRange(filters)}</Text>
+          </View>
+          <SearchRateRangeSlider
+            maximumValue={RATE_MAXIMUM}
+            minimumValue={RATE_MINIMUM}
+            onChange={(minimum, maximum) => {
+              // The visible cap means "this amount or higher", so the query keeps an open upper bound.
+              onRateRangeChange(
+                minimum === RATE_MINIMUM ? null : minimum,
+                maximum === RATE_MAXIMUM ? null : maximum,
+              );
+            }}
+            step={RATE_STEP}
+            value={{
+              maximum: filters.rateMax ?? RATE_MAXIMUM,
+              minimum: filters.rateMin ?? RATE_MINIMUM,
+            }}
+          />
+          <View style={styles.rateEndpointRow}>
+            <Text style={styles.rateEndpointText}>{formatPeso(RATE_MINIMUM)}</Text>
+            <Text style={styles.rateEndpointText}>{`${formatPeso(RATE_MAXIMUM)}+`}</Text>
           </View>
         </FilterSection>
 
@@ -271,6 +293,26 @@ export function SearchFiltersSheet({
       </View>
     </BottomSheet>
   );
+}
+
+function isAnyRate(filters: Pick<SearchDiscoveryFilters, 'rateMin' | 'rateMax'>) {
+  return filters.rateMin === null && filters.rateMax === null;
+}
+
+function formatSelectedRateRange(filters: Pick<SearchDiscoveryFilters, 'rateMin' | 'rateMax'>) {
+  if (isAnyRate(filters)) return 'Any rate';
+  if (filters.rateMin === null && filters.rateMax !== null) {
+    return `Up to ${formatPeso(filters.rateMax)}`;
+  }
+  if (filters.rateMin !== null && filters.rateMax === null) {
+    return `${formatPeso(filters.rateMin)}+`;
+  }
+
+  return `${formatPeso(filters.rateMin ?? RATE_MINIMUM)} \u2013 ${formatPeso(filters.rateMax ?? RATE_MAXIMUM)}`;
+}
+
+function formatPeso(value: number) {
+  return `\u20B1${value.toLocaleString('en-PH')}`;
 }
 
 function FilterSection({
@@ -355,6 +397,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
+  sectionHelper: {
+    ...typography.body,
+    color: color.textMuted,
+    marginTop: -space.xs,
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -365,7 +412,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 38,
+    minHeight: 44,
     minWidth: 90,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -386,6 +433,31 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: color.white,
     fontFamily: 'Satoshi-Bold',
+  },
+  rateAnyRow: {
+    flexDirection: 'row',
+  },
+  selectedRangeBlock: {
+    gap: space['2xs'],
+  },
+  selectedRangeLabel: {
+    ...typography.captionMedium,
+    color: color.textSubtle,
+  },
+  selectedRangeValue: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  rateEndpointRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: -space.sm,
+  },
+  rateEndpointText: {
+    ...typography.captionMedium,
+    color: color.textSubtle,
   },
   groupRows: {
     borderBottomColor: '#F1F3F6',
