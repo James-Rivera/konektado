@@ -218,7 +218,6 @@ export default function SearchScreen() {
     const structuredServices = getStructuredServiceFilterValues(appliedFilters);
     const barangayFilter =
       appliedFilters.locationScope === 'same_barangay' ? profile?.barangay ?? undefined : undefined;
-    const rateBounds = getRateBounds(appliedFilters.rateRange);
 
     setRefreshingModes((current) => ({ ...current, [mode]: true }));
     setSearchError(null);
@@ -234,8 +233,8 @@ export default function SearchScreen() {
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
-            budgetMin: rateBounds.min,
-            budgetMax: rateBounds.max,
+            budgetMin: appliedFilters.rateMin,
+            budgetMax: appliedFilters.rateMax,
             experienceLevel: appliedFilters.experienceLevel,
             certificationRequired:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -258,8 +257,8 @@ export default function SearchScreen() {
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
-            rateMin: rateBounds.min,
-            rateMax: rateBounds.max,
+            rateMin: appliedFilters.rateMin,
+            rateMax: appliedFilters.rateMax,
             experienceLevel: appliedFilters.experienceLevel,
             certificationAvailable:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
@@ -325,6 +324,7 @@ export default function SearchScreen() {
     query,
     selectedService,
   });
+  const activeFilterCount = getSearchFilterCount(appliedFilters);
   const activeResultCount = mode === 'jobs' ? visibleJobs.length : visibleWorkers.length;
   const activeModeLoaded = loadedModes[mode];
   const activeModeRefreshing = refreshingModes[mode];
@@ -718,7 +718,13 @@ export default function SearchScreen() {
   const renderSearchRow = useCallback(
     ({ index, item }: { index: number; item: SearchListRow }) => {
       if (item.type === 'resultHeader') {
-        return <SearchResultHeader title={resultHeading} onFilterPress={handleOpenFilters} />;
+        return (
+          <SearchResultHeader
+            activeFilterCount={activeFilterCount}
+            onFilterPress={handleOpenFilters}
+            title={resultHeading}
+          />
+        );
       }
 
       const rowStyle = [styles.resultRow, index === 1 && styles.firstResultRow];
@@ -826,6 +832,7 @@ export default function SearchScreen() {
     },
     [
       clearSearch,
+      activeFilterCount,
       handleOpenFilters,
       isPending,
       isSaved,
@@ -867,6 +874,9 @@ export default function SearchScreen() {
           onApply={handleApplyFilters}
           onChange={handleDraftFilterChange}
           onClose={() => setIsFilterSheetVisible(false)}
+          onRateRangeChange={(rateMin, rateMax) =>
+            setDraftFilters((current) => ({ ...current, rateMin, rateMax }))
+          }
           onReset={handleResetFilters}
           services={sheetServiceOptions}
           visible={isFilterSheetVisible}
@@ -897,7 +907,8 @@ function buildDefaultFilters(): SearchDiscoveryFilters {
     serviceGroup: 'all',
     service: 'all',
     locationScope: 'nearby',
-    rateRange: 'any',
+    rateMin: null,
+    rateMax: null,
     experienceLevel: 'all',
     certification: 'any',
     verifiedOnly: false,
@@ -934,12 +945,17 @@ function getStructuredServiceFilterValues(filters: SearchDiscoveryFilters) {
   return getServicesForDiscoveryGroupAndWorkType(filters.serviceGroup, filters.workType);
 }
 
-function getRateBounds(rateRange: SearchDiscoveryFilters['rateRange']) {
-  if (rateRange === 'under_500') return { min: null, max: 500 };
-  if (rateRange === '500_1000') return { min: 500, max: 1000 };
-  if (rateRange === '1000_2000') return { min: 1000, max: 2000 };
-  if (rateRange === '2000_plus') return { min: 2000, max: null };
-  return { min: null, max: null };
+function getSearchFilterCount(filters: SearchDiscoveryFilters) {
+  let count = 0;
+  if (filters.workType !== 'either') count += 1;
+  if (filters.service !== 'all' || filters.serviceGroup !== 'all') count += 1;
+  if (filters.locationScope !== 'nearby') count += 1;
+  if (filters.rateMin !== null || filters.rateMax !== null) count += 1;
+  if (filters.experienceLevel !== 'all') count += 1;
+  if (filters.certification !== 'any') count += 1;
+  if (filters.verifiedOnly) count += 1;
+  if (filters.sort !== 'relevant') count += 1;
+  return count;
 }
 
 function prioritizeSelectedService(

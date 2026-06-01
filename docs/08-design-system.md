@@ -436,6 +436,22 @@ Rules:
 - Use muted pills in Home/feed; reserve blue for active filters and primary actions.
 - In Home, use the unified feed card instead of this specialized worker card so service posts sit cleanly beside job posts. Search and worker-focused result lists may continue using this richer person-first card.
 
+### Public Profile Photo Guidance
+
+Usage:
+
+- Core Profile public avatar upload.
+
+Rules:
+
+- Keep the Core Profile row lightweight: title, short reminder, current photo or fallback, and one add/replace action.
+- Route add/replace through a focused bottom sheet before opening the existing photo picker.
+- Use visual examples plus short labels so residents do not need to parse a long instruction block.
+- Show one accepted clear-face example and a compact set of rejected examples for group photos, blurry or dark photos, covered faces, avatars, and ID/document photos.
+- Keep the fuller accepted/rejected checklist inside the sheet.
+- Public profile photos remain optional trust boosters. They must never be copied from verification selfies, IDs, certificates, or other private files.
+- The picker, public-image optimization, upload service, and barangay moderation flow remain separate from the guidance UI.
+
 ### Home Feed Card
 
 Usage:

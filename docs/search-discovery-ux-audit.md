@@ -562,7 +562,26 @@ Implementation note:
 
 - because current public marketplace data is barangay-first and not coordinate-based, `Nearby` may behave almost the same as `Same barangay` in the current demo dataset
 
-### Section 5: Sort
+### Section 5: Rate range
+
+Label:
+
+- `Rate range`
+
+Behavior:
+
+- default to `Any rate`, which applies no minimum or maximum filter
+- use one two-thumb slider with `₱100` steps from `₱0` to `₱5,000+`
+- show the selected range live as `Up to ₱500`, `₱700 – ₱1,500`, or `₱2,000+`
+- treat the visible `₱5,000+` endpoint as an open upper bound
+- do not show duplicate preset rate buckets or require numeric typing
+- count a custom range as one active Search filter
+
+Implementation note:
+
+- Search stores nullable min/max values in UI state and reuses the existing range-overlap service logic. No schema change is required.
+
+### Section 6: Sort
 
 Label:
 
@@ -589,7 +608,6 @@ Behavior:
 
 Do not add:
 
-- price ranges
 - schedule filters
 - rating filters
 - multiple barangay selector

@@ -22,6 +22,7 @@ import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { ProfilePhotoGuidelinesSheet } from '@/components/profile/ProfilePhotoGuidelinesSheet';
 import { RateRangeInput } from '@/components/RateRangeInput';
 import { Skeleton } from '@/components/Skeleton';
 import {
@@ -152,6 +153,7 @@ export default function CompleteProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [photoGuidelinesVisible, setPhotoGuidelinesVisible] = useState(false);
   const [status, setStatus] = useState<ProfileCompletionStatus | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -325,6 +327,13 @@ export default function CompleteProfileScreen() {
     showSuccessToast('Profile photo updated');
   };
 
+  const chooseAvatarFromGuidelines = () => {
+    setPhotoGuidelinesVisible(false);
+    requestAnimationFrame(() => {
+      void pickAvatar();
+    });
+  };
+
   const currentMeta = getModeMeta(mode);
   const roleLockedByCore = mode !== 'core' && status && !status.coreComplete;
   const saveDisabled = mode === 'core' && !core.street.trim();
@@ -374,7 +383,9 @@ export default function CompleteProfileScreen() {
               {status?.photoRecommended ? (
                 <SetupSection compact>
                   <NoticeBanner
-                    message="A clear public profile photo helps neighbors recognize you. It is strongly recommended, but verification selfie or ID files stay private and are never reused here."
+                    actionLabel="See photo guidelines"
+                    message="A clear public photo helps neighbors recognize you. Private verification files are never reused here."
+                    onActionPress={() => setPhotoGuidelinesVisible(true)}
                     title="Add a profile photo"
                     variant="info"
                   />
@@ -399,7 +410,7 @@ export default function CompleteProfileScreen() {
                   uploadingAvatar={uploadingAvatar}
                   value={core}
                   onChange={setCore}
-                  onPickAvatar={pickAvatar}
+                  onShowPhotoGuidelines={() => setPhotoGuidelinesVisible(true)}
                   onRequestNameCorrection={() => {
                     Alert.alert('Request name correction', NAME_CORRECTION_REQUEST_EXPLANATION);
                   }}
@@ -441,6 +452,12 @@ export default function CompleteProfileScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      <ProfilePhotoGuidelinesSheet
+        onChoosePhoto={chooseAvatarFromGuidelines}
+        onClose={() => setPhotoGuidelinesVisible(false)}
+        uploading={uploadingAvatar}
+        visible={photoGuidelinesVisible}
+      />
     </SafeAreaView>
   );
 }
@@ -452,7 +469,7 @@ function CoreForm({
   uploadingAvatar,
   value,
   onChange,
-  onPickAvatar,
+  onShowPhotoGuidelines,
   onRequestNameCorrection,
 }: {
   avatarUrl: string | null;
@@ -461,7 +478,7 @@ function CoreForm({
   uploadingAvatar: boolean;
   value: CoreProfileInput;
   onChange: (value: CoreProfileInput) => void;
-  onPickAvatar: () => void;
+  onShowPhotoGuidelines: () => void;
   onRequestNameCorrection: () => void;
 }) {
   const [areaSheetVisible, setAreaSheetVisible] = useState(false);
@@ -474,7 +491,7 @@ function CoreForm({
           avatarUrl={avatarUrl}
           name={`${value.firstName} ${value.lastName}`.trim()}
           uploading={uploadingAvatar}
-          onPickAvatar={onPickAvatar}
+          onShowGuidelines={onShowPhotoGuidelines}
         />
       </SetupSection>
 
@@ -567,12 +584,12 @@ function ProfilePhotoSection({
   avatarUrl,
   name,
   uploading,
-  onPickAvatar,
+  onShowGuidelines,
 }: {
   avatarUrl: string | null;
   name: string;
   uploading: boolean;
-  onPickAvatar: () => void;
+  onShowGuidelines: () => void;
 }) {
   const displayAvatarUrl = getAvatarDisplayUrl({ avatarUrl });
 
@@ -595,7 +612,7 @@ function ProfilePhotoSection({
         <Pressable
           accessibilityRole="button"
           disabled={uploading}
-          onPress={onPickAvatar}
+          onPress={onShowGuidelines}
           style={({ pressed }) => [
             styles.photoAction,
             uploading && styles.disabled,
@@ -607,12 +624,15 @@ function ProfilePhotoSection({
         </Pressable>
       </View>
       <View style={styles.photoGuide}>
-        <Text style={styles.photoGuideText}>
-          Good: clear face, bright lighting, only you, recent photo.
-        </Text>
-        <Text style={styles.photoGuideText}>
-          Not accepted: group photo, blurry or dark photo, ID/document photo, cartoon/anime/avatar, face covered, heavily edited photo.
-        </Text>
+        <Text style={styles.photoGuideText}>Choose a photo with only you and your face clearly visible.</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={uploading}
+          onPress={onShowGuidelines}
+          style={({ pressed }) => [styles.photoGuideAction, pressed && styles.pressed]}>
+          <Text style={styles.photoGuideActionText}>See photo guidelines</Text>
+          <MaterialIcons color={color.primary} name="arrow-forward" size={16} />
+        </Pressable>
       </View>
     </View>
   );
@@ -1327,6 +1347,17 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: color.textMuted,
   },
+  photoGuideAction: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: space.xs,
+    minHeight: 32,
+  },
+  photoGuideActionText: {
+    ...typography.captionMedium,
+    color: color.primary,
+  },
   photoAction: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -1334,7 +1365,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: space.md,
   },
   photoActionText: {

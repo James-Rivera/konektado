@@ -4,9 +4,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { color, typography } from '@/constants/theme';
 
 export function SearchResultHeader({
+  activeFilterCount = 0,
   title,
   onFilterPress,
 }: {
+  activeFilterCount?: number;
   title: string;
   onFilterPress: () => void;
 }) {
@@ -19,6 +21,11 @@ export function SearchResultHeader({
         onPress={onFilterPress}
         style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
         <MaterialIcons color={color.primary} name="tune" size={22} />
+        {activeFilterCount > 0 ? (
+          <View style={styles.filterBadge}>
+            <Text style={styles.filterBadgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -43,9 +50,29 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    height: 24,
+    height: 44,
     justifyContent: 'center',
-    width: 24,
+    width: 44,
+  },
+  filterBadge: {
+    alignItems: 'center',
+    backgroundColor: color.primary,
+    borderColor: color.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 16,
+    justifyContent: 'center',
+    minWidth: 16,
+    paddingHorizontal: 3,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  filterBadgeText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 9,
+    lineHeight: 11,
   },
   pressed: {
     opacity: 0.75,
