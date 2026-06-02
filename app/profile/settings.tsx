@@ -58,13 +58,13 @@ export default function ProfileSettingsScreen() {
           <SettingsRow
             icon="person"
             title="Core Profile"
-            subtitle="Name, location, contact preference, and intro"
+            subtitle="Name, location, preferred coordination, and intro"
             onPress={() => router.push({ pathname: '/profile/complete', params: { mode: 'core' } })}
           />
           <SettingsRow
             icon="handyman"
             title="Work Profile"
-            subtitle="Capabilities, service area, availability, and credentials"
+            subtitle="Skills, service area, availability, and credentials"
             onPress={() => router.push({ pathname: '/profile/complete', params: { mode: 'work' } })}
           />
           <SettingsRow

@@ -13,11 +13,26 @@ import {
   type ServiceRow,
 } from '@/services/marketplace.helpers';
 import { listWorkerReviews } from '@/services/review.service';
-import type { PublicWorkerProfile } from '@/types/marketplace.types';
+import type { PublicProfileHistoryItem, PublicWorkerProfile } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
 const SERVICE_COLUMNS =
   'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
+const JOB_HISTORY_COLUMNS =
+  'id, title, category, service_needed, barangay, location_text, status, closed_at, updated_at, created_at';
+
+type JobHistoryRow = {
+  id: string;
+  title: string | null;
+  category: string | null;
+  service_needed: string | null;
+  barangay: string | null;
+  location_text: string | null;
+  status: string;
+  closed_at: string | null;
+  updated_at: string;
+  created_at: string;
+};
 
 type WorkerStats = {
   completedJobsCount: number;
@@ -44,6 +59,27 @@ async function loadWorkerStats(workerId: string): Promise<WorkerStats> {
   };
 }
 
+export async function listWorkerHistory(workerId: string): Promise<ServiceResult<PublicProfileHistoryItem[]>> {
+  const id = compactText(workerId);
+  if (!id) return { data: [], error: null };
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .select(JOB_HISTORY_COLUMNS)
+    .eq('accepted_provider_id', id)
+    .in('status', ['completed', 'closed'])
+    .order('closed_at', { ascending: false, nullsFirst: false })
+    .order('updated_at', { ascending: false })
+    .limit(6);
+
+  if (error) return { data: null, error: error.message };
+
+  return {
+    data: ((data as JobHistoryRow[] | null) ?? []).map(mapJobHistoryItem),
+    error: null,
+  };
+}
+
 export async function getPublicWorkerProfile(
   workerId: string,
   options: { sourceServiceId?: string | null } = {},
@@ -52,7 +88,16 @@ export async function getPublicWorkerProfile(
   if (!id) return { data: null, error: 'Worker profile not found.' };
 
   const sourceServiceId = compactText(options.sourceServiceId) || null;
-  const [profiles, providerResult, servicesResult, selectedServiceResult, stats, credentialResult, reviewResult] = await Promise.all([
+  const [
+    profiles,
+    providerResult,
+    servicesResult,
+    selectedServiceResult,
+    stats,
+    credentialResult,
+    reviewResult,
+    historyResult,
+  ] = await Promise.all([
     loadPublicProfiles([id]),
     supabase
       .rpc('get_public_provider_profile_summaries', { p_user_ids: [id] }),
@@ -74,6 +119,7 @@ export async function getPublicWorkerProfile(
     loadWorkerStats(id),
     listApprovedCredentialsForProvider(id),
     listWorkerReviews(id),
+    listWorkerHistory(id),
   ]);
 
   if (providerResult.error) return { data: null, error: providerResult.error.message };
@@ -81,6 +127,7 @@ export async function getPublicWorkerProfile(
   if (selectedServiceResult.error) return { data: null, error: selectedServiceResult.error.message };
   if (credentialResult.error) return { data: null, error: credentialResult.error };
   if (reviewResult.error) return { data: null, error: reviewResult.error };
+  if (historyResult.error) return { data: null, error: historyResult.error };
 
   const profile = profiles.get(id);
   if (!profile) return { data: null, error: null };
@@ -105,7 +152,7 @@ export async function getPublicWorkerProfile(
     ...splitServices(providerProfile?.service_type),
     ...(providerProfile?.custom_offered_services ?? []),
   ]);
-  const capabilities = uniqueList([...capabilitySplit.official, ...capabilitySplit.custom]);
+  const skills = uniqueList([...capabilitySplit.official, ...capabilitySplit.custom]);
   const reviews = reviewResult.data ?? [];
   const reviewCount = reviews.length;
   const averageRating = reviewCount
@@ -125,7 +172,8 @@ export async function getPublicWorkerProfile(
         }),
       about: compactText(providerProfile?.bio) || compactText(profile.about) || null,
       availability: compactText(providerProfile?.availability) || null,
-      capabilities,
+      capabilities: skills,
+      skills,
       serviceArea: compactText(providerProfile?.service_area) || null,
       barangayVerifiedAt: profile.barangayVerifiedAt,
       verifiedAt: profile.verifiedAt,
@@ -134,6 +182,7 @@ export async function getPublicWorkerProfile(
       reviewCount,
       credentials: credentialResult.data ?? [],
       reviews,
+      workHistory: historyResult.data ?? [],
       selectedService,
       services,
     },
@@ -143,6 +192,17 @@ export async function getPublicWorkerProfile(
 
 function splitServices(value: string | null | undefined) {
   return uniqueList((value ?? '').split(','));
+}
+
+function mapJobHistoryItem(row: JobHistoryRow): PublicProfileHistoryItem {
+  return {
+    id: row.id,
+    title: compactText(row.title) || compactText(row.service_needed) || compactText(row.category) || 'Completed work',
+    serviceLabel: compactText(row.service_needed) || null,
+    category: compactText(row.category) || null,
+    locationText: compactText(row.location_text) || compactText(row.barangay) || null,
+    completedAt: row.closed_at ?? row.updated_at ?? row.created_at,
+  };
 }
 
 function uniqueList(values: Array<string | null | undefined>) {

@@ -58,8 +58,18 @@ export type PublicClientProfile = {
   averageRating: number | null;
   reviewCount: number;
   reviews: Review[];
+  hiringHistory: PublicProfileHistoryItem[];
   selectedJob: JobSummary | null;
   activeJobs: JobSummary[];
+};
+
+export type PublicProfileHistoryItem = {
+  id: string;
+  title: string;
+  serviceLabel: string | null;
+  category: string | null;
+  locationText: string | null;
+  completedAt: string;
 };
 
 export type PublicWorkerProfile = {
@@ -69,6 +79,8 @@ export type PublicWorkerProfile = {
   publicLocation: string;
   about: string | null;
   availability: string | null;
+  skills: string[];
+  /** @deprecated Use skills for profile-owned abilities. */
   capabilities: string[];
   serviceArea: string | null;
   barangayVerifiedAt: string | null;
@@ -78,6 +90,7 @@ export type PublicWorkerProfile = {
   reviewCount: number;
   credentials: CredentialSummary[];
   reviews: Review[];
+  workHistory: PublicProfileHistoryItem[];
   selectedService: ProviderService | null;
   services: ProviderService[];
 };

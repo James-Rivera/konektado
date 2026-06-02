@@ -212,7 +212,7 @@ Examples:
 
 Onboarding should feel guided rather than stop-start. Successful onboarding transitions should move the user forward visually; do not interrupt normal progress with success modals such as "Welcome" or "Onboarding complete".
 
-Remediation prompts should deep-link to the part of the flow that resolves them. Profile prompts should point to identity, capabilities, service area, default availability, coordination style, or scheduling preference. Listing prompts should point to rates, budgets, dates, requirements, and message options.
+Remediation prompts should deep-link to the part of the flow that resolves them. Profile prompts should point to identity, skills, service area, usual availability, coordination style, or preferred coordination time. Listing prompts should point to rates, budgets, dates, requirements, and message options.
 
 ### Bottom Sheet
 
@@ -496,22 +496,27 @@ Work Profile should show:
 
 - Worker rating.
 - Jobs done/taken.
-- Professional summary.
-- Capabilities.
-- Default service area and availability.
+- About My Work.
+- Skills.
+- Experience.
 - Credentials.
-- My Services as a visually separate area for service listings, drafts, saved content, and completed work.
+- Usual availability.
+- Usual service area.
+- Worker reviews.
+- Work history.
+- Services Offered as active service listings only. Drafts, inactive listings, archived listings, saved items, and edit/delete/deactivate/republish workflows belong in Post Dashboard.
 
 Hiring Profile should show:
 
 - Client rating.
 - Workers hired.
-- Hiring summary.
-- Common needs.
-- Coordination style and general scheduling preference.
-- My Job Posts as a visually separate area for job posts, drafts, saved content, and completed hires.
-- Job history.
-- Reviews from workers.
+- Hiring Introduction.
+- Usually Hires For / Common Needs.
+- Coordination style.
+- Preferred coordination time.
+- Client reviews.
+- Hiring history.
+- Job Posts as active hiring requests only. Drafts, inactive posts, archived posts, saved items, and edit/delete/deactivate/republish workflows belong in Post Dashboard.
 
 Saved workers/jobs should not live primarily in Profile. They belong closer to Home/Search or a future saved items surface.
 

@@ -81,9 +81,9 @@ Onboarding and verification rules:
 - Barangay verification is the trust gate for marketplace interaction.
 - The main app navigation is Home, Search, Post, Messages, Profile.
 - One account can have both Work Profile and Hiring Profile.
-- Use Services in UI, not Skills, unless referring to internal database/history.
+- Use Skills for profile-owned abilities and Services for active service listings. Do not use Skills when referring to active marketplace offers.
 - Do not implement Apply/Application as the primary flow. Use Messages and Mark Hired.
-- Keep profile ownership separate from listing ownership. Core Profile owns identity and trust; Work Profile owns general capability/defaults; Hiring Profile owns general client style/defaults. Services/jobs own rates, budgets, schedules, requirements, message options, and marketplace inventory.
+- Keep profile ownership separate from listing ownership. Core Profile owns identity and trust; Work Profile owns skills/defaults/reputation/history; Hiring Profile owns client preferences/reputation/history. Services/jobs own rates, budgets, schedules, requirements, message options, and marketplace inventory.
 - Current implementation limitations: Home is still mostly demo/static, locked actions route to a Figma-matched verification intro/request flow, admin verification review is still pending, and verified-origin database filtering is pending.
 
 Before editing code:

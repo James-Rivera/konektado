@@ -11,12 +11,12 @@ Profiles describe the resident. Listings describe the current marketplace offer 
 | Layer | Owns | Must not own |
 | --- | --- | --- |
 | Account | Login identity, auth session, account email | Marketplace readiness or public reputation |
-| Core Profile | Public identity, profile photo, display/legal name, public location, contact preference, resident intro, verification summary | Services, jobs, rates, budgets, requirements, inventory |
-| Work Profile | Worker headline, work bio, broad capability categories, default service area, default availability, credentials, worker reputation | Service listing rates, negotiability, listing photos, exact listing availability, message settings |
-| Hiring Profile | Hiring intro, common needs, coordination style, general scheduling preference, client reputation | Job budgets, job requirements, exact date/time/location, workers needed, message settings |
+| Core Profile | Public identity, profile photo, display/legal name, public location, preferred coordination, resident intro, verification summary | Services, jobs, rates, budgets, requirements, inventory |
+| Work Profile | About My Work, skills, usual service area, usual availability, credentials, worker reviews, work history | Service listing rates, negotiability, listing photos, exact listing availability, message settings, draft/listing management |
+| Hiring Profile | Hiring introduction, usually hires for/common needs, coordination style, preferred coordination time, client reviews, hiring history | Job budgets, job requirements, exact date/time/location, workers needed, message settings, draft/post management |
 | Service Listing | Service title, description, photos, exact category/custom category, rate fields, negotiability, listing availability/location, experience/certification notes, message settings, active/paused state | Core identity, all worker reputation |
 | Job Post | Job title, description, service needed, photos, budget fields, schedule/date/time, workers needed, requirements, exact/private location notes, message settings, status | Core identity, all client reputation |
-| Marketplace Activity | Active services, active jobs, drafts, completed work, completed hires, saved content, conversation/hire/review outcomes | Profile identity or profile completion requirements |
+| Post Dashboard | Draft jobs/services, active posts, inactive posts, archived/final posts, edit/delete/deactivate/republish management | Profile identity, profile completion requirements, role reputation |
 
 ## Common Types
 
@@ -150,7 +150,7 @@ Important constraints:
 - Owner can select, insert, and update only their own preferences.
 - These preferences are first-party personalization data, not verification proof.
 - Provider work setup is separate from service taxonomy values. It filters category/service selection but must not be mixed into `offered_services`.
-- For provider and both-role users, `provider_profiles.service_type` is seeded from offered services until the future `services` table is fully built.
+- For provider and both-role users, `provider_profiles.service_type` stores legacy profile-owned ability values. Current UI treats those values as Work Profile skills, not as public service listings.
 
 ## provider_profiles
 
@@ -159,9 +159,9 @@ Purpose: Role-specific public Work Profile completion details.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `user_id` | `uuid` | Primary key. References `profiles(id)` on delete cascade. |
-| `service_type` | `text` | Legacy/onboarding service summary, currently comma-separated. |
-| `headline` | `text` | Public worker headline shown in Profile trust surfaces. |
-| `bio` | `text` | Public worker bio. |
+| `service_type` | `text` | Legacy/onboarding skills summary, currently comma-separated. |
+| `headline` | `text` | Stored compatibility field used by UI as the About My Work title. |
+| `bio` | `text` | Public About My Work summary. |
 | `service_area` | `text` | Public area where the provider can work. |
 | `availability` | `text` | Default work availability. Used only as a profile default for new blank service drafts. |
 | `rate_text` | `text` | Deprecated archival field. Service listings own rate notes. Profile UI must not write or read this field. |
@@ -181,7 +181,7 @@ Important constraints:
 - Owner can read, insert, and update only their own Work Profile. Public surfaces must use public-safe summary RPCs that exclude deprecated pricing fields.
 - Work Profile completion is required before publishing service posts or messaging clients about jobs.
 - Credentials and private verification files are separate from this public profile row.
-- A completed Work Profile requires a professional summary, capabilities, default service area, and default availability. It must not require rates or active service listings.
+- A completed Work Profile requires About My Work, skills, usual service area, and usual availability. It must not require rates or active service listings.
 
 ## client_profiles
 
@@ -190,8 +190,8 @@ Purpose: Role-specific public Hiring Profile completion details.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `user_id` | `uuid` | Primary key. References `profiles(id)` on delete cascade. |
-| `headline` | `text` | Public client headline shown in Profile trust surfaces. |
-| `bio` | `text` | Public client intro. |
+| `headline` | `text` | Stored compatibility field used by UI as the Hiring Introduction title. |
+| `bio` | `text` | Public Hiring Introduction summary. |
 | `needed_services` | `text[]` | Public services the client usually needs. |
 | `custom_needed_services` | `text[]` | Free-text "Others / Specify" values, separate from official taxonomy values. |
 | `coordination_style` | `text` | General hiring communication and coordination style. |
@@ -250,7 +250,7 @@ Important constraints:
 
 Implementation note:
 
-- The older docs and SQL may still mention `skills` or `provider_profiles.service_type`. The current UI language is Services. For development, prefer a `services` table or map the old `service_type` field into service-style UI until the table is added.
+- The older SQL may still store profile skills in `provider_profiles.service_type` for compatibility. Treat those values as profile-owned skills in Profile and as suggestions/defaults for new Service Listings. Active services remain rows in the `services` table.
 
 ## service_drafts
 

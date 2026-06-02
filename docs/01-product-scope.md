@@ -7,8 +7,8 @@
 | Authentication | Email OTP signup, email/password login, logout, session handling. | Use Supabase Auth. |
 | Lightweight Onboarding | Let users enter the app quickly as unverified viewers. | Role intent -> basic identity/location -> service preferences -> review -> complete -> Home. Do not collect certificates, ID documents, or verification uploads here. |
 | Roles | Client, provider, both, and barangay admin. | Both-role users receive client and provider role rows, but one active role is used in the app at a time. |
-| Profiles | Basic identity, split address, contact method, resident intro, Work Profile capabilities, Hiring Profile preferences, setup status, role-specific reputation, and verification status. | Profiles describe the resident. Public cards show approximate location only; house number, block/lot, IDs, and verification notes stay private/admin-only. |
-| Service Listings | Provider service posts with selected service labels, custom "Others / Specify" text, descriptions, photos, experience level, listing availability, certification metadata, message options, and rate ranges. | Listings describe marketplace activity. Use "Services" in the UI; avoid abstract "skills" language. MVP services are limited to the controlled taxonomy, with custom values stored separately for admin review. |
+| Profiles | Basic identity, split address, preferred coordination, resident intro, Work Profile skills, Hiring Profile preferences, setup status, role-specific reputation, history, and verification status. | Profiles describe the resident. Public cards show approximate location only; house number, block/lot, IDs, and verification notes stay private/admin-only. |
+| Service Listings | Provider service posts with selected service labels, custom "Others / Specify" text, descriptions, photos, experience level, listing availability, certification metadata, message options, and rate ranges. | Listings describe active marketplace offers. Use "Skills" for profile-owned abilities and "Services" for active service listings. MVP services are limited to the controlled taxonomy, with custom values stored separately for admin review. |
 | Credentials | Upload records for IDs, certificates, or proof of experience. | Store files in Supabase Storage and metadata in PostgreSQL. |
 | Verification | Resident submits required details and documents; admin approves or rejects. | Verification unlocks interaction features and grants the verified badge. |
 | Jobs | Client creates, edits, closes, or cancels a job post with service category, hiring requirements, schedule, worker count, public approximate location, private location notes, certification preference, and budget range. | Payments and agreements remain outside the app. Private location notes are never public cards/details. |
@@ -84,7 +84,7 @@ The coding MVP should prioritize the screens already represented in the current 
 | Post | Post dashboard, create job, offer service, drafts/active/paused states. |
 | Details | Job details, public worker profile, public client profile. |
 | Messages | Locked state, inbox, search contacts/messages, job conversation, service request, empty chat, report/delete dialogs. |
-| Profile | Own Work Profile, own Hiring Profile, complete profile prompts, services, job history, worker feedback. |
+| Profile | Own Work Profile, own Hiring Profile, complete profile prompts, skills, credentials, role-specific reviews, work history, hiring history, active services offered, and active job posts. |
 | Admin | Web/admin-only verification queue and review details can be simpler than the mobile app. |
 
 Demo acceptance standard:
