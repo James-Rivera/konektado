@@ -20,6 +20,7 @@ import type {
     JobSummary,
     ProviderService,
     PublicClientProfile,
+    PublicProfileHistoryItem,
     PublicWorkerProfile,
     Review,
 } from '@/types/marketplace.types';
@@ -93,41 +94,22 @@ export function PublicWorkerProfileView({
           </Section>
         ) : null}
 
-        <Section title="Trust and activity">
-          <MetricGrid
-            metrics={[
-              { icon: 'star-border', label: 'Rating', value: formatRating(profile.averageRating, profile.reviewCount) },
-              { icon: 'rate-review', label: 'Reviews', value: String(profile.reviewCount) },
-              { icon: 'task-alt', label: 'Jobs done', value: String(profile.completedJobsCount) },
-              { icon: 'schedule', label: 'Availability', value: shortValue(profile.availability) },
-            ]}
-          />
-        </Section>
-
         {profile.about ? (
           <Section title="About">
             <Text style={styles.bodyText}>{profile.about}</Text>
           </Section>
         ) : null}
 
-        <Section title="Capabilities">
-          {profile.capabilities.length ? (
-            <LimitedTagRow primary={displayService(profile.capabilities[0])} tags={profile.capabilities.slice(1)} />
+        <Section title="Skills">
+          {profile.skills.length ? (
+            <LimitedTagRow primary={displayService(profile.skills[0])} tags={profile.skills.slice(1)} />
           ) : (
             <EmptyPublicCard
               icon="handyman"
-              message="This worker has not added capability categories yet."
-              title="No capabilities listed"
+              message="This worker has not added skills yet."
+              title="No skills listed"
             />
           )}
-          {profile.serviceArea || profile.availability ? (
-            <DetailRows
-              rows={[
-                { icon: 'location-on', text: profile.serviceArea || 'Service area to coordinate' },
-                { icon: 'schedule', text: profile.availability || 'Availability to coordinate' },
-              ]}
-            />
-          ) : null}
         </Section>
 
         <Section title="Credentials">
@@ -162,6 +144,22 @@ export function PublicWorkerProfileView({
           )}
         </Section>
 
+        <Section title="Work History">
+          {profile.workHistory.length ? (
+            <View style={styles.cardList}>
+              {profile.workHistory.map((item) => (
+                <HistorySummaryCard item={item} key={item.id} fallbackTitle="Completed work" />
+              ))}
+            </View>
+          ) : (
+            <EmptyPublicCard
+              icon="work-history"
+              message="Completed work will appear here after safe marketplace history is available."
+              title="No work history yet"
+            />
+          )}
+        </Section>
+
         <Section title="Services Offered">
           {visibleServices.length ? (
             <View style={styles.cardList}>
@@ -182,7 +180,7 @@ export function PublicWorkerProfileView({
           <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm schedule, exact location, and rate in Messages before starting." />
         </Section>
       </ScrollView>
-      {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={cta} />}
+      {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={withMessageHelper(cta)} />}
     </View>
   );
 }
@@ -223,24 +221,8 @@ export function PublicClientProfileView({
           </Section>
         ) : null}
 
-        <Section title="Trust and activity">
-          <MetricGrid
-            metrics={[
-              { icon: 'star-border', label: 'Rating', value: formatRating(profile.averageRating, profile.reviewCount) },
-              { icon: 'rate-review', label: 'Reviews', value: String(profile.reviewCount) },
-              { icon: 'business-center', label: 'Jobs posted', value: String(profile.jobsPostedCount) },
-              { icon: 'task-alt', label: 'Completed', value: String(profile.completedHiresCount) },
-            ]}
-          />
-        </Section>
-
-        {profile.about ? (
-          <Section title="About">
-            <Text style={styles.bodyText}>{profile.about}</Text>
-          </Section>
-        ) : null}
-
-        <Section title="Hiring Style">
+        <Section title="Hiring Preferences">
+          {profile.about ? <Text style={styles.bodyText}>{profile.about}</Text> : null}
           {profile.commonNeeds.length ? (
             <LimitedTagRow primary={displayService(profile.commonNeeds[0])} tags={profile.commonNeeds.slice(1)} />
           ) : (
@@ -274,6 +256,22 @@ export function PublicClientProfileView({
           )}
         </Section>
 
+        <Section title="Hiring History">
+          {profile.hiringHistory.length ? (
+            <View style={styles.cardList}>
+              {profile.hiringHistory.map((item) => (
+                <HistorySummaryCard item={item} key={item.id} fallbackTitle="Completed hire" />
+              ))}
+            </View>
+          ) : (
+            <EmptyPublicCard
+              icon="history"
+              message="Completed hires will appear here after safe marketplace history is available."
+              title="No hiring history yet"
+            />
+          )}
+        </Section>
+
         <Section title="Job Posts">
           {profile.activeJobs.length ? (
             <View style={styles.cardList}>
@@ -294,7 +292,7 @@ export function PublicClientProfileView({
           <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm scope, schedule, and budget in Messages before starting." />
         </Section>
       </ScrollView>
-      {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={cta} />}
+      {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={withMessageHelper(cta)} />}
     </View>
   );
 }
@@ -328,6 +326,34 @@ function PublicReviewCard({ review }: { review: Review }) {
       <Text numberOfLines={3} style={styles.bodyText}>
         {review.comment || 'No written feedback.'}
       </Text>
+    </PublicCard>
+  );
+}
+
+function HistorySummaryCard({
+  fallbackTitle,
+  item,
+}: {
+  fallbackTitle: string;
+  item: PublicProfileHistoryItem;
+}) {
+  return (
+    <PublicCard>
+      <View style={styles.contextHeaderRow}>
+        <View style={styles.cardCopy}>
+          <Text numberOfLines={2} style={styles.cardTitle}>
+            {item.title || fallbackTitle}
+          </Text>
+          <Text style={styles.cardMeta}>{formatShortDate(item.completedAt)}</Text>
+        </View>
+        <MaterialIcons color={color.primary} name="task-alt" size={20} />
+      </View>
+      <DetailRows
+        rows={[
+          { icon: 'category', text: displayService(item.serviceLabel || item.category) || 'Marketplace work' },
+          { icon: 'location-on', text: item.locationText || 'Barangay area' },
+        ]}
+      />
     </PublicCard>
   );
 }
@@ -431,32 +457,6 @@ function Section({ children, title }: { children: ReactNode; title: string }) {
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
-    </View>
-  );
-}
-
-function MetricGrid({
-  metrics,
-}: {
-  metrics: { icon: keyof typeof MaterialIcons.glyphMap; label: string; value: string }[];
-}) {
-  return (
-    <View style={styles.metricGrid}>
-      {metrics.map((metric) => (
-        <View key={metric.label} style={styles.metricCard}>
-          <MaterialIcons
-            color={metric.icon === 'star-border' ? color.brandYellow : color.primary}
-            name={metric.icon}
-            size={18}
-          />
-          <Text numberOfLines={1} style={styles.metricLabel}>
-            {metric.label}
-          </Text>
-          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.metricValue}>
-            {metric.value}
-          </Text>
-        </View>
-      ))}
     </View>
   );
 }
@@ -710,19 +710,24 @@ function PublicProfileCta({ bottomInset, cta }: { bottomInset: number; cta: Prof
   );
 }
 
-function formatRating(averageRating: number | null, reviewCount: number) {
-  if (averageRating && reviewCount > 0) return `${averageRating.toFixed(1)}`;
-  return '-';
-}
+function withMessageHelper(cta: ProfileCta): ProfileCta {
+  if (cta.helper) return cta;
 
-function shortValue(value: string | null | undefined) {
-  const cleanValue = compactText(value);
-  if (!cleanValue) return '-';
-  return cleanValue.length > 16 ? 'Set' : cleanValue;
+  return {
+    ...cta,
+    helper: 'This resident prefers to coordinate through Konektado Messages first.',
+  };
 }
 
 function compactText(value: string | null | undefined) {
   return value?.trim() ?? '';
+}
+
+function formatShortDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Recently completed';
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function displayService(value: string | null | undefined) {

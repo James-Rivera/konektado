@@ -220,7 +220,7 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
   }
 
   if (!compactText(input.preferredContactMethod)) {
-    return { data: null, error: 'Choose a contact preference.' };
+    return { data: null, error: 'Choose your preferred coordination method.' };
   }
 
   const [{ data: profile, error: profileError }, { data: latestVerification, error: latestError }] = await Promise.all([
@@ -654,13 +654,13 @@ function buildCoreCompletion({
     },
     {
       id: 'contact-preference',
-      label: 'Set contact preference',
+      label: 'Set preferred coordination',
       complete: hasContactPreference,
       action: completionAction({
         id: 'contact-preference',
         kind: 'edit_contact_preference',
-        label: 'Set contact preference',
-        description: 'Choose how people should contact you in Konektado.',
+        label: 'Set preferred coordination',
+        description: 'Choose how people should coordinate with you in Konektado.',
         mode: 'core',
       }),
     },
@@ -687,37 +687,37 @@ function buildWorkCompletion({
   isVerified: boolean;
 }): ProfileModeCompletion {
   const hasSummary = Boolean(compactText(work.headline) && compactText(work.bio));
-  const hasCapabilities = Boolean(work.offeredServices.length || work.customOfferedServices.length);
+  const hasSkills = Boolean(work.offeredServices.length || work.customOfferedServices.length);
   const hasAvailability = Boolean(compactText(work.availability));
   const hasServiceArea = Boolean(compactText(work.serviceArea));
   const setupStarted = Boolean(
     providerTextStarted(work) ||
-      hasCapabilities ||
+      hasSkills ||
       hasAvailability ||
       hasServiceArea,
   );
   const requiredItems: RequiredItem[] = [
     {
       id: 'work-summary',
-      label: 'Add professional summary',
+      label: 'Add work summary',
       complete: hasSummary,
       action: completionAction({
         id: 'work-summary',
         kind: 'edit_work_profile',
-        label: 'Add professional summary',
-        description: 'Add a worker headline and short work bio.',
+        label: 'Add work summary',
+        description: 'Add a flexible summary of the work you can do.',
         mode: 'work',
       }),
     },
     {
       id: 'capabilities',
-      label: 'Add capabilities',
-      complete: hasCapabilities,
+      label: 'Add skills',
+      complete: hasSkills,
       action: completionAction({
         id: 'capabilities',
         kind: 'edit_work_profile',
-        label: 'Add capabilities',
-        description: 'Choose the service categories you can generally do.',
+        label: 'Add skills',
+        description: 'Choose the things you know how to do.',
         mode: 'work',
       }),
     },

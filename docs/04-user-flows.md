@@ -116,8 +116,8 @@ Contact details rules:
 
 1. Verified user opens Profile and sees a trust checklist for Core Profile, Work Profile, and Hiring Profile.
 2. Core Profile collects public name, preferred contact method, approximate location, private block/lot or house-number details, short resident intro, and verification summary.
-3. Work Profile collects worker-facing headline, bio, broad capability categories, custom "Others / Specify" text, default service area, default availability, credentials, and worker reputation context.
-4. Hiring Profile collects client-facing headline, bio, common needs, custom "Others / Specify" text, coordination style, general scheduling preference, and client reputation context.
+3. Work Profile collects About My Work, skills, custom "Others / Specify" skill text, usual service area, usual availability, credentials, worker reviews, and work-history context.
+4. Hiring Profile collects Hiring Introduction, Usually Hires For / Common Needs, custom "Others / Specify" need text, coordination style, preferred coordination time, client reviews, and hiring-history context.
 5. App saves role-profile rows without changing the user's active role.
 6. When a verified user tries to publish or message without the relevant role profile, the app routes them to `/profile/complete`.
 
@@ -129,6 +129,7 @@ Rules:
 - Verification selfie, ID files, certificate files, and admin notes are private and must never become public profile photos or profile content.
 - A public profile photo is strongly recommended for recognition and trust, but remains optional and must not block completion or marketplace access.
 - Profile completion must not depend on active services, active jobs, budgets, rates, or marketplace inventory. A user with zero listings can still complete Core, Work, and Hiring profiles.
+- Profile may summarize active Services Offered, active Job Posts, Work History, and Hiring History, but drafts, inactive posts, archived/final post management, edit/delete/deactivate/republish controls, saved items, and private states belong in Post Dashboard or other owner/private surfaces.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
 - Publishing services and messaging clients about jobs require a completed Work Profile.
 

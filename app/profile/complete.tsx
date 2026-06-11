@@ -665,7 +665,7 @@ function ContactPreferencePicker({
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>Contact preference</Text>
+      <Text style={styles.fieldLabel}>Preferred coordination</Text>
       <View style={styles.contactPreferenceRow}>
         {CONTACT_METHOD_OPTIONS.map((option) => {
           const selected = value === option.value;
@@ -811,7 +811,7 @@ function CoreFirstPanel({ onPress }: { onPress: () => void }) {
         <View style={styles.lockedCopy}>
           <Text style={styles.lockedTitle}>Finish your Core Profile first</Text>
           <Text style={styles.lockedText}>
-            Your name, location, and contact preference help neighbors know who they are connecting with.
+            Your name, location, and preferred coordination help neighbors know who they are connecting with.
           </Text>
         </View>
         <PrimaryButton icon="person" label="Complete Core Profile" onPress={onPress} />
@@ -833,13 +833,13 @@ function WorkForm({
     <>
       <SetupSection targetId="work-summary" onTargetLayout={onTargetLayout}>
         <Field
-          label="Work headline"
-          placeholder="Reliable home repair help nearby"
+          label="About my work"
+          placeholder="I can help with tutoring, document formatting, and printer setup"
           value={value.headline}
           onChangeText={(headline) => onChange({ ...value, headline })}
         />
         <Field
-          label="Work bio"
+          label="Work summary"
           multiline
           placeholder="Tell clients what you can help with, how you work, and what they should prepare."
           value={value.bio}
@@ -850,11 +850,11 @@ function WorkForm({
       <SetupSection targetId="capabilities" onTargetLayout={onTargetLayout}>
         <ServiceSelectionField
           customServices={value.customOfferedServices}
-          emptyText="Choose the capabilities you want neighbors to know you can generally do."
-          label="Capabilities"
+          emptyText="Choose the skills you want neighbors to know you can generally do."
+          label="Skills"
           selectedServices={value.offeredServices}
-          sheetDescription="Pick all Konektado categories you can generally offer."
-          sheetTitle="Choose capabilities"
+          sheetDescription="Pick the things you know how to do. Active services are created separately in Post."
+          sheetTitle="Choose skills"
           onChange={(offeredServices, customOfferedServices) =>
             onChange({ ...value, offeredServices, customOfferedServices })
           }
@@ -896,7 +896,7 @@ function HiringForm({
     <>
       <SetupSection targetId="hiring-intro" onTargetLayout={onTargetLayout}>
         <Field
-          label="Hiring headline"
+          label="Hiring introduction title"
           placeholder="Hiring trusted help around the barangay"
           value={value.headline}
           onChangeText={(headline) => onChange({ ...value, headline })}

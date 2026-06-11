@@ -111,8 +111,8 @@ Barangay verification proves the account belongs to a real resident. Public prof
 Completion layers:
 
 - Core Profile: public name, preferred contact method, barangay/city, approximate address, private house number or block/lot for admin/private coordination, resident intro, and verification summary.
-- Work Profile: worker headline, bio, official taxonomy capability categories, separate custom "Others / Specify" capabilities, default service area, default availability, credentials, and worker reputation.
-- Hiring Profile: client headline, bio, common needs, separate custom "Others / Specify" needs, coordination style, general scheduling preference, and client reputation.
+- Work Profile: About My Work, official taxonomy skills, separate custom "Others / Specify" skills, usual service area, usual availability, credentials, worker reviews, and work history.
+- Hiring Profile: Hiring Introduction, common needs, separate custom "Others / Specify" needs, coordination style, preferred coordination time, client reviews, and hiring history.
 
 Verified/setup state:
 
@@ -121,6 +121,8 @@ Verified/setup state:
 - `Ready`: verified plus the relevant Work or Hiring Profile is complete for the attempted action.
 
 Profile completion must not query or require active services, active jobs, drafts, saved items, profile-owned rates, or profile-owned budgets. Listings own pricing, budgets, schedules, requirements, message options, and active inventory.
+
+Public profile history uses only safe job summary fields and must fail closed under existing RLS. In the current schema, completed/closed job rows are readable to participants and barangay admins; unrelated public viewers may see empty Work History or Hiring History until a dedicated public-safe history RPC or policy is approved.
 
 Action gates:
 
@@ -215,7 +217,7 @@ Public-safe provider fields:
 
 - Display name.
 - Approximate profile location label such as barangay and city.
-- Public profile headline and bio.
+- Public profile work summary or hiring introduction.
 - Offered or needed service categories.
 - Service area and preferred schedule text.
 - Service categories and descriptions.

@@ -12,7 +12,7 @@ Konektado exists to make barangay-based service discovery and hiring safer and e
 
 The app should:
 
-- Help residents show identity, capabilities, hiring style, credentials, reputation, and active marketplace listings without mixing profile data and listing data.
+- Help residents show identity, skills, hiring style, credentials, reputation, history, and active marketplace listings without mixing profile data and listing data.
 - Help clients find verified local service providers and micro-gig helpers.
 - Help clients post simple jobs that workers can view and respond to through messaging.
 - Help barangay admins verify resident identities and review platform activity.
@@ -131,7 +131,8 @@ Core interaction model:
 
 Important product language:
 
-- Use "Services" in the UI instead of "Skills" when describing what a worker offers.
+- Use "Skills" for profile-owned abilities: things a resident knows how to do.
+- Use "Services" for active service listings: specific offers the resident is currently publishing.
 - Use "Message", "View Job", "View Profile", "Mark Hired", and "Job History".
 - Do not use "Apply" or "Application" as the primary user-facing flow unless a future formal application feature is added.
 - Public feed cards do not need repeated verification badges because interaction is already verification-gated.
