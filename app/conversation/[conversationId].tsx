@@ -1,10 +1,12 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Keyboard,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -23,8 +25,10 @@ import { useProfile } from '@/hooks/use-profile';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
     getConversation,
+    getMessageAttachmentUrl,
     getConversationSummary,
     mapRealtimeMessage,
+    markConversationRead,
     markWorkerHired,
     sendMessage,
 } from '@/services/conversation.service';
@@ -50,6 +54,15 @@ const SERVICE_PROMPTS = ['Are you available?', 'Can we discuss the schedule?', '
 type LocalMessageStatus = 'sending' | 'failed';
 type ThreadMessage = ConversationMessage & {
   localStatus?: LocalMessageStatus;
+  pendingAttachment?: MessageAttachmentDraft | null;
+};
+
+type MessageAttachmentDraft = {
+  uri: string;
+  name?: string | null;
+  mimeType?: string | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 function getParamValue(value: string | string[] | undefined) {
@@ -72,6 +85,8 @@ export default function ConversationDetailScreen() {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(false);
   const [visibleTimestampId, setVisibleTimestampId] = useState<string | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<MessageAttachmentDraft | null>(null);
+  const [openImageUrl, setOpenImageUrl] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const loadRequestRef = useRef(0);
 
@@ -95,6 +110,7 @@ export default function ConversationDetailScreen() {
         Alert.alert('Conversation', result.error);
       } else {
         setConversation(result.data);
+        void markConversationRead(conversationId);
       }
 
       setLoading(false);
@@ -122,8 +138,15 @@ export default function ConversationDetailScreen() {
         (payload) => {
           const message = mapRealtimeMessage(payload.new);
           if (!message) return;
-          setConversation((current) => reconcileConversationMessage(current, message));
-          emitConversationPreviewUpdate({ conversationId, message, userId: profile?.id });
+          void (async () => {
+            const attachmentUrl = message.attachmentPath
+              ? await getMessageAttachmentUrl(message.attachmentPath)
+              : null;
+            const hydratedMessage = { ...message, attachmentUrl };
+            setConversation((current) => reconcileConversationMessage(current, hydratedMessage));
+            emitConversationPreviewUpdate({ conversationId, message: hydratedMessage, userId: profile?.id });
+            if (hydratedMessage.senderId !== profile?.id) void markConversationRead(conversationId);
+          })();
         },
       )
       .on(
@@ -204,11 +227,16 @@ export default function ConversationDetailScreen() {
     });
   };
 
-  const onSend = async (overrideBody?: string, retryMessageId?: string) => {
+  const onSend = async (
+    overrideBody?: string,
+    retryMessageId?: string,
+    overrideAttachment?: MessageAttachmentDraft | null,
+  ) => {
     if (!conversationId) return;
 
     const messageBody = (overrideBody ?? body).trim();
-    if (!messageBody) return;
+    const messageAttachment = overrideAttachment ?? selectedAttachment;
+    if (!messageBody && !messageAttachment) return;
 
     setSendError(null);
     const tempMessage: ThreadMessage = {
@@ -216,8 +244,14 @@ export default function ConversationDetailScreen() {
       conversationId,
       senderId: profile?.id ?? '',
       body: messageBody,
+      attachmentPath: null,
+      attachmentMimeType: messageAttachment?.mimeType ?? null,
+      attachmentWidth: messageAttachment?.width ?? null,
+      attachmentHeight: messageAttachment?.height ?? null,
+      attachmentUrl: messageAttachment?.uri ?? null,
       createdAt: new Date().toISOString(),
       localStatus: 'sending',
+      pendingAttachment: messageAttachment,
     };
 
     if (retryMessageId) {
@@ -235,10 +269,17 @@ export default function ConversationDetailScreen() {
       );
     }
 
-    if (!overrideBody) setBody('');
+    if (!overrideBody) {
+      setBody('');
+      setSelectedAttachment(null);
+    }
     scrollToBottom();
 
-    const result = await sendMessage({ conversationId, body: messageBody });
+    const result = await sendMessage({
+      attachment: messageAttachment,
+      conversationId,
+      body: messageBody,
+    });
 
     if (result.error) {
       setSendError(result.error);
@@ -265,6 +306,25 @@ export default function ConversationDetailScreen() {
       setConversation((current) => reconcileConversationMessage(current, result.data, tempMessage.id));
       emitConversationPreviewUpdate({ conversationId, message: result.data, userId: profile?.id });
     }
+  };
+
+  const chooseImage = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      multiple: false,
+      type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    if ((asset.size ?? 0) > 10 * 1024 * 1024) {
+      Alert.alert('Image attachment', 'Choose an image smaller than 10 MB.');
+      return;
+    }
+    setSelectedAttachment({
+      mimeType: asset.mimeType,
+      name: asset.name,
+      uri: asset.uri,
+    });
   };
 
   const onMarkHired = async () => {
@@ -411,9 +471,10 @@ export default function ConversationDetailScreen() {
                 nextMessage={nextMessage}
                 onRetryFailed={
                   message.localStatus === 'failed'
-                    ? () => onSend(message.body, message.id)
+                    ? () => onSend(message.body, message.id, message.pendingAttachment)
                     : undefined
                 }
+                onOpenImage={setOpenImageUrl}
                 onToggleTime={() =>
                   setVisibleTimestampId((current) => (current === message.id ? null : message.id))
                 }
@@ -426,6 +487,17 @@ export default function ConversationDetailScreen() {
 
         <View style={styles.composerWrap}>
           {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
+          {selectedAttachment ? (
+            <View style={styles.attachmentPreview}>
+              <CachedRemoteImage uri={selectedAttachment.uri} style={styles.attachmentPreviewImage} />
+              <Pressable
+                accessibilityLabel="Remove image attachment"
+                onPress={() => setSelectedAttachment(null)}
+                style={styles.removeAttachment}>
+                <MaterialIcons color={color.white} name="close" size={16} />
+              </Pressable>
+            </View>
+          ) : null}
           <ScrollView
             contentContainerStyle={styles.promptRow}
             horizontal
@@ -444,8 +516,9 @@ export default function ConversationDetailScreen() {
 
           <View style={styles.composer}>
             <View style={styles.attachmentRow}>
-              <MaterialIcons color={color.verificationBlue} name="image" size={22} />
-              <MaterialIcons color={color.verificationBlue} name="post-add" size={22} />
+              <Pressable accessibilityLabel="Choose image" onPress={chooseImage}>
+                <MaterialIcons color={color.verificationBlue} name="image" size={22} />
+              </Pressable>
             </View>
             <TextInput
               multiline
@@ -465,6 +538,17 @@ export default function ConversationDetailScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setOpenImageUrl(null)}
+        transparent
+        visible={Boolean(openImageUrl)}>
+        <Pressable onPress={() => setOpenImageUrl(null)} style={styles.imageModalBackdrop}>
+          {openImageUrl ? (
+            <CachedRemoteImage uri={openImageUrl} style={styles.fullscreenImage} />
+          ) : null}
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -693,6 +777,7 @@ function MessageBubble({
   message,
   nextMessage,
   onRetryFailed,
+  onOpenImage,
   onToggleTime,
   previousMessage,
   showTime,
@@ -701,6 +786,7 @@ function MessageBubble({
   message: ThreadMessage;
   nextMessage?: ThreadMessage;
   onRetryFailed?: () => void;
+  onOpenImage: (url: string) => void;
   onToggleTime: () => void;
   previousMessage?: ThreadMessage;
   showTime: boolean;
@@ -732,7 +818,14 @@ function MessageBubble({
             nextSameSender && (mine ? styles.myMessageGroupedBottom : styles.theirMessageGroupedBottom),
             mine ? styles.myMessage : styles.theirMessage,
           ]}>
-          <Text style={[styles.messageText, mine && styles.myMessageText]}>{message.body}</Text>
+          {message.attachmentUrl ? (
+            <Pressable onPress={() => onOpenImage(message.attachmentUrl as string)}>
+              <CachedRemoteImage uri={message.attachmentUrl} style={styles.messageImage} />
+            </Pressable>
+          ) : null}
+          {message.body ? (
+            <Text style={[styles.messageText, mine && styles.myMessageText]}>{message.body}</Text>
+          ) : null}
         </Pressable>
         {showTime ? (
           <Text style={[styles.messageTime, mine && styles.myMessageTime]}>
@@ -1092,8 +1185,15 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     borderRadius: 18,
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  messageImage: {
+    borderRadius: 12,
+    height: 180,
+    maxWidth: 250,
+    width: 220,
   },
   myMessageGroupedTop: {
     borderTopRightRadius: 6,
@@ -1199,6 +1299,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     height: 42,
+  },
+  attachmentPreview: {
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    position: 'relative',
+  },
+  attachmentPreviewImage: {
+    borderRadius: 12,
+    height: 92,
+    width: 92,
+  },
+  removeAttachment: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 12,
+    height: 24,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    width: 24,
+  },
+  imageModalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  fullscreenImage: {
+    height: '82%',
+    width: '100%',
   },
   input: {
     backgroundColor: color.surfaceAlt,

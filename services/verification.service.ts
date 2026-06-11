@@ -5,6 +5,7 @@ import type { VerificationUpload } from '@/types/onboarding.types';
 import type {
   CreateVerificationRequestInput,
   CreatedVerificationRequest,
+  ContactOtpSendResult,
   VerificationPrefill,
   VerificationStatus,
   VerificationSummary,
@@ -120,6 +121,10 @@ function validateInput(input: CreateVerificationRequestInput): string | null {
 
   if (!input.phone.trim()) {
     return 'Enter a contact number for verification updates.';
+  }
+
+  if (!input.contactOtpChallengeId) {
+    return 'Confirm your contact number before submitting verification.';
   }
 
   const hasCertificate = input.files.some((file) => file.fileType === 'certification');
@@ -273,6 +278,33 @@ export async function getMyVerificationPrefill(): Promise<ServiceResult<Verifica
   };
 }
 
+export async function sendContactVerificationCode(
+  phone: string,
+): Promise<ServiceResult<ContactOtpSendResult>> {
+  const { data, error } = await supabase.functions.invoke('contact-otp', {
+    body: { action: 'send', phone },
+  });
+  if (error) return { data: null, error: getFunctionError(error, data) };
+  if (data?.error) return { data: null, error: String(data.error) };
+  return { data: data as ContactOtpSendResult, error: null };
+}
+
+export async function verifyContactVerificationCode({
+  challengeId,
+  code,
+}: {
+  challengeId: string;
+  code: string;
+}): Promise<ServiceResult<string>> {
+  const { data, error } = await supabase.functions.invoke('contact-otp', {
+    body: { action: 'verify', challengeId, code },
+  });
+  if (error) return { data: null, error: getFunctionError(error, data) };
+  if (data?.error) return { data: null, error: String(data.error) };
+  if (!data?.verified) return { data: null, error: 'Could not confirm this contact code.' };
+  return { data: String(data.challengeId ?? challengeId), error: null };
+}
+
 export async function createVerificationRequest(
   input: CreateVerificationRequestInput,
 ): Promise<ServiceResult<CreatedVerificationRequest>> {
@@ -366,6 +398,7 @@ export async function createVerificationRequest(
   const { data: verification, error: verificationError } = await supabase
     .from('verifications')
     .insert({
+      contact_otp_challenge_id: input.contactOtpChallengeId,
       user_id: user.id,
       status: 'pending',
       notes: buildNotesPayload(input),
@@ -431,4 +464,11 @@ export async function createVerificationRequest(
     },
     error: null,
   };
+}
+
+function getFunctionError(error: { message?: string } | null, data: unknown) {
+  if (data && typeof data === 'object' && 'error' in data) {
+    return String((data as { error?: unknown }).error ?? 'Contact verification failed.');
+  }
+  return error?.message || 'Contact verification failed.';
 }

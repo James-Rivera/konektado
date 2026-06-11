@@ -11,6 +11,8 @@ import {
 import {
   createVerificationRequest,
   getMyVerificationPrefill,
+  sendContactVerificationCode,
+  verifyContactVerificationCode,
 } from '@/services/verification.service';
 import type { VerificationUpload } from '@/types/onboarding.types';
 import type {
@@ -31,6 +33,7 @@ const emptyForm: VerificationFormState = {
   barangay: 'San Pedro',
   birthdate: '',
   city: 'Santo Tomas',
+  contactOtpChallengeId: null,
   email: null,
   files: [],
   firstName: '',
@@ -47,6 +50,9 @@ export default function VerificationGateScreen() {
   const [step, setStep] = useState<VerificationFlowStep>('intro');
   const [form, setForm] = useState<VerificationFormState>(emptyForm);
   const [contactCode, setContactCode] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+  const [contactVerifying, setContactVerifying] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [loadingPrefill, setLoadingPrefill] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
@@ -113,6 +119,14 @@ export default function VerificationGateScreen() {
   }, []);
 
   useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setResendSeconds((value) => Math.max(value - 1, 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
+
+  useEffect(() => {
     if (!pendingRequestId || step !== 'submitted') return;
 
     let active = true;
@@ -157,7 +171,38 @@ export default function VerificationGateScreen() {
   }, [form.files]);
 
   const setField = (field: keyof VerificationFormState, value: string | null) => {
-    setForm((previous) => ({ ...previous, [field]: value }));
+    setForm((previous) => ({
+      ...previous,
+      ...(field === 'phone' && value !== previous.phone
+        ? { contactOtpChallengeId: null }
+        : {}),
+      [field]: value,
+    }));
+    if (field === 'phone') setContactCode('');
+  };
+
+  const sendContactCode = async () => {
+    if (!form.phone.trim()) {
+      Alert.alert('Contact number', 'Enter a contact number for verification updates.');
+      return false;
+    }
+
+    setContactSending(true);
+    const result = await sendContactVerificationCode(form.phone);
+    setContactSending(false);
+    if (result.error || !result.data) {
+      Alert.alert('Contact verification', result.error ?? 'Could not send a verification code.');
+      return false;
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      contactOtpChallengeId: result.data?.challengeId ?? null,
+    }));
+    setContactCode('');
+    setResendSeconds(result.data.resendAfter);
+    if (result.data.testCode) Alert.alert('Local verification code', result.data.testCode);
+    return true;
   };
 
   const chooseIdType = (idType: VerificationIdType) => {
@@ -298,6 +343,29 @@ export default function VerificationGateScreen() {
       return;
     }
 
+    if (step === 'details') {
+      const sent = await sendContactCode();
+      if (!sent) return;
+    }
+
+    if (step === 'code') {
+      if (!form.contactOtpChallengeId || contactCode.length !== 6) {
+        Alert.alert('Contact verification', 'Enter the complete 6-digit code.');
+        return;
+      }
+
+      setContactVerifying(true);
+      const result = await verifyContactVerificationCode({
+        challengeId: form.contactOtpChallengeId,
+        code: contactCode,
+      });
+      setContactVerifying(false);
+      if (result.error) {
+        Alert.alert('Contact verification', result.error);
+        return;
+      }
+    }
+
     setStep(getNextStep(step, form.idType));
   };
 
@@ -310,6 +378,8 @@ export default function VerificationGateScreen() {
   return (
     <FigmaVerificationFlow
       contactCode={contactCode}
+      contactSending={contactSending}
+      contactVerifying={contactVerifying}
       files={selectedFiles}
       form={form}
       loadingPrefill={loadingPrefill}
@@ -328,8 +398,12 @@ export default function VerificationGateScreen() {
       onPickFile={pickFile}
       onProceedHome={() => router.replace('/(tabs)')}
       onRemoveFile={removeFile}
+      onResendContactCode={() => {
+        if (!contactSending && resendSeconds === 0) void sendContactCode();
+      }}
       onResubmit={resubmit}
       onViewProfile={() => router.replace('/(tabs)/profile')}
+      resendSeconds={resendSeconds}
     />
   );
 }

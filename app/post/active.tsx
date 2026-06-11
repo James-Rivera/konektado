@@ -11,8 +11,9 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { closeJob, deactivateJob, listMyJobs, reactivateJob } from '@/services/job.service';
 import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketplace.helpers';
+import { getMyJobReviewState } from '@/services/review.service';
 import { listMyServices, updateServiceAvailability } from '@/services/service-profile.service';
-import type { JobSummary, ProviderService } from '@/types/marketplace.types';
+import type { JobReviewState, JobSummary, ProviderService } from '@/types/marketplace.types';
 
 type ManageTarget =
   | { job: JobSummary; type: 'job' }
@@ -29,6 +30,7 @@ export default function ActivePostsScreen() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [query, setQuery] = useState('');
   const [manageTarget, setManageTarget] = useState<ManageTarget | null>(null);
+  const [reviewStates, setReviewStates] = useState<Record<string, JobReviewState>>({});
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
   useFocusEffect(
@@ -64,6 +66,18 @@ export default function ActivePostsScreen() {
             Alert.alert('Active posts', jobResult.error ?? 'Could not load your posts.');
           } else {
             setJobs(jobResult.data);
+            const completedJobs = jobResult.data.filter((job) => job.status === 'completed');
+            const stateResults = await Promise.all(
+              completedJobs.map(async (job) => [job.id, await getMyJobReviewState(job.id)] as const),
+            );
+            if (!active) return;
+            setReviewStates(
+              Object.fromEntries(
+                stateResults.flatMap(([jobId, result]) =>
+                  result.data ? [[jobId, result.data] as const] : [],
+                ),
+              ),
+            );
           }
 
           if (serviceResult.error || !serviceResult.data) {
@@ -123,6 +137,14 @@ export default function ActivePostsScreen() {
   const editService = (service: ProviderService) => {
     setManageTarget(null);
     router.push({ pathname: '/create-service' as never, params: { serviceId: service.id } } as never);
+  };
+
+  const editJob = (job: JobSummary) => {
+    setManageTarget(null);
+    router.push({
+      pathname: '/create-job' as never,
+      params: { jobId: job.id, returnTo: 'post' },
+    } as never);
   };
 
   const updateJob = async ({
@@ -187,6 +209,9 @@ export default function ActivePostsScreen() {
     : manageTarget.type === 'job'
       ? getJobManagementActions({
         job: manageTarget.job,
+        onEdit: () => editJob(manageTarget.job),
+        onReview: () => viewTarget(manageTarget),
+        reviewState: reviewStates[manageTarget.job.id] ?? null,
         onClose: () =>
           confirmJobAction({
             body: 'This marks the job as closed and removes it from active search results.',
@@ -464,15 +489,21 @@ function getJobManagementActions({
   job,
   onClose,
   onDeactivate,
+  onEdit,
   onReactivate,
+  onReview,
   onView,
+  reviewState,
   updating,
 }: {
   job: JobSummary;
   onClose: () => void;
   onDeactivate: () => void;
+  onEdit: () => void;
   onReactivate: () => void;
+  onReview: () => void;
   onView: () => void;
+  reviewState: JobReviewState | null;
   updating: boolean;
 }): MoreSheetAction[] {
   const actions: MoreSheetAction[] = [
@@ -485,6 +516,27 @@ function getJobManagementActions({
   ];
   const isInactive = job.status === 'cancelled';
   const isFinal = job.status === 'closed' || job.status === 'completed';
+
+  if (['open', 'reviewing', 'cancelled'].includes(job.status)) {
+    actions.push({
+      disabled: updating,
+      icon: 'edit',
+      label: 'Edit job',
+      onPress: onEdit,
+    });
+  }
+
+  if (
+    job.status === 'completed' &&
+    (reviewState?.eligible || reviewState?.reason === 'already_reviewed')
+  ) {
+    actions.push({
+      disabled: updating,
+      icon: 'rate-review',
+      label: reviewState.reason === 'already_reviewed' ? 'View submitted review' : 'Review worker',
+      onPress: onReview,
+    });
+  }
 
   if (isInactive) {
     actions.push({

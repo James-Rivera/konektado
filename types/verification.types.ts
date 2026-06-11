@@ -50,9 +50,18 @@ export type CreateVerificationRequestInput = {
   servicesOrPurpose: string;
   note: string;
   files: VerificationUpload[];
+  contactOtpChallengeId: string | null;
 };
 
 export type CreatedVerificationRequest = {
   id: string;
   status: VerificationStatus;
+};
+
+export type ContactOtpSendResult = {
+  challengeId: string;
+  expiresIn: number;
+  resendAfter: number;
+  simulated: boolean;
+  testCode?: string;
 };

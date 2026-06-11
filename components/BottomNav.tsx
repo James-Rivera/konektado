@@ -1,10 +1,14 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import type { ComponentProps } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { color, space } from '@/constants/theme';
+import { useProfile } from '@/hooks/use-profile';
+import { listMyConversations } from '@/services/conversation.service';
+import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -25,7 +29,38 @@ const TAB_META: Record<
 
 export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { profile } = useProfile();
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
+
+  const refreshUnread = useCallback(() => {
+    if (!profile?.id) {
+      setUnreadMessages(0);
+      return;
+    }
+    void listMyConversations().then((result) => {
+      if (!result.data) return;
+      setUnreadMessages(
+        result.data.reduce((total, conversation) => total + conversation.unreadCount, 0),
+      );
+    });
+  }, [profile?.id]);
+
+  useFocusEffect(useCallback(() => {
+    refreshUnread();
+  }, [refreshUnread]));
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+    const channel = supabase
+      .channel(`bottom-nav-unread-${profile.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, refreshUnread)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_reads' }, refreshUnread)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, refreshUnread]);
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
@@ -59,11 +94,18 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
               });
             }}
             style={({ pressed }) => [styles.tab, pressed && styles.pressed]}>
-            <MaterialIcons
-              color={tint}
-              name={isFocused ? meta.activeIcon : meta.inactiveIcon}
-              size={24}
-            />
+            <View>
+              <MaterialIcons
+                color={tint}
+                name={isFocused ? meta.activeIcon : meta.inactiveIcon}
+                size={24}
+              />
+              {route.name === 'messages' && unreadMessages > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadMessages > 99 ? '99+' : unreadMessages}</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive, { color: tint }]}>
               {meta.label}
             </Text>
@@ -106,5 +148,24 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  badge: {
+    alignItems: 'center',
+    backgroundColor: color.danger,
+    borderColor: color.background,
+    borderRadius: 9,
+    borderWidth: 2,
+    minHeight: 18,
+    minWidth: 18,
+    paddingHorizontal: 3,
+    position: 'absolute',
+    right: -11,
+    top: -7,
+  },
+  badgeText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 9,
+    lineHeight: 14,
   },
 });

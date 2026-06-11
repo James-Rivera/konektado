@@ -363,6 +363,11 @@ export type ConversationMessage = {
   conversationId: string;
   senderId: string;
   body: string;
+  attachmentPath: string | null;
+  attachmentMimeType: string | null;
+  attachmentWidth: number | null;
+  attachmentHeight: number | null;
+  attachmentUrl: string | null;
   createdAt: string;
 };
 
@@ -382,6 +387,7 @@ export type ConversationSummary = {
   client: PublicProfileSummary | null;
   provider: PublicProfileSummary | null;
   lastMessage: ConversationMessage | null;
+  unreadCount: number;
 };
 
 export type ConversationDetail = ConversationSummary & {
@@ -398,13 +404,48 @@ export type Review = {
   createdAt: string;
   updatedAt: string;
   reviewer: PublicProfileSummary | null;
+  jobContext: {
+    id: string;
+    title: string;
+    serviceLabel: string | null;
+    completedAt: string;
+  } | null;
 };
 
 export type CreateReviewInput = {
   jobId: string;
-  revieweeId: string;
   rating: number;
   comment?: string | null;
+};
+
+export type JobReviewState = {
+  eligible: boolean;
+  reason:
+    | 'eligible'
+    | 'already_reviewed'
+    | 'invalid_counterparty'
+    | 'not_completed'
+    | 'not_found'
+    | 'not_hired_participant'
+    | 'not_participant'
+    | 'not_verified';
+  revieweeId: string | null;
+  revieweeRole: 'client' | 'worker' | null;
+  review: Review | null;
+};
+
+export type PublicProfileTrustSummary = {
+  averageRating: number | null;
+  reviewCount: number;
+  completedJobsCount: number;
+  jobsPostedCount: number;
+  reviews: Review[];
+  history: {
+    id: string;
+    title: string;
+    serviceLabel: string | null;
+    completedAt: string;
+  }[];
 };
 
 export type CredentialStatus = 'pending' | 'approved' | 'rejected';

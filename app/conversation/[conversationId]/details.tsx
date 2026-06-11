@@ -27,8 +27,8 @@ import {
   getMarketplaceLocation,
   isPresenceActive,
 } from '@/services/marketplace.helpers';
-import { createReview, getMyReviewForJob } from '@/services/review.service';
-import type { ConversationDetail, Review } from '@/types/marketplace.types';
+import { createReview, getMyJobReviewState } from '@/services/review.service';
+import type { ConversationDetail, JobReviewState, Review } from '@/types/marketplace.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -56,6 +56,7 @@ export default function ConversationDetailsScreen() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [submittedReview, setSubmittedReview] = useState<Review | null>(null);
+  const [jobReviewState, setJobReviewState] = useState<JobReviewState | null>(null);
 
   const load = () => {
     if (!conversationId) return;
@@ -84,7 +85,7 @@ export default function ConversationDetailsScreen() {
   const other = conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
   const reviewState = getReviewState({
     conversation,
-    isClient,
+    jobReviewState,
     loading: reviewLoading,
     submittedReview,
   });
@@ -94,25 +95,24 @@ export default function ConversationDetailsScreen() {
 
     if (
       !conversation?.jobId ||
-      !conversation.providerId ||
-      !isClient ||
-      conversation.job?.acceptedProviderId !== conversation.providerId
+      !profile?.id ||
+      ![conversation.clientId, conversation.providerId].includes(profile.id)
     ) {
       setSubmittedReview(null);
+      setJobReviewState(null);
       setReviewLoading(false);
       return;
     }
 
     setReviewLoading(true);
-    getMyReviewForJob({
-      jobId: conversation.jobId,
-      revieweeId: conversation.providerId,
-    }).then((result) => {
+    getMyJobReviewState(conversation.jobId).then((result) => {
       if (!active) return;
       if (result.error) {
         setSubmittedReview(null);
+        setJobReviewState(null);
       } else {
-        setSubmittedReview(result.data);
+        setJobReviewState(result.data);
+        setSubmittedReview(result.data?.review ?? null);
       }
       setReviewLoading(false);
     });
@@ -121,10 +121,10 @@ export default function ConversationDetailsScreen() {
       active = false;
     };
   }, [
-    conversation?.job?.acceptedProviderId,
+    conversation?.clientId,
     conversation?.jobId,
     conversation?.providerId,
-    isClient,
+    profile?.id,
   ]);
 
   const openPost = () => {
@@ -200,7 +200,6 @@ export default function ConversationDetailsScreen() {
     setReviewSubmitting(true);
     const result = await createReview({
       jobId: conversation.jobId,
-      revieweeId: conversation.providerId,
       rating: reviewRating,
       comment: reviewComment,
     });
@@ -212,6 +211,11 @@ export default function ConversationDetailsScreen() {
     }
 
     setSubmittedReview(result.data);
+    setJobReviewState((current) =>
+      current
+        ? { ...current, eligible: false, reason: 'already_reviewed', review: result.data }
+        : current,
+    );
     setReviewVisible(false);
     setReviewComment('');
     setReviewRating(0);
@@ -335,7 +339,7 @@ export default function ConversationDetailsScreen() {
                     description={reviewState.description}
                     disabled={!reviewState.enabled}
                     icon="rate-review"
-                    label="Leave review"
+                    label={jobReviewState?.revieweeRole === 'client' ? 'Review client' : 'Review worker'}
                     onPress={() => {
                       setReviewError(null);
                       setReviewVisible(true);
@@ -398,6 +402,7 @@ export default function ConversationDetailsScreen() {
         onChangeRating={setReviewRating}
         onSubmit={onSubmitReview}
         rating={reviewRating}
+        revieweeRole={jobReviewState?.revieweeRole ?? null}
         submitting={reviewSubmitting}
         visible={reviewVisible}
       />
@@ -498,6 +503,7 @@ function ReviewDialog({
   onChangeRating,
   onSubmit,
   rating,
+  revieweeRole,
   submitting,
   visible,
 }: {
@@ -508,6 +514,7 @@ function ReviewDialog({
   onChangeRating: (value: number) => void;
   onSubmit: () => void;
   rating: number;
+  revieweeRole: JobReviewState['revieweeRole'];
   submitting: boolean;
   visible: boolean;
 }) {
@@ -516,7 +523,10 @@ function ReviewDialog({
       <View style={styles.dialogBackdrop}>
         <View style={styles.reviewDialogCard}>
           <Text style={styles.dialogTitle}>Leave review</Text>
-          <Text style={styles.dialogBody}>Rate the hired worker after this completed job.</Text>
+          <Text style={styles.dialogBody}>
+            Rate the {revieweeRole === 'client' ? 'client' : 'hired worker'} after this completed job.
+            Reviews cannot be edited after submission.
+          </Text>
 
           <View style={styles.ratingRow}>
             {Array.from({ length: 5 }).map((_, index) => {
@@ -640,12 +650,12 @@ function getDetailMetrics(conversation: ConversationDetail) {
 
 function getReviewState({
   conversation,
-  isClient,
+  jobReviewState,
   loading,
   submittedReview,
 }: {
   conversation: ConversationDetail | null;
-  isClient: boolean;
+  jobReviewState: JobReviewState | null;
   loading: boolean;
   submittedReview: Review | null;
 }):
@@ -659,21 +669,20 @@ function getReviewState({
     return { description: 'Checking review status...', enabled: false, kind: 'disabled' };
   }
 
-  if (!conversation?.jobId || !isClient) {
+  if (!conversation?.jobId) {
     return {
-      description: 'Only the client who posted the job can leave this review.',
+      description: 'Reviews are tied to completed jobs.',
       enabled: false,
       kind: 'disabled',
     };
   }
 
-  if (
-    conversation.status !== 'hired' ||
-    conversation.job?.acceptedProviderId !== conversation.providerId ||
-    conversation.job?.status !== 'completed'
-  ) {
+  if (!jobReviewState?.eligible) {
     return {
-      description: 'Available after job is completed.',
+      description:
+        jobReviewState?.reason === 'not_participant'
+          ? 'Only the client and hired worker can review this job.'
+          : 'Available after job is completed.',
       enabled: false,
       kind: 'disabled',
     };

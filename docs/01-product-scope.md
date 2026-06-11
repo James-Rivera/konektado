@@ -15,7 +15,7 @@
 | Job Browsing | Providers browse open jobs. | Discovery hides the current user's own posts and supports filters for category/service, nearby, rate range, experience level, certification metadata, verified-only, and date. |
 | Messages / Interest | Verified users message job posters or workers to show interest and coordinate. | This replaces a formal application flow for MVP. |
 | Hiring Decision | Clients can mark a worker as hired from a job-related conversation. | Keep the decision simple: interested, hired, completed, declined/cancelled. |
-| Reviews | Completed job participants can leave rating and feedback. | One review per reviewer/reviewee/job. |
+| Reviews | Completed hired-job participants can leave reciprocal rating and feedback. | One immutable client-to-worker review and one immutable worker-to-client review per job; the database derives the correct counterparty. |
 | In-app Notifications | Users can review basic unread/read notifications for messages, verification decisions, completed hired jobs, and report status updates. | In-app center only; no push delivery in MVP. |
 | Admin Dashboard | Basic review queues for verification requests, reports, users, jobs, and reviews. | Admin UI can be simple but must be reliable. |
 
@@ -34,7 +34,7 @@ The following are intentionally out of scope for MVP:
 - Advanced analytics.
 - Multi-barangay administration.
 - Push notifications.
-- Advanced chat features such as attachments, read receipts, calls, or group chat.
+- Advanced chat features such as calls, group chat, push delivery, or per-message read receipts. Private image messages and conversation unread counts are included.
 - Gaming services, account sharing, academic cheating, and high-risk licensed or regulated service categories.
 - Formal file delivery, output approval, revisions, or online freelancing contract workflows.
 - Professional skill certification, licensing checks, or guarantees of service competence.
@@ -43,7 +43,7 @@ The following are intentionally out of scope for MVP:
 
 These can be considered after the MVP is stable:
 
-- Advanced messaging features after basic MVP chat is stable, such as attachments, read receipts, calls, and group chat.
+- Advanced messaging features after basic MVP chat is stable, such as calls, group chat, push delivery, and per-message read receipts.
 - Saved jobs and saved providers.
 - Provider availability calendar.
 - Push notifications and notification preferences beyond the basic in-app notification center.
@@ -84,7 +84,7 @@ The coding MVP should prioritize the screens already represented in the current 
 | Post | Post dashboard, create job, offer service, drafts/active/paused states. |
 | Details | Job details, public worker profile, public client profile. |
 | Messages | Locked state, inbox, search contacts/messages, job conversation, service request, empty chat, report/delete dialogs. |
-| Profile | Own Work Profile, own Hiring Profile, complete profile prompts, skills, credentials, role-specific reviews, work history, hiring history, active services offered, and active job posts. |
+| Profile | Own Work Profile, own Hiring Profile, complete profile prompts, skills, credentials, role-specific reviews, work history, hiring history, active services offered, and active job posts as trust/history context. Listing edit and lifecycle management remain in Post. |
 | Admin | Web/admin-only verification queue and review details can be simpler than the mobile app. |
 
 Demo acceptance standard:

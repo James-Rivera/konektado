@@ -40,6 +40,8 @@ export type SelectedVerificationFiles = {
 
 type VerificationFlowProps = {
   contactCode: string;
+  contactSending: boolean;
+  contactVerifying: boolean;
   files: SelectedVerificationFiles;
   form: CreateVerificationRequestInput;
   loadingPrefill: boolean;
@@ -58,8 +60,10 @@ type VerificationFlowProps = {
   onPickFile: (fileType: VerificationUpload['fileType']) => void;
   onProceedHome: () => void;
   onRemoveFile: (fileType: VerificationUpload['fileType']) => void;
+  onResendContactCode: () => void;
   onResubmit: () => void;
   onViewProfile: () => void;
+  resendSeconds: number;
 };
 
 const idTypeOptions: {
@@ -103,6 +107,8 @@ const idTypeLabels: Record<VerificationIdType, string> = {
 
 export function FigmaVerificationFlow({
   contactCode,
+  contactSending,
+  contactVerifying,
   files,
   form,
   loadingPrefill,
@@ -121,8 +127,10 @@ export function FigmaVerificationFlow({
   onPickFile,
   onProceedHome,
   onRemoveFile,
+  onResendContactCode,
   onResubmit,
   onViewProfile,
+  resendSeconds,
 }: VerificationFlowProps) {
   if (step === 'intro') {
     return (
@@ -158,7 +166,7 @@ export function FigmaVerificationFlow({
   if (step === 'details') {
     return (
       <LightFrame
-        footer={<FooterStack><PrimaryButton disabled={loadingPrefill} label="Continue" onPress={onContinue} /></FooterStack>}
+        footer={<FooterStack><PrimaryButton disabled={loadingPrefill || contactSending} label={contactSending ? 'Sending code...' : 'Continue'} onPress={onContinue} /></FooterStack>}
         onBack={onBack}
         progress={1}>
         <DetailsScreen
@@ -174,7 +182,7 @@ export function FigmaVerificationFlow({
   if (step === 'code') {
     return (
       <LightFrame
-        footer={<FooterStack><PrimaryButton label="Continue" onPress={onContinue} /></FooterStack>}
+        footer={<FooterStack><PrimaryButton disabled={contactCode.length !== 6 || contactVerifying} label={contactVerifying ? 'Checking code...' : 'Continue'} onPress={onContinue} /></FooterStack>}
         onBack={onBack}
         progress={1}>
         <CodeScreen
@@ -182,6 +190,8 @@ export function FigmaVerificationFlow({
           email={form.email}
           phone={form.phone}
           onChangeContactCode={onChangeContactCode}
+          onResend={onResendContactCode}
+          resendSeconds={resendSeconds}
         />
       </LightFrame>
     );
@@ -612,11 +622,15 @@ function CodeScreen({
   email,
   phone,
   onChangeContactCode,
+  onResend,
+  resendSeconds,
 }: {
   contactCode: string;
   email: string | null;
   phone: string;
   onChangeContactCode: (value: string) => void;
+  onResend: () => void;
+  resendSeconds: number;
 }) {
   const inputRef = useRef<TextInput>(null);
   const contact = phone.trim() || email || 'your contact detail';
@@ -626,7 +640,11 @@ function CodeScreen({
     <View style={styles.codeScreen}>
       <Text style={styles.largeTitle}>Enter the code</Text>
       <Text style={styles.codeSubtitle}>We have sent a code to {contact}</Text>
-      <Text style={styles.resendText}>Resend in 30s</Text>
+      <Pressable disabled={resendSeconds > 0} onPress={onResend}>
+        <Text style={styles.resendText}>
+          {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : 'Resend code'}
+        </Text>
+      </Pressable>
       <Pressable
         accessibilityLabel="Enter verification code"
         accessibilityRole="button"

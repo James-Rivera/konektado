@@ -36,6 +36,7 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { useDraftAutosave } from '@/hooks/use-draft-autosave';
 import { useProfile } from '@/hooks/use-profile';
 import { validateRateRange } from '@/services/marketplace.helpers';
+import { getOwnedJobForEdit } from '@/services/job.service';
 import { getJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { type JobPhotoAsset, uploadJobPhotos } from '@/services/job-photo.service';
 import { getMyProfileCompletion } from '@/services/profile-completion.service';
@@ -473,10 +474,12 @@ export default function CreateJobScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     draftId?: string | string[];
+    jobId?: string | string[];
     returnTo?: string | string[];
     focus?: string | string[];
   }>();
   const initialDraftId = getParamValue(params.draftId);
+  const jobId = getParamValue(params.jobId) ?? null;
   const returnTo = getParamValue(params.returnTo);
   const focusTarget = getParamValue(params.focus);
   const scrollRef = useRef<ScrollView>(null);
@@ -488,8 +491,8 @@ export default function CreateJobScreen() {
   const profileBarangay = profile?.barangay ?? null;
   const [errors, setErrors] = useState<JobDraftErrors>({});
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
-  const [loadingDraft, setLoadingDraft] = useState(Boolean(initialDraftId));
-  const [draftHydrated, setDraftHydrated] = useState(!initialDraftId);
+  const [loadingDraft, setLoadingDraft] = useState(Boolean(initialDraftId || jobId));
+  const [draftHydrated, setDraftHydrated] = useState(!initialDraftId && !jobId);
   const [savingDraft, setSavingDraft] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
@@ -564,6 +567,29 @@ export default function CreateJobScreen() {
   }, [initialDraftId]);
 
   useEffect(() => {
+    if (!jobId) return;
+    let active = true;
+    setLoadingDraft(true);
+
+    void getOwnedJobForEdit(jobId).then((result) => {
+      if (!active) return;
+      if (result.error || !result.data) {
+        Alert.alert('Edit job', result.error ?? 'Could not load this job.');
+        router.back();
+      } else {
+        const loadedDraft = draftFromRecord(result.data);
+        if (loadedDraft) setDraft(loadedDraft);
+      }
+      setDraftHydrated(true);
+      setLoadingDraft(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [jobId, router]);
+
+  useEffect(() => {
     if (!profileId) return;
 
     const barangay = profileBarangay || 'Barangay San Pedro';
@@ -575,7 +601,7 @@ export default function CreateJobScreen() {
   }, [profileId, profileBarangay]);
 
   useEffect(() => {
-    if (initialDraftId || defaultsAppliedRef.current || loading) return;
+    if (initialDraftId || jobId || defaultsAppliedRef.current || loading) return;
     let active = true;
 
     getMyProfileCompletion().then((result) => {
@@ -612,12 +638,12 @@ export default function CreateJobScreen() {
     return () => {
       active = false;
     };
-  }, [initialDraftId, loading]);
+  }, [initialDraftId, jobId, loading]);
 
   const autosaveInput = useMemo(() => buildDraftInput(draft), [draft]);
   const { flush: flushDraft } = useDraftAutosave({
     draftId,
-    enabled: !loading && !loadingDraft,
+    enabled: !jobId && !loading && !loadingDraft,
     hydrated: draftHydrated,
     input: autosaveInput,
     isMeaningful: hasMeaningfulDraft,
@@ -797,7 +823,7 @@ export default function CreateJobScreen() {
     setUploadingPhotos(true);
     const uploaded = await uploadJobPhotos({
       assets,
-      folderId: draftId ?? photoFolderId,
+      folderId: jobId ?? draftId ?? photoFolderId,
     });
     setUploadingPhotos(false);
 
@@ -823,6 +849,18 @@ export default function CreateJobScreen() {
     setErrors(validation);
 
     if (Object.keys(validation).length) return;
+
+    if (jobId) {
+      router.push({
+        pathname: '/create-job-preview',
+        params: {
+          draft: JSON.stringify(nextDraft),
+          jobId,
+          returnTo: returnTo ?? 'post',
+        },
+      });
+      return;
+    }
 
     setSavingDraft(true);
     const saved = await flushDraft(buildDraftInput(nextDraft));
@@ -871,7 +909,7 @@ export default function CreateJobScreen() {
             style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
             <MaterialIcons color={color.text} name="chevron-left" size={30} />
           </Pressable>
-          <Text style={styles.headerTitle}>New job post</Text>
+          <Text style={styles.headerTitle}>{jobId ? 'Edit job post' : 'New job post'}</Text>
           <Pressable
             accessibilityRole="button"
             disabled={savingDraft || uploadingPhotos}

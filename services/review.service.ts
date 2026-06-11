@@ -1,15 +1,12 @@
 import type { ServiceResult } from '@/services/auth.service';
-import {
-  compactText,
-  getCurrentUserId,
-  loadPublicProfiles,
-} from '@/services/marketplace.helpers';
-import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
-import type { CreateReviewInput, Review } from '@/types/marketplace.types';
+import { compactText, loadPublicProfiles } from '@/services/marketplace.helpers';
+import type {
+  CreateReviewInput,
+  JobReviewState,
+  PublicProfileTrustSummary,
+  Review,
+} from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
-
-const REVIEW_COLUMNS =
-  'id, job_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at';
 
 type ReviewRow = {
   id: string;
@@ -19,7 +16,37 @@ type ReviewRow = {
   rating: number;
   comment: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  job_title?: string | null;
+  service_label?: string | null;
+  completed_at?: string | null;
+};
+
+type ReviewStatePayload = {
+  eligible?: boolean;
+  reason?: JobReviewState['reason'];
+  revieweeId?: string | null;
+  revieweeRole?: JobReviewState['revieweeRole'];
+  review?: {
+    id?: string;
+    rating?: number;
+    comment?: string | null;
+    createdAt?: string;
+  } | null;
+};
+
+type TrustPayload = {
+  averageRating?: number | string | null;
+  reviewCount?: number | string | null;
+  completedJobsCount?: number | string | null;
+  jobsPostedCount?: number | string | null;
+  recentReviews?: ReviewRow[] | null;
+  recentHistory?: Array<{
+    id: string;
+    title: string;
+    service_label?: string | null;
+    completed_at: string;
+  }> | null;
 };
 
 async function mapReviewRows(rows: ReviewRow[]): Promise<Review[]> {
@@ -30,176 +57,135 @@ async function mapReviewRows(rows: ReviewRow[]): Promise<Review[]> {
     jobId: row.job_id,
     reviewerId: row.reviewer_id,
     revieweeId: row.reviewee_id,
-    rating: row.rating,
+    rating: Number(row.rating),
     comment: row.comment,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at ?? row.created_at,
     reviewer: reviewers.get(row.reviewer_id) ?? null,
+    jobContext:
+      row.job_title && row.completed_at
+        ? {
+            id: row.job_id,
+            title: row.job_title,
+            serviceLabel: row.service_label ?? null,
+            completedAt: row.completed_at,
+          }
+        : null,
   }));
 }
 
-export async function getMyReviewForJob({
-  jobId,
-  revieweeId,
-}: {
-  jobId: string;
-  revieweeId: string;
-}): Promise<ServiceResult<Review | null>> {
-  const currentUser = await getCurrentUserId();
-  if (currentUser.error) return currentUser;
-  if (!currentUser.data) return { data: null, error: 'Please sign in again to continue.' };
-
-  const { data, error } = await supabase
-    .from('reviews')
-    .select(REVIEW_COLUMNS)
-    .eq('job_id', jobId)
-    .eq('reviewer_id', currentUser.data)
-    .eq('reviewee_id', revieweeId)
-    .maybeSingle<ReviewRow>();
-
+export async function getMyJobReviewState(
+  jobId: string,
+): Promise<ServiceResult<JobReviewState>> {
+  const { data, error } = await supabase.rpc('get_my_job_review_state', {
+    p_job_id: jobId,
+  });
   if (error) return { data: null, error: error.message };
-  if (!data) return { data: null, error: null };
 
-  const [review] = await mapReviewRows([data]);
-  return { data: review, error: null };
+  const payload = (data ?? {}) as ReviewStatePayload;
+  let review: Review | null = null;
+  if (payload.review?.id && payload.revieweeId) {
+    const { data: user } = await supabase.auth.getUser();
+    review = {
+      id: payload.review.id,
+      jobId,
+      reviewerId: user.user?.id ?? '',
+      revieweeId: payload.revieweeId,
+      rating: Number(payload.review.rating ?? 0),
+      comment: payload.review.comment ?? null,
+      createdAt: payload.review.createdAt ?? new Date(0).toISOString(),
+      updatedAt: payload.review.createdAt ?? new Date(0).toISOString(),
+      reviewer: null,
+      jobContext: null,
+    };
+  }
+
+  return {
+    data: {
+      eligible: Boolean(payload.eligible),
+      reason: payload.reason ?? 'not_found',
+      revieweeId: payload.revieweeId ?? null,
+      revieweeRole: payload.revieweeRole ?? null,
+      review,
+    },
+    error: null,
+  };
 }
 
 export async function createReview(input: CreateReviewInput): Promise<ServiceResult<Review>> {
-  if (!input.jobId || !input.revieweeId) {
-    return { data: null, error: 'Choose a completed job and profile to review.' };
+  if (!input.jobId) {
+    return { data: null, error: 'Choose a completed job to review.' };
   }
-
   if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
     return { data: null, error: 'Choose a rating from 1 to 5.' };
   }
 
-  const currentUser = await getCurrentUserId();
-  if (currentUser.error) return currentUser;
-  if (!currentUser.data) return { data: null, error: 'Please sign in again to continue.' };
-
-  const { data: job, error: jobError } = await supabase
-    .from('jobs')
-    .select('owner_id, client_id, accepted_provider_id, status')
-    .eq('id', input.jobId)
-    .maybeSingle<{
-      owner_id: string;
-      client_id: string | null;
-      accepted_provider_id: string | null;
-      status: string;
-    }>();
-
-  if (jobError) return { data: null, error: jobError.message };
-  if (!job) return { data: null, error: 'Choose a completed job and profile to review.' };
-
-  const clientId = job.client_id ?? job.owner_id;
-  if (currentUser.data !== clientId) {
-    return { data: null, error: 'Only the client who posted the job can leave this review.' };
-  }
-
-  if (!job.accepted_provider_id || input.revieweeId !== job.accepted_provider_id) {
-    return { data: null, error: 'Only the hired worker can be reviewed for this job.' };
-  }
-
-  if (input.revieweeId === currentUser.data) {
-    return { data: null, error: 'You cannot review yourself.' };
-  }
-
-  if (job.status !== 'completed') {
-    return { data: null, error: 'Reviews are available only after a confirmed completed interaction.' };
-  }
-
-  const user = await requireVerifiedCompleteProfile('client');
-  if (user.error) return user;
-
-  const existingReview = await getMyReviewForJob({
-    jobId: input.jobId,
-    revieweeId: input.revieweeId,
+  const { data, error } = await supabase.rpc('create_completed_job_review', {
+    p_job_id: input.jobId,
+    p_rating: input.rating,
+    p_comment: compactText(input.comment) || null,
   });
-  if (existingReview.error) return { data: null, error: existingReview.error };
-  if (existingReview.data) {
-    return { data: null, error: 'You already reviewed this completed job.' };
-  }
+  if (error) return { data: null, error: toReviewError(error.message) };
 
-  const { data, error } = await supabase
-    .from('reviews')
-    .insert({
-      job_id: input.jobId,
-      reviewer_id: user.data,
-      reviewee_id: input.revieweeId,
-      rating: input.rating,
-      comment: compactText(input.comment) || null,
-    })
-    .select(REVIEW_COLUMNS)
-    .single<ReviewRow>();
-
-  if (error) {
-    if (error.code === '23505') {
-      return { data: null, error: 'You already reviewed this completed job.' };
-    }
-
-    return { data: null, error: error.message };
-  }
-
-  const [review] = await mapReviewRows([data]);
+  const [review] = await mapReviewRows([data as ReviewRow]);
   return { data: review, error: null };
 }
 
-export async function listProfileReviews(userId: string): Promise<ServiceResult<Review[]>> {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select(REVIEW_COLUMNS)
-    .eq('reviewee_id', userId)
-    .order('created_at', { ascending: false });
-
+export async function getPublicProfileTrustSummary(
+  userId: string,
+  role: 'client' | 'worker',
+): Promise<ServiceResult<PublicProfileTrustSummary>> {
+  const { data, error } = await supabase.rpc('get_public_profile_trust_summary', {
+    p_user_id: userId,
+    p_role: role,
+    p_limit: 6,
+  });
   if (error) return { data: null, error: error.message };
 
-  return { data: await mapReviewRows((data as ReviewRow[] | null) ?? []), error: null };
+  const payload = (data ?? {}) as TrustPayload;
+  const reviews = await mapReviewRows(payload.recentReviews ?? []);
+  return {
+    data: {
+      averageRating:
+        payload.averageRating === null || payload.averageRating === undefined
+          ? null
+          : Number(payload.averageRating),
+      reviewCount: Number(payload.reviewCount ?? 0),
+      completedJobsCount: Number(payload.completedJobsCount ?? 0),
+      jobsPostedCount: Number(payload.jobsPostedCount ?? 0),
+      reviews,
+      history: (payload.recentHistory ?? []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        serviceLabel: item.service_label ?? null,
+        completedAt: item.completed_at,
+      })),
+    },
+    error: null,
+  };
 }
 
 export async function listWorkerReviews(userId: string): Promise<ServiceResult<Review[]>> {
-  const { data: jobs, error: jobsError } = await supabase
-    .from('jobs')
-    .select('id')
-    .eq('accepted_provider_id', userId)
-    .in('status', ['completed', 'closed']);
-
-  if (jobsError) return { data: null, error: jobsError.message };
-
-  const jobIds = ((jobs as { id: string }[] | null) ?? []).map((job) => job.id);
-  if (!jobIds.length) return { data: [], error: null };
-
-  const { data, error } = await supabase
-    .from('reviews')
-    .select(REVIEW_COLUMNS)
-    .eq('reviewee_id', userId)
-    .in('job_id', jobIds)
-    .order('created_at', { ascending: false });
-
-  if (error) return { data: null, error: error.message };
-
-  return { data: await mapReviewRows((data as ReviewRow[] | null) ?? []), error: null };
+  const result = await getPublicProfileTrustSummary(userId, 'worker');
+  return result.error
+    ? { data: null, error: result.error }
+    : { data: result.data?.reviews ?? [], error: null };
 }
 
 export async function listClientReviews(userId: string): Promise<ServiceResult<Review[]>> {
-  const { data: jobs, error: jobsError } = await supabase
-    .from('jobs')
-    .select('id')
-    .or(`owner_id.eq.${userId},client_id.eq.${userId}`)
-    .in('status', ['completed', 'closed']);
+  const result = await getPublicProfileTrustSummary(userId, 'client');
+  return result.error
+    ? { data: null, error: result.error }
+    : { data: result.data?.reviews ?? [], error: null };
+}
 
-  if (jobsError) return { data: null, error: jobsError.message };
-
-  const jobIds = ((jobs as { id: string }[] | null) ?? []).map((job) => job.id);
-  if (!jobIds.length) return { data: [], error: null };
-
-  const { data, error } = await supabase
-    .from('reviews')
-    .select(REVIEW_COLUMNS)
-    .eq('reviewee_id', userId)
-    .in('job_id', jobIds)
-    .order('created_at', { ascending: false });
-
-  if (error) return { data: null, error: error.message };
-
-  return { data: await mapReviewRows((data as ReviewRow[] | null) ?? []), error: null };
+function toReviewError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('already reviewed') || normalized.includes('duplicate')) {
+    return 'You already reviewed this completed job.';
+  }
+  if (normalized.includes('verified participants') || normalized.includes('completed job')) {
+    return 'Reviews are available only to verified participants after a completed job.';
+  }
+  return message;
 }
