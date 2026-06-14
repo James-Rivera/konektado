@@ -11,9 +11,13 @@ import {
 import {
   createVerificationRequest,
   getMyVerificationPrefill,
+  sendContactVerificationCode,
+  verifyContactVerificationCode,
 } from '@/services/verification.service';
 import type { VerificationUpload } from '@/types/onboarding.types';
 import type {
+  ContactOtpDeliveryStatus,
+  ContactOtpStatusType,
   CreateVerificationRequestInput,
   VerificationIdType,
   VerificationStatus,
@@ -31,6 +35,7 @@ const emptyForm: VerificationFormState = {
   barangay: 'San Pedro',
   birthdate: '',
   city: 'Santo Tomas',
+  contactOtpChallengeId: null,
   email: null,
   files: [],
   firstName: '',
@@ -47,6 +52,13 @@ export default function VerificationGateScreen() {
   const [step, setStep] = useState<VerificationFlowStep>('intro');
   const [form, setForm] = useState<VerificationFormState>(emptyForm);
   const [contactCode, setContactCode] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+  const [contactVerifying, setContactVerifying] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusType, setStatusType] = useState<ContactOtpStatusType>('info');
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+  const [canVerify, setCanVerify] = useState(false);
+  const [deliveryStatus, setDeliveryStatus] = useState<ContactOtpDeliveryStatus | null>(null);
   const [loadingPrefill, setLoadingPrefill] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
@@ -113,6 +125,14 @@ export default function VerificationGateScreen() {
   }, []);
 
   useEffect(() => {
+    if (retryAfterSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setRetryAfterSeconds((value) => Math.max(value - 1, 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [retryAfterSeconds]);
+
+  useEffect(() => {
     if (!pendingRequestId || step !== 'submitted') return;
 
     let active = true;
@@ -157,7 +177,107 @@ export default function VerificationGateScreen() {
   }, [form.files]);
 
   const setField = (field: keyof VerificationFormState, value: string | null) => {
-    setForm((previous) => ({ ...previous, [field]: value }));
+    setForm((previous) => ({
+      ...previous,
+      ...(field === 'phone' && value !== previous.phone
+        ? { contactOtpChallengeId: null }
+        : {}),
+      [field]: value,
+    }));
+    if (field === 'phone') {
+      setContactCode('');
+      setStatusMessage(null);
+      setStatusType('info');
+      setRetryAfterSeconds(0);
+      setCanVerify(false);
+      setDeliveryStatus(null);
+    }
+  };
+
+  const sendContactCode = async (source: 'initial' | 'resend' = 'initial') => {
+    if (!form.phone.trim()) {
+      setStatusMessage('Enter a contact number for verification updates.');
+      setStatusType('error');
+      return false;
+    }
+
+    setContactSending(true);
+    const result = await sendContactVerificationCode(form.phone);
+    setContactSending(false);
+    if (result.error || !result.data) {
+      const message = result.error ?? 'Could not send a verification code.';
+      const hasUsableChallenge = Boolean(form.contactOtpChallengeId && canVerify);
+      if (result.errorCode === 'unauthorized') {
+        Alert.alert('Contact verification', message);
+        return false;
+      }
+
+      if (
+        (result.errorCode === 'rate_limited' ||
+          result.errorCode === 'invalid_phone') &&
+        !hasUsableChallenge
+      ) {
+        setStatusMessage(
+          result.errorCode === 'rate_limited'
+            ? 'Please wait before requesting another code.'
+            : message,
+        );
+        setStatusType('error');
+        setRetryAfterSeconds(result.retryAfterSeconds ?? 0);
+        setCanVerify(false);
+        return false;
+      }
+
+      if (!hasUsableChallenge) {
+        Alert.alert(
+          'Contact verification unavailable',
+          'We could not start contact verification right now. Please try again shortly.',
+        );
+        return false;
+      }
+
+      setStatusMessage(message);
+      setStatusType('warning');
+      return true;
+    }
+
+    if (!result.data.canVerify) {
+      Alert.alert('Contact verification', 'Could not start contact verification.');
+      return false;
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      contactOtpChallengeId: result.data?.challengeId ?? null,
+    }));
+    if (
+      source === 'initial' ||
+      result.data.deliveryStatus === 'sent' ||
+      result.data.deliveryStatus === 'failed' ||
+      result.data.deliveryStatus === 'simulated'
+    ) {
+      setContactCode('');
+    }
+    setRetryAfterSeconds(result.data.retryAfterSeconds ?? result.data.resendAfter);
+    setCanVerify(result.data.canVerify);
+    setDeliveryStatus(result.data.deliveryStatus);
+    setStatusMessage(
+      getContactOtpDeliveryMessage(
+        result.data.deliveryStatus,
+        form.phone,
+        result.data.message,
+      ),
+    );
+    setStatusType(getContactOtpStatusType(result.data.deliveryStatus));
+    return true;
+  };
+
+  const changeContactCode = (value: string) => {
+    setContactCode(value);
+    if (statusType === 'error' && canVerify) {
+      setStatusMessage(null);
+      setStatusType('info');
+    }
   };
 
   const chooseIdType = (idType: VerificationIdType) => {
@@ -298,6 +418,54 @@ export default function VerificationGateScreen() {
       return;
     }
 
+    if (step === 'details') {
+      const sent = await sendContactCode('initial');
+      if (!sent) return;
+    }
+
+    if (step === 'code') {
+      if (!form.contactOtpChallengeId || contactCode.length !== 6) {
+        setStatusMessage('Enter the complete 6-digit code.');
+        setStatusType('error');
+        return;
+      }
+
+      setContactVerifying(true);
+      const result = await verifyContactVerificationCode({
+        challengeId: form.contactOtpChallengeId,
+        code: contactCode,
+      });
+      setContactVerifying(false);
+      if (result.error) {
+        if (result.errorCode === 'unauthorized') {
+          Alert.alert('Contact verification', result.error);
+          return;
+        }
+
+        if (result.errorCode === 'invalid_code') {
+          setStatusMessage('The code is incorrect. Please try again.');
+          setStatusType('error');
+          return;
+        }
+
+        if (
+          result.errorCode === 'attempt_limit_reached' ||
+          result.errorCode === 'code_expired' ||
+          result.errorCode === 'challenge_consumed' ||
+          result.errorCode === 'challenge_not_found'
+        ) {
+          setCanVerify(false);
+        }
+        setStatusMessage(
+          result.errorCode === 'code_expired'
+            ? 'This code has expired. Please request a new code.'
+            : result.error,
+        );
+        setStatusType('error');
+        return;
+      }
+    }
+
     setStep(getNextStep(step, form.idType));
   };
 
@@ -310,6 +478,12 @@ export default function VerificationGateScreen() {
   return (
     <FigmaVerificationFlow
       contactCode={contactCode}
+      contactCanVerify={canVerify}
+      contactDeliveryStatus={deliveryStatus}
+      contactSending={contactSending}
+      contactStatusMessage={statusMessage}
+      contactStatusType={statusType}
+      contactVerifying={contactVerifying}
       files={selectedFiles}
       form={form}
       loadingPrefill={loadingPrefill}
@@ -320,7 +494,7 @@ export default function VerificationGateScreen() {
       step={step}
       submitting={submitting}
       onBack={goBack}
-      onChangeContactCode={setContactCode}
+      onChangeContactCode={changeContactCode}
       onChangeField={setField}
       onChooseIdType={chooseIdType}
       onContinue={continueFlow}
@@ -328,10 +502,42 @@ export default function VerificationGateScreen() {
       onPickFile={pickFile}
       onProceedHome={() => router.replace('/(tabs)')}
       onRemoveFile={removeFile}
+      onResendContactCode={() => {
+        if (!contactSending && retryAfterSeconds === 0) void sendContactCode('resend');
+      }}
       onResubmit={resubmit}
       onViewProfile={() => router.replace('/(tabs)/profile')}
+      retryAfterSeconds={retryAfterSeconds}
     />
   );
+}
+
+function getContactOtpDeliveryMessage(
+  deliveryStatus: ContactOtpDeliveryStatus,
+  phone: string,
+  serverMessage?: string,
+) {
+  if (deliveryStatus === 'sent') {
+    return `We sent a verification code to ${phone.trim()}.`;
+  }
+  if (
+    deliveryStatus === 'already_sent' ||
+    deliveryStatus === 'rate_limited_existing_challenge'
+  ) {
+    return 'A code was already sent. Please enter it below. You may request a new code later.';
+  }
+  if (deliveryStatus === 'failed') {
+    return 'SMS delivery may be delayed. You can still enter a valid code.';
+  }
+  return serverMessage ?? 'A verification challenge is ready.';
+}
+
+function getContactOtpStatusType(
+  deliveryStatus: ContactOtpDeliveryStatus,
+): ContactOtpStatusType {
+  if (deliveryStatus === 'sent') return 'success';
+  if (deliveryStatus === 'failed') return 'warning';
+  return 'info';
 }
 
 function getNextStep(

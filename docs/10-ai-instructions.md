@@ -42,7 +42,7 @@ Out of scope for MVP:
 - AI-powered matching.
 - National ID API integration.
 - Municipal or national government system integration.
-- Advanced messaging such as attachments, calls, read receipts, or group chat.
+- Advanced messaging such as calls, push delivery, per-message read receipts, or group chat. Private image messages and conversation unread counts are approved.
 - Gaming services, account sharing, academic cheating, licensed/high-risk work, regulated advice, file-delivery workflows, or professional skill certification.
 
 Architecture rules:
@@ -72,7 +72,7 @@ Onboarding and verification rules:
 - Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing, but the Magic Link and Confirm sign up email templates must include `{{ .Token }}` for the app's email-code flow.
 - Supabase Auth OTP length must be configured to 6 digits. The app and email template intentionally accept/display exactly six digits.
 - In app code, onboarding email OTP codes must be handled through `services/auth.service.ts`. The MVP signup path is email -> OTP -> create password: call `signInWithOtp({ email, options: { shouldCreateUser: true, data } })`, resend by calling `signInWithOtp()` again, verify with `verifyOtp({ type: 'email' })`, then save the real password with `updateUser({ password })` after Supabase creates a session.
-- Do not add SMS OTP, mobile OTP, or an SMS gateway unless explicitly requested later.
+- Do not use SMS/mobile OTP for account authentication. The approved barangay verification flow separately uses server-side contact OTP with restricted local simulation.
 - Phone-first account entry remains a future option when provider access and device testing are available.
 - Current auth state as of 2026-05-03, Asia/Shanghai: root cause found and fixed. Supabase Auth was configured to generate 8-digit OTP codes while the app and email template displayed and accepted 6 digits. Supabase Auth OTP length is now set to 6 digits. The UI is guarded 6-digit auto-submit.
 - Before barangay verification, users are unverified viewers.

@@ -1,10 +1,16 @@
 import { File } from 'expo-file-system';
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from '@supabase/supabase-js';
 
 import type { ServiceResult } from '@/services/auth.service';
 import type { VerificationUpload } from '@/types/onboarding.types';
 import type {
   CreateVerificationRequestInput,
   CreatedVerificationRequest,
+  ContactOtpSendResult,
   VerificationPrefill,
   VerificationStatus,
   VerificationSummary,
@@ -120,6 +126,10 @@ function validateInput(input: CreateVerificationRequestInput): string | null {
 
   if (!input.phone.trim()) {
     return 'Enter a contact number for verification updates.';
+  }
+
+  if (!input.contactOtpChallengeId) {
+    return 'Confirm your contact number before submitting verification.';
   }
 
   const hasCertificate = input.files.some((file) => file.fileType === 'certification');
@@ -273,6 +283,86 @@ export async function getMyVerificationPrefill(): Promise<ServiceResult<Verifica
   };
 }
 
+export async function sendContactVerificationCode(
+  phone: string,
+): Promise<ContactOtpServiceResult<ContactOtpSendResult>> {
+  const session = await getContactOtpSession();
+  if (session.error || !session.data) {
+    return {
+      data: null,
+      error: session.error ?? 'Please sign in again to continue.',
+      errorCode: 'unauthorized',
+      retryAfterSeconds: null,
+    };
+  }
+
+  const { data, error } = await supabase.functions.invoke('contact-otp', {
+    body: { action: 'send', phone },
+    headers: { Authorization: `Bearer ${session.data}` },
+  });
+  if (error || data?.error) {
+    const functionError = await getFunctionError(error, data, 'send');
+    return {
+      data: null,
+      error: functionError.message,
+      errorCode: functionError.code,
+      retryAfterSeconds: functionError.retryAfterSeconds,
+    };
+  }
+  return {
+    data: data as ContactOtpSendResult,
+    error: null,
+    errorCode: null,
+    retryAfterSeconds: null,
+  };
+}
+
+export async function verifyContactVerificationCode({
+  challengeId,
+  code,
+}: {
+  challengeId: string;
+  code: string;
+}): Promise<ContactOtpServiceResult<string>> {
+  const session = await getContactOtpSession();
+  if (session.error || !session.data) {
+    return {
+      data: null,
+      error: session.error ?? 'Please sign in again to continue.',
+      errorCode: 'unauthorized',
+      retryAfterSeconds: null,
+    };
+  }
+
+  const { data, error } = await supabase.functions.invoke('contact-otp', {
+    body: { action: 'verify', challengeId, code },
+    headers: { Authorization: `Bearer ${session.data}` },
+  });
+  if (error || data?.error) {
+    const functionError = await getFunctionError(error, data, 'verify');
+    return {
+      data: null,
+      error: functionError.message,
+      errorCode: functionError.code,
+      retryAfterSeconds: functionError.retryAfterSeconds,
+    };
+  }
+  if (!data?.verified) {
+    return {
+      data: null,
+      error: 'Could not confirm this contact code.',
+      errorCode: 'verification_failed',
+      retryAfterSeconds: null,
+    };
+  }
+  return {
+    data: String(data.challengeId ?? challengeId),
+    error: null,
+    errorCode: null,
+    retryAfterSeconds: null,
+  };
+}
+
 export async function createVerificationRequest(
   input: CreateVerificationRequestInput,
 ): Promise<ServiceResult<CreatedVerificationRequest>> {
@@ -366,6 +456,7 @@ export async function createVerificationRequest(
   const { data: verification, error: verificationError } = await supabase
     .from('verifications')
     .insert({
+      contact_otp_challenge_id: input.contactOtpChallengeId,
       user_id: user.id,
       status: 'pending',
       notes: buildNotesPayload(input),
@@ -431,4 +522,141 @@ export async function createVerificationRequest(
     },
     error: null,
   };
+}
+
+type ContactOtpOperation = 'send' | 'verify';
+
+type ContactOtpErrorBody = {
+  error?: unknown;
+  message?: unknown;
+  retryAfterSeconds?: unknown;
+  retryAfter?: unknown;
+};
+
+type ContactOtpServiceResult<T> =
+  | { data: T; error: null; errorCode: null; retryAfterSeconds: null }
+  | {
+      data: null;
+      error: string;
+      errorCode: string | null;
+      retryAfterSeconds: number | null;
+    };
+
+async function getContactOtpSession(): Promise<ServiceResult<string>> {
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (error || !accessToken) {
+    if (__DEV__) {
+      console.warn('[contact-otp] Missing authenticated session', {
+        hasSession: Boolean(data.session),
+        message: error?.message ?? null,
+      });
+    }
+    return { data: null, error: 'Please sign in again to continue.' };
+  }
+
+  return { data: accessToken, error: null };
+}
+
+async function getFunctionError(
+  error: unknown,
+  data: unknown,
+  operation: ContactOtpOperation,
+) {
+  let body = toContactOtpErrorBody(data);
+  let status: number | null = null;
+
+  if (error instanceof FunctionsHttpError) {
+    const response = error.context as Response;
+    status = typeof response?.status === 'number' ? response.status : null;
+    body = (await readFunctionErrorBody(response)) ?? body;
+  }
+
+  const code = typeof body?.error === 'string' ? body.error : null;
+  const serverMessage = typeof body?.message === 'string' ? body.message : null;
+  const retryAfterSeconds = getRetryAfterSeconds(body);
+
+  if (__DEV__) {
+    console.warn('[contact-otp] Edge Function request failed', {
+      code,
+      errorType:
+        error instanceof FunctionsHttpError
+          ? 'http'
+          : error instanceof FunctionsRelayError
+            ? 'relay'
+            : error instanceof FunctionsFetchError
+              ? 'fetch'
+              : error instanceof Error
+                ? error.name
+                : 'unknown',
+      operation,
+      serverMessage,
+      status,
+    });
+  }
+
+  if (code === 'unauthorized') {
+    return {
+      code,
+      message: 'Please sign in again to continue.',
+      retryAfterSeconds,
+    };
+  }
+  if (code === 'invalid_phone') {
+    return {
+      code,
+      message: 'Enter a valid Philippine mobile number.',
+      retryAfterSeconds,
+    };
+  }
+  if (
+    code === 'invalid_code' ||
+    code === 'code_expired' ||
+    code === 'challenge_not_found' ||
+    code === 'challenge_consumed' ||
+    code === 'attempt_limit_reached' ||
+    code === 'rate_limited'
+  ) {
+    return {
+      code,
+      message: serverMessage || 'Request a new verification code and try again.',
+      retryAfterSeconds,
+    };
+  }
+
+  if (operation === 'send') {
+    return {
+      code,
+      message: 'We could not send the verification code. Please try again.',
+      retryAfterSeconds,
+    };
+  }
+
+  return {
+    code,
+    message: 'We could not confirm the verification code. Please try again.',
+    retryAfterSeconds,
+  };
+}
+
+function getRetryAfterSeconds(body: ContactOtpErrorBody | null) {
+  const value = body?.retryAfterSeconds ?? body?.retryAfter;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.ceil(value))
+    : null;
+}
+
+function toContactOtpErrorBody(value: unknown): ContactOtpErrorBody | null {
+  return value && typeof value === 'object' ? value as ContactOtpErrorBody : null;
+}
+
+async function readFunctionErrorBody(response: Response | null | undefined) {
+  if (!response) return null;
+
+  try {
+    return toContactOtpErrorBody(await response.json());
+  } catch {
+    return null;
+  }
 }

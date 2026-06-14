@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { MoreActionsSheet } from '@/components/MoreActionsSheet';
 import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
+import { CompletedJobReviewCard } from '@/components/reviews/CompletedJobReviewCard';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonImage, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
@@ -273,6 +274,13 @@ export default function JobDetailScreen() {
     ? getOwnerJobActions({
         job,
         updating: updatingPost,
+        onEdit: () => {
+          setOptionsVisible(false);
+          router.push({
+            pathname: '/create-job',
+            params: { jobId: job.id, returnTo: 'post' },
+          });
+        },
         onClose: () =>
           confirmJobStatusUpdate({
             body: 'This marks the job as closed and removes it from active job search results.',
@@ -409,6 +417,12 @@ export default function JobDetailScreen() {
                   <BadgePill key={tag} label={tag} />
                 ))}
               </View>
+            </View>
+          ) : null}
+
+          {!adminViewOnly && job.status === 'completed' ? (
+            <View style={styles.section}>
+              <CompletedJobReviewCard jobId={job.id} status={job.status} />
             </View>
           ) : null}
 
@@ -719,18 +733,29 @@ function getOwnerJobActions({
   job,
   onClose,
   onDeactivate,
+  onEdit,
   onReactivate,
   updating,
 }: {
   job: JobDetail;
   onClose: () => void;
   onDeactivate: () => void;
+  onEdit: () => void;
   onReactivate: () => void;
   updating: boolean;
 }) {
   const actions = [];
   const isInactive = job.status === 'cancelled';
   const isFinal = job.status === 'closed' || job.status === 'completed';
+
+  if (['open', 'reviewing', 'cancelled'].includes(job.status)) {
+    actions.push({
+      disabled: updating,
+      icon: 'edit' as const,
+      label: 'Edit job',
+      onPress: onEdit,
+    });
+  }
 
   if (isInactive) {
     actions.push({

@@ -40,7 +40,7 @@ Required behavior:
 - The Supabase Auth email templates used by the signup OTP path must include `{{ .Token }}` so users receive a 6-digit code. Supabase Auth OTP length must be configured to 6 digits. For MVP signup, the app uses `signInWithOtp`; keep both **Magic Link** and **Confirm sign up** templates aligned.
 - The Supabase Auth **Password Recovery** template must also include `{{ .Token }}` and should avoid link-only copy, because the app verifies recovery through a six-box code entry flow.
 - In app code, verify signup email codes only through the auth service. Keep the request/resend/verify methods on Supabase email OTP/passwordless auth.
-- Do not require SMS OTP, mobile OTP, or an SMS gateway for the MVP.
+- Do not use SMS/mobile OTP for signup or login. Barangay verification separately requires a server-verified contact OTP for the profile phone number.
 - Phone-first authentication can be revisited later when provider access and Android/device testing are available.
 - Email is used for login, verification updates, support, and account recovery.
 
@@ -133,6 +133,7 @@ Action gates:
 - Sending messages in an existing conversation checks the sender's role in that conversation and applies the matching Work/Hiring Profile gate.
 - Marking a worker hired requires the client to remain verified and Hiring Profile complete.
 - Leaving a review requires verification, relevant role setup, and a completed/confirmed job relationship.
+- Review creation is RPC-only. The database derives the correct counterparty from the completed job and hired conversation; clients cannot supply arbitrary reviewer or reviewee IDs.
 
 Private verification files, ID uploads, selfie files, certificates, and admin notes must not be copied into public profile fields or used as public profile photos. A public profile photo is strongly recommended for recognition and trust, but remains optional and does not gate MVP actions.
 
@@ -170,8 +171,10 @@ These role permissions apply after the user's barangay verification is approved 
 | `job_drafts`            | Owner can read own drafts only.                                                                                                                | Authenticated owner, verified or unverified.     | Owner can update own drafts.                                                                       | Owner can delete own drafts.                                                |
 | `service_drafts`        | Owner can read own drafts only.                                                                                                                | Authenticated owner, verified or unverified.     | Owner can update own drafts.                                                                       | Owner can delete own drafts.                                                |
 | `conversations`         | Participants can read their own conversations. Job owner can read conversations tied to own jobs. Admin can read for moderation when reported. | Verified user with relevant role profile only.   | Participants can archive/decline where allowed. Job owner can mark hired.                          | Prefer status changes.                                                       |
-| `messages`              | Conversation participants only. Admin can read only for moderation/report workflows.                                                           | Verified sender with relevant role profile only. | Avoid editing messages in MVP.                                                                     | Prefer archive/report over hard delete.                                      |
-| `reviews`               | Public can read approved public reviews.                                                                                                       | Verified job participants only after completion. | Reviewer can edit own review if allowed. Admin can hide/moderate reported reviews.                 | Avoid hard delete; admin moderation preferred.                               |
+| `messages`              | Conversation participants only. Private image objects use participant-scoped signed access. Admin can read only for moderation/report workflows. | Verified sender with relevant role profile only; body or image is required. | Messages are immutable in normal app access. | Prefer archive/report over hard delete. |
+| `conversation_reads`    | User reads only their own marker; admins may inspect for moderation.                                                                           | Participant-only RPC upsert.                     | Participant-only RPC updates own marker.                                                           | Removed with conversation lifecycle.                                         |
+| `contact_otp_challenges` | No direct authenticated client access.                                                                                                        | Service-role Edge Function only.                 | Service-role verification/consumption only.                                                        | Service-role cleanup only.                                                    |
+| `reviews`               | Authenticated users read only reviews that match a real completed hired job relationship.                                                      | RPC-only for the verified job client or accepted worker after completion. | Immutable; no normal update policy.                                                                | No normal delete; admin moderation may hide/report separately.                |
 | `reports`               | Reporter can read own report. Admin can read all.                                                                                              | Authenticated users.                             | Admin updates status.                                                                              | Admin-only.                                                                  |
 | `admin_moderation_actions` | Barangay admins only. Normal users cannot read admin reasons, notes, or history.                                                            | Barangay admins only.                            | Barangay admins only.                                                                              | Avoid hard delete; preserve audit history.                                   |
 | `content_visibility`    | Barangay admins can read full rows. Public app clients use only a safe visibility view without admin notes/reasons.                             | Barangay admins only.                            | Barangay admins only.                                                                              | Avoid hard delete; use `visible`/`hidden`.                                   |
@@ -208,6 +211,21 @@ These role permissions apply after the user's barangay verification is approved 
 - Barangay admins should use `Rejected` only for suspicious, fake, invalid, or unrelated identity documents.
 - Internal demo/admin-only tooling may override names for presentation data or explicit admin correction, but normal users must not access that pathway.
 - Email is private and used for login, verification updates, support, and account recovery.
+- Contact OTP challenges are short-lived, rate-limited, attempt-limited, bound to the authenticated user and normalized profile phone, and consumed once by verification submission.
+- PhilSMS tokens, OTP HMAC secrets, and simulation allowlists are server-only. Simulated codes must never be enabled globally or returned for non-allowlisted users/numbers.
+- During active development, `CONTACT_OTP_BACKUP_CODE` provides a temporary server-only backup for existing active contact OTP challenges. It does not create challenges or verification requests, and it still requires challenge ownership, unexpired state, remaining attempts, and normal one-time consumption. Rotate or remove it before live deployment.
+- If PhilSMS delivery fails after a challenge is created, the challenge remains active and the app may continue to code entry with a delivery warning. This development fallback does not weaken ownership, expiry, cooldown, attempt, rate-limit, or barangay-submission checks.
+- SMS send throttles and OTP verification attempts are separate controls. Sends use a 60-second cooldown, a maximum of five challenge creations per user or phone per hour, and a maximum of four challenge creations for the same user and phone within ten minutes. A throttled send returns an existing usable challenge for that authenticated user and phone when one exists; it does not send another SMS.
+- Each challenge has a thirty-minute development/testing expiry and five incorrect attempts. Reaching the attempt limit locks only that challenge. Expiry and attempt checks run before both normal and backup code comparison, so neither code can verify an expired or exhausted challenge.
+
+## Reciprocal Review Rules
+
+- Each completed hired job permits at most two reviews: client to accepted worker and accepted worker to client.
+- `jobs.status = 'completed'`, the accepted provider, and a matching conversation with `hired_at` establish eligibility.
+- The authenticated reviewer must be one of those two participants. The RPC derives the other participant and rejects self-review.
+- A unique reviewer/reviewee/job constraint prevents duplicate reviews.
+- Review rows are immutable after creation; normal users cannot update identity, job linkage, rating, or comment.
+- Public trust summaries expose only aggregate ratings, counts, review text, and safe completed-job labels/dates. They do not expose contact details, private location notes, messages, or verification files.
 
 ## Public vs Private Data
 

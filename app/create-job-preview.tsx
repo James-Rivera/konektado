@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
-import { createJob } from '@/services/job.service';
+import { createJob, updateJob } from '@/services/job.service';
 import { formatJobBudget, formatJobPostTitle } from '@/services/marketplace.helpers';
 import {
     getCompletionModeForError,
@@ -88,12 +88,14 @@ export default function CreateJobPreviewScreen() {
   const params = useLocalSearchParams<{
     draft?: string | string[];
     draftId?: string | string[];
+    jobId?: string | string[];
     returnTo?: string | string[];
   }>();
   const { profile, loading, refresh } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
   const [draftId, setDraftId] = useState(getParamValue(params.draftId));
+  const jobId = getParamValue(params.jobId) ?? null;
   const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
@@ -135,10 +137,10 @@ export default function CreateJobPreviewScreen() {
     return result;
   };
 
-  const publishVerifiedJob = async (draftToDeleteId: string) => {
+  const publishVerifiedJob = async (draftToDeleteId?: string | null) => {
     if (!draft) return;
 
-    const result = await createJob({
+    const input = {
       title: draft.title,
       description: draft.description,
       category: draft.category,
@@ -160,7 +162,8 @@ export default function CreateJobPreviewScreen() {
       allowMessages: draft.allowMessages,
       autoReplyEnabled: draft.autoReplyEnabled,
       autoCloseEnabled: draft.autoCloseEnabled,
-    });
+    };
+    const result = jobId ? await updateJob(jobId, input) : await createJob(input);
 
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
@@ -179,11 +182,11 @@ export default function CreateJobPreviewScreen() {
       return;
     }
 
-    showSuccessToast('Job posted');
-    await deleteJobDraft(draftToDeleteId);
+    showSuccessToast(jobId ? 'Job updated' : 'Job posted');
+    if (!jobId && draftToDeleteId) await deleteJobDraft(draftToDeleteId);
     await refresh();
-    if (returnTo === 'profile') {
-      router.replace('/(tabs)/profile');
+    if (returnTo === 'post') {
+      router.replace('/post/active');
       return;
     }
 
@@ -197,9 +200,9 @@ export default function CreateJobPreviewScreen() {
     if (!draft || publishing) return;
 
     setPublishing(true);
-    const saved = await saveCurrentDraft();
+    const saved = jobId ? null : await saveCurrentDraft();
 
-    if (saved?.error || !saved?.data) {
+    if (!jobId && (saved?.error || !saved?.data)) {
       setPublishing(false);
       Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
       return;
@@ -211,12 +214,12 @@ export default function CreateJobPreviewScreen() {
       return;
     }
 
-    await publishVerifiedJob(saved.data.id);
+    await publishVerifiedJob(jobId ? null : saved?.data?.id);
     setPublishing(false);
   };
 
   const startVerification = async () => {
-    if (draft && !publishing) {
+    if (draft && !publishing && !jobId) {
       setPublishing(true);
       const saved = await saveCurrentDraft();
       setPublishing(false);
@@ -264,7 +267,7 @@ export default function CreateJobPreviewScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
         <Header
-          actionLabel={publishing ? 'Publishing...' : 'Publish'}
+          actionLabel={publishing ? (jobId ? 'Saving...' : 'Publishing...') : (jobId ? 'Save' : 'Publish')}
           disabled={publishing}
           onAction={onPublish}
           onBack={() => router.back()}
@@ -273,7 +276,7 @@ export default function CreateJobPreviewScreen() {
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.safetyBox}>
-            <Text style={styles.safetyTitle}>Before publishing</Text>
+            <Text style={styles.safetyTitle}>{jobId ? 'Before saving' : 'Before publishing'}</Text>
             <SafetyLine text="No phone number in public text" />
             <SafetyLine text="Exact address hidden until worker is accepted" />
             <SafetyLine text="Workers must verify before messaging" />
@@ -281,7 +284,7 @@ export default function CreateJobPreviewScreen() {
 
           <View style={styles.previewHeader}>
             <Text style={styles.sectionTitle}>Preview</Text>
-            <Text style={styles.smallMuted}>Review how your post will appear before publishing.</Text>
+            <Text style={styles.smallMuted}>Review how your post will appear before {jobId ? 'saving' : 'publishing'}.</Text>
           </View>
 
           {!isVerified ? <Text style={styles.previewNotice}>Verification required to publish</Text> : null}

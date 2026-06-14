@@ -692,7 +692,7 @@ Deferred items:
 - Match card logic still needs a separate pass to use real search/preference context rather than generic relevance copy.
 - Full saved-items persistence remains deferred by confirmed product decision; Save is hidden rather than implemented.
 - Search overflow/more-options actions remain placeholder actions and should become real report/share actions or be hidden in a later trust/safety pass.
-- Database, review-system expansion, booking/payment, admin, and performance work remain out of scope for this product UX phase.
+- Booking/payment, unrelated admin work, and broader performance work remain outside this product UX phase. Reciprocal completed-job reviews are now implemented as a separate approved workflow.
 
 Post-Phase-5 stabilization:
 
@@ -706,3 +706,17 @@ Needs human confirmation:
 
 - Whether Job Details should ever use `Message to show interest`, or stay simply `Message client`.
 - Whether job requirements/what-to-bring should become structured data in the job builder, or stay in description/tags for MVP.
+
+## Reciprocal Review And Trust Update
+
+Implemented on 2026-06-11:
+
+- Completed hired jobs now support one client-to-worker review and one worker-to-client review.
+- Review eligibility and the correct counterparty are derived by database RPC from the completed job, accepted provider, and matching `hired_at` conversation.
+- Reviews are immutable and reject self-review, unrelated users, incomplete jobs, and duplicate reviewer/reviewee/job directions.
+- Completed job detail and conversation details show the role-correct action or submitted state. Post management is the primary owner surface for completed-job review actions.
+- Worker profiles show real average rating, review count, recent client reviews, and safe completed-job context.
+- Client profiles show real average rating, review count, recent worker reviews, completed hiring context, and safe jobs-posted history.
+- Profiles do not show fake rating boxes or placeholder reviews. Empty copy is `No reviews yet. Reviews will appear after completed jobs.`
+- The public trust badge remains `Verified`.
+- Profile remains an identity, skills, trust, history, and public-preview surface. Job editing and listing lifecycle actions remain in Post, with an owner-only job-detail link to the same edit flow.

@@ -81,7 +81,7 @@ Rules:
 3. App shows the Figma "Before you continue" requirements: Barangay Certificate recommended, another valid ID allowed as fallback, clear face photo, and good lighting.
 4. App shows account details with onboarding/profile data prefilled.
 5. User confirms or edits first name, last name, date of birth, and contact number so they match the document.
-6. App shows the contact-code UI from Figma for contact confirmation. MVP does not add SMS OTP; this is a visual/contact-confirmation step until provider-backed OTP is added.
+6. App sends a six-digit contact OTP to the normalized Philippine mobile number through the server-side contact OTP function. The user must verify the current code before continuing.
 7. User selects document to submit: Barangay Certificate is recommended; National ID, Driver's License, or Passport remain allowed fallback valid IDs for barangay staff review.
 8. If Barangay Certificate is selected, user uploads the certificate. Otherwise, user uploads ID front and ID back. Camera capture can be added as a verification-polish task, but file/image picker upload is the current MVP path.
 9. App shows face-photo guidance, then user uploads a clear face photo for manual barangay comparison. Camera selfie capture is planned but should not block the verified Post slice.
@@ -110,7 +110,10 @@ Contact details rules:
 - The name fields should clearly say they must match the uploaded ID.
 - Email is required for MVP login and can be reused for verification follow-up, but the verification screen must include a short privacy explanation.
 - Email should not be displayed on public profiles, job cards, service cards, or worker cards.
-- SMS/mobile OTP is not required for MVP. Add it only when an SMS provider and Android/device testing path are available.
+- Contact OTP is required for barangay verification submission, but it is not an authentication method. PhilSMS credentials remain server-only. Restricted simulation may be enabled only for explicitly allowlisted local test users or numbers.
+- Contact OTP SMS sends use a 60-second cooldown plus server-side send windows to protect provider credits. If a send is throttled while the same authenticated user and normalized phone still have an unexpired, unconsumed, unverified challenge with attempts remaining, the app reuses that challenge and opens the code-entry step instead of blocking the verification flow.
+- Each contact OTP challenge permits five incorrect attempts and expires after thirty minutes during active development and defense testing. Reaching five attempts locks only that challenge; a new challenge is required, and the server-only development backup code cannot bypass expiry or the lock.
+- Routine contact OTP outcomes appear inline on the code screen rather than in blocking alerts. Sent, reused, delayed-delivery, cooldown, incorrect-code, and expired-code states keep the input visible and explain the next action. Alerts are reserved for session loss or a server failure that leaves no usable challenge.
 
 ## Public Profile Completion Flow
 
@@ -130,6 +133,7 @@ Rules:
 - A public profile photo is strongly recommended for recognition and trust, but remains optional and must not block completion or marketplace access.
 - Profile completion must not depend on active services, active jobs, budgets, rates, or marketplace inventory. A user with zero listings can still complete Core, Work, and Hiring profiles.
 - Profile may summarize active Services Offered, active Job Posts, Work History, and Hiring History, but drafts, inactive posts, archived/final post management, edit/delete/deactivate/republish controls, saved items, and private states belong in Post Dashboard or other owner/private surfaces.
+- Profile remains focused on identity, skills, trust, history, and public profile preview. Primary job/service management and edit actions must remain in Post.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
 - Publishing services and messaging clients about jobs require a completed Work Profile.
 
@@ -170,6 +174,7 @@ Rules:
 9. If the client is barangay-verified and Hiring Profile complete, `JobService.createJob` saves the job with status `open` and deletes the draft.
 10. Job appears in Home, job search, post dashboard, active posts, and provider browsing.
 11. Client can open the created job detail after publishing.
+12. From Post management, the owner can edit an eligible open/reviewing/cancelled job through the same builder and preview flow. Owner job detail may link to that flow, but Profile does not.
 
 Rules:
 
@@ -181,7 +186,7 @@ Rules:
 - Payments and job agreements happen outside the app.
 - Jobs should be clear enough for providers to decide whether to message.
 - Closed or cancelled jobs should not accept new interested workers.
-- Job photos can be selected, uploaded to storage, and shown in preview and job detail. Renewal rules, auto-reply behavior, ranking, hiring, reviews, and advanced search remain out of this slice.
+- Job photos can be selected, uploaded to storage, and shown in preview and job detail. Renewal rules, auto-reply behavior, ranking, and advanced search remain separate slices.
 - Post UI should avoid Apply/Application wording; workers show interest through Messages.
 - Service Needed is structured data saved separately from category. Tags remain short context/condition descriptors, not service names.
 - Public job cards/details must not show house number, block/lot, private location notes, ID files, private contact data, or sensitive verification details.
@@ -209,6 +214,8 @@ Rules:
 - Providers must complete Work Profile before messaging clients about jobs.
 - Clients must complete Hiring Profile before messaging workers about service posts.
 - "Apply" should not be used in the UI for the MVP unless a formal application feature is added later.
+- Conversation messages may contain text, one private image attachment, or both. Only participants can read the attachment.
+- Inbox and bottom navigation use participant-scoped unread counts. Opening a conversation marks it read.
 
 ## Message-Based Hiring Flow
 
@@ -218,7 +225,8 @@ Rules:
 4. Client taps Mark Hired when a worker is chosen.
 5. App checks that the client has completed Hiring Profile setup, then updates the job or conversation with hired worker status.
 6. Job History shows the job as active, worker hired, in progress, or completed.
-7. After completion, both sides can leave feedback if the review flow is enabled.
+7. After completion, both sides can leave feedback.
+8. Client sees Review worker; the accepted worker sees Review client. A submitted review replaces the action with the immutable submitted state.
 
 ## Admin Verification Flow
 
@@ -256,18 +264,22 @@ Rules:
 
 ## Ratings/Review Flow
 
-1. Job reaches completed or closed state.
-2. Client can review the accepted provider.
-3. Provider may also review the client if MVP time allows.
-4. Reviewer selects a rating from 1 to 5.
-5. Reviewer adds optional feedback text.
-6. `ReviewService.createReview` saves the review.
-7. Profile rating summary updates from review data.
-8. Admin can review reported or abusive feedback.
+1. A hired job reaches `completed`.
+2. The client can review only the accepted worker.
+3. The accepted worker can review only the client.
+4. Reviewer selects a rating from 1 to 5 and may add feedback.
+5. A database RPC derives the correct reviewee from the completed job and hired conversation.
+6. The RPC saves one immutable review for that reviewer/reviewee/job direction.
+7. Job detail, conversation details, and Post management show the submitted state instead of another action.
+8. Worker and client public profiles update their real average, review count, recent reciprocal reviews, and safe completed-job context.
+9. Admin can review reported or abusive feedback through moderation paths.
 
 Rules:
 
-- Reviews require a real job relationship.
-- One reviewer can review the same reviewee for the same job only once.
+- Reviews require a completed job, an accepted provider, and a matching conversation with `hired_at`.
+- A reviewer must be the job client or accepted worker, and the database derives the correct other party.
+- Self-reviews, random-user reviews, pre-completion reviews, and duplicate directional reviews are rejected.
+- Reviews are immutable after creation. Job, reviewer, reviewee, rating, and comment cannot be edited through normal app access.
 - Reviews should not expose private contact or ID document information.
 - Review comments are shown only as controlled completed-interaction feedback. Do not add open public comment threads to job/service posts.
+- Empty profile state: `No reviews yet. Reviews will appear after completed jobs.`

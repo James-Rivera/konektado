@@ -19,11 +19,14 @@ import {
 } from '@/services/marketplace.helpers';
 import { requireVerifiedCompleteProfile } from '@/services/profile-completion.service';
 import type {
-    CreateJobInput,
-    JobDetail,
-    JobSearchFilters,
-    JobStatus,
-    JobSummary,
+  CreateJobInput,
+  ExperienceLevel,
+  JobDetail,
+  JobDraftSummary,
+  JobSearchFilters,
+  JobStatus,
+  JobSummary,
+  RateType,
 } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -343,6 +346,131 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   const stats = await loadClientStats(jobs.map((job) => job.clientId));
 
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
+}
+
+export async function getOwnedJobForEdit(
+  jobId: string,
+): Promise<ServiceResult<JobDraftSummary>> {
+  const user = await getCurrentUserId();
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .select(
+      'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, private_location_notes, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, status, created_at, updated_at',
+    )
+    .eq('id', jobId)
+    .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)
+    .maybeSingle<Record<string, unknown>>();
+
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: 'Only the job owner can edit this post.' };
+  if (!['open', 'reviewing', 'cancelled'].includes(String(data.status))) {
+    return { data: null, error: 'Hired, completed, and closed jobs cannot be edited.' };
+  }
+
+  return {
+    data: {
+      id: String(data.id),
+      userId: user.data,
+      title: data.title ? String(data.title) : null,
+      description: data.description ? String(data.description) : null,
+      category: data.category ? String(data.category) : null,
+      serviceNeeded: data.service_needed ? String(data.service_needed) : null,
+      tags: (data.tags as string[] | null) ?? [],
+      photoUrls: (data.photo_urls as string[] | null) ?? [],
+      barangay: data.barangay ? String(data.barangay) : null,
+      locationText: data.location_text ? String(data.location_text) : null,
+      privateLocationNotes: data.private_location_notes ? String(data.private_location_notes) : null,
+      budgetMin: data.budget_min === null ? null : Number(data.budget_min),
+      budgetMax: data.budget_max === null ? null : Number(data.budget_max),
+      rateType: normalizeRateType(data.rate_type as RateType),
+      budgetNegotiable: Boolean(data.budget_negotiable),
+      workersNeeded: data.workers_needed === null ? null : Number(data.workers_needed),
+      scheduleText: data.schedule_text ? String(data.schedule_text) : null,
+      experienceLevel: normalizeExperienceLevel(data.experience_level as ExperienceLevel),
+      certificationRequired: Boolean(data.certification_required),
+      certificationNote: data.certification_note ? String(data.certification_note) : null,
+      allowMessages: data.allow_messages !== false,
+      autoReplyEnabled: Boolean(data.auto_reply_enabled),
+      autoCloseEnabled: Boolean(data.auto_close_enabled),
+      createdAt: String(data.created_at),
+      updatedAt: String(data.updated_at),
+    },
+    error: null,
+  };
+}
+
+export async function updateJob(
+  jobId: string,
+  input: CreateJobInput,
+): Promise<ServiceResult<JobSummary>> {
+  const user = await requireVerifiedCompleteProfile('client');
+  if (user.error) return user;
+  if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
+
+  const editable = await getOwnedJobForEdit(jobId);
+  if (editable.error || !editable.data) {
+    return { data: null, error: editable.error ?? 'This job cannot be edited.' };
+  }
+
+  const title = compactText(input.title);
+  const description = compactText(input.description);
+  const category = compactText(input.category);
+  const serviceNeeded = compactText(input.serviceNeeded);
+  const rateType = normalizeRateType(input.rateType);
+  const budgetRange = validateRateRange({
+    min: input.budgetMin ?? null,
+    max: input.budgetMax ?? null,
+    rateType,
+  });
+  if (!title || !description || !category || !serviceNeeded) {
+    return { data: null, error: 'Complete the job title, description, category, and service.' };
+  }
+  if (!budgetRange.valid) {
+    return { data: null, error: `Budget range: ${budgetRange.error ?? 'Enter a valid budget range.'}` };
+  }
+
+  const publicLocation =
+    compactText(input.locationText) || compactText(input.barangay) || 'Barangay San Pedro';
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({
+      title,
+      description,
+      category,
+      service_needed: serviceNeeded,
+      tags: Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4),
+      photo_urls: Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean))),
+      barangay: compactText(input.barangay) || 'Barangay San Pedro',
+      location: publicLocation,
+      location_text: publicLocation,
+      public_location_text: publicLocation,
+      private_location_notes: compactText(input.privateLocationNotes) || null,
+      budget_min: budgetRange.min,
+      budget_max: budgetRange.max,
+      rate_type: budgetRange.rateType,
+      budget_negotiable: input.budgetNegotiable ?? false,
+      workers_needed: input.workersNeeded ?? null,
+      schedule_text: compactText(input.scheduleText) || null,
+      experience_level: normalizeExperienceLevel(input.experienceLevel),
+      certification_required: input.certificationRequired ?? false,
+      certification_note: compactText(input.certificationNote) || null,
+      allow_messages: input.allowMessages ?? true,
+      auto_reply_enabled: input.autoReplyEnabled ?? false,
+      auto_close_enabled: input.autoCloseEnabled ?? false,
+    })
+    .eq('id', jobId)
+    .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)
+    .in('status', ['open', 'reviewing', 'cancelled'])
+    .select(JOB_COLUMNS)
+    .maybeSingle<JobRow>();
+
+  if (error) return { data: null, error: formatSupabaseError(error.message) };
+  if (!data) return { data: null, error: 'This job is no longer editable.' };
+  const profiles = await loadPublicProfiles([data.client_id ?? data.owner_id]);
+  return { data: mapJob(data, profiles), error: null };
 }
 
 function normalizeLimit(value: number | undefined) {

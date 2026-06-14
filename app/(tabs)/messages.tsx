@@ -185,7 +185,7 @@ export default function MessagesScreen() {
     const other = getOtherParticipant(conversation, profileId ?? undefined);
     const context = getConversationContext(conversation);
     const latest = conversation.lastMessage?.body ?? '';
-    const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== profileId;
+    const unread = conversation.unreadCount > 0;
     const haystack = [other?.fullName, context, latest].filter(Boolean).join(' ').toLowerCase();
     const matchesSearch = !query.trim() || haystack.includes(query.trim().toLowerCase());
 
@@ -387,11 +387,13 @@ const MessageRow = memo(function MessageRow({
 
   if (!conversation || !onPress) return null;
 
-  const unread = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== currentUserId;
+  const unread = conversation.unreadCount > 0;
   const context = getConversationContext(conversation);
   const sentByCurrentUser = Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId === currentUserId;
   const preview = conversation.lastMessage
-    ? `${sentByCurrentUser ? 'You: ' : ''}${conversation.lastMessage.body}`
+    ? `${sentByCurrentUser ? 'You: ' : ''}${
+        conversation.lastMessage.body || (conversation.lastMessage.attachmentPath ? 'Photo' : 'Message')
+      }`
     : 'No messages yet';
   const timestamp = conversation.lastMessage?.createdAt ?? conversation.updatedAt;
 

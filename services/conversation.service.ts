@@ -1,3 +1,5 @@
+import { File } from 'expo-file-system';
+
 import type { ServiceResult } from '@/services/auth.service';
 import { getJobDetail } from '@/services/job.service';
 import {
@@ -26,7 +28,9 @@ import { supabase } from '@/utils/supabase';
 
 const CONVERSATION_COLUMNS =
   'id, job_id, service_id, client_id, provider_id, started_by, status, hired_at, created_at, updated_at';
-const MESSAGE_COLUMNS = 'id, conversation_id, sender_id, body, created_at';
+const MESSAGE_COLUMNS =
+  'id, conversation_id, sender_id, body, attachment_path, attachment_mime_type, attachment_width, attachment_height, created_at';
+const MESSAGE_ATTACHMENTS_BUCKET = 'message-attachments';
 const JOB_COLUMNS =
   'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 const SERVICE_COLUMNS =
@@ -50,6 +54,10 @@ type MessageRow = {
   conversation_id: string;
   sender_id: string;
   body: string;
+  attachment_path: string | null;
+  attachment_mime_type: string | null;
+  attachment_width: number | null;
+  attachment_height: number | null;
   created_at: string;
 };
 
@@ -89,7 +97,9 @@ type ConversationInboxRow = {
   last_message_id: string | null;
   last_message_sender_id: string | null;
   last_message_body: string | null;
+  last_message_attachment_path: string | null;
   last_message_created_at: string | null;
+  unread_count: number | string | null;
 };
 
 export function mapMessage(row: MessageRow): ConversationMessage {
@@ -98,6 +108,11 @@ export function mapMessage(row: MessageRow): ConversationMessage {
     conversationId: row.conversation_id,
     senderId: row.sender_id,
     body: row.body,
+    attachmentPath: row.attachment_path,
+    attachmentMimeType: row.attachment_mime_type,
+    attachmentWidth: row.attachment_width,
+    attachmentHeight: row.attachment_height,
+    attachmentUrl: null,
     createdAt: row.created_at,
   };
 }
@@ -238,15 +253,21 @@ function mapInboxRow(row: ConversationInboxRow): ConversationSummary {
     client: mapInboxProfile(row, 'client'),
     provider: mapInboxProfile(row, 'provider'),
     lastMessage:
-      row.last_message_id && row.last_message_sender_id && row.last_message_body && row.last_message_created_at
+      row.last_message_id && row.last_message_sender_id && row.last_message_created_at
         ? {
             id: row.last_message_id,
             conversationId: row.conversation_id,
             senderId: row.last_message_sender_id,
-            body: row.last_message_body,
+            body: row.last_message_body ?? '',
+            attachmentPath: row.last_message_attachment_path,
+            attachmentMimeType: null,
+            attachmentWidth: null,
+            attachmentHeight: null,
+            attachmentUrl: null,
             createdAt: row.last_message_created_at,
           }
         : null,
+    unreadCount: Number(row.unread_count ?? 0),
   };
 }
 
@@ -318,6 +339,7 @@ async function mapConversationRows(
     client: profiles.get(row.client_id) ?? null,
     provider: profiles.get(row.provider_id) ?? null,
     lastMessage: latestMessages.get(row.id) ?? null,
+    unreadCount: 0,
   }));
 }
 
@@ -394,7 +416,7 @@ function filterConversationSummaries(
   if (filters.kind === 'unread') {
     conversations = conversations.filter(
       (conversation) =>
-        Boolean(conversation.lastMessage) && conversation.lastMessage?.senderId !== userId,
+        conversation.unreadCount > 0,
     );
   }
 
@@ -420,10 +442,11 @@ export async function getConversation(conversationId: string): Promise<ServiceRe
 
   if (messageError) return { data: null, error: messageError.message };
 
+  const mappedMessages = ((messages as MessageRow[] | null) ?? []).map(mapMessage);
   return {
     data: {
       ...summary,
-      messages: ((messages as MessageRow[] | null) ?? []).map(mapMessage),
+      messages: await hydrateMessageAttachmentUrls(mappedMessages),
     },
     error: null,
   };
@@ -571,9 +594,17 @@ export async function startServiceConversation({
 }
 
 export async function sendMessage({
+  attachment,
   conversationId,
   body,
 }: {
+  attachment?: {
+    uri: string;
+    name?: string | null;
+    mimeType?: string | null;
+    width?: number | null;
+    height?: number | null;
+  } | null;
   conversationId: string;
   body: string;
 }): Promise<ServiceResult<ConversationMessage>> {
@@ -582,8 +613,8 @@ export async function sendMessage({
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
   const text = compactText(body);
-  if (!text) {
-    return { data: null, error: 'Enter a message.' };
+  if (!text && !attachment) {
+    return { data: null, error: 'Enter a message or choose an image.' };
   }
 
   const { data: conversation, error: conversationError } = await supabase
@@ -603,24 +634,93 @@ export async function sendMessage({
   );
   if (completion.error) return completion;
 
+  let attachmentPath: string | null = null;
+  let attachmentMimeType: string | null = null;
+  if (attachment) {
+    const mimeType = compactText(attachment.mimeType) || 'image/jpeg';
+    if (!mimeType.startsWith('image/')) {
+      return { data: null, error: 'Choose an image attachment.' };
+    }
+
+    try {
+      const file = new File(attachment.uri);
+      const bytes = await file.arrayBuffer();
+      if (bytes.byteLength > 10 * 1024 * 1024) {
+        return { data: null, error: 'Choose an image smaller than 10 MB.' };
+      }
+
+      const safeName = (attachment.name || 'message-image')
+        .replace(/[^a-zA-Z0-9._-]/g, '-')
+        .slice(0, 80);
+      attachmentPath = `${user.data}/${conversationId}/${Date.now()}-${safeName}`;
+      attachmentMimeType = mimeType;
+      const { error: uploadError } = await supabase.storage
+        .from(MESSAGE_ATTACHMENTS_BUCKET)
+        .upload(attachmentPath, bytes, { contentType: mimeType, upsert: false });
+      if (uploadError) return { data: null, error: uploadError.message };
+    } catch {
+      return { data: null, error: 'Could not upload this image.' };
+    }
+  }
+
   const { data, error } = await supabase
     .from('messages')
     .insert({
       conversation_id: conversationId,
       sender_id: user.data,
       body: text,
+      attachment_path: attachmentPath,
+      attachment_mime_type: attachmentMimeType,
+      attachment_width: attachment?.width ?? null,
+      attachment_height: attachment?.height ?? null,
     })
     .select(MESSAGE_COLUMNS)
     .single<MessageRow>();
 
-  if (error) return { data: null, error: error.message };
+  if (error) {
+    if (attachmentPath) {
+      await supabase.storage.from(MESSAGE_ATTACHMENTS_BUCKET).remove([attachmentPath]);
+    }
+    return { data: null, error: error.message };
+  }
 
   await supabase
     .from('conversations')
     .update({ updated_at: new Date().toISOString() })
     .eq('id', conversationId);
 
-  return { data: mapMessage(data), error: null };
+  const [message] = await hydrateMessageAttachmentUrls([mapMessage(data)]);
+  return { data: message, error: null };
+}
+
+export async function markConversationRead(
+  conversationId: string,
+): Promise<ServiceResult<string>> {
+  const { data, error } = await supabase.rpc('mark_conversation_read', {
+    p_conversation_id: conversationId,
+  });
+  if (error) return { data: null, error: error.message };
+  return { data: String(data), error: null };
+}
+
+export async function getMessageAttachmentUrl(path: string): Promise<string | null> {
+  const cleanPath = compactText(path);
+  if (!cleanPath) return null;
+  const { data, error } = await supabase.storage
+    .from(MESSAGE_ATTACHMENTS_BUCKET)
+    .createSignedUrl(cleanPath, 60 * 60);
+  return error ? null : data.signedUrl;
+}
+
+async function hydrateMessageAttachmentUrls(messages: ConversationMessage[]) {
+  return Promise.all(
+    messages.map(async (message) => ({
+      ...message,
+      attachmentUrl: message.attachmentPath
+        ? await getMessageAttachmentUrl(message.attachmentPath)
+        : null,
+    })),
+  );
 }
 
 export async function markWorkerHired({

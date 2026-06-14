@@ -12,7 +12,7 @@ import {
   mapService,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
-import { listWorkerReviews } from '@/services/review.service';
+import { getPublicProfileTrustSummary } from '@/services/review.service';
 import type { PublicProfileHistoryItem, PublicWorkerProfile } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -34,10 +34,6 @@ type JobHistoryRow = {
   created_at: string;
 };
 
-type WorkerStats = {
-  completedJobsCount: number;
-};
-
 type ProviderProfileRow = {
   user_id: string;
   service_type: string | null;
@@ -47,35 +43,17 @@ type ProviderProfileRow = {
   custom_offered_services: string[] | null;
 };
 
-async function loadWorkerStats(workerId: string): Promise<WorkerStats> {
-  const { data: completedJobs } = await supabase
-    .from('jobs')
-    .select('id')
-    .eq('accepted_provider_id', workerId)
-    .in('status', ['completed', 'closed']);
-
-  return {
-    completedJobsCount: ((completedJobs as { id: string }[] | null) ?? []).length,
-  };
-}
-
 export async function listWorkerHistory(workerId: string): Promise<ServiceResult<PublicProfileHistoryItem[]>> {
   const id = compactText(workerId);
   if (!id) return { data: [], error: null };
-
-  const { data, error } = await supabase
-    .from('jobs')
-    .select(JOB_HISTORY_COLUMNS)
-    .eq('accepted_provider_id', id)
-    .in('status', ['completed', 'closed'])
-    .order('closed_at', { ascending: false, nullsFirst: false })
-    .order('updated_at', { ascending: false })
-    .limit(6);
-
-  if (error) return { data: null, error: error.message };
-
+  const result = await getPublicProfileTrustSummary(id, 'worker');
+  if (result.error) return { data: null, error: result.error };
   return {
-    data: ((data as JobHistoryRow[] | null) ?? []).map(mapJobHistoryItem),
+    data: (result.data?.history ?? []).map((item) => ({
+      ...item,
+      category: null,
+      locationText: null,
+    })),
     error: null,
   };
 }
@@ -93,10 +71,8 @@ export async function getPublicWorkerProfile(
     providerResult,
     servicesResult,
     selectedServiceResult,
-    stats,
     credentialResult,
-    reviewResult,
-    historyResult,
+    trustResult,
   ] = await Promise.all([
     loadPublicProfiles([id]),
     supabase
@@ -116,18 +92,15 @@ export async function getPublicWorkerProfile(
           .eq('provider_id', id)
           .maybeSingle<ServiceRow>()
       : Promise.resolve({ data: null, error: null }),
-    loadWorkerStats(id),
     listApprovedCredentialsForProvider(id),
-    listWorkerReviews(id),
-    listWorkerHistory(id),
+    getPublicProfileTrustSummary(id, 'worker'),
   ]);
 
   if (providerResult.error) return { data: null, error: providerResult.error.message };
   if (servicesResult.error) return { data: null, error: servicesResult.error.message };
   if (selectedServiceResult.error) return { data: null, error: selectedServiceResult.error.message };
   if (credentialResult.error) return { data: null, error: credentialResult.error };
-  if (reviewResult.error) return { data: null, error: reviewResult.error };
-  if (historyResult.error) return { data: null, error: historyResult.error };
+  if (trustResult.error) return { data: null, error: trustResult.error };
 
   const profile = profiles.get(id);
   if (!profile) return { data: null, error: null };
@@ -153,11 +126,7 @@ export async function getPublicWorkerProfile(
     ...(providerProfile?.custom_offered_services ?? []),
   ]);
   const skills = uniqueList([...capabilitySplit.official, ...capabilitySplit.custom]);
-  const reviews = reviewResult.data ?? [];
-  const reviewCount = reviews.length;
-  const averageRating = reviewCount
-    ? reviews.reduce((total, review) => total + review.rating, 0) / reviewCount
-    : null;
+  const trust = trustResult.data;
 
   return {
     data: {
@@ -177,12 +146,16 @@ export async function getPublicWorkerProfile(
       serviceArea: compactText(providerProfile?.service_area) || null,
       barangayVerifiedAt: profile.barangayVerifiedAt,
       verifiedAt: profile.verifiedAt,
-      completedJobsCount: stats.completedJobsCount,
-      averageRating,
-      reviewCount,
+      completedJobsCount: trust?.completedJobsCount ?? 0,
+      averageRating: trust?.averageRating ?? null,
+      reviewCount: trust?.reviewCount ?? 0,
       credentials: credentialResult.data ?? [],
-      reviews,
-      workHistory: historyResult.data ?? [],
+      reviews: trust?.reviews ?? [],
+      workHistory: (trust?.history ?? []).map((item) => ({
+        ...item,
+        category: null,
+        locationText: null,
+      })),
       selectedService,
       services,
     },

@@ -1,7 +1,7 @@
 import type { ServiceResult } from '@/services/auth.service';
 import { applyPublicPhotoVisibilityToRows } from '@/services/content-visibility.service';
 import { compactText, loadPublicProfiles, mapJob, type JobRow } from '@/services/marketplace.helpers';
-import { listClientReviews } from '@/services/review.service';
+import { getPublicProfileTrustSummary } from '@/services/review.service';
 import type { PublicClientProfile, PublicProfileHistoryItem } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
@@ -36,20 +36,14 @@ type ClientProfileRow = {
 export async function listClientHiringHistory(clientId: string): Promise<ServiceResult<PublicProfileHistoryItem[]>> {
   const id = compactText(clientId);
   if (!id) return { data: [], error: null };
-
-  const { data, error } = await supabase
-    .from('jobs')
-    .select(JOB_HISTORY_COLUMNS)
-    .or(`owner_id.eq.${id},client_id.eq.${id}`)
-    .in('status', ['completed', 'closed'])
-    .order('closed_at', { ascending: false, nullsFirst: false })
-    .order('updated_at', { ascending: false })
-    .limit(6);
-
-  if (error) return { data: null, error: error.message };
-
+  const result = await getPublicProfileTrustSummary(id, 'client');
+  if (result.error) return { data: null, error: result.error };
   return {
-    data: ((data as JobHistoryRow[] | null) ?? []).map(mapJobHistoryItem),
+    data: (result.data?.history ?? []).map((item) => ({
+      ...item,
+      category: null,
+      locationText: null,
+    })),
     error: null,
   };
 }
@@ -67,10 +61,7 @@ export async function getPublicClientProfile(
     clientProfileResult,
     jobsResult,
     selectedJobResult,
-    reviewResult,
-    jobsCountResult,
-    completedJobsResult,
-    historyResult,
+    trustResult,
   ] =
     await Promise.all([
       loadPublicProfiles([id]),
@@ -91,17 +82,7 @@ export async function getPublicClientProfile(
             .or(`owner_id.eq.${id},client_id.eq.${id}`)
             .maybeSingle<JobRow>()
         : Promise.resolve({ data: null, error: null }),
-      listClientReviews(id),
-      supabase
-        .from('jobs')
-        .select('id', { count: 'exact', head: true })
-        .or(`owner_id.eq.${id},client_id.eq.${id}`),
-      supabase
-        .from('jobs')
-        .select('id')
-        .or(`owner_id.eq.${id},client_id.eq.${id}`)
-        .in('status', ['completed', 'closed']),
-      listClientHiringHistory(id),
+      getPublicProfileTrustSummary(id, 'client'),
     ]);
 
   const profile = publicProfiles.get(id) ?? null;
@@ -109,10 +90,7 @@ export async function getPublicClientProfile(
   if (clientProfileResult.error) return { data: null, error: clientProfileResult.error.message };
   if (jobsResult.error) return { data: null, error: jobsResult.error.message };
   if (selectedJobResult.error) return { data: null, error: selectedJobResult.error.message };
-  if (reviewResult.error) return { data: null, error: reviewResult.error };
-  if (jobsCountResult.error) return { data: null, error: jobsCountResult.error.message };
-  if (completedJobsResult.error) return { data: null, error: completedJobsResult.error.message };
-  if (historyResult.error) return { data: null, error: historyResult.error };
+  if (trustResult.error) return { data: null, error: trustResult.error };
 
   const jobs = ((jobsResult.data as JobRow[] | null) ?? []).filter(
     (job) => (job.client_id ?? job.owner_id) === id,
@@ -126,11 +104,7 @@ export async function getPublicClientProfile(
     .filter((job) => job.id !== selectedJob?.id)
     .map((job) => mapJob(job, publicProfiles));
   const clientProfile = ((clientProfileResult.data as ClientProfileRow[] | null) ?? [])[0] ?? null;
-  const reviews = reviewResult.data ?? [];
-  const reviewCount = reviews.length;
-  const averageRating = reviewCount
-    ? reviews.reduce((total, review) => total + review.rating, 0) / reviewCount
-    : null;
+  const trust = trustResult.data;
   const commonNeeds = uniqueList([
     ...(clientProfile?.needed_services ?? []),
     ...(clientProfile?.custom_needed_services ?? []),
@@ -148,12 +122,16 @@ export async function getPublicClientProfile(
       commonNeeds,
       barangayVerifiedAt: profile.barangayVerifiedAt,
       verifiedAt: profile.verifiedAt,
-      jobsPostedCount: jobsCountResult.count ?? 0,
-      completedHiresCount: ((completedJobsResult.data as { id: string }[] | null) ?? []).length,
-      averageRating,
-      reviewCount,
-      reviews,
-      hiringHistory: historyResult.data ?? [],
+      jobsPostedCount: trust?.jobsPostedCount ?? 0,
+      completedHiresCount: trust?.completedJobsCount ?? 0,
+      averageRating: trust?.averageRating ?? null,
+      reviewCount: trust?.reviewCount ?? 0,
+      reviews: trust?.reviews ?? [],
+      hiringHistory: (trust?.history ?? []).map((item) => ({
+        ...item,
+        category: null,
+        locationText: null,
+      })),
       selectedJob,
       activeJobs,
     },

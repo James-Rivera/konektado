@@ -128,6 +128,15 @@ export function PublicWorkerProfileView({
           )}
         </Section>
 
+        <Section title="Trust and activity">
+          <TrustMetrics
+            averageRating={profile.averageRating}
+            completedLabel="Jobs done"
+            completedValue={profile.completedJobsCount}
+            reviewCount={profile.reviewCount}
+          />
+        </Section>
+
         <Section title="Worker reviews">
           {profile.reviews.length ? (
             <View style={styles.cardList}>
@@ -138,8 +147,8 @@ export function PublicWorkerProfileView({
           ) : (
             <EmptyPublicCard
               icon="rate-review"
-              message="Reviews appear after completed work."
-              title="No worker reviews yet"
+              message="No reviews yet. Reviews will appear after completed jobs."
+              title="No reviews yet"
             />
           )}
         </Section>
@@ -240,6 +249,16 @@ export function PublicClientProfileView({
           />
         </Section>
 
+        <Section title="Trust and activity">
+          <TrustMetrics
+            averageRating={profile.averageRating}
+            completedLabel="Completed hires"
+            completedValue={profile.completedHiresCount}
+            jobsPosted={profile.jobsPostedCount}
+            reviewCount={profile.reviewCount}
+          />
+        </Section>
+
         <Section title="Client reviews">
           {profile.reviews.length ? (
             <View style={styles.cardList}>
@@ -250,8 +269,8 @@ export function PublicClientProfileView({
           ) : (
             <EmptyPublicCard
               icon="rate-review"
-              message="Reviews from workers appear after completed hires."
-              title="No client reviews yet"
+              message="No reviews yet. Reviews will appear after completed jobs."
+              title="No reviews yet"
             />
           )}
         </Section>
@@ -323,10 +342,54 @@ function PublicReviewCard({ review }: { review: Review }) {
         </View>
         <MaterialIcons color={color.brandYellow} name="star" size={20} />
       </View>
-      <Text numberOfLines={3} style={styles.bodyText}>
-        {review.comment || 'No written feedback.'}
-      </Text>
+      {review.comment ? (
+        <Text numberOfLines={3} style={styles.bodyText}>{review.comment}</Text>
+      ) : null}
+      {review.jobContext ? (
+        <DetailRows
+          rows={[
+            {
+              icon: 'task-alt',
+              text: `${review.jobContext.title} · ${formatShortDate(review.jobContext.completedAt)}`,
+            },
+          ]}
+        />
+      ) : null}
     </PublicCard>
+  );
+}
+
+function TrustMetrics({
+  averageRating,
+  completedLabel,
+  completedValue,
+  jobsPosted,
+  reviewCount,
+}: {
+  averageRating: number | null;
+  completedLabel: string;
+  completedValue: number;
+  jobsPosted?: number;
+  reviewCount: number;
+}) {
+  const metrics = [
+    ...(averageRating !== null && reviewCount > 0
+      ? [{ label: 'Average rating', value: averageRating.toFixed(1) }]
+      : []),
+    { label: 'Reviews', value: String(reviewCount) },
+    { label: completedLabel, value: String(completedValue) },
+    ...(jobsPosted === undefined ? [] : [{ label: 'Jobs posted', value: String(jobsPosted) }]),
+  ];
+
+  return (
+    <View style={styles.metricGrid}>
+      {metrics.map((metric) => (
+        <View key={metric.label} style={styles.metricCard}>
+          <Text style={styles.metricLabel}>{metric.label}</Text>
+          <Text style={styles.metricValue}>{metric.value}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
