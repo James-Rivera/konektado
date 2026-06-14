@@ -73,6 +73,51 @@ Supabase Auth OTP emails remain separate from this edge-function workflow. If yo
 
 See [docs/13-verification-email-setup.md](../docs/13-verification-email-setup.md) for deploy and test steps.
 
+## Contact OTP Backup Code
+
+The `functions/contact-otp/` Edge Function keeps PHILSMS delivery, random OTP generation,
+hashed challenge storage, expiry, cooldowns, attempt limits, and rate limits. During active
+development, it also accepts a server-only backup code for an existing challenge owned by
+the authenticated user.
+
+Set the backup code as a Supabase Edge Function secret:
+
+```bash
+npx supabase secrets set CONTACT_OTP_BACKUP_CODE=676767
+```
+
+The function defaults to `676767` when the secret is missing. This fallback is temporary and
+must be removed or rotated before live deployment. Never expose this value through an
+`EXPO_PUBLIC_*` variable or return it from the Edge Function.
+
+Successful backup verification follows the normal challenge lifecycle: the Edge Function
+sets `verified_at`, and the database trigger sets `consumed_at` when the resident submits the
+barangay verification request.
+
+Manual test checklist:
+
+- Request a contact OTP, enter `676767`, and confirm the active challenge verifies.
+- Enter `676767` without requesting an OTP first and confirm verification fails.
+- Request an OTP, wait until the challenge expires, enter `676767`, and confirm verification fails.
+- Confirm an expired challenge shows inline recovery, then request a fresh challenge and verify that the new challenge replaces the expired ID.
+- Request an OTP, enter an incorrect code, and confirm verification fails and records an attempt.
+- Enter five incorrect codes for one challenge, then enter `676767`, and confirm that challenge remains blocked.
+- Request an OTP, immediately request another, and confirm the existing challenge returns with `deliveryStatus = already_sent`, HTTP `200`, and no second provider send.
+- Reach the hourly or ten-minute send window with a usable challenge and confirm it returns with `deliveryStatus = rate_limited_existing_challenge`, HTTP `200`, and code entry remains available.
+- Reach a send window without a usable challenge and confirm the function returns HTTP `429` until a new SMS send is allowed.
+- Complete barangay verification submission and confirm the verified challenge is consumed once.
+
+PHILSMS troubleshooting:
+
+- The current PHILSMS API base URL is `https://dashboard.philsms.com/api/v3`. Do not use the older `https://app.philsms.com/api/v3` host.
+- Store the token as the raw value, such as `900|xxxxx`, without a `Bearer ` prefix. The function reads `PHILSMS_API_TOKEN` first and falls back to `PHILSMS_BEARER_TOKEN`.
+- Before sending, a temporary server-side diagnostic checks `GET /balance` and logs only whether it succeeded.
+- If PHILSMS delivery fails after challenge creation, the function keeps the challenge active and returns HTTP `200` with `deliveryStatus = failed` and a stable `deliveryError`. This lets the authenticated user continue to code entry and use the server-only backup code while expiry, cooldown, attempt, and rate limits remain active.
+- SMS sends have a 60-second cooldown, a five-per-user or five-per-phone hourly limit, and a four-per-user-and-phone ten-minute limit. When these block a new send but a usable challenge exists for the same authenticated user and phone, the function returns that challenge without calling PHILSMS again.
+- Challenges expire after thirty minutes during active development/testing and allow five incorrect verification attempts. Expiry and attempt exhaustion apply only to that challenge and are checked before both normal and backup code comparison.
+- Routine send, resend, delayed-delivery, incorrect-code, cooldown, and expired-code messages render inline. Blocking alerts are reserved for an expired session or a server failure when no usable challenge exists.
+- Provider response details are logged only in Edge Function logs. The app receives a stable, user-safe error and never receives provider credentials or OTP values.
+
 ## Signup Duplicate Email Check
 
 The signup flow uses `functions/signup-email-check/` before sending a signup OTP. The function runs server-side with the Supabase service role and checks whether the submitted email already belongs to a Konektado profile.

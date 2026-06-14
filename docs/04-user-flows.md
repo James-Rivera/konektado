@@ -111,6 +111,9 @@ Contact details rules:
 - Email is required for MVP login and can be reused for verification follow-up, but the verification screen must include a short privacy explanation.
 - Email should not be displayed on public profiles, job cards, service cards, or worker cards.
 - Contact OTP is required for barangay verification submission, but it is not an authentication method. PhilSMS credentials remain server-only. Restricted simulation may be enabled only for explicitly allowlisted local test users or numbers.
+- Contact OTP SMS sends use a 60-second cooldown plus server-side send windows to protect provider credits. If a send is throttled while the same authenticated user and normalized phone still have an unexpired, unconsumed, unverified challenge with attempts remaining, the app reuses that challenge and opens the code-entry step instead of blocking the verification flow.
+- Each contact OTP challenge permits five incorrect attempts and expires after thirty minutes during active development and defense testing. Reaching five attempts locks only that challenge; a new challenge is required, and the server-only development backup code cannot bypass expiry or the lock.
+- Routine contact OTP outcomes appear inline on the code screen rather than in blocking alerts. Sent, reused, delayed-delivery, cooldown, incorrect-code, and expired-code states keep the input visible and explain the next action. Alerts are reserved for session loss or a server failure that leaves no usable challenge.
 
 ## Public Profile Completion Flow
 

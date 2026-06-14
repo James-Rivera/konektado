@@ -213,6 +213,10 @@ These role permissions apply after the user's barangay verification is approved 
 - Email is private and used for login, verification updates, support, and account recovery.
 - Contact OTP challenges are short-lived, rate-limited, attempt-limited, bound to the authenticated user and normalized profile phone, and consumed once by verification submission.
 - PhilSMS tokens, OTP HMAC secrets, and simulation allowlists are server-only. Simulated codes must never be enabled globally or returned for non-allowlisted users/numbers.
+- During active development, `CONTACT_OTP_BACKUP_CODE` provides a temporary server-only backup for existing active contact OTP challenges. It does not create challenges or verification requests, and it still requires challenge ownership, unexpired state, remaining attempts, and normal one-time consumption. Rotate or remove it before live deployment.
+- If PhilSMS delivery fails after a challenge is created, the challenge remains active and the app may continue to code entry with a delivery warning. This development fallback does not weaken ownership, expiry, cooldown, attempt, rate-limit, or barangay-submission checks.
+- SMS send throttles and OTP verification attempts are separate controls. Sends use a 60-second cooldown, a maximum of five challenge creations per user or phone per hour, and a maximum of four challenge creations for the same user and phone within ten minutes. A throttled send returns an existing usable challenge for that authenticated user and phone when one exists; it does not send another SMS.
+- Each challenge has a thirty-minute development/testing expiry and five incorrect attempts. Reaching the attempt limit locks only that challenge. Expiry and attempt checks run before both normal and backup code comparison, so neither code can verify an expired or exhausted challenge.
 
 ## Reciprocal Review Rules
 

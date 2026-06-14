@@ -10,7 +10,13 @@ import { Skeleton } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
 import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 import type { VerificationUpload } from '@/types/onboarding.types';
-import type { CreateVerificationRequestInput, VerificationIdType, VerificationStatus } from '@/types/verification.types';
+import type {
+  ContactOtpDeliveryStatus,
+  ContactOtpStatusType,
+  CreateVerificationRequestInput,
+  VerificationIdType,
+  VerificationStatus,
+} from '@/types/verification.types';
 import { NAME_SUBMISSION_WARNING } from '@/utils/verified-name-policy';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
@@ -40,7 +46,11 @@ export type SelectedVerificationFiles = {
 
 type VerificationFlowProps = {
   contactCode: string;
+  contactCanVerify: boolean;
+  contactDeliveryStatus: ContactOtpDeliveryStatus | null;
   contactSending: boolean;
+  contactStatusMessage: string | null;
+  contactStatusType: ContactOtpStatusType;
   contactVerifying: boolean;
   files: SelectedVerificationFiles;
   form: CreateVerificationRequestInput;
@@ -63,7 +73,7 @@ type VerificationFlowProps = {
   onResendContactCode: () => void;
   onResubmit: () => void;
   onViewProfile: () => void;
-  resendSeconds: number;
+  retryAfterSeconds: number;
 };
 
 const idTypeOptions: {
@@ -107,7 +117,11 @@ const idTypeLabels: Record<VerificationIdType, string> = {
 
 export function FigmaVerificationFlow({
   contactCode,
+  contactCanVerify,
+  contactDeliveryStatus,
   contactSending,
+  contactStatusMessage,
+  contactStatusType,
   contactVerifying,
   files,
   form,
@@ -130,7 +144,7 @@ export function FigmaVerificationFlow({
   onResendContactCode,
   onResubmit,
   onViewProfile,
-  resendSeconds,
+  retryAfterSeconds,
 }: VerificationFlowProps) {
   if (step === 'intro') {
     return (
@@ -166,10 +180,12 @@ export function FigmaVerificationFlow({
   if (step === 'details') {
     return (
       <LightFrame
-        footer={<FooterStack><PrimaryButton disabled={loadingPrefill || contactSending} label={contactSending ? 'Sending code...' : 'Continue'} onPress={onContinue} /></FooterStack>}
+        footer={<FooterStack><PrimaryButton disabled={loadingPrefill || contactSending || (!contactCanVerify && retryAfterSeconds > 0)} label={contactSending ? 'Sending code...' : !contactCanVerify && retryAfterSeconds > 0 ? `Try again in ${retryAfterSeconds}s` : 'Continue'} onPress={onContinue} /></FooterStack>}
         onBack={onBack}
         progress={1}>
         <DetailsScreen
+          contactStatusMessage={!contactCanVerify ? contactStatusMessage : null}
+          contactStatusType={contactStatusType}
           form={form}
           legalNameEdit={legalNameEdit}
           loading={loadingPrefill}
@@ -182,16 +198,19 @@ export function FigmaVerificationFlow({
   if (step === 'code') {
     return (
       <LightFrame
-        footer={<FooterStack><PrimaryButton disabled={contactCode.length !== 6 || contactVerifying} label={contactVerifying ? 'Checking code...' : 'Continue'} onPress={onContinue} /></FooterStack>}
+        footer={<FooterStack><PrimaryButton disabled={!contactCanVerify || contactCode.length !== 6 || contactVerifying} label={contactVerifying ? 'Checking code...' : 'Continue'} onPress={onContinue} /></FooterStack>}
         onBack={onBack}
         progress={1}>
         <CodeScreen
+          canVerify={contactCanVerify}
           contactCode={contactCode}
-          email={form.email}
+          deliveryStatus={contactDeliveryStatus}
           phone={form.phone}
+          statusMessage={contactStatusMessage}
+          statusType={contactStatusType}
           onChangeContactCode={onChangeContactCode}
           onResend={onResendContactCode}
-          resendSeconds={resendSeconds}
+          retryAfterSeconds={retryAfterSeconds}
         />
       </LightFrame>
     );
@@ -519,11 +538,15 @@ function PreflightScreen() {
 }
 
 function DetailsScreen({
+  contactStatusMessage,
+  contactStatusType,
   form,
   legalNameEdit,
   loading,
   onChangeField,
 }: {
+  contactStatusMessage: string | null;
+  contactStatusType: ContactOtpStatusType;
   form: CreateVerificationRequestInput;
   legalNameEdit: LegalNameEditPolicy;
   loading: boolean;
@@ -592,6 +615,13 @@ function DetailsScreen({
               onChangeText={(value) => onChangeField('phone', value)}
               value={form.phone}
             />
+            {contactStatusMessage ? (
+              <ContactStatusBanner
+                deliveryStatus={null}
+                message={contactStatusMessage}
+                type={contactStatusType}
+              />
+            ) : null}
             <InfoNote text="Used for verification updates, support, and account recovery. Not shown publicly." />
           </>
         )}
@@ -618,33 +648,61 @@ function DateField({ onPress, value }: { onPress: () => void; value: string }) {
 }
 
 function CodeScreen({
+  canVerify,
   contactCode,
-  email,
+  deliveryStatus,
   phone,
+  statusMessage,
+  statusType,
   onChangeContactCode,
   onResend,
-  resendSeconds,
+  retryAfterSeconds,
 }: {
+  canVerify: boolean;
   contactCode: string;
-  email: string | null;
+  deliveryStatus: ContactOtpDeliveryStatus | null;
   phone: string;
+  statusMessage: string | null;
+  statusType: ContactOtpStatusType;
   onChangeContactCode: (value: string) => void;
   onResend: () => void;
-  resendSeconds: number;
+  retryAfterSeconds: number;
 }) {
   const inputRef = useRef<TextInput>(null);
-  const contact = phone.trim() || email || 'your contact detail';
   const digits = contactCode.padEnd(6, ' ').slice(0, 6).split('');
+  const hasError = statusType === 'error' && Boolean(statusMessage);
 
   return (
     <View style={styles.codeScreen}>
       <Text style={styles.largeTitle}>Enter the code</Text>
-      <Text style={styles.codeSubtitle}>We have sent a code to {contact}</Text>
-      <Pressable disabled={resendSeconds > 0} onPress={onResend}>
-        <Text style={styles.resendText}>
-          {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : 'Resend code'}
-        </Text>
-      </Pressable>
+      <Text style={styles.codeSubtitle}>Enter the 6-digit code for {phone.trim()}.</Text>
+      {statusMessage && !hasError ? (
+        <ContactStatusBanner
+          deliveryStatus={deliveryStatus}
+          message={statusMessage}
+          type={statusType}
+        />
+      ) : null}
+      <View style={styles.resendBlock}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: retryAfterSeconds > 0 }}
+          disabled={retryAfterSeconds > 0}
+          onPress={onResend}>
+          <Text
+            style={[
+              styles.resendText,
+              retryAfterSeconds > 0 && styles.resendTextDisabled,
+            ]}>
+            {canVerify ? 'Resend code' : 'Request new code'}
+          </Text>
+        </Pressable>
+        {retryAfterSeconds > 0 ? (
+          <Text style={styles.retryText}>
+            You can request a new code in {retryAfterSeconds} seconds.
+          </Text>
+        ) : null}
+      </View>
       <Pressable
         accessibilityLabel="Enter verification code"
         accessibilityRole="button"
@@ -658,6 +716,11 @@ function CodeScreen({
           </View>
         ))}
       </Pressable>
+      {hasError ? (
+        <Text accessibilityLiveRegion="polite" style={styles.otpErrorText}>
+          {statusMessage}
+        </Text>
+      ) : null}
       <TextInput
         accessibilityLabel="Verification code"
         keyboardType="number-pad"
@@ -669,6 +732,57 @@ function CodeScreen({
       />
     </View>
   );
+}
+
+function ContactStatusBanner({
+  deliveryStatus,
+  message,
+  type,
+}: {
+  deliveryStatus: ContactOtpDeliveryStatus | null;
+  message: string;
+  type: ContactOtpStatusType;
+}) {
+  return (
+    <View
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.contactStatusBanner,
+        type === 'success' && styles.contactStatusBannerSuccess,
+        type === 'warning' && styles.contactStatusBannerWarning,
+        type === 'error' && styles.contactStatusBannerError,
+      ]}>
+      <MaterialIcons
+        color={getContactStatusColor(type)}
+        name={getContactStatusIcon(type, deliveryStatus)}
+        size={22}
+      />
+      <Text style={styles.contactStatusText}>{message}</Text>
+    </View>
+  );
+}
+
+function getContactStatusColor(type: ContactOtpStatusType) {
+  if (type === 'success') return '#2F7D32';
+  if (type === 'warning') return color.warning;
+  if (type === 'error') return color.danger;
+  return color.verificationBlue;
+}
+
+function getContactStatusIcon(
+  type: ContactOtpStatusType,
+  deliveryStatus: ContactOtpDeliveryStatus | null,
+): MaterialIconName {
+  if (type === 'success') return 'check-circle';
+  if (type === 'warning') return 'warning-amber';
+  if (type === 'error') return 'error-outline';
+  if (
+    deliveryStatus === 'already_sent' ||
+    deliveryStatus === 'rate_limited_existing_challenge'
+  ) {
+    return 'schedule';
+  }
+  return 'info-outline';
 }
 
 function IdTypeScreen({
@@ -1404,7 +1518,7 @@ const styles = StyleSheet.create({
   },
   codeScreen: {
     paddingHorizontal: 18,
-    paddingTop: 74,
+    paddingTop: 56,
   },
   largeTitle: {
     color: color.text,
@@ -1413,33 +1527,82 @@ const styles = StyleSheet.create({
     lineHeight: 39,
   },
   codeSubtitle: {
-    color: color.text,
+    color: color.textMuted,
     fontFamily: 'Satoshi-Light',
     fontSize: 13,
     lineHeight: 20,
+  },
+  contactStatusBanner: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    padding: 14,
+  },
+  contactStatusBannerSuccess: {
+    backgroundColor: color.successSoft,
+  },
+  contactStatusBannerWarning: {
+    backgroundColor: color.warningSoft,
+  },
+  contactStatusBannerError: {
+    backgroundColor: color.dangerSoft,
+  },
+  contactStatusText: {
+    color: color.textMuted,
+    flex: 1,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  resendBlock: {
+    alignItems: 'flex-start',
+    gap: 2,
+    marginTop: 10,
   },
   resendText: {
     color: color.primary,
     fontFamily: 'Satoshi-Bold',
     fontSize: 13,
     lineHeight: 20,
-    marginTop: 10,
+  },
+  resendTextDisabled: {
+    color: color.textSubtle,
+  },
+  retryText: {
+    color: color.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 16,
   },
   otpRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginTop: 36,
     justifyContent: 'center',
     width: '100%',
+  },
+  otpErrorText: {
+    color: color.danger,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
+    textAlign: 'center',
   },
   otpBox: {
     alignItems: 'center',
     borderColor: '#D5D7DA',
     borderRadius: 10,
     borderWidth: 1,
+    flex: 1,
     height: 54,
     justifyContent: 'center',
-    width: 47,
+    maxWidth: 47,
+    minWidth: 38,
   },
   otpBoxActive: {
     borderColor: color.accentYellow,
