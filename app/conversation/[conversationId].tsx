@@ -110,13 +110,20 @@ export default function ConversationDetailScreen() {
         Alert.alert('Conversation', result.error);
       } else {
         setConversation(result.data);
-        void markConversationRead(conversationId);
+        void markConversationRead(conversationId).then((readResult) => {
+          if (readResult.error) return;
+          emitConversationPreviewUpdate({
+            conversationId,
+            unreadCount: 0,
+            userId: profile?.id,
+          });
+        });
       }
 
       setLoading(false);
       setConversationReady(true);
     });
-  }, [conversationId]);
+  }, [conversationId, profile?.id]);
 
   useEffect(() => {
     load({ showSkeleton: true });
@@ -145,7 +152,16 @@ export default function ConversationDetailScreen() {
             const hydratedMessage = { ...message, attachmentUrl };
             setConversation((current) => reconcileConversationMessage(current, hydratedMessage));
             emitConversationPreviewUpdate({ conversationId, message: hydratedMessage, userId: profile?.id });
-            if (hydratedMessage.senderId !== profile?.id) void markConversationRead(conversationId);
+            if (hydratedMessage.senderId !== profile?.id) {
+              void markConversationRead(conversationId).then((readResult) => {
+                if (readResult.error) return;
+                emitConversationPreviewUpdate({
+                  conversationId,
+                  unreadCount: 0,
+                  userId: profile?.id,
+                });
+              });
+            }
           })();
         },
       )

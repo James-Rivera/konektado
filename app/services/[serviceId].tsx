@@ -4,6 +4,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { useFeedback } from '@/components/FeedbackProvider';
 import {
   PublicProfileHeader,
   PublicProfileSkeleton,
@@ -12,6 +13,7 @@ import {
 import { color } from '@/constants/theme';
 import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
+import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startServiceConversation } from '@/services/conversation.service';
 import {
@@ -32,6 +34,7 @@ function getParamValue(value: string | string[] | undefined) {
 export default function ServicePublicWorkerProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showErrorToast, showSuccessToast } = useFeedback();
   const { profile: currentProfile, loading: currentProfileLoading } = useProfile();
   const params = useLocalSearchParams<{ adminView?: string | string[]; serviceId?: string | string[] }>();
   const serviceId = getParamValue(params.serviceId);
@@ -40,6 +43,7 @@ export default function ServicePublicWorkerProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
+  const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
 
   useEffect(() => {
     let active = true;
@@ -88,6 +92,11 @@ export default function ServicePublicWorkerProfileScreen() {
     };
   }, [serviceId]);
 
+  useEffect(() => {
+    if (!currentProfile?.id || !serviceId) return;
+    void refreshSavedPosts();
+  }, [currentProfile?.id, refreshSavedPosts, serviceId]);
+
   const isVerified = Boolean(currentProfile?.barangay_verified_at || currentProfile?.verified_at);
   const isOwnProfile = Boolean(profile && currentProfile?.id === profile.id);
   const messageService = getMessageService(profile);
@@ -96,6 +105,26 @@ export default function ServicePublicWorkerProfileScreen() {
     isVerified,
     service: messageService,
   });
+  const saveTarget = serviceId
+    ? { postType: 'service' as const, postId: serviceId }
+    : null;
+
+  const handleSave = async () => {
+    if (!saveTarget || isOwnProfile || adminViewOnly) return;
+    if (isPending(saveTarget)) return;
+    if (!isVerified) {
+      router.push('/verification');
+      return;
+    }
+
+    const result = await toggleSaved(saveTarget);
+    if (result.error || !result.data) {
+      showErrorToast(result.error ?? 'Could not update saved posts.');
+      return;
+    }
+
+    showSuccessToast(result.data.saved ? 'Saved' : 'Removed from saved');
+  };
 
   const handleMessage = async () => {
     if (!profile) return;
@@ -146,7 +175,18 @@ export default function ServicePublicWorkerProfileScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <PublicProfileHeader onBack={() => router.back()} title="Worker Profile" />
+        <PublicProfileHeader
+          actionActive={Boolean(saveTarget && isSaved(saveTarget))}
+          actionIcon={saveTarget && !isOwnProfile && !adminViewOnly
+            ? isSaved(saveTarget)
+              ? 'bookmark'
+              : 'bookmark-border'
+            : undefined}
+          actionLabel={saveTarget && isSaved(saveTarget) ? 'Remove saved service' : 'Save service'}
+          onAction={saveTarget ? handleSave : undefined}
+          onBack={() => router.back()}
+          title="Worker Profile"
+        />
         {loading || currentProfileLoading ? (
           <PublicProfileSkeleton bottomInset={insets.bottom} showCta={!adminViewRequested} />
         ) : null}

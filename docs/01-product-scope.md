@@ -44,7 +44,7 @@ The following are intentionally out of scope for MVP:
 These can be considered after the MVP is stable:
 
 - Advanced messaging features after basic MVP chat is stable, such as calls, group chat, push delivery, and per-message read receipts.
-- Saved jobs and saved providers.
+- Saved-post folders, labels, sharing, and reminders beyond the MVP Saved Posts list.
 - Provider availability calendar.
 - Push notifications and notification preferences beyond the basic in-app notification center.
 - Admin analytics dashboard.

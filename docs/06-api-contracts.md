@@ -12,6 +12,7 @@ Recommended service folder:
   verification.service.ts
   job.service.ts
   conversation.service.ts
+  saved-posts.service.ts
   notification.service.ts
   review.service.ts
   admin.service.ts
@@ -108,7 +109,7 @@ Purpose: Own job creation, search, and status changes.
 | `getJob(id)` | `{ id: string }` | `ServiceResult<JobDetail>` | Gets job details with public client info. |
 | `searchJobs(filters)` | `JobSearchFilters` | `ServiceResult<JobSummary[]>` | Lists open jobs by category, location, text, budget, or date. |
 | `listMyJobs()` | none | `ServiceResult<Job[]>` | Lists jobs owned by current client. |
-| `updateJob(id, input)` | `{ id: string; input: UpdateJobInput }` | `ServiceResult<Job>` | Edits owned open job. |
+| `updateJob(id, input)` | `{ id: string; input: UpdateJobInput }` | `ServiceResult<Job>` | Edits an owned `open`, `reviewing`, or deactivated (`cancelled`) job without changing its lifecycle status. |
 | `updateJobStatus(id, status)` | `{ id: string; status: JobStatus }` | `ServiceResult<Job>` | Closes, cancels, completes, or reopens if allowed. |
 
 Rules:
@@ -128,9 +129,10 @@ Purpose: Own message-based job interest and basic chat.
 | `startJobConversation(input)` | `{ jobId: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a job conversation to show interest. |
 | `startServiceConversation(input)` | `{ serviceId: string; message?: string }` | `ServiceResult<ConversationDetail>` | Creates or reuses a service request conversation for the current client and service provider. |
 | `sendMessage(input)` | `{ conversationId: string; body: string }` | `ServiceResult<Message>` | Sends a text message. |
+| `markConversationRead(id)` | `{ conversationId: string }` | `ServiceResult<string>` | Advances only the current participant's read watermark. |
 | `markWorkerHired(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Client marks the provider hired for the job. |
 | `declineConversation(input)` | `{ conversationId: string; reason?: string }` | `ServiceResult<ConversationDetail>` | Declines a request/interest without deleting history. |
-| `archiveConversation(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Marks the conversation archived for the MVP. Per-user archive state can be added later. |
+| `archiveConversation(input)` | `{ conversationId: string }` | `ServiceResult<boolean>` | Hides the conversation only from the current participant's inbox. |
 | `reportConversation(input)` | `{ conversationId: string }` | `ServiceResult<ConversationDetail>` | Marks the conversation reported for MVP moderation visibility. |
 
 Rules:
@@ -139,8 +141,30 @@ Rules:
 - A provider cannot start a job conversation on their own job.
 - One active job conversation per provider per job.
 - One service conversation per client, provider, and service.
+- Conversation creation treats unique conflicts as an existing thread and refetches the canonical row.
+- Inbox, thread, and Details participant identity must use the same public-safe profile resolver.
+- Unread counts exclude the current user's messages and clear immediately when the thread opens.
+- New message activity restores participant-archived conversations.
 - "Mark hired" is client-only for jobs owned by that client.
-- Keep MVP messaging text-only.
+- MVP messages may contain text, one private image, or both.
+
+## SavedPostService
+
+Purpose: Own private post-scoped bookmarks and Saved Posts hydration.
+
+| Function | Input | Output | Behavior |
+| --- | --- | --- | --- |
+| `listSavedPostReferences()` | none | `ServiceResult<SavedPostReference[]>` | Lists the current user's private saved post keys newest first. |
+| `listSavedPosts()` | none | `ServiceResult<SavedPost[]>` | Hydrates saved jobs/services and preserves unavailable rows. |
+| `isPostSaved(target)` | `{ postType: "job" \| "service"; postId: string }` | `ServiceResult<boolean>` | Checks one current-user bookmark. |
+| `savePost(target)` | `{ postType: "job" \| "service"; postId: string }` | `ServiceResult<SavedPostReference>` | Idempotently saves one post for a verified user. |
+| `unsavePost(target)` | `{ postType: "job" \| "service"; postId: string }` | `ServiceResult<boolean>` | Removes only the current user's bookmark. |
+
+Rules:
+
+- Screens use `useSavedPosts` for optimistic UI and rollback.
+- Worker/provider identity IDs are not valid saved-post targets.
+- RLS keeps saved rows private to their owner.
 
 ## ReviewService
 

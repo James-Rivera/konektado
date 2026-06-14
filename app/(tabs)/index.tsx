@@ -19,7 +19,7 @@ import { homeFilters, type HomeFilter } from '@/constants/demo-data';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { useSavedItems } from '@/hooks/use-saved-items';
+import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
   compactText,
@@ -234,7 +234,7 @@ export default function HomeScreen() {
   const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
   const isFocused = useIsFocused();
   const { profile, loading: profileLoading, version } = useProfile();
-  const { isPending, isSaved, refreshSavedItems, toggleSaved } = useSavedItems();
+  const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const topInset = useSafeTopInset();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
@@ -333,8 +333,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!isFocused || profileLoading) return;
-    void refreshSavedItems();
-  }, [isFocused, profileLoading, refreshSavedItems]);
+    void refreshSavedPosts();
+  }, [isFocused, profileLoading, refreshSavedPosts]);
 
   useEffect(() => {
     let active = true;
@@ -691,14 +691,14 @@ function FeedSeparator() {
 function getHomeSavedTarget(feedItem: HomeFeedItem) {
   if (feedItem.type === 'worker') {
     return {
-      itemType: 'provider' as const,
-      itemId: feedItem.service.providerId,
+      postType: 'service' as const,
+      postId: feedItem.service.id,
     };
   }
 
   return {
-    itemType: 'job' as const,
-    itemId: feedItem.itemId,
+      postType: 'job' as const,
+      postId: feedItem.itemId,
   };
 }
 

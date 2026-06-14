@@ -16,6 +16,7 @@ import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
+import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startJobConversation } from '@/services/conversation.service';
 import { closeJob, deactivateJob, getJobDetail, reactivateJob } from '@/services/job.service';
@@ -43,7 +44,7 @@ function getParamValue(value: string | string[] | undefined) {
 
 export default function JobDetailScreen() {
   const router = useRouter();
-  const { showSuccessToast } = useFeedback();
+  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
   const { profile } = useProfile();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
 
@@ -58,10 +59,16 @@ export default function JobDetailScreen() {
   const [reporting, setReporting] = useState(false);
   const [updatingPost, setUpdatingPost] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
 
   useEffect(() => {
     setAvatarFailed(false);
   }, [job?.client?.avatarUrl]);
+
+  useEffect(() => {
+    if (!profile?.id || !rawJobId) return;
+    void refreshSavedPosts();
+  }, [profile?.id, rawJobId, refreshSavedPosts]);
 
   useEffect(() => {
     let active = true;
@@ -149,6 +156,7 @@ export default function JobDetailScreen() {
     ),
   );
   const isOwnJob = profile?.id === job.clientId;
+  const saveTarget = { postType: 'job' as const, postId: job.id };
   const messageCta = getJobMessageCta({
     allowMessages: job.allowMessages,
     isOwnJob,
@@ -201,6 +209,22 @@ export default function JobDetailScreen() {
         params: { conversationId: result.data.id },
       });
     });
+  };
+
+  const handleSave = async () => {
+    if (!isVerified) {
+      showInfoToast('Complete barangay verification before saving posts.');
+      router.push('/verification');
+      return;
+    }
+
+    const result = await toggleSaved(saveTarget);
+    if (result.error || !result.data) {
+      showErrorToast(result.error ?? 'Could not update saved posts.');
+      return;
+    }
+
+    showSuccessToast(result.data.saved ? 'Saved' : 'Removed from saved');
   };
 
   const handleReport = async ({ details, reason }: ReportSheetSubmitValue) => {
@@ -486,24 +510,47 @@ export default function JobDetailScreen() {
               Budget is for coordination. Payment and final agreement happen outside Konektado.
             </Text>
             {messageCta.helper ? <Text style={styles.actionHelper}>{messageCta.helper}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={messageCta.disabled || messaging}
-              onPress={handleMessage}
-              style={({ pressed }) => [
-                styles.primaryAction,
-                (messageCta.disabled || messaging) && styles.disabledAction,
-                pressed && !messageCta.disabled && !messaging && styles.pressed,
-              ]}>
-              <MaterialIcons
-                color={messageCta.disabled ? color.textSubtle : color.primary}
-                name="chat-bubble"
-                size={16}
-              />
-              <Text style={[styles.primaryActionText, messageCta.disabled && styles.disabledActionText]}>
-                {messaging ? 'Opening...' : messageCta.label}
-              </Text>
-            </Pressable>
+            <View style={styles.actionButtons}>
+              {!isOwnJob ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSaved(saveTarget) }}
+                  disabled={isPending(saveTarget)}
+                  onPress={handleSave}
+                  style={({ pressed }) => [
+                    styles.secondaryAction,
+                    pressed && !isPending(saveTarget) && styles.pressed,
+                  ]}>
+                  <MaterialIcons
+                    color={isSaved(saveTarget) ? color.primary : color.textSubtle}
+                    name={isSaved(saveTarget) ? 'bookmark' : 'bookmark-border'}
+                    size={16}
+                  />
+                  <Text style={styles.secondaryActionText}>
+                    {isSaved(saveTarget) ? 'Saved' : 'Save'}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={messageCta.disabled || messaging}
+                onPress={handleMessage}
+                style={({ pressed }) => [
+                  styles.primaryAction,
+                  styles.flexAction,
+                  (messageCta.disabled || messaging) && styles.disabledAction,
+                  pressed && !messageCta.disabled && !messaging && styles.pressed,
+                ]}>
+                <MaterialIcons
+                  color={messageCta.disabled ? color.textSubtle : color.primary}
+                  name="chat-bubble"
+                  size={16}
+                />
+                <Text style={[styles.primaryActionText, messageCta.disabled && styles.disabledActionText]}>
+                  {messaging ? 'Opening...' : messageCta.label}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         )}
       </View>
@@ -1110,6 +1157,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: color.textSubtle,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: space.sm,
+    width: '100%',
+  },
   primaryAction: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
@@ -1126,6 +1178,9 @@ const styles = StyleSheet.create({
   primaryActionText: {
     ...typography.captionMedium,
     color: color.primary,
+  },
+  flexAction: {
+    flex: 2,
   },
   disabledActionText: {
     color: color.textSubtle,

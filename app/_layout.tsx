@@ -132,6 +132,7 @@ function RootNavigator() {
         "notifications",
         "post",
         "profile",
+        "saved",
         "services",
         "verification",
         "worker",
@@ -191,6 +192,7 @@ function RootNavigator() {
       <Stack.Screen name="profile/complete" options={{ headerShown: false }} />
       <Stack.Screen name="profile/credentials" options={{ headerShown: false }} />
       <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
+      <Stack.Screen name="saved" options={{ headerShown: false }} />
       <Stack.Screen name="services/[serviceId]" options={{ headerShown: false }} />
       <Stack.Screen name="verification" options={{ headerShown: false }} />
       <Stack.Screen name="worker/[workerId]" options={{ headerShown: false }} />

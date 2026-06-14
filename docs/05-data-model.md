@@ -2,7 +2,7 @@
 
 This is the target PostgreSQL-style data model for the MVP. Supabase Auth owns account authentication, while public app data lives in PostgreSQL tables under the app schema.
 
-Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state. `supabase/migrations/20260531120100_public_photo_cleanup_delete_policies.sql` adds owner-scoped delete policies for staged job and service photos so failed or cancelled edits can clean up their own storage objects. `supabase/migrations/20260601090000_service_drafts.sql` adds owner-private service draft persistence with the same verified-or-unverified authoring model as job drafts. `supabase/migrations/20260601103000_profile_ownership_cleanup.sql` adds Hiring Profile coordination style, marks profile-owned pricing/budget fields deprecated, removes profile completion's rate-range constraint, and adds public-safe role-profile summary RPCs.
+Current implementation note: the first Supabase migration lives at `supabase/migrations/20260503001433_initial_app_schema.sql`. It creates the database surface the current app already calls during onboarding: `profiles`, `user_roles`, `provider_profiles`, `client_profiles`, `verifications`, `verification_files`, `jobs`, and the `verification-files` storage bucket. `supabase/migrations/20260503013000_user_preferences.sql` adds the lightweight taste setup table used before viewer entry. `supabase/migrations/20260503023000_marketplace_mvp.sql` adds the functional marketplace MVP surface: `services`, `conversations`, `messages`, `saved_items`, `reviews`, job compatibility fields, admin verification review policies, and verification-gated RLS for posting/messaging/reviews. `supabase/migrations/20260504100000_add_service_needed_to_jobs.sql` adds structured service-needed storage for public jobs and private drafts. `supabase/migrations/20260504103000_job_photos.sql` adds public job-photo storage and photo URL arrays for draft and published posts. `supabase/migrations/20260509103000_profile_completion_model.sql` adds public role-profile completion fields to `provider_profiles` and `client_profiles`. `supabase/migrations/20260513120000_adviser_marketplace_refinements.sql` adds split address fields, profile contact method, job/service rate ranges, private job location notes, experience/certification metadata, and custom service review status. `supabase/migrations/20260514100000_profile_address_split_fields.sql` adds province, subdivision/area, and landmark/address note for cleaner address privacy. `supabase/migrations/20260514120000_user_preferences_offered_delivery_mode.sql` stores provider onboarding work setup separately from service taxonomy values. `supabase/migrations/20260515120000_profile_builder_credentials_and_ranges.sql` adds optional credential metadata/storage access, separates negotiable flags from rate/budget type, and requires valid numeric min/max ranges for published/open marketplace rows. `supabase/migrations/20260515130000_profile_photos.sql` adds the public profile-photo bucket with owner-scoped writes for strongly recommended shared identity photos. `supabase/migrations/20260517110000_in_app_notifications.sql` adds owner-readable in-app notifications plus server-side creation triggers for messages, verification decisions, completed hired jobs, and report status updates. `supabase/migrations/20260519120000_canonical_rate_ranges_cleanup.sql` backfills legacy fixed-rate rows into canonical ranges where possible and marks fixed-rate columns deprecated. `supabase/migrations/20260519130000_expand_rate_type_pricing_units.sql` expands supported pricing units for demo-realistic rate range display. `supabase/migrations/20260526090000_public_photo_moderation.sql` adds backend-backed public photo moderation history and public-safe content visibility state. `supabase/migrations/20260531120100_public_photo_cleanup_delete_policies.sql` adds owner-scoped delete policies for staged job and service photos so failed or cancelled edits can clean up their own storage objects. `supabase/migrations/20260601090000_service_drafts.sql` adds owner-private service draft persistence with the same verified-or-unverified authoring model as job drafts. `supabase/migrations/20260601103000_profile_ownership_cleanup.sql` adds Hiring Profile coordination style, marks profile-owned pricing/budget fields deprecated, removes profile completion's rate-range constraint, and adds public-safe role-profile summary RPCs. `supabase/migrations/20260614120000_marketplace_identity_inbox_saved_posts.sql` adds participant archive state, repairs legacy conversation duplicates, restores canonical inbox identity/unread behavior, and converts private saves to job/service post IDs.
 
 ## Canonical Ownership Map
 
@@ -31,7 +31,7 @@ Recommended enum values can be implemented as PostgreSQL enums or `text check` c
 | `rate_type` | `per_service`, `hourly`, `daily`, `weekly`, `per_project` |
 | `experience_level` | `any`, `beginner`, `intermediate`, `experienced` |
 | `custom_service_review_status` | `none`, `pending`, `approved`, `rejected` |
-| `saved_item_type` | `job`, `provider` |
+| `saved_item_type` | `job`, `service` |
 | `report_status` | `open`, `reviewing`, `resolved`, `dismissed` |
 | `moderation_target_type` | `photo`, `user`, `job`, `service`, `report` |
 | `photo_source_type` | `profile_photo`, `job_photo`, `service_photo` |
@@ -493,11 +493,28 @@ Relationships:
 
 Important constraints:
 
-- Unique active `(job_id, provider_id)` when `job_id` is present.
+- Unique `(job_id, provider_id)` when `job_id` is present.
 - Unique `(service_id, client_id, provider_id)` when `service_id` is present.
 - Provider cannot start interest on their own job.
 - Only job owner/client can mark a worker hired for that job.
-- Both participants can archive their own view if per-user conversation state is later added.
+- Conversation creation must reuse the canonical row and recover from concurrent unique conflicts.
+
+## conversation_reads
+
+Purpose: Participant-scoped inbox state for a conversation.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `conversation_id` | `uuid` | References `conversations(id)` on delete cascade. |
+| `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
+| `last_read_at` | `timestamptz` | Read watermark used for unread counts. |
+| `archived_at` | `timestamptz` | Nullable participant-only archive state. |
+
+Important constraints:
+
+- Primary key is `(conversation_id, user_id)`.
+- Only the owning participant can read their state; writes use participant-checking RPCs.
+- New message activity clears `archived_at` without changing the other participant's read watermark.
 
 ## messages
 
@@ -508,8 +525,11 @@ Purpose: Basic in-app text messages for marketplace coordination.
 | `id` | `uuid` | Primary key. |
 | `conversation_id` | `uuid` | References `conversations(id)` on delete cascade. |
 | `sender_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `body` | `text` | Message text. |
-| `read_at` | `timestamptz` | Nullable. |
+| `body` | `text` | Message text; may be empty when an attachment exists. |
+| `attachment_path` | `text` | Nullable private Storage path for one image. |
+| `attachment_mime_type` | `text` | Nullable image MIME type. |
+| `attachment_width` | `integer` | Nullable positive image width. |
+| `attachment_height` | `integer` | Nullable positive image height. |
 | `created_at` | `timestamptz` | Default `now()`. |
 
 Relationships:
@@ -521,24 +541,25 @@ Important constraints:
 
 - Only conversation participants can read messages.
 - Only verified users with the relevant Work or Hiring Profile can send messages.
-- MVP messages are text-only. Attachments, read receipts, calls, and group chat are future features.
+- MVP messages support text, one private image, or both. Per-message read receipts, calls, and group chat are future features.
 
 ## saved_items
 
-Purpose: One-tap bookmark state for saved jobs and providers.
+Purpose: Private one-tap bookmark state for saved job and service posts.
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | `uuid` | Primary key. |
 | `user_id` | `uuid` | References `profiles(id)` on delete cascade. |
-| `item_type` | `saved_item_type` | `job` or `provider`. |
-| `item_id` | `uuid` | Target record ID. |
+| `item_type` | `saved_item_type` | `job` or `service`. |
+| `item_id` | `uuid` | Target job or service post ID. |
 | `created_at` | `timestamptz` | Default `now()`. |
 
 Important constraints:
 
 - Unique `(user_id, item_type, item_id)`.
-- Saving is verification-gated if final product requires all interactions to be gated. If time is tight, save can be a local/demo-only state.
+- Select and delete are owner-only; insert is owner-only and verification-gated.
+- Missing or inaccessible target posts may remain as private unavailable rows until the owner removes them.
 
 ## notifications
 

@@ -72,6 +72,7 @@ type ConversationInboxRow = {
   hired_at: string | null;
   conversation_created_at: string;
   conversation_updated_at: string;
+  archived_at: string | null;
   job_title: string | null;
   service_title: string | null;
   client_full_name: string | null;
@@ -246,6 +247,7 @@ function mapInboxRow(row: ConversationInboxRow): ConversationSummary {
     startedBy: row.started_by,
     status: row.status,
     hiredAt: row.hired_at,
+    archivedAt: row.archived_at ?? null,
     createdAt: row.conversation_created_at,
     updatedAt: row.last_message_created_at ?? row.conversation_updated_at,
     job: mapInboxJob(row),
@@ -332,6 +334,7 @@ async function mapConversationRows(
     startedBy: row.started_by,
     status: row.status,
     hiredAt: row.hired_at,
+    archivedAt: null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     job: row.job_id ? jobs.get(row.job_id) ?? null : null,
@@ -341,6 +344,70 @@ async function mapConversationRows(
     lastMessage: latestMessages.get(row.id) ?? null,
     unreadCount: 0,
   }));
+}
+
+async function hydrateInboxProfiles(
+  conversations: ConversationSummary[],
+): Promise<ConversationSummary[]> {
+  const profiles = await loadPublicProfiles(
+    conversations.flatMap((conversation) => [
+      conversation.clientId,
+      conversation.providerId,
+    ]),
+  );
+
+  return conversations.map((conversation) => {
+    const client = profiles.get(conversation.clientId) ?? conversation.client;
+    const provider = profiles.get(conversation.providerId) ?? conversation.provider;
+
+    return {
+      ...conversation,
+      client,
+      provider,
+      job: conversation.job
+        ? {
+            ...conversation.job,
+            client,
+          }
+        : null,
+    };
+  });
+}
+
+async function findJobConversation(
+  jobId: string,
+  providerId: string,
+): Promise<{ data: ConversationRow | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS)
+    .eq('job_id', jobId)
+    .eq('provider_id', providerId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle<ConversationRow>();
+
+  if (error) return { data: null, error: error.message };
+  return { data, error: null };
+}
+
+async function findServiceConversation(
+  serviceId: string,
+  clientId: string,
+  providerId: string,
+): Promise<{ data: ConversationRow | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS)
+    .eq('service_id', serviceId)
+    .eq('client_id', clientId)
+    .eq('provider_id', providerId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle<ConversationRow>();
+
+  if (error) return { data: null, error: error.message };
+  return { data, error: null };
 }
 
 export async function listMyConversations(filters: {
@@ -357,11 +424,13 @@ export async function listMyConversations(filters: {
   );
 
   if (!inboxError) {
+    const conversations = await hydrateInboxProfiles(
+      ((inboxRows as ConversationInboxRow[] | null) ?? []).map(mapInboxRow),
+    );
     return {
       data: filterConversationSummaries(
-        ((inboxRows as ConversationInboxRow[] | null) ?? []).map(mapInboxRow),
+        conversations,
         filters,
-        user.data,
       ),
       error: null,
     };
@@ -386,9 +455,21 @@ export async function listMyConversations(filters: {
   }
 
   let conversations = await mapConversationRows((data as ConversationRow[] | null) ?? []);
+  const { data: readRows } = await supabase
+    .from('conversation_reads')
+    .select('conversation_id, archived_at')
+    .eq('user_id', user.data);
+  const archivedByConversation = new Map(
+    ((readRows as { archived_at: string | null; conversation_id: string }[] | null) ?? [])
+      .map((row) => [row.conversation_id, row.archived_at]),
+  );
+  conversations = conversations.map((conversation) => ({
+    ...conversation,
+    archivedAt: archivedByConversation.get(conversation.id) ?? null,
+  }));
 
   return {
-    data: filterConversationSummaries(conversations, filters, user.data),
+    data: filterConversationSummaries(conversations, filters),
     error: null,
   };
 }
@@ -399,10 +480,9 @@ function filterConversationSummaries(
     kind?: 'all' | 'jobs' | 'services' | 'unread';
     includeArchived?: boolean;
   },
-  userId: string,
 ) {
   if (!filters.includeArchived) {
-    conversations = conversations.filter((conversation) => conversation.status !== 'archived');
+    conversations = conversations.filter((conversation) => !conversation.archivedAt);
   }
 
   if (filters.kind === 'jobs') {
@@ -453,6 +533,20 @@ export async function getConversation(conversationId: string): Promise<ServiceRe
 }
 
 export async function getConversationSummary(conversationId: string): Promise<ServiceResult<ConversationSummary>> {
+  const { data: inboxRows, error: inboxError } = await supabase.rpc(
+    'get_my_conversation_inbox',
+    { p_include_archived: true },
+  );
+
+  if (!inboxError) {
+    const row = ((inboxRows as ConversationInboxRow[] | null) ?? [])
+      .find((item) => item.conversation_id === conversationId);
+    if (!row) return { data: null, error: 'Conversation not found.' };
+
+    const [summary] = await hydrateInboxProfiles([mapInboxRow(row)]);
+    return { data: summary, error: null };
+  }
+
   const { data, error } = await supabase
     .from('conversations')
     .select(CONVERSATION_COLUMNS)
@@ -494,14 +588,10 @@ export async function startJobConversation({
     return { data: null, error: 'The client is not accepting new messages from this post.' };
   }
 
-  const { data: existing } = await supabase
-    .from('conversations')
-    .select(CONVERSATION_COLUMNS)
-    .eq('job_id', jobId)
-    .eq('provider_id', user.data)
-    .maybeSingle<ConversationRow>();
+  const existing = await findJobConversation(jobId, user.data);
+  if (existing.error) return { data: null, error: existing.error };
 
-  let conversationId = existing?.id ?? null;
+  let conversationId = existing.data?.id ?? null;
 
   if (!conversationId) {
     const { data, error } = await supabase
@@ -517,10 +607,18 @@ export async function startJobConversation({
       .single<ConversationRow>();
 
     if (error) {
-      return { data: null, error: error.message };
-    }
+      if (error.code !== '23505') {
+        return { data: null, error: error.message };
+      }
 
-    conversationId = data.id;
+      const concurrent = await findJobConversation(jobId, user.data);
+      if (concurrent.error || !concurrent.data) {
+        return { data: null, error: concurrent.error ?? 'Could not open this conversation.' };
+      }
+      conversationId = concurrent.data.id;
+    } else {
+      conversationId = data.id;
+    }
   }
 
   if (compactText(message)) {
@@ -555,15 +653,10 @@ export async function startServiceConversation({
     return { data: null, error: 'This service is not accepting messages right now.' };
   }
 
-  const { data: existing } = await supabase
-    .from('conversations')
-    .select(CONVERSATION_COLUMNS)
-    .eq('service_id', serviceId)
-    .eq('client_id', user.data)
-    .eq('provider_id', service.data.providerId)
-    .maybeSingle<ConversationRow>();
+  const existing = await findServiceConversation(serviceId, user.data, service.data.providerId);
+  if (existing.error) return { data: null, error: existing.error };
 
-  let conversationId = existing?.id ?? null;
+  let conversationId = existing.data?.id ?? null;
 
   if (!conversationId) {
     const { data, error } = await supabase
@@ -579,10 +672,22 @@ export async function startServiceConversation({
       .single<ConversationRow>();
 
     if (error) {
-      return { data: null, error: error.message };
-    }
+      if (error.code !== '23505') {
+        return { data: null, error: error.message };
+      }
 
-    conversationId = data.id;
+      const concurrent = await findServiceConversation(
+        serviceId,
+        user.data,
+        service.data.providerId,
+      );
+      if (concurrent.error || !concurrent.data) {
+        return { data: null, error: concurrent.error ?? 'Could not open this conversation.' };
+      }
+      conversationId = concurrent.data.id;
+    } else {
+      conversationId = data.id;
+    }
   }
 
   if (compactText(message)) {
@@ -822,7 +927,7 @@ export async function updateConversationStatus({
   status,
 }: {
   conversationId: string;
-  status: Extract<ConversationStatus, 'active' | 'declined' | 'archived' | 'reported'>;
+  status: Extract<ConversationStatus, 'active' | 'declined' | 'reported'>;
 }): Promise<ServiceResult<ConversationDetail>> {
   const user = await requireVerifiedUser();
   if (user.error) return user;
@@ -847,8 +952,19 @@ export async function updateConversationStatus({
   return getConversation(conversationId);
 }
 
-export function archiveConversation(input: { conversationId: string }) {
-  return updateConversationStatus({ ...input, status: 'archived' });
+export async function archiveConversation({
+  conversationId,
+}: {
+  conversationId: string;
+}): Promise<ServiceResult<boolean>> {
+  const user = await requireVerifiedUser();
+  if (user.error) return user;
+
+  const { error } = await supabase.rpc('archive_conversation', {
+    p_conversation_id: conversationId,
+  });
+  if (error) return { data: null, error: error.message };
+  return { data: true, error: null };
 }
 
 export async function reportConversation({

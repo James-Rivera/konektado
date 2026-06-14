@@ -132,7 +132,7 @@ Rules:
 - Verification selfie, ID files, certificate files, and admin notes are private and must never become public profile photos or profile content.
 - A public profile photo is strongly recommended for recognition and trust, but remains optional and must not block completion or marketplace access.
 - Profile completion must not depend on active services, active jobs, budgets, rates, or marketplace inventory. A user with zero listings can still complete Core, Work, and Hiring profiles.
-- Profile may summarize active Services Offered, active Job Posts, Work History, and Hiring History, but drafts, inactive posts, archived/final post management, edit/delete/deactivate/republish controls, saved items, and private states belong in Post Dashboard or other owner/private surfaces.
+- Profile may summarize active Services Offered, active Job Posts, Work History, and Hiring History, but drafts, inactive posts, archived/final post management, edit/delete/deactivate/republish controls, and private states belong in Post Dashboard or other owner/private surfaces. Profile may link to the private Saved Posts destination.
 - Profile remains focused on identity, skills, trust, history, and public profile preview. Primary job/service management and edit actions must remain in Post.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
 - Publishing services and messaging clients about jobs require a completed Work Profile.
@@ -216,6 +216,23 @@ Rules:
 - "Apply" should not be used in the UI for the MVP unless a formal application feature is added later.
 - Conversation messages may contain text, one private image attachment, or both. Only participants can read the attachment.
 - Inbox and bottom navigation use participant-scoped unread counts. Opening a conversation marks it read.
+- Conversation identity always comes from the canonical public-safe profile resolver; listing titles never substitute for participant names or avatars.
+- Archiving hides the conversation only for the current participant. New message activity restores the conversation to participant inboxes.
+
+## Saved Posts Flow
+
+1. A verified resident bookmarks a job or service from Home, Search, or a detail screen.
+2. The UI updates optimistically and rolls back if persistence fails.
+3. The private `saved_items` record stores the post type and post ID for that user.
+4. The resident opens Saved Posts from Profile.
+5. The resident filters All, Jobs, or Services, opens an available post, or removes an unavailable save.
+
+Rules:
+
+- Saves are post-scoped: `job` or `service`, never provider identity.
+- Saving the same post twice is idempotent.
+- One user's saves are never readable by another resident.
+- Removed, inactive, or inaccessible posts remain removable through an unavailable state.
 
 ## Message-Based Hiring Flow
 

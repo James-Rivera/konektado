@@ -6,6 +6,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { PresenceDot } from '@/components/PresenceDot';
 import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
@@ -19,6 +20,7 @@ import {
   markWorkerHired,
   reportConversation,
 } from '@/services/conversation.service';
+import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
   formatJobBudget,
   formatJobPostTitle,
@@ -48,6 +50,7 @@ export default function ConversationDetailsScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [reviewVisible, setReviewVisible] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -83,12 +86,17 @@ export default function ConversationDetailsScreen() {
     conversation?.job?.status === 'in_progress';
   const context = conversation ? getContextSummary(conversation) : null;
   const other = conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
+  const otherAvatarUrl = other?.avatarUrl ?? null;
   const reviewState = getReviewState({
     conversation,
     jobReviewState,
     loading: reviewLoading,
     submittedReview,
   });
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [otherAvatarUrl]);
 
   useEffect(() => {
     let active = true;
@@ -252,10 +260,15 @@ export default function ConversationDetailsScreen() {
 
     const result = await archiveConversation({ conversationId });
     if (result.error) {
-      Alert.alert('Delete chat', result.error);
+      Alert.alert('Archive conversation', result.error);
       return;
     }
 
+    emitConversationPreviewUpdate({
+      conversationId,
+      remove: true,
+      userId: profile?.id,
+    });
     setDeleteVisible(false);
     router.replace('/(tabs)/messages');
   };
@@ -279,11 +292,25 @@ export default function ConversationDetailsScreen() {
           {context ? (
             <View style={styles.hero}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(context.title)}</Text>
+                {otherAvatarUrl && !avatarFailed ? (
+                  <CachedRemoteImage
+                    onError={() => setAvatarFailed(true)}
+                    style={styles.avatarImage}
+                    uri={otherAvatarUrl}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {getInitials(other?.fullName ?? 'Konektado resident')}
+                  </Text>
+                )}
                 <PresenceDot active={isPresenceActive(other?.availability)} size={13} style={styles.onlineDot} />
               </View>
-              <Text numberOfLines={2} style={styles.title}>{context.title}</Text>
-              <Text numberOfLines={2} style={styles.subtitle}>{context.subtitle}</Text>
+              <Text numberOfLines={2} style={styles.title}>
+                {other?.fullName ?? 'Konektado resident'}
+              </Text>
+              <Text numberOfLines={2} style={styles.subtitle}>
+                {context.title} · {context.subtitle}
+              </Text>
               <View style={styles.heroActions}>
                 <IconAction
                   icon="article"
@@ -362,10 +389,9 @@ export default function ConversationDetailsScreen() {
                   onPress={() => setReportVisible(true)}
                 />
                 <ActionRow
-                  danger
-                  description="Remove this conversation from your inbox"
-                  icon="logout"
-                  label="Delete chat"
+                  description="Hide this conversation from your inbox only"
+                  icon="archive"
+                  label="Archive conversation"
                   onPress={() => setDeleteVisible(true)}
                 />
               </ActionList>
@@ -483,9 +509,11 @@ function DeleteChatDialog({
     <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
       <View style={styles.dialogBackdrop}>
         <View style={styles.dialogCard}>
-          <Text style={styles.dialogTitle}>Delete chat?</Text>
-          <Text style={styles.dialogBody}>This removes the conversation from your active inbox.</Text>
-          <PrimaryButton label="Delete" onPress={onDelete} />
+          <Text style={styles.dialogTitle}>Archive this conversation?</Text>
+          <Text style={styles.dialogBody}>
+            It will be hidden from your inbox. The other participant will still keep their copy.
+          </Text>
+          <PrimaryButton label="Archive" onPress={onDelete} />
           <Pressable onPress={onCancel} style={styles.dialogCancel}>
             <Text style={styles.dialogCancelText}>Cancel</Text>
           </Pressable>
@@ -762,6 +790,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     width: 52,
+  },
+  avatarImage: {
+    borderRadius: 26,
+    height: '100%',
+    width: '100%',
   },
   avatarText: {
     color: color.text,

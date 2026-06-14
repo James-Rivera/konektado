@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
@@ -35,11 +35,19 @@ type ProfileCta = {
 };
 
 export function PublicProfileHeader({
+  actionActive = false,
+  actionIcon,
+  actionLabel,
   title,
   onBack,
+  onAction,
 }: {
+  actionActive?: boolean;
+  actionIcon?: ComponentProps<typeof MaterialIcons>['name'];
+  actionLabel?: string;
   title: string;
   onBack: () => void;
+  onAction?: () => void;
 }) {
   return (
     <View style={styles.header}>
@@ -51,7 +59,22 @@ export function PublicProfileHeader({
         <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
       </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
-      <View style={styles.headerIcon} />
+      {actionIcon && onAction ? (
+        <Pressable
+          accessibilityLabel={actionLabel}
+          accessibilityRole="button"
+          accessibilityState={{ selected: actionActive }}
+          onPress={onAction}
+          style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
+          <MaterialIcons
+            color={actionActive ? color.primary : color.text}
+            name={actionIcon}
+            size={22}
+          />
+        </Pressable>
+      ) : (
+        <View style={styles.headerIcon} />
+      )}
     </View>
   );
 }

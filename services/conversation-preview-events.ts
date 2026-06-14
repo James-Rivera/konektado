@@ -4,6 +4,8 @@ export type ConversationPreviewEvent = {
   conversationId: string;
   conversation?: ConversationSummary;
   message?: ConversationMessage;
+  remove?: boolean;
+  unreadCount?: number;
   userId?: string | null;
 };
 
@@ -46,6 +48,10 @@ function reconcilePreview(
   conversations: ConversationSummary[] | null,
   event: ConversationPreviewEvent,
 ) {
+  if (event.remove) {
+    return conversations?.filter((conversation) => conversation.id !== event.conversationId) ?? conversations;
+  }
+
   if (!conversations) return event.conversation ? [event.conversation] : conversations;
 
   let found = false;
@@ -55,11 +61,16 @@ function reconcilePreview(
     if (event.conversation) {
       return mergeConversationPreview(conversation, event.conversation);
     }
-    if (!event.message) return conversation;
+    if (!event.message && event.unreadCount === undefined) return conversation;
     return {
       ...conversation,
-      lastMessage: event.message,
-      updatedAt: event.message.createdAt,
+      ...(event.message
+        ? {
+            lastMessage: event.message,
+            updatedAt: event.message.createdAt,
+          }
+        : {}),
+      ...(event.unreadCount === undefined ? {} : { unreadCount: event.unreadCount }),
     };
   });
 

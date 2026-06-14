@@ -35,7 +35,7 @@ import {
 } from '@/constants/service-taxonomy';
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { useSavedItems } from '@/hooks/use-saved-items';
+import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
   formatJobSubtitle,
@@ -124,7 +124,7 @@ export default function SearchScreen() {
   const listRef = useRef<FlatList<SearchListRow>>(null);
   const topInset = useSafeTopInset();
   const { profile, loading: profileLoading } = useProfile();
-  const { isPending, isSaved, refreshSavedItems, toggleSaved } = useSavedItems();
+  const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const params = useLocalSearchParams<{
     filter?: string | string[];
     openFilters?: string | string[];
@@ -188,8 +188,8 @@ export default function SearchScreen() {
 
   useEffect(() => {
     if (!isFocused || profileLoading) return;
-    void refreshSavedItems();
-  }, [isFocused, profileLoading, refreshSavedItems]);
+    void refreshSavedPosts();
+  }, [isFocused, profileLoading, refreshSavedPosts]);
 
   useEffect(() => {
     const nextDefaultFilters = buildDefaultFilters();
@@ -565,7 +565,7 @@ export default function SearchScreen() {
   }, [actionsTarget]);
 
   const toggleSearchSave = useCallback(
-    async (target: { itemType: 'job' | 'provider'; itemId: string }) => {
+    async (target: { postType: 'job' | 'service'; postId: string }) => {
       if (!isVerified) {
         showInfoToast('Complete barangay verification before saving items.');
         router.push('/verification' as never);
@@ -757,7 +757,7 @@ export default function SearchScreen() {
         return (
           <View style={rowStyle}>
             <SearchJobResultCard
-              isSaved={isSaved({ itemType: 'job', itemId: item.job.id })}
+              isSaved={isSaved({ postType: 'job', postId: item.job.id })}
               job={item.job}
               onMore={() =>
                 setActionsTarget({
@@ -769,8 +769,8 @@ export default function SearchScreen() {
                 })
               }
               onOpenJob={() => openJob(item.job.id)}
-              onSave={() => void toggleSearchSave({ itemType: 'job', itemId: item.job.id })}
-              savePending={isPending({ itemType: 'job', itemId: item.job.id })}
+              onSave={() => void toggleSearchSave({ postType: 'job', postId: item.job.id })}
+              savePending={isPending({ postType: 'job', postId: item.job.id })}
             />
           </View>
         );
@@ -780,7 +780,7 @@ export default function SearchScreen() {
         return (
           <View style={rowStyle}>
             <SearchWorkerResultCard
-              isSaved={isSaved({ itemType: 'provider', itemId: item.worker.providerId })}
+              isSaved={isSaved({ postType: 'service', postId: item.worker.id })}
               onMore={() =>
                 setActionsTarget({
                   id: item.worker.id,
@@ -793,11 +793,11 @@ export default function SearchScreen() {
               onOpenWorker={() => openService(item.worker.id)}
               onSave={() =>
                 void toggleSearchSave({
-                  itemType: 'provider',
-                  itemId: item.worker.providerId,
+                  postType: 'service',
+                  postId: item.worker.id,
                 })
               }
-              savePending={isPending({ itemType: 'provider', itemId: item.worker.providerId })}
+              savePending={isPending({ postType: 'service', postId: item.worker.id })}
               worker={item.worker}
             />
           </View>

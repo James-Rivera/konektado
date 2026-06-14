@@ -380,6 +380,7 @@ export type ConversationSummary = {
   startedBy: string;
   status: ConversationStatus;
   hiredAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   job: JobSummary | null;

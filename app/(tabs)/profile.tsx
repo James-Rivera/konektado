@@ -217,6 +217,17 @@ export default function ProfileScreen() {
               <MetricStrip items={metrics} />
             </ProfileHero>
 
+            <ProfileSection title="Marketplace">
+              <ProfileHistoryCard
+                description="Return to jobs and services you bookmarked."
+                footerLeft="Private to you"
+                footerRight="Jobs and services"
+                meta="Saved posts"
+                onPress={() => router.push('/saved' as never)}
+                title="Saved Posts"
+              />
+            </ProfileSection>
+
             {mode === 'work' ? (
               <WorkProfileContent
                 completion={completion}

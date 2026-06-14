@@ -973,8 +973,8 @@ order by created_at;
 insert into public.saved_items (user_id, item_type, item_id, created_at)
 select
   p.user_id,
-  'provider',
-  s.provider_id,
+  'service',
+  s.id,
   now() - (s.idx::text || ' hours')::interval
 from _seed_inserted_services s
 join _seed_verified_people p on p.verified_slot = 1

@@ -20,6 +20,7 @@ import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
     type ConversationPreviewEvent,
+    emitConversationPreviewUpdate,
     getConversationPreviewCache,
     setConversationPreviewCache,
     subscribeConversationPreviewUpdates,
@@ -170,6 +171,32 @@ export default function MessagesScreen() {
             if (conversationIdFromPayload) hydrateConversation(conversationIdFromPayload);
           },
         )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'conversation_reads',
+            filter: `user_id=eq.${profileId}`,
+          },
+          (payload) => {
+            const conversationIdFromPayload = getRealtimeReadConversationId(payload.new);
+            if (conversationIdFromPayload) hydrateConversation(conversationIdFromPayload);
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'conversation_reads',
+            filter: `user_id=eq.${profileId}`,
+          },
+          (payload) => {
+            const conversationIdFromPayload = getRealtimeReadConversationId(payload.new);
+            if (conversationIdFromPayload) hydrateConversation(conversationIdFromPayload);
+          },
+        )
         .subscribe();
 
       return () => {
@@ -211,11 +238,16 @@ export default function MessagesScreen() {
   }, [filter, messageRequests, visibleConversations]);
 
   const openConversation = useCallback((conversationId: string) => {
+    emitConversationPreviewUpdate({
+      conversationId,
+      unreadCount: 0,
+      userId: profileId,
+    });
     router.push({
       pathname: '/conversation/[conversationId]',
       params: { conversationId },
     });
-  }, [router]);
+  }, [profileId, router]);
 
   return (
     <View style={styles.screen}>
@@ -482,11 +514,15 @@ function reconcilePreviewEvent(
   conversations: ConversationSummary[],
   event: ConversationPreviewEvent,
 ) {
+  if (event.remove) {
+    return conversations.filter((conversation) => conversation.id !== event.conversationId);
+  }
+
   if (event.conversation) {
     return upsertConversation(conversations, event.conversation);
   }
 
-  if (!event.message) return conversations;
+  if (!event.message && event.unreadCount === undefined) return conversations;
 
   let found = false;
   const updated = conversations.map((conversation) => {
@@ -494,8 +530,13 @@ function reconcilePreviewEvent(
     found = true;
     return {
       ...conversation,
-      lastMessage: event.message ?? conversation.lastMessage,
-      updatedAt: event.message?.createdAt ?? conversation.updatedAt,
+      ...(event.message
+        ? {
+            lastMessage: event.message,
+            updatedAt: event.message.createdAt,
+          }
+        : {}),
+      ...(event.unreadCount === undefined ? {} : { unreadCount: event.unreadCount }),
     };
   });
 
@@ -544,6 +585,12 @@ function getRealtimeConversationId(row: unknown) {
   if (!row || typeof row !== 'object') return null;
   const value = row as { id?: unknown };
   return typeof value.id === 'string' ? value.id : null;
+}
+
+function getRealtimeReadConversationId(row: unknown) {
+  if (!row || typeof row !== 'object') return null;
+  const value = row as { conversation_id?: unknown };
+  return typeof value.conversation_id === 'string' ? value.conversation_id : null;
 }
 
 function latestTimestamp(...values: (string | null | undefined)[]) {
