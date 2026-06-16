@@ -15,7 +15,7 @@ export const MVP_SERVICES_BY_CATEGORY: Record<MvpServiceCategory, string[]> = {
     'Errands',
     'Delivery help',
     'Home assistance',
-    'Basic home repair',
+    'Minor home fix help',
     'Yard or outdoor help',
   ],
   'Learning & Digital Help': [
@@ -81,7 +81,7 @@ export const SEARCH_DISCOVERY_SERVICES_BY_GROUP: Record<DiscoveryGroupKey, MvpSe
     'Cleaning',
     'Laundry help',
     'Home assistance',
-    'Basic home repair',
+    'Minor home fix help',
     'Yard or outdoor help',
   ],
   'Errands & Assistance': ['Errands', 'Delivery help'],
@@ -109,7 +109,7 @@ export const SEARCH_WORK_TYPE_BY_SERVICE: Record<MvpServiceOption, SearchWorkTyp
   Errands: 'physical',
   'Delivery help': 'physical',
   'Home assistance': 'physical',
-  'Basic home repair': 'physical',
+  'Minor home fix help': 'physical',
   'Yard or outdoor help': 'physical',
   Tutoring: 'either',
   Encoding: 'digital',
@@ -127,10 +127,6 @@ export const SEARCH_WORK_TYPE_BY_SERVICE: Record<MvpServiceOption, SearchWorkTyp
   'Resume or form assistance': 'digital',
 };
 
-export const SEARCH_SERVICE_DISPLAY_LABELS: Partial<Record<MvpServiceOption, string>> = {
-  'Basic home repair': 'Minor home fix help',
-};
-
 function normalizeServiceLookupKey(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -144,9 +140,12 @@ export const LEGACY_MVP_SERVICE_ALIASES: Record<string, MvpServiceOption> = {
   'Pickup errands': 'Errands',
   'Small delivery': 'Delivery help',
   'General home help': 'Home assistance',
-  'Minor home fix help': 'Basic home repair',
-  'Home repair': 'Basic home repair',
-  'Small fix': 'Basic home repair',
+  'Basic home repair': 'Minor home fix help',
+  'Basic home repair help': 'Minor home fix help',
+  'Minor home repair': 'Minor home fix help',
+  'Minor home fix support': 'Minor home fix help',
+  'Home repair': 'Minor home fix help',
+  'Small fix': 'Minor home fix help',
   'Yard sweeping': 'Yard or outdoor help',
   'Yard cleanup': 'Yard or outdoor help',
   'Garden help': 'Yard or outdoor help',
@@ -167,9 +166,6 @@ export const LEGACY_MVP_SERVICE_ALIASES: Record<string, MvpServiceOption> = {
 
 const NORMALIZED_MVP_SERVICE_LOOKUP = new Map<string, MvpServiceOption>([
   ...MVP_SERVICE_OPTIONS.map((service) => [normalizeServiceLookupKey(service), service] as const),
-  ...Object.entries(SEARCH_SERVICE_DISPLAY_LABELS).flatMap(([service, label]) =>
-    label ? [[normalizeServiceLookupKey(label), service as MvpServiceOption] as const] : [],
-  ),
   ...Object.entries(LEGACY_MVP_SERVICE_ALIASES).map(
     ([legacyLabel, service]) => [normalizeServiceLookupKey(legacyLabel), service] as const,
   ),
@@ -222,7 +218,7 @@ export const MVP_SERVICE_TAGS: Record<MvpServiceOption, string[]> = {
   Errands: ['Nearby only', 'Same day', 'Short task', 'Pickup help', 'Senior help'],
   'Delivery help': ['Small delivery', 'Nearby only', 'Pickup available', 'Same day', 'Light items'],
   'Home assistance': ['General help', 'Home visit', 'Senior help', 'Weekly', 'Short task'],
-  'Basic home repair': ['Small fix', 'Home maintenance', 'Tools ready', 'Indoor', 'Outdoor'],
+  'Minor home fix help': ['Small fix', 'Home maintenance', 'Tools ready', 'Indoor', 'Outdoor'],
   'Yard or outdoor help': ['Yard cleanup', 'Outdoor', 'Plant care', 'Sweeping', 'Weekly'],
   Tutoring: ['Grade school', 'High school', 'Online', 'In person', 'Exam review', 'Weekend'],
   Encoding: ['Typing', 'Data entry', 'Document help', 'Online', 'Short task'],
@@ -305,9 +301,6 @@ export function getServiceSearchValues(value: string | null | undefined) {
 
   values.add(storedValue);
 
-  const displayLabel = SEARCH_SERVICE_DISPLAY_LABELS[storedValue];
-  if (displayLabel) values.add(displayLabel);
-
   Object.entries(LEGACY_MVP_SERVICE_ALIASES).forEach(([legacyLabel, service]) => {
     if (service === storedValue) values.add(legacyLabel);
   });
@@ -322,7 +315,26 @@ export function getServiceSearchValuesForOptions(values: Array<string | null | u
 export function getDisplayLabelForMvpService(value: string | null | undefined) {
   const storedValue = getStoredMvpServiceOption(value);
   if (!storedValue) return value ?? '';
-  return SEARCH_SERVICE_DISPLAY_LABELS[storedValue] ?? storedValue;
+  return storedValue;
+}
+
+export function getDisplayTitleForMvpService(
+  title: string | null | undefined,
+  service: string | null | undefined,
+) {
+  const cleanTitle = title?.trim() ?? '';
+  if (!cleanTitle) return '';
+
+  const storedService = getStoredMvpServiceOption(service);
+  const titleService = getStoredMvpServiceOption(
+    cleanTitle.replace(/\s+(?:help|support)$/i, '').trim(),
+  );
+
+  if (storedService === 'Minor home fix help' && titleService === storedService) {
+    return 'Minor home fix support';
+  }
+
+  return cleanTitle;
 }
 
 export function getDisplayServiceLabels(values: Array<string | null | undefined>) {

@@ -28,6 +28,7 @@ import {
   getDiscoveryGroupsForWorkType,
   getDiscoveryGroupForService,
   getDisplayLabelForMvpService,
+  getDisplayTitleForMvpService,
   getOrderedDiscoveryGroupsForMode,
   getServicesForDiscoveryGroup,
   getServicesForDiscoveryGroupAndWorkType,
@@ -52,7 +53,6 @@ import {
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { searchJobs as searchOpenJobs } from '@/services/job.service';
-import { getMyUserPreferences } from '@/services/onboarding.service';
 import { createReport } from '@/services/report.service';
 import { searchServices } from '@/services/service-profile.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
@@ -123,7 +123,7 @@ export default function SearchScreen() {
   const isFocused = useIsFocused();
   const listRef = useRef<FlatList<SearchListRow>>(null);
   const topInset = useSafeTopInset();
-  const { profile, loading: profileLoading } = useProfile();
+  const { profile, loading: profileLoading, preferences } = useProfile();
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const params = useLocalSearchParams<{
     filter?: string | string[];
@@ -135,7 +135,6 @@ export default function SearchScreen() {
   const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [browseGroup, setBrowseGroup] = useState<DiscoveryGroupKey>('Home & Local Help');
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -172,19 +171,6 @@ export default function SearchScreen() {
     () => getDiscoveryGroupsForWorkType(appliedFilters.workType, orderedGroups),
     [appliedFilters.workType, orderedGroups],
   );
-
-  useEffect(() => {
-    let active = true;
-
-    getMyUserPreferences().then((result) => {
-      if (!active || result.error) return;
-      setPreferences(result.data);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!isFocused || profileLoading) return;
@@ -496,6 +482,11 @@ export default function SearchScreen() {
     setIsFilterSheetVisible(true);
   }, [appliedFilters]);
 
+  const handleOpenDiscoveryPreferences = useCallback(() => {
+    setIsFilterSheetVisible(false);
+    router.push('/profile/discovery-preferences' as never);
+  }, [router]);
+
   useEffect(() => {
     if (!isFocused || !openFiltersParam) return;
 
@@ -614,7 +605,7 @@ export default function SearchScreen() {
     return [
       {
         icon: 'visibility',
-        label: actionsTarget.type === 'job' ? 'View details' : 'View profile',
+        label: actionsTarget.type === 'job' ? 'View details' : 'View service',
         onPress: () => {
           const target = actionsTarget;
           setActionsTarget(null);
@@ -874,6 +865,7 @@ export default function SearchScreen() {
           onApply={handleApplyFilters}
           onChange={handleDraftFilterChange}
           onClose={() => setIsFilterSheetVisible(false)}
+          onOpenDiscoveryPreferences={handleOpenDiscoveryPreferences}
           onRateRangeChange={(rateMin, rateMax) =>
             setDraftFilters((current) => ({ ...current, rateMin, rateMax }))
           }
@@ -1233,10 +1225,7 @@ function mapJobToSearchItem(job: JobSummary): SearchJobItem {
 function mapServiceToSearchItem(service: ServiceSearchResult): SearchWorkerItem {
   const category = getDisplayLabelForMvpService(service.category) || service.category || 'Service';
   const location = getMarketplaceLocation(service);
-  const headlineTitle =
-    service.category === 'Basic home repair' && service.title === 'Basic home repair help'
-      ? 'Minor home fix support'
-      : service.title;
+  const headlineTitle = getDisplayTitleForMvpService(service.title, service.category);
 
   return {
     id: service.id,

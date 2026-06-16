@@ -43,6 +43,22 @@
         }
       ],
       "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Konektado to use your camera to scan verification documents.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Konektado to choose verification images from your gallery.",
+          "cameraPermission": "Allow Konektado to use your camera to scan verification documents.",
+          "microphonePermission": false
+        }
+      ],
       "expo-image",
       "expo-web-browser"
     ],

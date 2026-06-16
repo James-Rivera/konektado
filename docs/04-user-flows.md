@@ -66,6 +66,7 @@ Rules:
 4. User applies filters and Home updates the already-bounded discovery feed locally.
 5. If no cards match, Home shows `No posts match these filters yet.` and suggests adjusting feed filters.
 6. User can reset filters or jump to `Advanced search`, which opens the fuller Search filter experience.
+7. User can open `Personalize Home & Search` from the Home feed filter sheet to edit private discovery preferences.
 
 Rules:
 
@@ -73,6 +74,7 @@ Rules:
 - Search remains the intentional lookup surface with advanced filters.
 - `Nearby areas` and `Relevant nearby` use known barangay/city text in MVP; they are not true geodistance.
 - Setup and profile-completion nudges stay outside feed filtering.
+- Discovery preferences are private personalization controls. They must not look like public service listings or profile-owned marketplace content.
 
 ## Barangay Verification Flow
 
@@ -83,8 +85,8 @@ Rules:
 5. User confirms or edits first name, last name, date of birth, and contact number so they match the document.
 6. App sends a six-digit contact OTP to the normalized Philippine mobile number through the server-side contact OTP function. The user must verify the current code before continuing.
 7. User selects document to submit: Barangay Certificate is recommended; National ID, Driver's License, or Passport remain allowed fallback valid IDs for barangay staff review.
-8. If Barangay Certificate is selected, user uploads the certificate. Otherwise, user uploads ID front and ID back. Camera capture can be added as a verification-polish task, but file/image picker upload is the current MVP path.
-9. App shows face-photo guidance, then user uploads a clear face photo for manual barangay comparison. Camera selfie capture is planned but should not block the verified Post slice.
+8. If Barangay Certificate is selected, user scans or uploads the certificate. Otherwise, user scans or uploads ID front and ID back. The scan screen uses the device camera when permission and hardware are available, with Upload from Gallery as a fallback.
+9. App shows face-photo guidance, then user captures or uploads a clear face photo for manual barangay comparison.
 10. App shows the Figma review and submit screen so the user can check personal details, document type, uploaded files, face photo, and barangay before submission.
 11. App uploads selected files to Supabase Storage, creates a pending row in the current live `verifications` table, and links metadata in `verification_files`.
 12. Face photo currently uses `file_type = other` because the live table only accepts the initial file-type values.
@@ -134,6 +136,8 @@ Rules:
 - Profile completion must not depend on active services, active jobs, budgets, rates, or marketplace inventory. A user with zero listings can still complete Core, Work, and Hiring profiles.
 - Profile may summarize active Services Offered, active Job Posts, Work History, and Hiring History, but drafts, inactive posts, archived/final post management, edit/delete/deactivate/republish controls, and private states belong in Post Dashboard or other owner/private surfaces. Profile may link to the private Saved Posts destination.
 - Profile remains focused on identity, skills, trust, history, and public profile preview. Primary job/service management and edit actions must remain in Post.
+- Profile may expose private utilities such as Saved Posts and Discovery Preferences only as lightweight private tools below identity, trust, services, availability, reviews, and public activity context. These utilities should not appear as large marketplace listing cards at the top of Profile.
+- Settings exposes `Personalization -> Discovery preferences` as the account-level path for editing private recommendation preferences.
 - Publishing jobs and messaging workers require a completed Hiring Profile.
 - Publishing services and messaging clients about jobs require a completed Work Profile.
 
@@ -233,6 +237,7 @@ Rules:
 - Saving the same post twice is idempotent.
 - One user's saves are never readable by another resident.
 - Removed, inactive, or inaccessible posts remain removable through an unavailable state.
+- Saved Posts is a private bookmark utility. Profile entry copy should use privacy/bookmark language such as `Only you can see these`, not marketplace location metadata.
 
 ## Message-Based Hiring Flow
 

@@ -29,10 +29,11 @@ MVP features:
 - Basic admin dashboard.
 
 Controlled MVP taxonomy:
-- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, basic home repair, and yard or outdoor help.
+- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, minor home fix help, and yard or outdoor help.
 - Learning & Digital Help: tutoring, encoding, Canva layout, presentation design, social media help, basic computer lessons, and school project guidance.
 - Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, and resume or form assistance.
 - This is a taxonomy-only MVP. Do not add schema fields such as `service_type`, `risk_level`, `location_required`, or category tables unless explicitly requested later.
+- Minor home fix help covers non-licensed household maintenance only, such as loose hinges, shelves, handles, and curtain-rod adjustments. Exclude plumbing, electrical work, construction, and appliance work involving wiring or internal disassembly.
 - Barangay verification confirms resident identity and platform eligibility; it does not certify professional competence.
 
 Out of scope for MVP:

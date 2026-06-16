@@ -104,11 +104,11 @@ Payments, agreements, scheduling details, final negotiation, file exchange, and 
 
 The taxonomy-only MVP supports selected services under three controlled groups:
 
-- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, basic home repair, and yard or outdoor help.
+- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, minor home fix help, and yard or outdoor help.
 - Learning & Digital Help: tutoring, encoding, Canva layout, presentation design, social media help, basic computer lessons, and school project guidance.
 - Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, and resume or form assistance.
 
-High-risk or hard-to-moderate services are excluded from the MVP, including gaming services, licensed electrical work, appliance repair involving wiring, legal/medical/financial advice, academic cheating, account selling or sharing, and government document falsification.
+Minor home fix help is limited to non-licensed household maintenance such as loose hinges, shelves, handles, and curtain-rod adjustments. High-risk or hard-to-moderate services are excluded from the MVP, including plumbing, licensed electrical work, construction, appliance repair involving wiring or internal disassembly, gaming services, legal/medical/financial advice, academic cheating, account selling or sharing, and government document falsification.
 
 ## Current Product Direction
 

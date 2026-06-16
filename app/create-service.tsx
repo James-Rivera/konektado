@@ -48,6 +48,7 @@ import type {
 } from '@/types/marketplace.types';
 
 const MAX_SERVICE_PHOTOS = 10;
+const MAX_SERVICE_TITLE_LENGTH = 80;
 
 const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'any', label: 'Any level' },
@@ -434,7 +435,7 @@ export default function CreateServiceScreen() {
     setSavingService(false);
 
     if (!saved || saved.error || !saved.data) {
-      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      showDraftSaveAlert(saved?.error);
       return;
     }
 
@@ -627,7 +628,10 @@ export default function CreateServiceScreen() {
 
             <Field
               error={errors.title}
+              helperText={`${title.length}/${MAX_SERVICE_TITLE_LENGTH} characters. Keep it short and searchable.`}
               label="Service title"
+              maxLength={MAX_SERVICE_TITLE_LENGTH}
+              multiline
               onChangeText={(value) => {
                 setTitle(value);
                 clearError('title');
@@ -942,6 +946,7 @@ function Field({
   helperText,
   keyboardType,
   label,
+  maxLength,
   multiline,
   onChangeText,
   placeholder,
@@ -952,6 +957,7 @@ function Field({
   helperText?: string;
   keyboardType?: 'default' | 'numeric';
   label: string;
+  maxLength?: number;
   multiline?: boolean;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -963,6 +969,7 @@ function Field({
       {helperText ? <Text style={styles.smallHelper}>{helperText}</Text> : null}
       <TextInput
         keyboardType={keyboardType}
+        maxLength={maxLength}
         multiline={multiline}
         onChangeText={onChangeText}
         placeholderTextColor="#AFAFAF"
@@ -971,6 +978,7 @@ function Field({
           styles.input,
           compact && styles.compactInput,
           multiline && styles.multiline,
+          multiline && maxLength ? styles.shortMultiline : null,
           error && styles.inputErrorBorder,
         ]}
         textAlignVertical={multiline ? 'top' : 'center'}
@@ -984,6 +992,14 @@ function Field({
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <Text style={styles.errorText}>{message}</Text>;
+}
+
+function showDraftSaveAlert(error?: string | null) {
+  if (__DEV__ && error) {
+    console.warn('Service draft save failed', error);
+  }
+
+  Alert.alert('Draft', 'We could not save your draft. Please try again.');
 }
 
 function CreateServiceSkeleton() {
@@ -1108,11 +1124,13 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
+    backgroundColor: color.background,
     flexDirection: 'row',
     gap: space.md,
     justifyContent: 'space-between',
     minHeight: 55,
     paddingHorizontal: space.xl,
+    zIndex: 1,
   },
   headerIcon: {
     alignItems: 'center',
@@ -1131,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: space.xl,
-    paddingTop: space.md,
+    paddingTop: space.lg,
     paddingBottom: space['3xl'],
   },
   group: {
@@ -1335,6 +1353,9 @@ const styles = StyleSheet.create({
   multiline: {
     minHeight: 123,
     textAlignVertical: 'top',
+  },
+  shortMultiline: {
+    minHeight: 72,
   },
   inputErrorBorder: {
     borderColor: color.danger,

@@ -71,9 +71,10 @@ export async function saveOwnDraftRow<Row extends DraftRow>({
       .eq('id', draftId)
       .eq('user_id', user.data)
       .select(columns)
-      .single();
+      .maybeSingle();
 
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: getFriendlyDraftSaveError(error.message) };
+    if (!data) return { data: null, error: 'We could not save your draft. Please try again.' };
     return { data: data as unknown as Row, error: null };
   }
 
@@ -81,9 +82,10 @@ export async function saveOwnDraftRow<Row extends DraftRow>({
     .from(table)
     .insert({ ...payload, user_id: user.data, updated_at: updatedAt })
     .select(columns)
-    .single();
+    .maybeSingle();
 
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: getFriendlyDraftSaveError(error.message) };
+  if (!data) return { data: null, error: 'We could not save your draft. Please try again.' };
   return { data: data as unknown as Row, error: null };
 }
 
@@ -102,4 +104,21 @@ export async function deleteOwnDraftRow(
 
   if (error) return { data: null, error: error.message };
   return { data: true, error: null };
+}
+
+function getFriendlyDraftSaveError(message: string) {
+  if (__DEV__) {
+    console.warn('Draft save failed', message);
+  }
+
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes('cannot coerce') ||
+    normalized.includes('single json object') ||
+    normalized.includes('multiple (or no) rows')
+  ) {
+    return 'We could not save your draft. Please try again.';
+  }
+
+  return message;
 }

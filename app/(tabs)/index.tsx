@@ -16,7 +16,10 @@ import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
 import { homeFilters, type HomeFilter } from '@/constants/demo-data';
-import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
+import {
+  getDisplayLabelForMvpService,
+  getDisplayTitleForMvpService,
+} from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
@@ -37,7 +40,6 @@ import {
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { searchJobs } from '@/services/job.service';
-import { getMyUserPreferences } from '@/services/onboarding.service';
 import { getUnreadNotificationCount } from '@/services/notification.service';
 import { searchServices } from '@/services/service-profile.service';
 import {
@@ -151,9 +153,7 @@ function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
 function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardProps {
   const category = compactText(getDisplayLabelForMvpService(service.category)) || compactText(service.category) || 'Service';
   const serviceTitle =
-    service.category === 'Basic home repair' && compactText(service.title) === 'Basic home repair help'
-      ? 'Minor home fix support'
-      : compactText(service.title) || category;
+    compactText(getDisplayTitleForMvpService(service.title, service.category)) || category;
   const providerName = compactText(service.provider?.fullName) || 'Konektado resident';
   const availability = compactText(service.availabilityText) || 'Available to coordinate';
 
@@ -165,7 +165,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
     detailLine: `${formatServiceRate(service)} - ${availability}`,
     title: formatServicePostTitle({
       title: serviceTitle,
-      category: service.category,
+      category,
       cue: service.isActive ? 'availableFor' : 'offers',
     }),
     description:
@@ -178,7 +178,7 @@ function mapServiceToHomeFeedCard(service: ServiceSearchResult): HomeFeedCardPro
       { icon: 'location-on', text: getMarketplaceLocation(service) },
     ],
     tags: Array.from(new Set([category, ...service.tags.map((tag) => getDisplayLabelForMvpService(tag) || tag)].filter(Boolean))),
-    primaryActionLabel: 'View Profile',
+    primaryActionLabel: 'View Service',
     avatarUrl: getPublicProfileAvatarUrl(service.provider),
     imageUrl: getCardImageUrl({ imageUrl: service.photoUrls[0] }),
     isOnline: isPresenceActive(service.isActive && (service.availabilityText || service.provider?.availability || true)),
@@ -233,12 +233,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
   const isFocused = useIsFocused();
-  const { profile, loading: profileLoading, version } = useProfile();
+  const { profile, loading: profileLoading, preferences, version } = useProfile();
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const topInset = useSafeTopInset();
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [feedSources, setFeedSources] = useState<{ jobs: HomeJobFeedItem[]; workers: HomeWorkerFeedItem[] }>({
     jobs: [],
     workers: [],
@@ -258,29 +257,24 @@ export default function HomeScreen() {
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
   const headerVisibleRef = useRef(true);
+  const initialHomeFilterAppliedRef = useRef(false);
   const lastScrollOffset = useRef(0);
   const feedRequestRef = useRef(0);
 
   useEffect(() => {
-    let active = true;
+    if (profileLoading || initialHomeFilterAppliedRef.current) return;
 
-    getMyUserPreferences().then((result) => {
-      if (!active || result.error) return;
-      setPreferences(result.data);
-      const defaultFilter = getDefaultHomeFilter({
-          activeRole: profile?.active_role,
-          preferences: result.data,
-      });
-      const defaultFeedType = mapHomeFilterToFeedType(defaultFilter);
-      setSelectedFilter(defaultFilter);
-      setAppliedFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
-      setDraftFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
+    initialHomeFilterAppliedRef.current = true;
+    const defaultFilter = getDefaultHomeFilter({
+      activeRole: profile?.active_role,
+      preferences,
     });
+    const defaultFeedType = mapHomeFilterToFeedType(defaultFilter);
 
-    return () => {
-      active = false;
-    };
-  }, [profile?.active_role]);
+    setSelectedFilter(defaultFilter);
+    setAppliedFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
+    setDraftFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
+  }, [preferences, profile?.active_role, profileLoading]);
 
   useEffect(() => {
     let active = true;
@@ -515,6 +509,11 @@ export default function HomeScreen() {
     });
   }, [draftFeedFilters.feedType, preferences, profile?.active_role, router]);
 
+  const openDiscoveryPreferences = useCallback(() => {
+    setFeedFiltersVisible(false);
+    router.push('/profile/discovery-preferences' as never);
+  }, [router]);
+
   const toggleFeedSave = useCallback(
     async (feedItem: HomeFeedItem) => {
       if (!isVerified) {
@@ -676,6 +675,7 @@ export default function HomeScreen() {
             setDraftFeedFilters((current) => ({ ...current, [key]: value }))
           }
           onClose={() => setFeedFiltersVisible(false)}
+          onPersonalizeHomeSearch={openDiscoveryPreferences}
           onReset={resetFeedFilters}
           visible={feedFiltersVisible}
         />
@@ -919,7 +919,7 @@ function HomeFeedCardSkeleton({
       meta={[]}
       name=""
       postedAt=""
-      primaryActionLabel={kind === 'worker' ? 'View Profile' : 'View Job'}
+      primaryActionLabel={kind === 'worker' ? 'View Service' : 'View Job'}
       tags={[]}
       title=""
     />

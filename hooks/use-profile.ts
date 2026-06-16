@@ -3,7 +3,36 @@ import type { ReactNode } from 'react';
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { getMyUserPreferences } from '@/services/onboarding.service';
+import type { UserPreferences } from '@/types/onboarding.types';
 import { supabase } from '@/utils/supabase';
+
+type ProfileRealtimeChannel = ReturnType<typeof supabase.channel>;
+
+function warnProfileRealtime(message: string, error?: unknown) {
+  if (__DEV__) {
+    console.warn(`[useProfile] ${message}`, error);
+  }
+}
+
+function getRealtimeTopic(channelName: string) {
+  return `realtime:${channelName}`;
+}
+
+async function removeExistingProfileRealtimeChannels(channelName: string) {
+  const topic = getRealtimeTopic(channelName);
+  const existingChannels = supabase
+    .getChannels()
+    .filter((channel) => channel.topic === topic);
+
+  await Promise.all(
+    existingChannels.map((channel) =>
+      supabase.removeChannel(channel).catch((error) => {
+        warnProfileRealtime(`Could not remove stale channel ${channelName}.`, error);
+      }),
+    ),
+  );
+}
 
 export type ProfileRecord = {
   id: string;
@@ -46,6 +75,7 @@ type ProfileContextValue = {
   authenticated: boolean;
   error: string | null;
   loading: boolean;
+  preferences: UserPreferences | null;
   profile: ProfileRecord | null;
   refresh: () => Promise<void>;
   user: User | null;
@@ -61,6 +91,7 @@ type LoadOptions = {
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -98,6 +129,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             setAuthenticated(false);
             setUser(null);
             setProfile(null);
+            setPreferences(null);
             setError(userError?.message ?? null);
             return;
           }
@@ -117,6 +149,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
           if (profileError) {
             setProfile(null);
+            setPreferences(null);
             setError(profileError.message);
             return;
           }
@@ -126,6 +159,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             .select('service_type, has_certifications, certification_status')
             .eq('user_id', userResult.user.id)
             .maybeSingle();
+
+          const preferencesResult = await getMyUserPreferences();
 
           if (!activeRef.current) return;
 
@@ -145,6 +180,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                 }
               : null,
           );
+          setPreferences(preferencesResult.error ? null : preferencesResult.data);
         } while (pendingLoadRef.current && activeRef.current);
       } catch (loadError) {
         if (!activeRef.current) return;
@@ -203,48 +239,89 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) return undefined;
 
-    const channel = supabase
-      .channel(`profile-cache-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        () => {
-          void refresh();
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'provider_profiles',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          void refresh();
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'client_profiles',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          void refresh();
-        },
-      )
-      .subscribe();
+    let cancelled = false;
+    let channel: ProfileRealtimeChannel | null = null;
+    const channelName = `profile-cache-${user.id}`;
+
+    const setupChannel = async () => {
+      try {
+        await removeExistingProfileRealtimeChannels(channelName);
+
+        if (cancelled) return;
+
+        channel = supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${user.id}`,
+            },
+            () => {
+              void refresh();
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'provider_profiles',
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              void refresh();
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'client_profiles',
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              void refresh();
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'user_preferences',
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              void refresh();
+            },
+          );
+
+        channel.subscribe((status, error) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            warnProfileRealtime(`Realtime subscription ${channelName} reported ${status}.`, error);
+          }
+        });
+      } catch (error) {
+        warnProfileRealtime(`Could not subscribe to ${channelName}.`, error);
+      }
+    };
+
+    void setupChannel();
 
     return () => {
-      void supabase.removeChannel(channel);
+      cancelled = true;
+
+      if (!channel) return;
+
+      const channelToRemove = channel;
+      channel = null;
+      void supabase.removeChannel(channelToRemove).catch((error) => {
+        warnProfileRealtime(`Could not remove channel ${channelName}.`, error);
+      });
     };
   }, [refresh, user?.id]);
 
@@ -253,12 +330,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       authenticated,
       error,
       loading,
+      preferences,
       profile,
       refresh,
       user,
       version,
     }),
-    [authenticated, error, loading, profile, refresh, user, version],
+    [authenticated, error, loading, preferences, profile, refresh, user, version],
   );
 
   return createElement(ProfileContext.Provider, { value }, children);

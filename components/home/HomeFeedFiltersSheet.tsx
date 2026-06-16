@@ -30,6 +30,7 @@ type HomeFeedFiltersSheetProps = {
     value: HomeFeedFilters[K],
   ) => void;
   onClose: () => void;
+  onPersonalizeHomeSearch: () => void;
   onReset: () => void;
   visible: boolean;
 };
@@ -64,6 +65,7 @@ export function HomeFeedFiltersSheet({
   onApply,
   onChange,
   onClose,
+  onPersonalizeHomeSearch,
   onReset,
   visible,
 }: HomeFeedFiltersSheetProps) {
@@ -161,6 +163,20 @@ export function HomeFeedFiltersSheet({
             ))}
           </View>
         </FilterSection>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPersonalizeHomeSearch}
+          style={({ pressed }) => [styles.personalizeButton, pressed && styles.pressed]}>
+          <View style={styles.personalizeIcon}>
+            <MaterialIcons color={color.verificationBlue} name="tune" size={20} />
+          </View>
+          <View style={styles.personalizeCopy}>
+            <Text style={styles.personalizeTitle}>Personalize Home & Search</Text>
+            <Text style={styles.personalizeSubtitle}>Choose what recommendations prioritize first.</Text>
+          </View>
+          <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
@@ -322,6 +338,39 @@ const styles = StyleSheet.create({
   advancedSearchText: {
     ...typography.bodyMedium,
     color: color.primary,
+  },
+  personalizeButton: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    marginTop: space.md,
+    minHeight: 72,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  personalizeIcon: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.md,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  personalizeCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  personalizeTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  personalizeSubtitle: {
+    ...typography.caption,
+    color: color.textMuted,
   },
   footer: {
     gap: space.sm,

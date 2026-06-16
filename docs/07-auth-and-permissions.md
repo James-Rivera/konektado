@@ -211,6 +211,7 @@ These role permissions apply after the user's barangay verification is approved 
 - Barangay admins should use `Rejected` only for suspicious, fake, invalid, or unrelated identity documents.
 - Internal demo/admin-only tooling may override names for presentation data or explicit admin correction, but normal users must not access that pathway.
 - Email is private and used for login, verification updates, support, and account recovery.
+- Verification document and face-photo scan screens may request camera access to capture still images for the private barangay review package. If camera permission is denied or the device/emulator camera is unavailable, the app must keep Upload from Gallery available and must not trap the user on a blank scan screen.
 - Contact OTP challenges are short-lived, rate-limited, attempt-limited, bound to the authenticated user and normalized profile phone, and consumed once by verification submission.
 - PhilSMS tokens, OTP HMAC secrets, and simulation allowlists are server-only. Simulated codes must never be enabled globally or returned for non-allowlisted users/numbers.
 - During active development, `CONTACT_OTP_BACKUP_CODE` provides a temporary server-only backup for existing active contact OTP challenges. It does not create challenges or verification requests, and it still requires challenge ownership, unexpired state, remaining attempts, and normal one-time consumption. Rotate or remove it before live deployment.

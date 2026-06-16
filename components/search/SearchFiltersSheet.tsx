@@ -42,6 +42,7 @@ type SearchFiltersSheetProps = {
     value: SearchDiscoveryFilters[K],
   ) => void;
   onClose: () => void;
+  onOpenDiscoveryPreferences: () => void;
   onRateRangeChange: (minimum: number | null, maximum: number | null) => void;
   onReset: () => void;
 };
@@ -87,6 +88,7 @@ export function SearchFiltersSheet({
   onApply,
   onChange,
   onClose,
+  onOpenDiscoveryPreferences,
   onRateRangeChange,
   onReset,
 }: SearchFiltersSheetProps) {
@@ -274,6 +276,22 @@ export function SearchFiltersSheet({
             ))}
           </View>
         </FilterSection>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenDiscoveryPreferences}
+          style={({ pressed }) => [styles.discoveryPreferencesButton, pressed && styles.pressed]}>
+          <View style={styles.discoveryPreferencesIcon}>
+            <MaterialIcons color={color.verificationBlue} name="tune" size={20} />
+          </View>
+          <View style={styles.discoveryPreferencesCopy}>
+            <Text style={styles.discoveryPreferencesTitle}>Discovery preferences</Text>
+            <Text style={styles.discoveryPreferencesSubtitle}>
+              Choose what Home and Search recommend first.
+            </Text>
+          </View>
+          <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
+        </Pressable>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -487,6 +505,39 @@ const styles = StyleSheet.create({
   groupRowTextSelected: {
     color: color.primary,
     fontFamily: 'Satoshi-Bold',
+  },
+  discoveryPreferencesButton: {
+    alignItems: 'center',
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: space.md,
+    marginTop: space.md,
+    minHeight: 72,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  discoveryPreferencesIcon: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.md,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  discoveryPreferencesCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  discoveryPreferencesTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  discoveryPreferencesSubtitle: {
+    ...typography.caption,
+    color: color.textMuted,
   },
   footer: {
     gap: space.sm,

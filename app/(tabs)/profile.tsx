@@ -51,6 +51,7 @@ import type {
     ProfileCompletionMode,
     ProfileCompletionStatus,
 } from '@/types/profile.types';
+import type { UserPreferences } from '@/types/onboarding.types';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const topInset = useSafeTopInset();
   const [mode, setMode] = useState<ProfileMode>('work');
-  const { profile, loading: profileLoading, version } = useProfile();
+  const { profile, loading: profileLoading, preferences, version } = useProfile();
   const [completion, setCompletion] = useState<ProfileCompletionStatus | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -217,17 +218,6 @@ export default function ProfileScreen() {
               <MetricStrip items={metrics} />
             </ProfileHero>
 
-            <ProfileSection title="Marketplace">
-              <ProfileHistoryCard
-                description="Return to jobs and services you bookmarked."
-                footerLeft="Private to you"
-                footerRight="Jobs and services"
-                meta="Saved posts"
-                onPress={() => router.push('/saved' as never)}
-                title="Saved Posts"
-              />
-            </ProfileSection>
-
             {mode === 'work' ? (
               <WorkProfileContent
                 completion={completion}
@@ -262,6 +252,12 @@ export default function ProfileScreen() {
                 onOpenJob={(jobId) => router.push({ pathname: '/job/[jobId]', params: { jobId } })}
               />
             )}
+
+            <PrivateToolsSection
+              discoveryMeta={getDiscoveryPreferenceFooter(preferences)}
+              onOpenDiscoveryPreferences={() => router.push('/profile/discovery-preferences' as never)}
+              onOpenSavedPosts={() => router.push('/saved' as never)}
+            />
           </>
         )}
       </ScrollView>
@@ -299,6 +295,83 @@ export default function ProfileScreen() {
         visible={quickActionsVisible}
       />
     </View>
+  );
+}
+
+function PrivateToolsSection({
+  discoveryMeta,
+  onOpenDiscoveryPreferences,
+  onOpenSavedPosts,
+}: {
+  discoveryMeta: string;
+  onOpenDiscoveryPreferences: () => void;
+  onOpenSavedPosts: () => void;
+}) {
+  return (
+    <ProfileSection title="Private tools">
+      <View style={styles.privateToolList}>
+        <PrivateToolRow
+          actionLabel="View"
+          icon="bookmark"
+          meta="Only you can see these."
+          onPress={onOpenSavedPosts}
+          subtitle="Jobs and services you bookmarked."
+          title="Saved posts"
+        />
+        <View style={styles.privateToolDivider} />
+        <PrivateToolRow
+          actionLabel="Edit"
+          icon="tune"
+          meta={discoveryMeta}
+          onPress={onOpenDiscoveryPreferences}
+          subtitle="Choose what Home and Search recommend first."
+          title="Discovery preferences"
+        />
+      </View>
+    </ProfileSection>
+  );
+}
+
+function PrivateToolRow({
+  actionLabel,
+  icon,
+  meta,
+  onPress,
+  subtitle,
+  title,
+}: {
+  actionLabel: string;
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  meta: string;
+  onPress: () => void;
+  subtitle: string;
+  title: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.privateToolRow, pressed && styles.pressed]}>
+      <View style={styles.privateToolIcon}>
+        <MaterialIcons color={color.verificationBlue} name={icon} size={21} />
+      </View>
+      <View style={styles.privateToolCopy}>
+        <View style={styles.privateToolTitleRow}>
+          <Text numberOfLines={1} style={styles.privateToolTitle}>
+            {title}
+          </Text>
+          <Text style={styles.privateToolAction}>{actionLabel}</Text>
+        </View>
+        <Text style={styles.privateToolSubtitle}>{subtitle}</Text>
+        <View style={styles.privateToolMetaRow}>
+          <MaterialIcons color={color.textSubtle} name="lock-outline" size={14} />
+          <Text numberOfLines={1} style={styles.privateToolMeta}>
+            {meta}
+          </Text>
+        </View>
+      </View>
+      <MaterialIcons color={color.textSubtle} name="chevron-right" size={22} />
+    </Pressable>
   );
 }
 
@@ -896,6 +969,16 @@ function uniqueList(values: (string | null | undefined)[]) {
   );
 }
 
+function getDiscoveryPreferenceFooter(preferences: UserPreferences | null) {
+  const offeredCount =
+    (preferences?.offeredServices.length ?? 0) + (preferences?.customOfferedServices.length ?? 0);
+  const neededCount =
+    (preferences?.neededServices.length ?? 0) + (preferences?.customNeededServices.length ?? 0);
+
+  if (!offeredCount && !neededCount) return 'No preferences yet';
+  return `${offeredCount} offered - ${neededCount} needed`;
+}
+
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: color.background,
@@ -966,6 +1049,69 @@ const styles = StyleSheet.create({
   quickActionSubtitle: {
     ...typography.caption,
     color: color.textMuted,
+  },
+  privateToolList: {
+    borderColor: color.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  privateToolRow: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    flexDirection: 'row',
+    gap: space.md,
+    minHeight: 82,
+    paddingHorizontal: space.md,
+    paddingVertical: space.md,
+  },
+  privateToolDivider: {
+    backgroundColor: color.border,
+    height: 1,
+    marginLeft: 66,
+  },
+  privateToolIcon: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: 14,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  privateToolCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  privateToolTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+    justifyContent: 'space-between',
+  },
+  privateToolTitle: {
+    ...typography.bodyMedium,
+    color: color.text,
+    flex: 1,
+  },
+  privateToolAction: {
+    ...typography.captionMedium,
+    color: color.primary,
+  },
+  privateToolSubtitle: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  privateToolMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space['2xs'],
+    minWidth: 0,
+  },
+  privateToolMeta: {
+    ...typography.caption,
+    color: color.textSubtle,
+    flex: 1,
   },
   pressed: {
     opacity: 0.72,

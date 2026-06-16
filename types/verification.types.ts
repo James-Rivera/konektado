@@ -16,6 +16,7 @@ export type VerificationIdType =
 
 export type VerificationSummary = {
   id: string;
+  idType: VerificationIdType | null;
   status: VerificationStatus;
   notes: string | null;
   reviewerNote: string | null;

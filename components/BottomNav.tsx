@@ -11,6 +11,32 @@ import { listMyConversations } from '@/services/conversation.service';
 import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
+type BottomNavUnreadChannel = ReturnType<typeof supabase.channel>;
+
+function warnBottomNavRealtime(message: string, error?: unknown) {
+  if (__DEV__) {
+    console.warn(`[BottomNav] ${message}`, error);
+  }
+}
+
+function getRealtimeTopic(channelName: string) {
+  return `realtime:${channelName}`;
+}
+
+async function removeExistingBottomNavUnreadChannels(channelName: string) {
+  const topic = getRealtimeTopic(channelName);
+  const existingChannels = supabase
+    .getChannels()
+    .filter((channel) => channel.topic === topic);
+
+  await Promise.all(
+    existingChannels.map((channel) =>
+      supabase.removeChannel(channel).catch((error) => {
+        warnBottomNavRealtime(`Could not remove stale channel ${channelName}.`, error);
+      }),
+    ),
+  );
+}
 
 const TAB_META: Record<
   string,
@@ -52,13 +78,47 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
 
   useEffect(() => {
     if (!profile?.id) return undefined;
-    const channel = supabase
-      .channel(`bottom-nav-unread-${profile.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, refreshUnread)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_reads' }, refreshUnread)
-      .subscribe();
+
+    let cancelled = false;
+    let channel: BottomNavUnreadChannel | null = null;
+    const channelName = `bottom-nav-unread-${profile.id}`;
+
+    const setupChannel = async () => {
+      try {
+        await removeExistingBottomNavUnreadChannels(channelName);
+
+        if (cancelled) return;
+
+        channel = supabase
+          .channel(channelName)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, refreshUnread)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_reads' }, refreshUnread);
+
+        channel.subscribe((status, error) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            warnBottomNavRealtime(
+              `Realtime subscription ${channelName} reported ${status}.`,
+              error,
+            );
+          }
+        });
+      } catch (error) {
+        warnBottomNavRealtime(`Could not subscribe to ${channelName}.`, error);
+      }
+    };
+
+    void setupChannel();
+
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+
+      if (!channel) return;
+
+      const channelToRemove = channel;
+      channel = null;
+      void supabase.removeChannel(channelToRemove).catch((error) => {
+        warnBottomNavRealtime(`Could not remove channel ${channelName}.`, error);
+      });
     };
   }, [profile?.id, refreshUnread]);
 

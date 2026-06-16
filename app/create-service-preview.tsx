@@ -1,14 +1,15 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import type { ComponentProps } from 'react';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { Skeleton } from '@/components/Skeleton';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { getProfileDisplayName } from '@/components/profile/CurrentUserIdentity';
-import { WorkerCard } from '@/components/WorkerCard';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -90,7 +91,10 @@ function parseDraft(value: string | undefined): ServiceDraft | null {
 }
 
 function getStatusLine(draft: ServiceDraft) {
-  return draft.availability.trim() ? `Available ${draft.availability.trim()}` : 'Available nearby';
+  const availability = draft.availability.trim();
+  if (!availability) return 'Available nearby';
+  if (/^(available|unavailable|availability)\b/i.test(availability)) return availability;
+  return `Available ${availability}`;
 }
 
 function getRateLine(draft: ServiceDraft) {
@@ -101,8 +105,7 @@ function getRateLine(draft: ServiceDraft) {
     rateType: draft.rateType,
     rateNegotiable: draft.rateNegotiable,
   });
-  const availability = draft.availability.trim() || 'Availability to coordinate';
-  return `${rate} - ${availability}`;
+  return rate;
 }
 
 function parseNumber(value: string) {
@@ -178,7 +181,7 @@ export default function CreateServicePreviewScreen() {
 
     if (saved?.error || !saved?.data) {
       setPublishing(false);
-      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      showDraftSaveAlert(saved?.error);
       return;
     }
 
@@ -210,9 +213,9 @@ export default function CreateServicePreviewScreen() {
       autoReplyEnabled: draft.autoReplyEnabled,
       autoPauseEnabled: draft.autoPauseEnabled,
     });
-    setPublishing(false);
 
     if (result.error || !result.data) {
+      setPublishing(false);
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'work';
         Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
@@ -230,7 +233,10 @@ export default function CreateServicePreviewScreen() {
     }
 
     showSuccessToast('Service posted');
-    await deleteServiceDraft(saved.data.id);
+    const deleteResult = await deleteServiceDraft(saved.data.id);
+    if (deleteResult.error && __DEV__) {
+      console.warn('Service draft cleanup failed after publish', deleteResult.error);
+    }
     await refresh();
     router.replace(returnTo === 'profile' ? '/(tabs)/profile' : '/(tabs)/post');
   };
@@ -241,7 +247,7 @@ export default function CreateServicePreviewScreen() {
       const saved = await saveCurrentDraft();
       setPublishing(false);
       if (saved?.error || !saved?.data) {
-        Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+        showDraftSaveAlert(saved?.error);
         return;
       }
     }
@@ -307,7 +313,7 @@ export default function CreateServicePreviewScreen() {
           {!isVerified ? <Text style={styles.previewNotice}>Verification required to publish</Text> : null}
 
           <View style={styles.previewFrame}>
-            <WorkerCard
+            <PreviewServiceCard
               avatarUrl={getAvatarDisplayUrl({ avatarUrl: profile?.avatar_url })}
               headline={formatServicePostTitle({
                 title: draft.title,
@@ -319,12 +325,10 @@ export default function CreateServicePreviewScreen() {
               jobsDoneText="Jobs after publish"
               location={draft.locationText || profile?.barangay || 'Barangay San Pedro'}
               name={getProfileDisplayName(profile)}
-              onPress={() => {}}
               ratingText="Preview listing"
               rateLine={getRateLine(draft)}
-              showSaveButton={false}
               statusLine={getStatusLine(draft)}
-              tags={getPreviewTags(draft).slice(0, 4)}
+              tags={getPreviewTags(draft).slice(0, 6)}
             />
           </View>
 
@@ -347,6 +351,14 @@ export default function CreateServicePreviewScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+function showDraftSaveAlert(error?: string | null) {
+  if (__DEV__ && error) {
+    console.warn('Service draft save failed', error);
+  }
+
+  Alert.alert('Draft', 'We could not save your draft. Please try again.');
 }
 
 function VerificationGateModal({
@@ -416,6 +428,98 @@ function SafetyLine({ text }: { text: string }) {
   );
 }
 
+function PreviewServiceCard({
+  avatarUrl,
+  headline,
+  imageUrl,
+  isActive,
+  jobsDoneText,
+  location,
+  name,
+  ratingText,
+  rateLine,
+  statusLine,
+  tags,
+}: {
+  avatarUrl?: string | null;
+  headline: string;
+  imageUrl?: string;
+  isActive?: boolean;
+  jobsDoneText: string;
+  location: string;
+  name: string;
+  ratingText: string;
+  rateLine: string;
+  statusLine: string;
+  tags: string[];
+}) {
+  return (
+    <View style={styles.previewCard}>
+      <View style={styles.previewIdentityRow}>
+        <View style={styles.previewAvatar}>
+          {avatarUrl ? (
+            <CachedRemoteImage uri={avatarUrl} style={styles.previewAvatarImage} />
+          ) : (
+            <Text style={styles.previewAvatarText}>{getInitials(name)}</Text>
+          )}
+          <View style={[styles.previewPresenceDot, isActive ? styles.previewPresenceActive : styles.previewPresenceIdle]} />
+        </View>
+        <View style={styles.previewIdentityCopy}>
+          <Text numberOfLines={2} style={styles.previewName}>
+            {name}
+          </Text>
+          <Text style={styles.previewStatus}>{statusLine}</Text>
+        </View>
+      </View>
+
+      <View style={styles.previewCopyBlock}>
+        <Text style={styles.previewRate}>{rateLine}</Text>
+        <Text style={styles.previewHeadline}>{headline}</Text>
+      </View>
+
+      {imageUrl ? <CachedRemoteImage uri={imageUrl} style={styles.previewImage} /> : null}
+
+      <View style={styles.previewTags}>
+        {tags.map((tag) => (
+          <View key={tag} style={styles.previewTag}>
+            <Text style={styles.previewTagText}>{tag}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.previewMetaGrid}>
+        <PreviewMeta icon="star-border" text={ratingText} />
+        <PreviewMeta icon="check-circle" text={jobsDoneText} />
+        <PreviewMeta icon="location-on" text={location} />
+      </View>
+    </View>
+  );
+}
+
+function PreviewMeta({
+  icon,
+  text,
+}: {
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  text: string;
+}) {
+  return (
+    <View style={styles.previewMetaItem}>
+      <MaterialIcons color={icon === 'star-border' ? color.brandYellow : color.textSubtle} name={icon} size={15} />
+      <Text style={styles.previewMetaText}>{text}</Text>
+    </View>
+  );
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'K';
+}
+
 function OptionReadout({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.optionRow}>
@@ -472,11 +576,13 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
+    backgroundColor: color.background,
     flexDirection: 'row',
     gap: space.md,
     justifyContent: 'space-between',
     minHeight: 55,
     paddingHorizontal: space.xl,
+    zIndex: 1,
   },
   headerIcon: {
     alignItems: 'center',
@@ -503,6 +609,7 @@ const styles = StyleSheet.create({
     gap: space.md,
     padding: space.xl,
     paddingBottom: space['3xl'],
+    paddingTop: space.lg,
   },
   centered: {
     alignItems: 'center',
@@ -574,6 +681,118 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  previewCard: {
+    backgroundColor: color.background,
+    gap: space.md,
+    padding: space.md,
+  },
+  previewIdentityRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+    minWidth: 0,
+  },
+  previewAvatar: {
+    alignItems: 'center',
+    backgroundColor: color.surfaceAlt,
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 44,
+  },
+  previewAvatarImage: {
+    borderRadius: radius.pill,
+    height: '100%',
+    width: '100%',
+  },
+  previewAvatarText: {
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 16,
+  },
+  previewPresenceDot: {
+    borderColor: color.background,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    bottom: 1,
+    height: 12,
+    position: 'absolute',
+    right: 1,
+    width: 12,
+  },
+  previewPresenceActive: {
+    backgroundColor: color.success,
+  },
+  previewPresenceIdle: {
+    backgroundColor: color.textSubtle,
+  },
+  previewIdentityCopy: {
+    flex: 1,
+    gap: space['2xs'],
+    minWidth: 0,
+  },
+  previewName: {
+    ...typography.bodyMedium,
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+  },
+  previewStatus: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  previewCopyBlock: {
+    gap: space.sm,
+  },
+  previewRate: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  previewHeadline: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  previewImage: {
+    borderColor: color.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    height: 214,
+    width: '100%',
+  },
+  previewTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.xs,
+  },
+  previewTag: {
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    minHeight: 27,
+    paddingHorizontal: space.sm,
+  },
+  previewTagText: {
+    color: '#42474C',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  previewMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  previewMetaItem: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space['2xs'],
+    maxWidth: '100%',
+  },
+  previewMetaText: {
+    ...typography.caption,
+    color: color.textSubtle,
+    flexShrink: 1,
   },
   optionsHeader: {
     alignItems: 'center',

@@ -155,7 +155,7 @@ export function SearchWorkerResultCard({
         onPress={onOpenWorker}
         style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
         <MaterialIcons color={color.primary} name="visibility" size={16} />
-        <Text style={styles.primaryButtonText}>View profile</Text>
+        <Text style={styles.primaryButtonText}>View service</Text>
       </Pressable>
     </View>
   );

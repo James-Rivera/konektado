@@ -1,4 +1,4 @@
-import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
@@ -39,7 +39,7 @@ const emptyForm: VerificationFormState = {
   email: null,
   files: [],
   firstName: '',
-  idType: 'national_id',
+  idType: 'barangay_certificate',
   lastName: '',
   note: '',
   phone: '',
@@ -97,6 +97,7 @@ export default function VerificationGateScreen() {
         city: prefill.city,
         email: prefill.email,
         firstName: prefill.firstName,
+        idType: prefill.latestRequest?.idType ?? emptyForm.idType,
         lastName: prefill.lastName,
         phone: prefill.phone,
         servicesOrPurpose: prefill.servicesOrPurpose,
@@ -310,22 +311,21 @@ export default function VerificationGateScreen() {
     setStep(getPreviousStep(step, form.idType));
   };
 
-  const pickFile = async (fileType: VerificationUpload['fileType']) => {
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
-      type: fileType === 'other' ? ['image/*'] : ['image/*', 'application/pdf'],
-    });
-
-    if (result.canceled || !result.assets?.length) return;
-
-    const asset = result.assets[0];
+  const savePickedImage = (
+    fileType: VerificationUpload['fileType'],
+    image: {
+      fileName?: string | null;
+      fileSize?: number | null;
+      mimeType?: string | null;
+      uri: string;
+    },
+  ) => {
     const nextFile: VerificationUpload = {
       fileType,
-      mimeType: asset.mimeType ?? null,
-      name: asset.name ?? `${fileType}-upload`,
-      size: asset.size ?? null,
-      uri: asset.uri,
+      mimeType: image.mimeType ?? 'image/jpeg',
+      name: image.fileName ?? `${fileType}-${Date.now()}.jpg`,
+      size: image.fileSize ?? null,
+      uri: image.uri,
     };
 
     setForm((previous) => ({
@@ -335,6 +335,47 @@ export default function VerificationGateScreen() {
         nextFile,
       ],
     }));
+  };
+
+  const pickFile = async (fileType: VerificationUpload['fileType']) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        'Upload from Gallery',
+        'Photo library access is needed to choose an image. You can try again or use the camera.',
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      allowsMultipleSelection: false,
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets?.length) return;
+
+    const asset = result.assets[0];
+    savePickedImage(fileType, {
+      fileName: asset.fileName,
+      fileSize: asset.fileSize,
+      mimeType: asset.mimeType,
+      uri: asset.uri,
+    });
+  };
+
+  const capturePhoto = (
+    fileType: VerificationUpload['fileType'],
+    photo: { uri: string },
+  ) => {
+    savePickedImage(fileType, {
+      fileName: `${fileType}-${Date.now()}.jpg`,
+      fileSize: null,
+      mimeType: 'image/jpeg',
+      uri: photo.uri,
+    });
   };
 
   const removeFile = (fileType: VerificationUpload['fileType']) => {
@@ -497,6 +538,7 @@ export default function VerificationGateScreen() {
       onChangeContactCode={changeContactCode}
       onChangeField={setField}
       onChooseIdType={chooseIdType}
+      onCapturePhoto={capturePhoto}
       onContinue={continueFlow}
       onContinueBrowsing={() => router.back()}
       onPickFile={pickFile}

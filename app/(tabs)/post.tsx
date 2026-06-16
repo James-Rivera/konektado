@@ -118,6 +118,7 @@ export default function PostScreen() {
     services.filter((service) => !service.isActive).length;
   const recentPosts = [
     ...jobs.map((job) => ({
+      actionLabel: 'View',
       createdAt: job.createdAt,
       id: `job-${job.id}`,
       label: formatDate(job.createdAt),
@@ -131,6 +132,7 @@ export default function PostScreen() {
       }),
     })),
     ...services.map((service) => ({
+      actionLabel: 'Manage',
       createdAt: service.createdAt,
       id: `service-${service.id}`,
       label: formatDate(service.createdAt),
@@ -277,6 +279,7 @@ export default function PostScreen() {
             {recentPosts.slice(0, 2).map((post) => (
               <RecentPostCard
                 key={post.id}
+                actionLabel={post.actionLabel}
                 label={post.label}
                 onPress={post.onPress}
                 title={post.title}
@@ -287,6 +290,7 @@ export default function PostScreen() {
             {recentPosts.slice(0, 3).map((post) => (
               <MiniPostCard
                 key={post.id}
+                actionLabel={post.actionLabel}
                 onPress={post.onPress}
                 status={post.status}
                 subtitle={post.subtitle}
@@ -422,10 +426,12 @@ function InlineStat({
 }
 
 function RecentPostCard({
+  actionLabel,
   label,
   onPress,
   title,
 }: {
+  actionLabel: string;
   label: string;
   onPress: () => void;
   title: string;
@@ -439,7 +445,7 @@ function RecentPostCard({
         <Text style={styles.recentLabel}>{label}</Text>
       </View>
       <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
-        <Text style={styles.editButtonText}>View</Text>
+        <Text style={styles.editButtonText}>{actionLabel}</Text>
       </Pressable>
     </View>
   );
@@ -473,11 +479,13 @@ function DraftCard({ draft, onPress }: { draft: PostingDraft; onPress: () => voi
 }
 
 function MiniPostCard({
+  actionLabel,
   onPress,
   status,
   subtitle,
   title,
 }: {
+  actionLabel: string;
   onPress: () => void;
   status: string;
   subtitle: string;
@@ -498,7 +506,7 @@ function MiniPostCard({
         </View>
       </View>
       <View style={styles.editButton}>
-        <Text style={styles.editButtonText}>View</Text>
+        <Text style={styles.editButtonText}>{actionLabel}</Text>
       </View>
     </Pressable>
   );

@@ -11,6 +11,7 @@ import type {
   CreateVerificationRequestInput,
   CreatedVerificationRequest,
   ContactOtpSendResult,
+  VerificationIdType,
   VerificationPrefill,
   VerificationStatus,
   VerificationSummary,
@@ -65,12 +66,34 @@ function compactValues(values: (string | null | undefined)[]) {
 function mapVerification(row: VerificationRow): VerificationSummary {
   return {
     id: row.id,
+    idType: getVerificationIdTypeFromNotes(row.notes),
     status: row.status,
     notes: row.notes,
     reviewerNote: row.reviewer_note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function getVerificationIdTypeFromNotes(notes: string | null): VerificationIdType | null {
+  if (!notes) return null;
+
+  try {
+    const parsed = JSON.parse(notes) as { document?: { idType?: unknown } };
+    const idType = parsed.document?.idType;
+    return isVerificationIdType(idType) ? idType : null;
+  } catch {
+    return null;
+  }
+}
+
+function isVerificationIdType(value: unknown): value is VerificationIdType {
+  return (
+    value === 'barangay_certificate' ||
+    value === 'national_id' ||
+    value === 'drivers_license' ||
+    value === 'passport'
+  );
 }
 
 function getFileName(file: VerificationUpload, index: number) {

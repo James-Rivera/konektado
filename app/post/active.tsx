@@ -426,7 +426,7 @@ function ActiveServicePostCard({
       </View>
       <StatusRow label={service.isActive ? 'Active service' : 'Inactive service'} tone={service.isActive ? 'active' : 'inactive'} />
       <Pressable accessibilityRole="button" onPress={onManage} style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}>
-        <Text style={styles.manageButtonText}>View</Text>
+        <Text style={styles.manageButtonText}>Manage</Text>
       </Pressable>
     </View>
   );
@@ -586,7 +586,7 @@ function getServiceManagementActions({
     {
       disabled: updating,
       icon: 'visibility',
-      label: 'View',
+      label: 'Manage service',
       onPress: onView,
     },
     {

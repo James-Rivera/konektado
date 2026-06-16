@@ -1,5 +1,7 @@
 # Konektado Search Discovery UX Audit
 
+> Resolved on 2026-06-15: `Minor home fix help` is now the canonical MVP taxonomy label. References to `Basic home repair` below describe the pre-cleanup state and remain only as audit history or legacy compatibility context.
+
 ## Summary
 
 Konektado Search works mechanically, but discovery is weak because the current chip model is flat, not grouped, not preference-aware, and only loosely aligned with the controlled taxonomy intent.

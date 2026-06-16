@@ -1,8 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { CameraView, useCameraPermissions, type CameraCapturedPicture } from 'expo-camera';
 import type React from 'react';
-import { useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
+import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
@@ -44,6 +45,8 @@ export type SelectedVerificationFiles = {
   idFront?: VerificationUpload;
 };
 
+type CapturedVerificationPhoto = Pick<CameraCapturedPicture, 'uri'>;
+
 type VerificationFlowProps = {
   contactCode: string;
   contactCanVerify: boolean;
@@ -62,6 +65,7 @@ type VerificationFlowProps = {
   step: VerificationFlowStep;
   submitting: boolean;
   onBack: () => void;
+  onCapturePhoto: (fileType: VerificationUpload['fileType'], photo: CapturedVerificationPhoto) => void;
   onChangeContactCode: (value: string) => void;
   onChangeField: (field: keyof CreateVerificationRequestInput, value: string | null) => void;
   onChooseIdType: (idType: VerificationIdType) => void;
@@ -133,6 +137,7 @@ export function FigmaVerificationFlow({
   step,
   submitting,
   onBack,
+  onCapturePhoto,
   onChangeContactCode,
   onChangeField,
   onChooseIdType,
@@ -231,15 +236,18 @@ export function FigmaVerificationFlow({
   }
 
   if (step === 'idFront') {
+    const copy = getDocumentScanCopy(form.idType, 'front');
+
     return (
       <CaptureScreen
         file={files.idFront}
         frame="landscape"
         progress={2}
-        subtitle="Place the front of your ID inside the frame."
-        title="Scan ID front"
+        reminder={copy.reminder}
+        subtitle={copy.subtitle}
+        title={copy.title}
         onBack={onBack}
-        onCapture={() => onPickFile('id_front')}
+        onCapture={(photo) => onCapturePhoto('id_front', photo)}
         onContinue={onContinue}
         onRemove={() => onRemoveFile('id_front')}
         onUpload={() => onPickFile('id_front')}
@@ -248,15 +256,18 @@ export function FigmaVerificationFlow({
   }
 
   if (step === 'idBack') {
+    const copy = getDocumentScanCopy(form.idType, 'back');
+
     return (
       <CaptureScreen
         file={files.idBack}
         frame="landscape"
         progress={2}
-        subtitle="Place the back of your ID inside the frame."
-        title="Scan ID Back"
+        reminder={copy.reminder}
+        subtitle={copy.subtitle}
+        title={copy.title}
         onBack={onBack}
-        onCapture={() => onPickFile('id_back')}
+        onCapture={(photo) => onCapturePhoto('id_back', photo)}
         onContinue={onContinue}
         onRemove={() => onRemoveFile('id_back')}
         onUpload={() => onPickFile('id_back')}
@@ -265,15 +276,18 @@ export function FigmaVerificationFlow({
   }
 
   if (step === 'certificate') {
+    const copy = getDocumentScanCopy(form.idType);
+
     return (
       <CaptureScreen
         file={files.certificate}
         frame="portrait"
         progress={2}
-        subtitle="Place the certificate inside the frame."
-        title="Scan Certificate"
+        reminder={copy.reminder}
+        subtitle={copy.subtitle}
+        title={copy.title}
         onBack={onBack}
-        onCapture={() => onPickFile('certification')}
+        onCapture={(photo) => onCapturePhoto('certification', photo)}
         onContinue={onContinue}
         onRemove={() => onRemoveFile('certification')}
         onUpload={() => onPickFile('certification')}
@@ -298,10 +312,11 @@ export function FigmaVerificationFlow({
         file={files.facePhoto}
         frame="face"
         progress={3}
+        reminder="Make sure your face is clear and readable."
         subtitle="Remove masks, hats, or anything covering your face"
         title="Take a face photo"
         onBack={onBack}
-        onCapture={() => onPickFile('other')}
+        onCapture={(photo) => onCapturePhoto('other', photo)}
         onContinue={onContinue}
         onRemove={() => onRemoveFile('other')}
         onUpload={() => onPickFile('other')}
@@ -903,10 +918,29 @@ function ReviewScreen({
   );
 }
 
+function getDocumentScanCopy(idType: VerificationIdType, side?: 'back' | 'front') {
+  if (idType === 'barangay_certificate') {
+    return {
+      reminder: 'Make sure the name and details are readable.',
+      subtitle: 'Place the certificate inside the frame.',
+      title: 'Scan Certificate',
+    };
+  }
+
+  const label = idTypeLabels[idType];
+
+  return {
+    reminder: 'Make sure the name and photo are readable.',
+    subtitle: 'Place the document inside the frame.',
+    title: side === 'back' ? `Scan ${label} back` : `Scan ${label}`,
+  };
+}
+
 function CaptureScreen({
   file,
   frame,
   progress,
+  reminder,
   subtitle,
   title,
   onBack,
@@ -918,40 +952,118 @@ function CaptureScreen({
   file?: VerificationUpload;
   frame: 'face' | 'landscape' | 'portrait';
   progress: number;
+  reminder: string;
   subtitle: string;
   title: string;
   onBack: () => void;
-  onCapture: () => void;
+  onCapture: (photo: CapturedVerificationPhoto) => void;
   onContinue: () => void;
   onRemove: () => void;
   onUpload: () => void;
 }) {
+  const cameraRef = useRef<CameraView>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [captureLoading, setCaptureLoading] = useState(false);
+  const [requestedPermission, setRequestedPermission] = useState(false);
+  const needsFrontCamera = frame === 'face';
+  const cameraGranted = Boolean(permission?.granted);
+  const cameraBlocked = Boolean(permission && !permission.granted && !permission.canAskAgain);
+  const canUseCamera = !file && cameraGranted && !cameraError;
+
+  useEffect(() => {
+    if (file || requestedPermission || !permission || permission.granted || !permission.canAskAgain) {
+      return;
+    }
+
+    setRequestedPermission(true);
+    void requestPermission();
+  }, [file, permission, requestPermission, requestedPermission]);
+
+  const tryCameraAgain = async () => {
+    setCameraError(null);
+    setCameraReady(false);
+    await requestPermission();
+  };
+
+  const capture = async () => {
+    if (!canUseCamera || !cameraReady || captureLoading) return;
+
+    setCaptureLoading(true);
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.85 });
+      if (photo?.uri) {
+        onCapture(photo);
+      }
+    } catch {
+      setCameraError('Camera preview is unavailable. Check camera settings or upload from gallery.');
+    } finally {
+      setCaptureLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.darkSafeArea}>
       <View style={styles.darkScreen}>
         <TopHeader dark onBack={onBack} progress={progress} />
         <View style={styles.cameraStage}>
-          <Text style={styles.cameraTitle}>{title}</Text>
-          <Text style={styles.cameraSubtitle}>{subtitle}</Text>
-          <View
-            style={[
-              styles.captureFrame,
-              frame === 'portrait' && styles.captureFramePortrait,
-              frame === 'face' && styles.captureFrameFace,
-            ]}>
-            {file ? (
-              <View style={styles.uploadedBadge}>
-                <MaterialIcons color={color.brandYellow} name="check-circle" size={28} />
-                <Text style={styles.uploadedText}>Uploaded</Text>
+          {file ? (
+            <Image source={{ uri: file.uri }} style={styles.cameraPreview} />
+          ) : cameraGranted ? (
+            <CameraView
+              ref={cameraRef}
+              active={!file}
+              facing={needsFrontCamera ? 'front' : 'back'}
+              mode="picture"
+              onCameraReady={() => setCameraReady(true)}
+              onMountError={(error) => {
+                setCameraReady(false);
+                setCameraError(error.message || 'Camera preview is unavailable.');
+              }}
+              style={styles.cameraPreview}
+            />
+          ) : null}
+          <View style={styles.cameraScrim} />
+          <View style={styles.cameraContent}>
+            <Text style={styles.cameraTitle}>{title}</Text>
+            <Text style={styles.cameraSubtitle}>{subtitle}</Text>
+            {canUseCamera || file ? (
+              <View
+                style={[
+                  styles.captureFrame,
+                  frame === 'portrait' && styles.captureFramePortrait,
+                  frame === 'face' && styles.captureFrameFace,
+                ]}>
+                {file ? (
+                  <View style={styles.uploadedBadge}>
+                    <MaterialIcons color={color.brandYellow} name="check-circle" size={28} />
+                    <Text style={styles.uploadedText}>Ready to review</Text>
+                  </View>
+                ) : !cameraReady ? (
+                  <ActivityIndicator color={color.brandYellow} size="small" />
+                ) : null}
               </View>
-            ) : null}
+            ) : (
+              <CameraFallback
+                blocked={cameraBlocked}
+                error={cameraError}
+                onTryAgain={tryCameraAgain}
+                onUpload={onUpload}
+              />
+            )}
+            <Text style={styles.reminderTitle}>Reminder</Text>
+            <Text style={styles.reminderText}>{reminder}</Text>
+            {file ? <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text> : null}
           </View>
-          <Text style={styles.reminderTitle}>Reminder</Text>
-          <Text style={styles.reminderText}>Make sure the name and photo are readable.</Text>
-          {file ? <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text> : null}
         </View>
         <View style={styles.darkFooter}>
-          <PrimaryButton label={file ? 'Continue' : 'Capture'} onPress={file ? onContinue : onCapture} />
+          <PrimaryButton
+            disabled={!file && (!canUseCamera || !cameraReady || captureLoading)}
+            label={file ? 'Continue' : captureLoading ? 'Capturing...' : 'Capture'}
+            loading={captureLoading}
+            onPress={file ? onContinue : capture}
+          />
           <SecondaryButton
             dark
             label={file ? 'Remove upload' : 'Upload from Gallery'}
@@ -960,6 +1072,47 @@ function CaptureScreen({
         </View>
       </View>
     </SafeAreaView>
+  );
+}
+
+function CameraFallback({
+  blocked,
+  error,
+  onTryAgain,
+  onUpload,
+}: {
+  blocked: boolean;
+  error: string | null;
+  onTryAgain: () => void;
+  onUpload: () => void;
+}) {
+  return (
+    <View style={styles.cameraFallback}>
+      <MaterialIcons color={color.brandYellow} name="photo-camera" size={34} />
+      <Text style={styles.cameraFallbackTitle}>
+        {error ? 'Camera preview unavailable' : 'Camera access needed'}
+      </Text>
+      <Text style={styles.cameraFallbackText}>
+        {error || 'Camera access is needed to scan your document.'}
+        {blocked ? ' You can enable camera permission in device settings or upload from gallery.' : ''}
+      </Text>
+      <View style={styles.cameraFallbackActions}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onTryAgain}
+          style={({ pressed }) => [styles.cameraFallbackButton, pressed && styles.pressed]}>
+          <Text style={styles.cameraFallbackButtonText}>Try again</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onUpload}
+          style={({ pressed }) => [styles.cameraFallbackButton, styles.cameraFallbackButtonFilled, pressed && styles.pressed]}>
+          <Text style={[styles.cameraFallbackButtonText, styles.cameraFallbackButtonTextFilled]}>
+            Upload from Gallery
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -1644,10 +1797,31 @@ const styles = StyleSheet.create({
   },
   cameraStage: {
     alignItems: 'center',
-    backgroundColor: '#AFAFAF',
+    backgroundColor: '#090909',
+    flex: 1,
+    overflow: 'hidden',
+  },
+  cameraPreview: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  cameraScrim: {
+    backgroundColor: 'rgba(9, 9, 9, 0.28)',
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  cameraContent: {
+    alignItems: 'center',
     flex: 1,
     paddingHorizontal: 15,
     paddingTop: 58,
+    width: '100%',
   },
   cameraTitle: {
     color: color.white,
@@ -1724,6 +1898,61 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 8,
     maxWidth: 320,
+  },
+  cameraFallback: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(9, 9, 9, 0.58)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 42,
+    padding: 18,
+    width: '100%',
+  },
+  cameraFallbackTitle: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 15,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  cameraFallbackText: {
+    color: 'rgba(255, 255, 255, 0.82)',
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  cameraFallbackActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    width: '100%',
+  },
+  cameraFallbackButton: {
+    alignItems: 'center',
+    borderColor: 'rgba(255, 255, 255, 0.42)',
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  cameraFallbackButtonFilled: {
+    backgroundColor: color.white,
+    borderColor: color.white,
+  },
+  cameraFallbackButtonText: {
+    color: color.white,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+  },
+  cameraFallbackButtonTextFilled: {
+    color: color.text,
   },
   darkFooter: {
     backgroundColor: '#090909',

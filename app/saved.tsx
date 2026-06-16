@@ -100,7 +100,7 @@ export default function SavedPostsScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <View style={styles.screen}>
-        <PublicProfileHeader onBack={() => router.back()} title="Saved Posts" />
+        <PublicProfileHeader onBack={() => router.back()} title="Saved posts" />
         <FlatList
           contentContainerStyle={[
             styles.content,

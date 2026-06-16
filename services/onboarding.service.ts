@@ -379,3 +379,95 @@ export async function getMyUserPreferences(): Promise<
 
   return { data: data ? mapPreferences(data) : null, error: null };
 }
+
+export async function saveMyDiscoveryPreferences({
+  customNeededServices,
+  customOfferedServices,
+  neededServices,
+  offeredServices,
+}: {
+  customNeededServices: string[];
+  customOfferedServices: string[];
+  neededServices: string[];
+  offeredServices: string[];
+}): Promise<ServiceResult<UserPreferences>> {
+  const { data: userResult, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userResult.user) {
+    return { data: null, error: "Please sign in again to continue." };
+  }
+
+  const current = await getMyUserPreferences();
+  if (current.error) {
+    return { data: null, error: current.error };
+  }
+
+  const fallbackIntent = await getFallbackPreferenceIntent(userResult.user.id);
+  const intent = current.data?.intent ?? fallbackIntent;
+  const offeredSplit = splitOfficialAndCustomServices([
+    ...offeredServices,
+    ...customOfferedServices,
+  ]);
+  const neededSplit = splitOfficialAndCustomServices([
+    ...neededServices,
+    ...customNeededServices,
+  ]);
+  const normalizedOfferedServices = compactServices(offeredSplit.official);
+  const normalizedNeededServices = compactServices(neededSplit.official);
+  const normalizedCustomOfferedServices = compactServices(offeredSplit.custom);
+  const normalizedCustomNeededServices = compactServices(neededSplit.custom);
+  const updatedAt = new Date().toISOString();
+  const preferencesPayload = {
+    user_id: userResult.user.id,
+    intent,
+    offered_delivery_mode: current.data?.offeredDeliveryMode ?? null,
+    offered_services: normalizedOfferedServices,
+    needed_services: normalizedNeededServices,
+    custom_offered_services: normalizedCustomOfferedServices,
+    custom_needed_services: normalizedCustomNeededServices,
+    onboarding_completed_at: current.data?.onboardingCompletedAt ?? updatedAt,
+    updated_at: updatedAt,
+  };
+
+  let { error } = await supabase.from("user_preferences").upsert(preferencesPayload);
+
+  if (isMissingOfferedDeliveryModeColumn(error)) {
+    const { offered_delivery_mode: _offeredDeliveryMode, ...legacyPreferencesPayload } =
+      preferencesPayload;
+    const retry = await supabase.from("user_preferences").upsert(legacyPreferencesPayload);
+    error = retry.error;
+  }
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  const saved = await getMyUserPreferences();
+  if (saved.error || !saved.data) {
+    return { data: null, error: saved.error ?? "Could not reload discovery preferences." };
+  }
+
+  return { data: saved.data, error: null };
+}
+
+async function getFallbackPreferenceIntent(userId: string): Promise<OnboardingIntent> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, active_role")
+    .eq("id", userId)
+    .maybeSingle<{ role: string | null; active_role: string | null }>();
+
+  const profileRole =
+    normalizeIntent(profile?.active_role) ?? normalizeIntent(profile?.role);
+
+  if (profileRole) return profileRole;
+
+  const { data: userRoles } = await supabase
+    .from("user_roles")
+    .select("role, is_active")
+    .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .limit(1);
+
+  return normalizeIntent(userRoles?.[0]?.role) ?? "client";
+}

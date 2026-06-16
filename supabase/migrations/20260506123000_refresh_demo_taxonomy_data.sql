@@ -4,7 +4,7 @@
 
 update public.provider_profiles
 set
-  service_type = 'Basic home repair, computer setup, home assistance',
+  service_type = 'Minor home fix help, computer setup, home assistance',
   has_certifications = true,
   certification_details = 'Barangay clearance and practical home maintenance references',
   certification_status = 'approved',
@@ -39,7 +39,7 @@ update public.user_preferences
 set
   intent = 'client',
   offered_services = '{}',
-  needed_services = array['Basic home repair', 'Cleaning', 'Document formatting'],
+  needed_services = array['Minor home fix help', 'Cleaning', 'Document formatting'],
   custom_offered_services = '{}',
   custom_needed_services = array['Urgent errands'],
   updated_at = now()
@@ -48,7 +48,7 @@ where user_id = '00000000-0000-4000-8000-000000000002';
 update public.user_preferences
 set
   intent = 'provider',
-  offered_services = array['Basic home repair', 'Computer setup', 'Home assistance'],
+  offered_services = array['Minor home fix help', 'Computer setup', 'Home assistance'],
   needed_services = '{}',
   custom_offered_services = array['Printer setup'],
   custom_needed_services = '{}',
@@ -69,7 +69,7 @@ update public.user_preferences
 set
   intent = 'client',
   offered_services = '{}',
-  needed_services = array['Cleaning', 'Basic home repair'],
+  needed_services = array['Cleaning', 'Minor home fix help'],
   custom_offered_services = '{}',
   custom_needed_services = '{}',
   updated_at = now()
@@ -87,10 +87,10 @@ where user_id = '00000000-0000-4000-8000-000000000006';
 
 update public.services
 set
-  category = 'Basic home repair',
+  category = 'Minor home fix help',
   title = 'Minor home fix support',
   description = 'Helps with loose hinges, shelves, door handles, and other small non-licensed household maintenance tasks.',
-  tags = array['Home & Local Help', 'Basic home repair', 'Home maintenance'],
+  tags = array['Home & Local Help', 'Minor home fix help', 'Home maintenance'],
   photo_urls = array['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80'],
   years_experience = 6,
   availability_text = 'Weekdays after 2:00 PM and Saturday mornings',
@@ -183,9 +183,9 @@ where id = '00000000-0000-4000-9000-000000002005';
 update public.jobs
 set
   title = 'Fix loose shelf bracket',
-  description = 'Kitchen shelf bracket is loose. Need someone nearby who can inspect and do a basic repair.',
+  description = 'Kitchen shelf bracket is loose. Need someone nearby who can inspect and make a small adjustment.',
   category = 'Home & Local Help',
-  service_needed = 'Basic home repair',
+  service_needed = 'Minor home fix help',
   tags = array['Home & Local Help', 'Kitchen', 'Urgent'],
   photo_urls = array['https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&w=1200&q=80'],
   barangay = 'Barangay San Pedro',
@@ -254,10 +254,10 @@ where id = '00000000-0000-4000-9000-000000001003';
 
 update public.jobs
 set
-  title = 'Repair loose cabinet hinges',
-  description = 'Kitchen cabinet doors were repaired and aligned.',
+  title = 'Adjust loose cabinet hinges',
+  description = 'Kitchen cabinet doors were adjusted and aligned.',
   category = 'Home & Local Help',
-  service_needed = 'Basic home repair',
+  service_needed = 'Minor home fix help',
   tags = array['Home & Local Help', 'Cabinet', 'Completed'],
   photo_urls = array['https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80'],
   barangay = 'Barangay San Pedro',

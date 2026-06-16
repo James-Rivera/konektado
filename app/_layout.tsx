@@ -5,7 +5,7 @@ import {
 } from "@react-navigation/native";
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { useEffect, useState } from "react";
@@ -66,6 +66,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const segments = useSegments();
   const { loading, authenticated, needsRole, needsProfile, needsSignupPassword, isAdmin } =
     useProfileStatus();
@@ -78,6 +79,7 @@ function RootNavigator() {
   }, [loading]);
 
   useEffect(() => {
+    if (!rootNavigationState?.key) return;
     if (loading) return;
 
     const routeSegments = [...segments] as string[];
@@ -155,7 +157,17 @@ function RootNavigator() {
     ) {
       router.replace(targetPath);
     }
-  }, [authenticated, isAdmin, loading, needsProfile, needsRole, needsSignupPassword, router, segments]);
+  }, [
+    authenticated,
+    isAdmin,
+    loading,
+    needsProfile,
+    needsRole,
+    needsSignupPassword,
+    rootNavigationState?.key,
+    router,
+    segments,
+  ]);
 
   if (loading && !hasResolvedInitialStatus) {
     return <AppSplashScreen />;
@@ -191,6 +203,7 @@ function RootNavigator() {
       <Stack.Screen name="post/renew" options={{ headerShown: false }} />
       <Stack.Screen name="profile/complete" options={{ headerShown: false }} />
       <Stack.Screen name="profile/credentials" options={{ headerShown: false }} />
+      <Stack.Screen name="profile/discovery-preferences" options={{ headerShown: false }} />
       <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
       <Stack.Screen name="saved" options={{ headerShown: false }} />
       <Stack.Screen name="services/[serviceId]" options={{ headerShown: false }} />

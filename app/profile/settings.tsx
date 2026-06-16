@@ -96,6 +96,15 @@ export default function ProfileSettingsScreen() {
           />
         </SettingsSection>
 
+        <SettingsSection title="Personalization">
+          <SettingsRow
+            icon="tune"
+            title="Discovery preferences"
+            subtitle="Choose what Home and Search recommend first"
+            onPress={() => router.push('/profile/discovery-preferences')}
+          />
+        </SettingsSection>
+
         <SettingsSection title="Session">
           <SettingsRow
             danger

@@ -1,6 +1,15 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -18,9 +27,13 @@ type GroupedServicePickerSheetProps = {
   servicesByCategory: Record<string, readonly string[]>;
   title: string;
   visible: boolean;
+  multiActionLabel?: string;
+  multiActionLoading?: boolean;
   onClose: () => void;
   onSelect?: (value: string) => void;
-  onApplyMulti?: (value: { selectedServices: string[]; customServices: string[] }) => void;
+  onApplyMulti?: (
+    value: { selectedServices: string[]; customServices: string[] },
+  ) => boolean | void | Promise<boolean | void>;
 };
 
 export function GroupedServicePickerSheet({
@@ -35,6 +48,8 @@ export function GroupedServicePickerSheet({
   servicesByCategory,
   title,
   visible,
+  multiActionLabel = 'Done',
+  multiActionLoading = false,
   onClose,
   onSelect,
   onApplyMulti,
@@ -44,6 +59,7 @@ export function GroupedServicePickerSheet({
   const [draftServices, setDraftServices] = useState<string[]>(selectedServices);
   const [draftCustomServices, setDraftCustomServices] = useState<string[]>(selectedCustomServices);
   const [customServiceText, setCustomServiceText] = useState('');
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -94,172 +110,211 @@ export function GroupedServicePickerSheet({
     setDraftCustomServices((current) => current.filter((item) => item !== service));
   };
 
-  const applyMultiSelection = () => {
-    onApplyMulti?.({
-      selectedServices: draftServices,
-      customServices: draftCustomServices,
-    });
+  const cancelMultiSelection = () => {
+    setDraftServices(selectedServices);
+    setDraftCustomServices(selectedCustomServices);
+    setCustomServiceText('');
+    setQuery('');
     onClose();
+  };
+
+  const applyMultiSelection = async () => {
+    if (applying || multiActionLoading) return;
+
+    setApplying(true);
+    try {
+      const result = await onApplyMulti?.({
+        selectedServices: draftServices,
+        customServices: draftCustomServices,
+      });
+      if (result === false) return;
+      onClose();
+    } finally {
+      setApplying(false);
+    }
   };
 
   const selectedCount = draftServices.length + draftCustomServices.length;
   const isMulti = mode === 'multi';
+  const actionLoading = applying || multiActionLoading;
 
   return (
-    <BottomSheet maxHeight="76%" onClose={onClose} visible={visible}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.description}>{description}</Text>
-      </View>
-
-      <View style={styles.searchBox}>
-        <TextInput
-          onChangeText={setQuery}
-          placeholder={searchPlaceholder}
-          placeholderTextColor={color.textSubtle}
-          style={styles.searchInput}
-          value={query}
-        />
-        <MaterialIcons color={color.primary} name="search" size={24} />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Service categories</Text>
+    <BottomSheet maxHeight="90%" onClose={isMulti ? cancelMultiSelection : onClose} visible={visible}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+        style={styles.keyboardFrame}>
         <ScrollView
-          contentContainerStyle={styles.categoryRow}
-          horizontal
-          showsHorizontalScrollIndicator={false}>
-          {categories.map((category) => {
-            const active = category === activeCategory;
-
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                key={category}
-                onPress={() => setActiveCategory(category)}
-                style={({ pressed }) => [
-                  styles.categoryChip,
-                  active ? styles.categoryChipActive : styles.categoryChipDefault,
-                  pressed && styles.pressed,
-                ]}>
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    active && styles.categoryChipTextActive,
-                  ]}>
-                  {category}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      <View style={styles.listHeader}>
-        <Text style={styles.sectionTitle}>Services in {activeCategory}</Text>
-        <Text style={styles.listHint}>
-          {isMulti ? `${selectedCount} selected` : 'Choose one service for this post.'}
-        </Text>
-      </View>
-
-      <View style={styles.listShell}>
-        <ScrollView
-          style={styles.listScroll}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={styles.sheetContent}
           keyboardShouldPersistTaps="handled"
+          style={styles.sheetScroll}
           showsVerticalScrollIndicator>
-          {visibleServices.map((service, index) => {
-            const active = isMulti ? draftServices.includes(service) : service === selectedService;
-
-            return (
-              <Pressable
-                accessibilityRole={isMulti ? 'checkbox' : 'button'}
-                accessibilityState={isMulti ? { checked: active } : { selected: active }}
-                key={service}
-                onPress={() => selectService(service)}
-                style={({ pressed }) => [
-                  styles.optionRow,
-                  index === 0 && styles.optionRowTop,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={[styles.optionText, active && styles.optionTextActive]}>
-                  {service}
-                </Text>
-                {active ? (
-                  <MaterialIcons color={color.primary} name="check" size={20} />
-                ) : isMulti ? (
-                  <MaterialIcons color={color.textSubtle} name="add-circle-outline" size={20} />
-                ) : null}
-              </Pressable>
-            );
-          })}
-          {!visibleServices.length ? (
-            <Text style={styles.emptyText}>No matching services in this category.</Text>
-          ) : null}
-        </ScrollView>
-        <View pointerEvents="none" style={styles.listFade} />
-      </View>
-
-      {isMulti ? (
-        <>
-          <View style={styles.customBlock}>
-            <View style={styles.customHeader}>
-              <Text style={styles.sectionTitle}>Other service</Text>
-              <Text style={styles.listHint}>Use this only when it is not listed above.</Text>
-            </View>
-            {draftCustomServices.length ? (
-              <View style={styles.selectedRow}>
-                {draftCustomServices.map((service) => (
-                  <Pressable
-                    accessibilityLabel={`Remove ${service}`}
-                    accessibilityRole="button"
-                    key={service}
-                    onPress={() => removeCustomService(service)}
-                    style={({ pressed }) => [styles.customPill, pressed && styles.pressed]}>
-                    <Text style={styles.customPillText}>{service}</Text>
-                    <MaterialIcons color={color.primary} name="close" size={15} />
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.customInputRow}>
-              <TextInput
-                onChangeText={setCustomServiceText}
-                onSubmitEditing={addCustomService}
-                placeholder="Add other service"
-                placeholderTextColor={color.textSubtle}
-                returnKeyType="done"
-                style={styles.customInput}
-                value={customServiceText}
-              />
-              <Pressable
-                accessibilityRole="button"
-                onPress={addCustomService}
-                style={({ pressed }) => [styles.customAddButton, pressed && styles.pressed]}>
-                <Text style={styles.customAddText}>Add</Text>
-              </Pressable>
-            </View>
+          <View style={styles.header}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.description}>{description}</Text>
           </View>
 
+          <View style={styles.searchBox}>
+            <TextInput
+              onChangeText={setQuery}
+              placeholder={searchPlaceholder}
+              placeholderTextColor={color.textSubtle}
+              style={styles.searchInput}
+              value={query}
+            />
+            <MaterialIcons color={color.primary} name="search" size={24} />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Service categories</Text>
+            <ScrollView
+              contentContainerStyle={styles.categoryRow}
+              horizontal
+              showsHorizontalScrollIndicator={false}>
+              {categories.map((category) => {
+                const active = category === activeCategory;
+
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    key={category}
+                    onPress={() => setActiveCategory(category)}
+                    style={({ pressed }) => [
+                      styles.categoryChip,
+                      active ? styles.categoryChipActive : styles.categoryChipDefault,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        active && styles.categoryChipTextActive,
+                      ]}>
+                      {category}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <View style={styles.listHeader}>
+            <Text style={styles.sectionTitle}>Services in {activeCategory}</Text>
+            <Text style={styles.listHint}>
+              {isMulti ? `${selectedCount} selected` : 'Choose one service for this post.'}
+            </Text>
+          </View>
+
+          <View>
+            {visibleServices.map((service, index) => {
+              const active = isMulti ? draftServices.includes(service) : service === selectedService;
+
+              return (
+                <Pressable
+                  accessibilityRole={isMulti ? 'checkbox' : 'button'}
+                  accessibilityState={isMulti ? { checked: active } : { selected: active }}
+                  key={service}
+                  onPress={() => selectService(service)}
+                  style={({ pressed }) => [
+                    styles.optionRow,
+                    index === 0 && styles.optionRowTop,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text style={[styles.optionText, active && styles.optionTextActive]}>
+                    {service}
+                  </Text>
+                  {active ? (
+                    <MaterialIcons color={color.primary} name="check" size={20} />
+                  ) : isMulti ? (
+                    <MaterialIcons color={color.textSubtle} name="add-circle-outline" size={20} />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+            {!visibleServices.length ? (
+              <Text style={styles.emptyText}>No matching services in this category.</Text>
+            ) : null}
+          </View>
+
+          {isMulti ? (
+            <View style={styles.customBlock}>
+              <View style={styles.customHeader}>
+                <Text style={styles.sectionTitle}>Other service</Text>
+                <Text style={styles.listHint}>Use this only when it is not listed above.</Text>
+              </View>
+              {draftCustomServices.length ? (
+                <View style={styles.selectedRow}>
+                  {draftCustomServices.map((service) => (
+                    <Pressable
+                      accessibilityLabel={`Remove ${service}`}
+                      accessibilityRole="button"
+                      key={service}
+                      onPress={() => removeCustomService(service)}
+                      style={({ pressed }) => [styles.customPill, pressed && styles.pressed]}>
+                      <Text style={styles.customPillText}>{service}</Text>
+                      <MaterialIcons color={color.primary} name="close" size={15} />
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              <View style={styles.customInputRow}>
+                <TextInput
+                  onChangeText={setCustomServiceText}
+                  onSubmitEditing={addCustomService}
+                  placeholder="Add other service"
+                  placeholderTextColor={color.textSubtle}
+                  returnKeyType="done"
+                  style={styles.customInput}
+                  value={customServiceText}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={addCustomService}
+                  style={({ pressed }) => [styles.customAddButton, pressed && styles.pressed]}>
+                  <Text style={styles.customAddText}>Add</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {isMulti ? (
           <View style={styles.sheetActions}>
             <Pressable
               accessibilityRole="button"
-              onPress={onClose}
+              disabled={actionLoading}
+              onPress={cancelMultiSelection}
               style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}>
               <Text style={styles.secondaryActionText}>Cancel</Text>
             </Pressable>
             <View style={styles.primaryAction}>
-              <PrimaryButton label="Apply services" onPress={applyMultiSelection} />
+              <PrimaryButton
+                label={multiActionLabel}
+                loading={actionLoading}
+                onPress={applyMultiSelection}
+              />
             </View>
           </View>
-        </>
-      ) : null}
+        ) : null}
+      </KeyboardAvoidingView>
     </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardFrame: {
+    flexShrink: 1,
+    gap: space.md,
+    maxHeight: '100%',
+    minHeight: 0,
+  },
+  sheetScroll: {
+    flexShrink: 1,
+  },
+  sheetContent: {
+    gap: space.lg,
+    paddingBottom: space.xl,
+  },
   header: {
     gap: space.xs,
   },
@@ -330,23 +385,6 @@ const styles = StyleSheet.create({
   listHint: {
     ...typography.caption,
     color: color.textMuted,
-  },
-  listShell: {
-    position: 'relative',
-  },
-  listScroll: {
-    maxHeight: 240,
-  },
-  listContent: {
-    paddingBottom: space.xl + 18,
-  },
-  listFade: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    bottom: 0,
-    height: 28,
-    left: 0,
-    position: 'absolute',
-    right: 0,
   },
   optionRow: {
     alignItems: 'center',
@@ -428,8 +466,15 @@ const styles = StyleSheet.create({
   },
   sheetActions: {
     alignItems: 'center',
+    backgroundColor: color.background,
+    borderTopColor: color.border,
+    borderTopWidth: 1,
     flexDirection: 'row',
     gap: space.sm,
+    marginHorizontal: -space.xl,
+    marginTop: space.xs,
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
   },
   secondaryAction: {
     alignItems: 'center',
