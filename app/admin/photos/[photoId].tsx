@@ -201,7 +201,7 @@ export default function AdminPhotoReviewScreen() {
             </View>
 
             <AdminPrivacyNotice icon="security">
-              Photos should not show IDs, certificates, screenshots, or private information.
+              Only public profile, job, and service photos are shown here. Private verification files remain available only in the verification review flow.
             </AdminPrivacyNotice>
 
             <View style={styles.actionBlock}>
@@ -259,7 +259,7 @@ export default function AdminPhotoReviewScreen() {
             <View style={styles.disabledNotice}>
               <MaterialIcons color={adminPalette.faint} name="lock-outline" size={22} />
               <Text style={styles.disabledNoticeText}>
-                User restriction requires a separate enforcement design.
+                Admin actions are limited to authorized barangay review workflows.
               </Text>
             </View>
           </View>

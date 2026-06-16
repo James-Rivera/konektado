@@ -738,6 +738,12 @@ function formatDate(value: string) {
 }
 
 function formatFileType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'barangay_certificate') return 'Barangay Certificate';
+  if (normalized === 'national_id') return 'National ID';
+  if (normalized === 'driver_license' || normalized === 'drivers_license') return "Driver's License";
+  if (normalized === 'passport') return 'Passport';
+
   return value
     .split('_')
     .filter(Boolean)
@@ -780,7 +786,7 @@ function toneForStatus(status: VerificationStatus): AdminTone {
 }
 
 function formatStatusLabel(status: VerificationStatus) {
-  if (status === 'needs_more_info') return 'Needs Correction';
+  if (status === 'needs_more_info') return 'Needs More Info';
   return status.replace(/_/g, ' ');
 }
 

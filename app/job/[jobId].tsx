@@ -8,6 +8,7 @@ import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
+import { ListingPhotoCarousel } from '@/components/ListingPhotoCarousel';
 import { MoreActionsSheet } from '@/components/MoreActionsSheet';
 import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { CompletedJobReviewCard } from '@/components/reviews/CompletedJobReviewCard';
@@ -140,7 +141,9 @@ export default function JobDetailScreen() {
   const jobStatus = job.status;
   const workersNeeded = job.workersNeeded ?? 1;
   const acceptedCount = job.acceptedProviderId ? 1 : 0;
-  const jobImageUrl = getDetailImageUrl({ imageUrl: job.photoUrls?.[0] });
+  const jobPhotoUrls = job.photoUrls
+    .map((imageUrl) => getDetailImageUrl({ imageUrl }))
+    .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
   const clientAvatarUrl = getAvatarDisplayUrl({ avatarUrl: job.client?.avatarUrl });
   const location = getMarketplaceLocation(job);
   const displayServiceNeeded = getDisplayLabelForMvpService(job.serviceNeeded) || job.serviceNeeded;
@@ -421,10 +424,15 @@ export default function JobDetailScreen() {
             />
           </View>
 
-          {jobImageUrl ? (
+          {jobPhotoUrls.length ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Photos</Text>
-              <CachedRemoteImage uri={jobImageUrl} style={styles.detailPhoto} />
+              <ListingPhotoCarousel
+                accessibilityLabel={`${jobTitle} photos`}
+                height={210}
+                photoUrls={jobPhotoUrls}
+                style={styles.detailPhoto}
+              />
             </View>
           ) : null}
 
@@ -998,11 +1006,7 @@ const styles = StyleSheet.create({
     color: color.primary,
   },
   detailPhoto: {
-    backgroundColor: color.cardTint,
-    borderRadius: radius.lg,
-    height: 210,
     marginTop: space.md,
-    width: '100%',
   },
   detailGrid: {
     columnGap: space.xs,

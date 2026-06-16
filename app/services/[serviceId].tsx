@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
+import { ListingPhotoCarousel } from '@/components/ListingPhotoCarousel';
 import {
   PublicProfileHeader,
   PublicProfileSkeleton,
@@ -40,7 +41,7 @@ import {
 import { getServiceDetail, updateServiceAvailability } from '@/services/service-profile.service';
 import { getPublicWorkerProfile } from '@/services/worker-profile.service';
 import type { ProviderService, PublicWorkerProfile, ServiceDetail } from '@/types/marketplace.types';
-import { getCardImageUrl } from '@/utils/image-processing';
+import { getDetailImageUrl } from '@/utils/image-processing';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -261,7 +262,7 @@ export default function ServicePublicWorkerProfileScreen() {
           actionLabel={saveTarget && isSaved(saveTarget) ? 'Remove saved service' : 'Save service'}
           onAction={saveTarget ? handleSave : undefined}
           onBack={() => router.back()}
-          title={isOwnerManageView ? 'Service post' : 'Service Detail'}
+          title={isOwnerManageView ? 'Service post' : 'Service Details'}
         />
         {loading || currentProfileLoading ? (
           <PublicProfileSkeleton bottomInset={insets.bottom} showCta={!adminViewRequested} />
@@ -291,6 +292,15 @@ export default function ServicePublicWorkerProfileScreen() {
             adminViewOnly={adminViewOnly}
             bottomInset={insets.bottom}
             cta={{ ...cta, loading: messaging, onPress: handleMessage }}
+            saveCta={
+              saveTarget && !isCurrentUsersService && !adminViewOnly
+                ? {
+                    isSaved: isSaved(saveTarget),
+                    loading: isPending(saveTarget),
+                    onPress: handleSave,
+                  }
+                : null
+            }
             onOpenService={(nextServiceId) =>
               nextServiceId !== serviceId
                 ? router.push({
@@ -316,6 +326,7 @@ function PublicServiceDetailView({
   adminViewOnly = false,
   bottomInset,
   cta,
+  saveCta,
   onOpenService,
   onViewWorkerProfile,
   service,
@@ -324,12 +335,19 @@ function PublicServiceDetailView({
   adminViewOnly?: boolean;
   bottomInset: number;
   cta: ReturnType<typeof getServiceCta> & { loading?: boolean; onPress: () => void };
+  saveCta?: {
+    isSaved: boolean;
+    loading: boolean;
+    onPress: () => void;
+  } | null;
   onOpenService?: (serviceId: string) => void;
   onViewWorkerProfile: () => void;
   service: ServiceDetail;
   workerProfile: PublicWorkerProfile | null;
 }) {
-  const imageUrl = getCardImageUrl({ imageUrl: service.photoUrls[0] });
+  const photoUrls = service.photoUrls
+    .map((imageUrl) => getDetailImageUrl({ imageUrl }))
+    .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
   const displayCategory = getDisplayLabelForMvpService(service.category) || service.category;
   const title = formatServicePostTitle({
     title: getDisplayTitleForMvpService(service.title, service.category) || service.title,
@@ -348,6 +366,7 @@ function PublicServiceDetailView({
       service.provider?.barangayVerifiedAt ||
       service.provider?.verifiedAt,
   );
+  const credentialSummary = getCredentialSummary(workerProfile);
   const otherServices = service.providerServices.filter((item) => item.id !== service.id);
 
   return (
@@ -358,7 +377,15 @@ function PublicServiceDetailView({
           { paddingBottom: Math.max(bottomInset, 12) + (adminViewOnly ? 24 : 132) },
         ]}
         showsVerticalScrollIndicator={false}>
-        {imageUrl ? <CachedRemoteImage uri={imageUrl} style={styles.publicHeroImage} /> : null}
+        <View style={styles.publicPhotoSection}>
+          <ListingPhotoCarousel
+            accessibilityLabel={`${title} photos`}
+            height={238}
+            photoUrls={photoUrls}
+            showEmptyState
+            emptyLabel="No service photos yet"
+          />
+        </View>
 
         <View style={styles.publicSection}>
           <View style={styles.statusPill}>
@@ -381,35 +408,7 @@ function PublicServiceDetailView({
         </View>
 
         <View style={styles.publicSection}>
-          <Text style={styles.publicSectionTitle}>Service details</Text>
-          <View style={styles.publicDetailGrid}>
-            <PublicDetail label="Service" value={displayCategory} />
-            <PublicDetail label="Experience" value={getExperienceLabel(service.experienceLevel)} />
-            <PublicDetail
-              label="Certification"
-              value={service.certificationAvailable ? service.certificationNote || 'Available' : 'Not listed'}
-            />
-            <PublicDetail label="Messages" value={service.allowMessages ? 'On' : 'Off'} />
-          </View>
-        </View>
-
-        {service.tags.length ? (
-          <View style={styles.publicSection}>
-            <Text style={styles.publicSectionTitle}>Tags</Text>
-            <View style={styles.publicTagRow}>
-              {service.tags.map((tag) => (
-                <View key={tag} style={styles.publicTag}>
-                  <Text numberOfLines={1} style={styles.publicTagText}>
-                    {getDisplayLabelForMvpService(tag) || tag}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.publicSection}>
-          <Text style={styles.publicSectionTitle}>Worker</Text>
+          <Text style={styles.publicSectionTitle}>Offered by</Text>
           <View style={styles.workerTrustCard}>
             <View style={styles.workerTrustRow}>
               <WorkerAvatar imageUrl={providerAvatarUrl} name={providerName} />
@@ -450,6 +449,34 @@ function PublicServiceDetailView({
           </View>
         </View>
 
+        <View style={styles.publicSection}>
+          <Text style={styles.publicSectionTitle}>Service details</Text>
+          <View style={styles.publicDetailGrid}>
+            <PublicDetail label="Service" value={displayCategory} />
+            <PublicDetail label="Experience" value={getExperienceLabel(service.experienceLevel)} />
+            <PublicDetail
+              label="Certification"
+              value={service.certificationAvailable ? service.certificationNote || 'Available' : 'Not listed'}
+            />
+            <PublicDetail label="Credentials" value={credentialSummary} />
+          </View>
+        </View>
+
+        {service.tags.length ? (
+          <View style={styles.publicSection}>
+            <Text style={styles.publicSectionTitle}>Tags</Text>
+            <View style={styles.publicTagRow}>
+              {service.tags.map((tag) => (
+                <View key={tag} style={styles.publicTag}>
+                  <Text numberOfLines={1} style={styles.publicTagText}>
+                    {getDisplayLabelForMvpService(tag) || tag}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {otherServices.length ? (
           <View style={styles.publicSection}>
             <Text style={styles.publicSectionTitle}>Other services from this worker</Text>
@@ -486,7 +513,7 @@ function PublicServiceDetailView({
           </View>
         </View>
       </ScrollView>
-      {adminViewOnly ? null : <PublicServiceCta bottomInset={bottomInset} cta={cta} />}
+      {adminViewOnly ? null : <PublicServiceCta bottomInset={bottomInset} cta={cta} saveCta={saveCta} />}
     </View>
   );
 }
@@ -506,7 +533,9 @@ function OwnerServicePostView({
   service: ServiceDetail;
   updating: boolean;
 }) {
-  const imageUrl = getCardImageUrl({ imageUrl: service.photoUrls[0] });
+  const photoUrls = service.photoUrls
+    .map((imageUrl) => getDetailImageUrl({ imageUrl }))
+    .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
 
   return (
     <View style={styles.ownerScreen}>
@@ -517,7 +546,15 @@ function OwnerServicePostView({
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.ownerHero}>
-          {imageUrl ? <CachedRemoteImage uri={imageUrl} style={styles.ownerHeroImage} /> : null}
+          <ListingPhotoCarousel
+            accessibilityLabel={`${service.title} photos`}
+            borderRadius={0}
+            emptyLabel="No service photos yet"
+            height={220}
+            photoUrls={photoUrls}
+            showEmptyState
+            style={styles.ownerHeroImage}
+          />
           <View style={styles.ownerHeroCopy}>
             <View style={styles.statusPill}>
               <View style={[styles.statusDot, service.isActive ? styles.statusDotActive : styles.statusDotInactive]} />
@@ -638,6 +675,23 @@ function getMessageService(profile: PublicWorkerProfile | null): ProviderService
   return profile.selectedService ?? profile.services[0] ?? null;
 }
 
+function getCredentialSummary(profile: PublicWorkerProfile | null) {
+  const credentials = profile?.credentials ?? [];
+  if (!credentials.length) return 'Not listed';
+
+  const titles = credentials
+    .map((credential) => credential.title.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (!titles.length) {
+    return `${credentials.length} approved credential${credentials.length === 1 ? '' : 's'}`;
+  }
+
+  const extraCount = Math.max(0, credentials.length - titles.length);
+  return extraCount ? `${titles.join(', ')} +${extraCount} more` : titles.join(', ');
+}
+
 function getServiceCta({
   isOwnService,
   isVerified,
@@ -703,34 +757,67 @@ function getServiceCta({
 function PublicServiceCta({
   bottomInset,
   cta,
+  saveCta,
 }: {
   bottomInset: number;
   cta: ReturnType<typeof getServiceCta> & { loading?: boolean; onPress: () => void };
+  saveCta?: {
+    isSaved: boolean;
+    loading: boolean;
+    onPress: () => void;
+  } | null;
 }) {
   return (
     <View style={[styles.publicCtaBar, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
       <Text style={styles.publicCtaHelper}>
         {cta.helper || 'Messages are for coordination. Final agreement happens outside Konektado.'}
       </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: cta.disabled || cta.loading }}
-        disabled={cta.disabled || cta.loading}
-        onPress={cta.onPress}
-        style={({ pressed }) => [
-          styles.publicCtaButton,
-          (cta.disabled || cta.loading) && styles.publicCtaDisabled,
-          pressed && !cta.disabled && !cta.loading && styles.pressed,
-        ]}>
-        <MaterialIcons color={cta.disabled ? color.textSubtle : color.primary} name="chat-bubble" size={17} />
-        <Text
-          adjustsFontSizeToFit
-          minimumFontScale={0.78}
-          numberOfLines={1}
-          style={[styles.publicCtaButtonText, cta.disabled && styles.publicCtaButtonTextDisabled]}>
-          {cta.loading ? 'Opening...' : cta.label}
-        </Text>
-      </Pressable>
+      <View style={styles.publicCtaButtons}>
+        {saveCta ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: saveCta.isSaved, disabled: saveCta.loading }}
+            disabled={saveCta.loading}
+            onPress={saveCta.onPress}
+            style={({ pressed }) => [
+              styles.publicSecondaryCtaButton,
+              pressed && !saveCta.loading && styles.pressed,
+            ]}>
+            <MaterialIcons
+              color={saveCta.isSaved ? color.primary : color.textSubtle}
+              name={saveCta.isSaved ? 'bookmark' : 'bookmark-border'}
+              size={17}
+            />
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              numberOfLines={1}
+              style={styles.publicSecondaryCtaText}>
+              {saveCta.isSaved ? 'Saved' : 'Save'}
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: cta.disabled || cta.loading }}
+          disabled={cta.disabled || cta.loading}
+          onPress={cta.onPress}
+          style={({ pressed }) => [
+            styles.publicCtaButton,
+            saveCta && styles.publicCtaButtonFlexible,
+            (cta.disabled || cta.loading) && styles.publicCtaDisabled,
+            pressed && !cta.disabled && !cta.loading && styles.pressed,
+          ]}>
+          <MaterialIcons color={cta.disabled ? color.textSubtle : color.primary} name="chat-bubble" size={17} />
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            numberOfLines={1}
+            style={[styles.publicCtaButtonText, cta.disabled && styles.publicCtaButtonTextDisabled]}>
+            {cta.loading ? 'Opening...' : cta.label}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -817,10 +904,10 @@ const styles = StyleSheet.create({
   publicContent: {
     backgroundColor: color.background,
   },
-  publicHeroImage: {
-    backgroundColor: color.cardTint,
-    height: 238,
-    width: '100%',
+  publicPhotoSection: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
   publicSection: {
     borderBottomColor: color.border,
@@ -1052,8 +1139,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     flexDirection: 'row',
     gap: 8,
+    flex: 2,
     justifyContent: 'center',
     minHeight: 42,
+  },
+  publicCtaButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  publicCtaButtonFlexible: {
+    flex: 2,
   },
   publicCtaDisabled: {
     backgroundColor: color.surfaceAlt,
@@ -1063,6 +1158,23 @@ const styles = StyleSheet.create({
     color: color.primary,
   },
   publicCtaButtonTextDisabled: {
+    color: color.textSubtle,
+  },
+  publicSecondaryCtaButton: {
+    alignItems: 'center',
+    backgroundColor: color.background,
+    borderColor: color.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    minHeight: 42,
+    paddingHorizontal: 12,
+  },
+  publicSecondaryCtaText: {
+    ...typography.bodyMedium,
     color: color.textSubtle,
   },
   ownerScreen: {
@@ -1081,7 +1193,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   ownerHeroImage: {
-    height: 220,
     width: '100%',
   },
   ownerHeroCopy: {

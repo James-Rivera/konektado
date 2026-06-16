@@ -145,9 +145,9 @@ export default function AdminUserReviewScreen() {
                 </View>
               ) : (
                 <InlineEmpty
-                  description="No reports are connected to this user through the current reports table."
+                  description="Submitted user reports will appear here."
                   icon="flag"
-                  title="No recent reports"
+                  title="No open reports"
                 />
               )}
             </Section>
@@ -185,7 +185,7 @@ export default function AdminUserReviewScreen() {
               <View style={styles.moderationNotice}>
                 <MaterialIcons color={adminPalette.faint} name="lock-outline" size={22} />
                 <Text style={styles.moderationText}>
-                  Moderation actions require backend enforcement and audit logging.
+                  Admin actions are limited to authorized barangay review workflows.
                 </Text>
               </View>
             </Section>
@@ -314,7 +314,7 @@ function VerificationLink({
   if (!latestVerification) {
     return (
       <InlineEmpty
-        description="No verification request id is available for this user."
+        description="No active verification request is linked to this user."
         icon="verified-user"
         title="No verification request"
       />
@@ -362,7 +362,7 @@ function PublicPhotosPreview({
   return (
     <View style={styles.photosBlock}>
       <AdminPrivacyNotice icon="visibility">
-        Only public profile, job, and service photos are listed here.
+        Only public profile, job, and service photos are shown here. Private verification files remain available only in the verification review flow.
       </AdminPrivacyNotice>
 
       {photos.length ? (
@@ -518,7 +518,7 @@ function toneForVerificationRequest(status: VerificationStatus): AdminTone {
 }
 
 function formatVerificationStatus(status: VerificationStatus) {
-  if (status === 'needs_more_info') return 'Needs more info';
+  if (status === 'needs_more_info') return 'Needs More Info';
   return status
     .split('_')
     .filter(Boolean)

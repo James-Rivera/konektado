@@ -5,7 +5,7 @@ import { color, radius, space, typography } from '@/constants/theme';
 import { adminPalette } from '@/components/admin/AdminShell';
 
 export function AdminContextBanner({
-  note = 'Moderation actions require backend enforcement and audit logging.',
+  note = 'Admin actions are limited to authorized barangay review workflows.',
 }: {
   note?: string | null;
 }) {

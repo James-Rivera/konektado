@@ -100,7 +100,7 @@ export default function AdminPhotosScreen() {
       subtitle="View public-facing app photos"
       title="Photos">
       <AdminPrivacyNotice icon="visibility">
-        Only public-facing photos are shown here. Verification IDs and private files stay inside verification review.
+        Only public profile, job, and service photos are shown here. Private verification files remain available only in the verification review flow.
       </AdminPrivacyNotice>
 
       <AdminPanel>
@@ -137,7 +137,7 @@ export default function AdminPhotosScreen() {
         <View style={styles.backendNote}>
           <MaterialIcons color={adminPalette.faint} name="info-outline" size={18} />
           <Text style={styles.backendNoteText}>
-            Review opens backend-backed Flag, Hide photo, and Clear actions for public-facing photos only.
+            Photo review actions apply only to public-facing profile, job, and service photos.
           </Text>
         </View>
       </AdminPanel>
