@@ -15,11 +15,25 @@ type ProfileStatusRealtimeEntry = {
 };
 
 const profileStatusRealtimeByUser = new Map<string, ProfileStatusRealtimeEntry>();
+const reportedRealtimeStatuses = new Set<string>();
 
 function warnProfileStatusRealtime(message: string, error?: unknown) {
   if (__DEV__) {
     console.warn(`[useProfileStatus] ${message}`, error);
   }
+}
+
+function noteProfileStatusRealtime(channelName: string, status: string, error?: unknown) {
+  if (!__DEV__) return;
+
+  const key = `${channelName}:${status}`;
+  if (reportedRealtimeStatuses.has(key)) return;
+
+  reportedRealtimeStatuses.add(key);
+  console.debug(
+    `[useProfileStatus] Realtime ${status} for ${channelName}; route-status fetch fallback remains active.`,
+    error,
+  );
 }
 
 function getRealtimeTopic(channelName: string) {
@@ -95,11 +109,17 @@ async function setupProfileStatusRealtime(entry: ProfileStatusRealtimeEntry) {
 
     entry.channel = channel;
     channel.subscribe((status, error) => {
+      if (
+        entry.closed ||
+        profileStatusRealtimeByUser.get(entry.userId) !== entry ||
+        entry.listeners.size === 0
+      ) {
+        return;
+      }
+
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        warnProfileStatusRealtime(
-          `Realtime subscription ${entry.channelName} reported ${status}.`,
-          error,
-        );
+        noteProfileStatusRealtime(entry.channelName, status, error);
+        notifyProfileStatusListeners(entry.userId);
       }
     });
   } catch (error) {

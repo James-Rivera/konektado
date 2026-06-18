@@ -9,10 +9,25 @@ import { supabase } from '@/utils/supabase';
 
 type ProfileRealtimeChannel = ReturnType<typeof supabase.channel>;
 
+const reportedRealtimeStatuses = new Set<string>();
+
 function warnProfileRealtime(message: string, error?: unknown) {
   if (__DEV__) {
     console.warn(`[useProfile] ${message}`, error);
   }
+}
+
+function noteProfileRealtime(channelName: string, status: string, error?: unknown) {
+  if (!__DEV__) return;
+
+  const key = `${channelName}:${status}`;
+  if (reportedRealtimeStatuses.has(key)) return;
+
+  reportedRealtimeStatuses.add(key);
+  console.debug(
+    `[useProfile] Realtime ${status} for ${channelName}; profile fetch/poll fallback remains active.`,
+    error,
+  );
 }
 
 function getRealtimeTopic(channelName: string) {
@@ -301,12 +316,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           );
 
         channel.subscribe((status, error) => {
+          if (cancelled) return;
+
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            warnProfileRealtime(`Realtime subscription ${channelName} reported ${status}.`, error);
+            noteProfileRealtime(channelName, status, error);
+            void refresh();
           }
         });
       } catch (error) {
+        if (cancelled) return;
+
         warnProfileRealtime(`Could not subscribe to ${channelName}.`, error);
+        void refresh();
       }
     };
 

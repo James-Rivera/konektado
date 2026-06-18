@@ -13,10 +13,25 @@ import { supabase } from '@/utils/supabase';
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 type BottomNavUnreadChannel = ReturnType<typeof supabase.channel>;
 
+const reportedRealtimeStatuses = new Set<string>();
+
 function warnBottomNavRealtime(message: string, error?: unknown) {
   if (__DEV__) {
     console.warn(`[BottomNav] ${message}`, error);
   }
+}
+
+function noteBottomNavRealtime(channelName: string, status: string, error?: unknown) {
+  if (!__DEV__) return;
+
+  const key = `${channelName}:${status}`;
+  if (reportedRealtimeStatuses.has(key)) return;
+
+  reportedRealtimeStatuses.add(key);
+  console.debug(
+    `[BottomNav] Realtime ${status} for ${channelName}; unread-count fetch fallback remains active.`,
+    error,
+  );
 }
 
 function getRealtimeTopic(channelName: string) {
@@ -64,6 +79,7 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
       setUnreadMessages(0);
       return;
     }
+
     void listMyConversations().then((result) => {
       if (!result.data) return;
       setUnreadMessages(
@@ -71,6 +87,10 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
       );
     });
   }, [profile?.id]);
+
+  useEffect(() => {
+    refreshUnread();
+  }, [refreshUnread]);
 
   useFocusEffect(useCallback(() => {
     refreshUnread();
@@ -95,15 +115,18 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_reads' }, refreshUnread);
 
         channel.subscribe((status, error) => {
+          if (cancelled) return;
+
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            warnBottomNavRealtime(
-              `Realtime subscription ${channelName} reported ${status}.`,
-              error,
-            );
+            noteBottomNavRealtime(channelName, status, error);
+            refreshUnread();
           }
         });
       } catch (error) {
+        if (cancelled) return;
+
         warnBottomNavRealtime(`Could not subscribe to ${channelName}.`, error);
+        refreshUnread();
       }
     };
 
