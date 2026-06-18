@@ -130,7 +130,7 @@ export default function AdminUsersScreen() {
       </AdminMetricRow>
 
       <AdminPrivacyNotice icon="visibility">
-        Users shows public profile and activity signals only. Private verification documents stay in verification review.
+        This information is shown from public profile and listing records. Private verification documents stay in verification review.
       </AdminPrivacyNotice>
 
       <AdminPanel>

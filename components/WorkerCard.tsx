@@ -85,7 +85,7 @@ export function WorkerCard({
             <IconButton
               disabled={savePending}
               icon={isSaved ? 'bookmark' : 'bookmark-border'}
-              label={isSaved ? 'Remove saved worker' : 'Save worker'}
+              label={isSaved ? 'Remove saved service' : 'Save service'}
               onPress={onSave}
             />
           ) : null}

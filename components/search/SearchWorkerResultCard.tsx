@@ -113,7 +113,7 @@ export function SearchWorkerResultCard({
           {onSave ? (
             <IconButton
               disabled={savePending}
-              label={isSaved ? 'Remove saved worker' : 'Save worker'}
+              label={isSaved ? 'Remove saved service' : 'Save service'}
               name={isSaved ? 'bookmark' : 'bookmark-border'}
               onPress={onSave}
             />

@@ -231,7 +231,7 @@ export default function AdminPhotoReviewScreen() {
             <AdminListCard style={styles.embeddedCard}>
               <View style={styles.inlineCopy}>
                 <Text style={styles.inlineTitle}>Source link</Text>
-                <Text style={styles.inlineMeta}>Open the public source without loading private verification files.</Text>
+                <Text style={styles.inlineMeta}>Open the public source record for this photo.</Text>
               </View>
               <Pressable
                 accessibilityRole="button"

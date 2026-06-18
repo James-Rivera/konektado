@@ -310,7 +310,7 @@ export default function ForgotPasswordScreen() {
       </View>
 
       <View style={styles.passwordChecklist}>
-        <Text style={styles.passwordChecklistTitle}>Your password must have atleast:</Text>
+        <Text style={styles.passwordChecklistTitle}>Your password must have at least:</Text>
         <PasswordRequirementRow checked={passwordHasLength}>must be 8 characters (20 max)</PasswordRequirementRow>
         <PasswordRequirementRow checked={passwordHasSpecial}>password must have special characters</PasswordRequirementRow>
         <PasswordRequirementRow checked={passwordsMatch}>confirmation must match</PasswordRequirementRow>
