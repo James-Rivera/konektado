@@ -7,8 +7,6 @@ import { color, radius } from '@/constants/theme';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
-const HERO_GRADIENT_HEIGHT = 240;
-
 /**
  * Blue hero band used behind the greeting, location, and search entry.
  * Uses `react-native-svg` because the project does not depend on
@@ -17,21 +15,29 @@ const HERO_GRADIENT_HEIGHT = 240;
 function HeroBackground() {
   return (
     <View pointerEvents="none" style={styles.heroBackground}>
-      <Svg height="100%" width="100%">
+      {/*
+        `StyleSheet.absoluteFill` on the Svg itself is required: with only
+        height="100%"/width="100%" the SVG viewport collapses inside an
+        absolutely positioned parent, so the gradient Rect paints a sliver and
+        the whole band reads as white. This matches the working gradients in
+        `(onboarding)/complete.tsx` and `FigmaOnboarding.tsx`.
+      */}
+      <Svg height="100%" style={StyleSheet.absoluteFill} width="100%">
         <Defs>
-          <LinearGradient id="homeHero" x1="0" x2="0.35" y1="0" y2="1">
+          <LinearGradient id="homeHeroGradient" x1="0" x2="0" y1="0" y2="1">
             <Stop offset="0" stopColor="#7CB6F7" />
-            <Stop offset="1" stopColor="#3B82D6" />
+            <Stop offset="0.55" stopColor="#4B8BDB" />
+            <Stop offset="1" stopColor="#3C7FD2" />
           </LinearGradient>
         </Defs>
-        <Rect fill="url(#homeHero)" height="100%" width="100%" />
-        <Circle cx="88%" cy="34%" fill={color.accentYellow} opacity={0.9} r="34" />
+        <Rect fill="url(#homeHeroGradient)" height="100%" width="100%" />
+        <Circle cx="86%" cy="30%" fill={color.accentYellow} opacity={0.95} r="38" />
         <Circle
-          cx="88%"
-          cy="34%"
+          cx="86%"
+          cy="30%"
           fill="none"
-          opacity={0.35}
-          r="56"
+          opacity={0.3}
+          r="62"
           stroke={color.white}
           strokeWidth={1.5}
         />
@@ -225,10 +231,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   heroBackground: {
+    // Solid fill is the fallback, not decoration: the hero's text is white, so
+    // if the SVG ever fails to paint the band must still be blue, never white.
+    backgroundColor: '#4B8BDB',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     bottom: 0,
-    height: HERO_GRADIENT_HEIGHT,
     left: 0,
     overflow: 'hidden',
     position: 'absolute',
