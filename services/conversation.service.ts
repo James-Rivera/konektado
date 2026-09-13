@@ -846,23 +846,11 @@ export async function markWorkerHired({
     return { data: null, error: 'Only the client who posted the job can mark a worker hired.' };
   }
 
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from('conversations')
-    .update({ status: 'hired', hired_at: now })
-    .eq('id', conversationId);
+  const { error } = await supabase.rpc('mark_job_worker_hired', {
+    p_conversation_id: conversationId,
+  });
 
   if (error) return { data: null, error: error.message };
-
-  if (conversation.data.jobId) {
-    await supabase
-      .from('jobs')
-      .update({
-        status: 'in_progress',
-        accepted_provider_id: conversation.data.providerId,
-      })
-      .eq('id', conversation.data.jobId);
-  }
 
   return getConversation(conversationId);
 }
@@ -904,17 +892,9 @@ export async function markHiredJobCompleted({
     return { data: null, error: 'Only hired jobs in progress can be marked completed.' };
   }
 
-  const { data, error } = await supabase
-    .from('jobs')
-    .update({
-      status: 'completed',
-      closed_at: new Date().toISOString(),
-    })
-    .eq('id', conversation.data.jobId)
-    .eq('accepted_provider_id', conversation.data.providerId)
-    .eq('status', 'in_progress')
-    .select('id')
-    .maybeSingle<{ id: string }>();
+  const { data, error } = await supabase.rpc('complete_hired_job', {
+    p_conversation_id: conversationId,
+  });
 
   if (error) return { data: null, error: error.message };
   if (!data) return { data: null, error: 'This job could not be marked completed.' };

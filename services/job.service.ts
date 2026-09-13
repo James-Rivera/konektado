@@ -358,7 +358,7 @@ export async function getOwnedJobForEdit(
   const { data, error } = await supabase
     .from('jobs')
     .select(
-      'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, private_location_notes, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, status, created_at, updated_at',
+      'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, status, created_at, updated_at',
     )
     .eq('id', jobId)
     .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)
@@ -369,6 +369,11 @@ export async function getOwnedJobForEdit(
   if (!['open', 'reviewing', 'cancelled'].includes(String(data.status))) {
     return { data: null, error: 'Hired, completed, and closed jobs cannot be edited.' };
   }
+
+  const { data: privateNotes, error: privateNotesError } = await supabase.rpc(
+    'get_job_private_location_notes', { p_job_id: jobId },
+  );
+  if (privateNotesError) return { data: null, error: privateNotesError.message };
 
   return {
     data: {
@@ -382,7 +387,7 @@ export async function getOwnedJobForEdit(
       photoUrls: (data.photo_urls as string[] | null) ?? [],
       barangay: data.barangay ? String(data.barangay) : null,
       locationText: data.location_text ? String(data.location_text) : null,
-      privateLocationNotes: data.private_location_notes ? String(data.private_location_notes) : null,
+      privateLocationNotes: typeof privateNotes === 'string' ? privateNotes : null,
       budgetMin: data.budget_min === null ? null : Number(data.budget_min),
       budgetMax: data.budget_max === null ? null : Number(data.budget_max),
       rateType: normalizeRateType(data.rate_type as RateType),

@@ -1,5 +1,36 @@
 # Konektado Stabilization Audit
 
+## Backend security correction — 2026-09-13
+
+Implemented locally in `20260913090000_security_permission_boundaries.sql` and the corresponding services/verification-email handler. This section supersedes earlier statements that UI gates alone were sufficient. Prior migrations are unchanged.
+
+Closed resident self-verification and credential self-approval, protected reviewer fields, enforced real Work/Hiring Profile readiness at the database boundary, made hiring/completion RPC-controlled, restricted private job notes and credential metadata, preserved private verification storage, and authorized email sends against actual caller/request state. Approved credential files are protected against owner replacement/deletion.
+
+Validation: all 37 migrations replayed on an isolated PostgreSQL 18 database; 60 SQL/RLS assertions passed; 28 real PostgREST HTTP checks passed, including direct bypass attempts, concurrent hiring with one winner, and injected second-write failure rollback. Nine mocked-boundary tests execute the real verification-email handler without sending email. TypeScript, Expo lint, targeted service/test lint, and whitespace checks passed. See `supabase/tests/README.md` for reproducible commands and deployment preflight.
+
+Hosted migration/function deployment, real Supabase Storage and Realtime behavior, real email delivery, signup/OTP, verification resubmission/name correction, and device flows still require QA. Local tests do not certify the linked project's current schema, legacy hiring data, Auth settings, or infrastructure configuration.
+
+Changed-file inventory for this correction:
+
+| File | Change |
+| --- | --- |
+| `supabase/migrations/20260913090000_security_permission_boundaries.sql` | New corrective migration; prior migrations untouched. |
+| `services/conversation.service.ts` | Use atomic hiring/completion RPCs. |
+| `services/job.service.ts` | Read owner-only private notes through the authorized RPC. |
+| `services/credential.service.ts` | Read safe approved-credential summaries. |
+| `services/verification.service.ts` | Cancel failed uploads without writing admin review fields. |
+| `supabase/functions/verification-email/index.ts` | Authenticate caller; derive state/template, recipient and server link; return no recipient data. |
+| `supabase/functions/verification-email/authorization.ts` | Testable owner/admin authorization decision. |
+| `scripts/test-verification-email.js` | Update real-email harness to require a signed-in access token. |
+| `scripts/test-verification-email-security.cjs` | Actual-handler authorization and tampering regression tests. |
+| `scripts/test-database-security.cjs` | Full migration replay, real PostgREST negative tests, concurrency and rollback tests. |
+| `supabase/tests/local-platform.sql` | Isolated PostgreSQL platform contracts. |
+| `supabase/tests/security-permissions.sql` | Positive and negative SQL/RLS/storage permission assertions. |
+| `supabase/tests/README.md` | Reproduction commands, deployment preflight and manual QA. |
+| `docs/07-auth-and-permissions.md` | Current server-side permission contract. |
+| `docs/11-decision-log.md` | DEC-104 database permission enforcement. |
+| `docs/stabilization-audit.md` | Security findings, implementation status and validation inventory. |
+
 ## Current Project Status
 
 Konektado is in post-stabilization after several focused fixes across performance, product UX, auth, routing, and posting flows.

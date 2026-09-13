@@ -511,7 +511,6 @@ export async function createVerificationRequest(
       .from('verifications')
       .update({
         status: 'cancelled',
-        reviewer_note: 'File upload failed before submission could be completed.',
       })
       .eq('id', verification.id);
 
@@ -530,6 +529,8 @@ export async function createVerificationRequest(
   );
 
   if (fileError) {
+    // Leave review fields admin-owned and permit a fresh challenge/submission.
+    await supabase.from('verifications').update({ status: 'cancelled' }).eq('id', verification.id);
     return { data: null, error: fileError.message };
   }
 

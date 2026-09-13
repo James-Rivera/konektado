@@ -1,5 +1,20 @@
 # Auth and Permissions
 
+## Database enforcement (2026-09-13)
+
+Migration `20260913090000_security_permission_boundaries.sql` enforces the following rules independently of the app's UI. Deployment and local test instructions are in `supabase/tests/README.md`.
+
+- Residents cannot insert/update verification timestamps or assign Barangay Admin fields/roles. New resident verification requests are pending, use the existing consumed contact proof, and contain no reviewer fields. Only Barangay Admin review actions can change decisions/reviewer metadata. Resident upload failure may cancel a pending request. Legal-name locking and admin-requested name corrections remain supported.
+- Publishing jobs requires verification plus Core/Hiring Profile readiness. Publishing services requires verification plus Core/Work Profile readiness. Readiness checks actual required fields and documented fallbacks, never the client-editable completion timestamp. Photos, credentials, and existing listings remain optional.
+- Starting a job conversation requires the worker's Work Profile; starting a service conversation requires the client's Hiring Profile. Listing ownership, availability, message settings, and participant identities are checked by RLS. Sending messages checks the sender's relevant profile and verification. Existing history stays readable by its participants.
+- `mark_job_worker_hired` locks the job and conversation and changes both within one transaction. Only the verified, ready job client can hire a verified, ready worker. A job can have only one hired conversation; completed, closed, or cancelled jobs cannot be hired. Participant/context/hiring fields cannot be changed directly. `complete_hired_job` is the authorized completion path.
+- Reviews remain RPC-only through `create_completed_job_review`: a verified, ready participant, completed job, matching hired conversation and accepted worker, valid rating, and one review per participant. Clients cannot fabricate or edit review records directly.
+- `jobs.private_location_notes` has no client SELECT grant. Public job queries must select explicit safe columns. Only the owner or Barangay Admin can use `get_job_private_location_notes`. Verification files stay in a private bucket with owner/admin access; resident metadata must reference that owner's pending request. Approved credential files cannot be overwritten/deleted by their owner.
+- Credential submissions start pending. Owners may edit pending/rejected credentials but cannot set review decisions or reviewer metadata. Public approved-credential summaries use `get_public_approved_credentials`, which omits private file paths and reviewer metadata.
+- `verification-email` validates a signed-in caller and actual admin role. Owners can request pending acknowledgements; admins can request decision emails. The stored request state determines the template, Supabase Auth determines the recipient, and server configuration determines the link/deduplication key. Responses contain no recipient address. Old client template/link fields are ignored.
+
+Trusted server/service-role operations and explicitly admin-authorized demo RPCs remain available. No service-role key belongs in client code. Apply the migration and updated services together; older clients using direct hiring updates will be rejected. These changes do not affect navigation, visual design, or external-only payments.
+
 ## Authentication
 
 Konektado uses Supabase Auth for MVP authentication.

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'npm:@supabase/supabase-js@2.100.1';
+import { authorizeVerificationEmail } from './authorization.ts';
 import nodemailer from 'npm:nodemailer@6.10.1';
 
 type VerificationEmailTemplateName =
@@ -541,8 +542,8 @@ const SMTP_PASS = Deno.env.get('VERIFICATION_EMAIL_SMTP_PASS') ?? Deno.env.get('
 const SMTP_FROM_EMAIL = Deno.env.get('VERIFICATION_EMAIL_FROM_EMAIL') ?? Deno.env.get('EMAIL_FROM_EMAIL');
 const SMTP_FROM_NAME = Deno.env.get('VERIFICATION_EMAIL_FROM_NAME') ?? Deno.env.get('EMAIL_FROM_NAME') ?? 'Konektado';
 
-const supabaseUrl = Deno.env.get('PROJECT_URL');
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('PROJECT_URL');
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY');
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.warn('Verification email function missing Supabase env vars.');
@@ -820,21 +821,22 @@ async function loadVerificationContext(requestId: string) {
     throw new Error(profileError.message);
   }
 
-  if (!profile?.email) {
+  const { data: recipient, error: recipientError } = await supabase.auth.admin.getUserById(verification.user_id);
+  if (recipientError || !recipient?.user?.email) {
     throw new Error('Verification recipient email is missing.');
   }
 
   const fullName =
-    profile.full_name?.trim() ||
-    [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() ||
+    profile?.full_name?.trim() ||
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
     'Konektado resident';
 
-  const firstName = profile.first_name?.trim() || fullName.split(' ')[0] || 'there';
-  const barangay = profile.barangay?.trim() || 'Barangay San Pedro';
+  const firstName = profile?.first_name?.trim() || fullName.split(' ')[0] || 'there';
+  const barangay = profile?.barangay?.trim() || 'Barangay San Pedro';
 
   return {
     barangay,
-    email: profile.email,
+    email: recipient.user.email,
     fullName,
     firstName,
     reviewedDate: formatDate(verification.reviewed_at ?? verification.created_at),
@@ -849,11 +851,15 @@ async function sendVerificationTemplate(
   requestId: string,
   ctaUrl = DEFAULT_CTA_URL,
   idempotencyKey?: string,
+  expectedStatus?: string,
 ) {
   const meta = TEMPLATE_META[template];
   const layout = EMAIL_LAYOUT_TEMPLATE;
   const content = CONTENT_TEMPLATES[template];
   const context = await loadVerificationContext(requestId);
+  if (expectedStatus && context.status !== expectedStatus) {
+    throw new Error('Verification state changed; retry the authorized action.');
+  }
 
   const html = renderTemplate(layout, content, buildEmailValues(template, context, ctaUrl));
 
@@ -899,46 +905,47 @@ export async function sendVerificationRejectedEmail(input: {
 }
 
 Deno.serve(async (request) => {
+  const corsHeaders = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    'content-type': 'application/json',
+  };
+  const respond = (status: number, body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status, headers: corsHeaders });
+  if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return respond(405, { error: 'Method not allowed' });
   }
 
   try {
+    const authorization = request.headers.get('authorization') ?? '';
+    if (!authorization.startsWith('Bearer ')) return respond(401, { error: 'Unauthorized' });
+    const { data: authData, error: authError } = await supabase.auth.getUser(authorization.slice(7));
+    if (authError || !authData.user) return respond(401, { error: 'Unauthorized' });
+
     const body = (await request.json()) as RequestBody;
-    const template = body.template;
-    const idempotencyKey = body.idempotencyKey?.trim();
-    const requestId = body.requestId?.trim();
-
-    if (!template || !(template in TEMPLATE_META)) {
-      return new Response(JSON.stringify({ error: 'Invalid verification email template.' }), {
-        headers: { 'content-type': 'application/json' },
-        status: 400,
-      });
+    const requestId = typeof body?.requestId === 'string' ? body.requestId.trim() : '';
+    if (!requestId || !/^[0-9a-f-]{36}$/i.test(requestId)) return respond(400, { error: 'Invalid request id' });
+    const [{ data: verification, error: lookupError }, { data: adminRole, error: roleError }] = await Promise.all([
+      supabase.from('verifications').select('user_id, status, reviewed_at').eq('id', requestId).maybeSingle(),
+      supabase.from('user_roles').select('id').eq('user_id', authData.user.id).eq('role', 'barangay_admin').maybeSingle(),
+    ]);
+    if (lookupError || roleError) return respond(503, { error: 'Could not authorize email' });
+    if (!verification) return respond(403, { error: 'Forbidden' });
+    let template: VerificationEmailTemplateName;
+    try {
+      template = authorizeVerificationEmail({ callerId: authData.user.id, ownerId: verification.user_id,
+        isAdmin: Boolean(adminRole), status: verification.status });
+    } catch {
+      return respond(403, { error: 'Forbidden' });
     }
-
-    if (!requestId) {
-      return new Response(JSON.stringify({ error: 'Missing verification request id.' }), {
-        headers: { 'content-type': 'application/json' },
-        status: 400,
-      });
-    }
-
-    const result = await sendVerificationTemplate(
-      template as VerificationEmailTemplateName,
-      requestId,
-      body.ctaUrl?.trim() || undefined,
-      idempotencyKey || undefined,
-    );
-
-    return new Response(JSON.stringify({ ok: true, ...result }), {
-      headers: { 'content-type': 'application/json' },
-      status: 200,
-    });
+    // Template, recipient, destination, and deduplication key are server-owned.
+    await sendVerificationTemplate(template, requestId, DEFAULT_CTA_URL,
+      `verification-email:${requestId}:${verification.status}:${verification.reviewed_at ?? 'submitted'}`, verification.status);
+    return respond(200, { ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not send verification email.';
-    return new Response(JSON.stringify({ error: message }), {
-      headers: { 'content-type': 'application/json' },
-      status: 500,
-    });
+    console.error('Verification email failed', error instanceof Error ? error.name : 'UnknownError');
+    return respond(500, { error: 'Could not send verification email.' });
   }
 });

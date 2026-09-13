@@ -4,25 +4,23 @@
  * Test harness for the verification email edge function.
  *
  * Usage:
- *   node scripts/test-verification-email.js <template> <requestId> [ctaUrl] [idempotencyKey]
+ *   node scripts/test-verification-email.js <requestId>
+ * This sends a real email; use only an authorized test account/request.
  *
  * Required env:
  *   SUPABASE_URL
  *   SUPABASE_ANON_KEY (or EXPO_PUBLIC_SUPABASE_KEY)
+ *   VERIFICATION_EMAIL_ACCESS_TOKEN (signed-in owner for pending, admin for decisions)
  *
  * Optional env:
  *   VERIFICATION_EMAIL_BASE_URL   (defaults to SUPABASE_URL)
  */
 
-const template = process.argv[2];
-const requestId = process.argv[3];
-const ctaUrl = process.argv[4] || 'konektado://verification';
-const idempotencyKey =
-  process.argv[5] || `verification-email:test:${template}:${requestId}:${Date.now()}`;
+const requestId = process.argv[2];
 
-if (!template || !requestId) {
+if (!requestId) {
   console.error(
-    'Usage: node scripts/test-verification-email.js <verification_submitted|verification_approved|verification_needs_more_info|verification_rejected> <requestId> [ctaUrl] [idempotencyKey]',
+    'Usage: node scripts/test-verification-email.js <requestId>',
   );
   process.exit(1);
 }
@@ -35,30 +33,18 @@ const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ||
   process.env.VERIFICATION_EMAIL_SUPABASE_URL;
 const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.EXPO_PUBLIC_SUPABASE_KEY;
 const baseUrl = process.env.VERIFICATION_EMAIL_BASE_URL || supabaseUrl;
+const accessToken = process.env.VERIFICATION_EMAIL_ACCESS_TOKEN;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing SUPABASE_URL or Supabase JWT key.');
+if (!supabaseUrl || !supabaseKey || !accessToken) {
+  console.error('Missing Supabase URL, public API key, or VERIFICATION_EMAIL_ACCESS_TOKEN.');
   process.exit(1);
 }
 
 if (!baseUrl) {
   console.error('Missing VERIFICATION_EMAIL_BASE_URL or SUPABASE_URL.');
-  process.exit(1);
-}
-
-const allowedTemplates = new Set([
-  'verification_submitted',
-  'verification_approved',
-  'verification_needs_more_info',
-  'verification_rejected',
-]);
-
-if (!allowedTemplates.has(template)) {
-  console.error(`Invalid template: ${template}`);
   process.exit(1);
 }
 
@@ -69,14 +55,11 @@ async function main() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${supabaseKey}`,
+      Authorization: `Bearer ${accessToken}`,
       apikey: supabaseKey,
     },
     body: JSON.stringify({
-      ctaUrl,
-      idempotencyKey,
       requestId,
-      template,
     }),
   });
 

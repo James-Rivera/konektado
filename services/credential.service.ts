@@ -59,7 +59,7 @@ function mapCredential(row: CredentialRow): CredentialSummary {
     issuer: row.issuer,
     issuedAt: row.issued_at,
     status: normalizeCredentialStatus(row.status),
-    reviewerNote: row.reviewer_note,
+    reviewerNote: row.reviewer_note ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -129,11 +129,7 @@ export async function listApprovedCredentialsForProvider(
   if (!id) return { data: [], error: null };
 
   const { data, error } = await supabase
-    .from('credentials')
-    .select(CREDENTIAL_COLUMNS)
-    .eq('provider_id', id)
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false });
+    .rpc('get_public_approved_credentials', { p_provider_id: id });
 
   if (error) return { data: null, error: error.message };
   return { data: ((data as CredentialRow[] | null) ?? []).map(mapCredential), error: null };
