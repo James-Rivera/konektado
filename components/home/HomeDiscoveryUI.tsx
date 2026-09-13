@@ -1,43 +1,55 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { color, radius } from '@/constants/theme';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
 /**
- * Hero metrics measured from the Figma frame (390x844):
- *   status bar ends 38, greeting 65, location 100, search 143-188,
- *   blue band bottom ~146, segmented control 207.
- * Kept as named constants so the relationships stay readable, and applied as
- * padding/margin rather than absolute positions so the band reflows when the
- * greeting or address wraps on narrow screens.
+ * Hero metrics measured off the Figma frame (390x844) by sampling pixels:
+ *   status bar ends 38 | greeting 65 | location 100 | search bar 143-188
+ *   blue band bottom 168 | segmented control 207
+ *
+ * The band runs BEHIND the search bar: it ends at 168 while the bar spans
+ * 143-188, so the bar covers the band's lower 25px. That overlap is what makes
+ * the bar read as straddling the blue/white boundary, and it is also what clips
+ * the sun - the band itself does not.
+ *
+ * Kept as named constants and applied as padding/margin rather than absolute
+ * positions, so the band reflows when the greeting or address wraps.
  */
-const HERO_TOP_GAP = 27; // 65 - 38
-const HERO_BAND_BOTTOM_GAP = 27; // band bottom (146) - location bottom (119)
-const HERO_SEARCH_OVERLAP = 3; // band bottom (146) - search top (143)
-const HERO_SEARCH_HEIGHT = 45;
-const HERO_SEARCH_BOTTOM_GAP = 19; // segmented control (207) - search bottom (188)
+const HERO_TOP_GAP = 27; // greeting 65 - status bar 38
+const HERO_BAND_BOTTOM_GAP = 49; // band bottom 168 - location bottom 119
+const HERO_SEARCH_OVERLAP = 25; // band bottom 168 - search top 143
+const HERO_SEARCH_HEIGHT = 45; // search 143 -> 188
+const HERO_SEARCH_BOTTOM_GAP = 19; // segmented control 207 - search bottom 188
 const HERO_SIDE_PADDING = 24;
-const HERO_BAND_RADIUS = 24;
+
+// The band's bottom corners are deliberately asymmetric in the design.
+const HERO_BAND_RADIUS_LEFT = 50;
+const HERO_BAND_RADIUS_RIGHT = 10;
+
+// Sun: #FCC03B circle centred at 77.8% width, sitting on the search bar's top
+// edge, so the search bar - not the band - clips its lower half.
+const HERO_SUN_RADIUS = 25.5;
+const HERO_SUN_RING_RADIUS = 35;
+const HERO_SUN_CENTRE_X = '77.8%';
 
 /**
- * Blue hero band used behind the greeting, location, and search entry.
- * Uses `react-native-svg` because the project does not depend on
- * `expo-linear-gradient`.
- */
-/**
- * Values sampled from the Figma frame (390x844), so the band matches the design
- * rather than approximating it:
- *   gradient  diagonal, #4587D7 (top-left) -> #69A4EC (bottom-right, = brand primary)
- *   sun       #FCC03B circle, r 25.5, centred at 78% width ON the band's bottom
- *             edge, so the band's `overflow: hidden` clips it to a half sun
- *   ring      concentric white arc, r 39.5
+ * Blue hero band, sampled from the Figma rather than approximated. Uses
+ * `react-native-svg` for the gradient because the project has no
+ * `expo-linear-gradient` dependency.
  *
- * Positions are proportional (percentages) so the band scales across widths;
- * only the sun's radius is fixed, because it is an icon, not a layout element.
+ *   gradient  shallow diagonal, #4587D7 (top-left) -> #69A4EC (bottom-right,
+ *             which is exactly `color.primary`)
+ *   sun       #FCC03B circle, r 25.5, centre at 77.8% width sitting on the
+ *             search bar's top edge
+ *   ring      concentric #FCC03B stroke at r 35, ~35% opacity
+ *
+ * The horizontal centre is a percentage so it scales across widths; radii stay
+ * fixed because they are icon-sized, not layout-sized.
  */
 function HeroBackground() {
   return (
@@ -56,17 +68,15 @@ function HeroBackground() {
           </LinearGradient>
         </Defs>
         <Rect fill="url(#homeHeroGradient)" height="100%" width="100%" />
-        <Circle
-          cx="78%"
-          cy="100%"
-          fill="none"
-          opacity={0.28}
-          r="39.5"
-          stroke={color.white}
-          strokeWidth={1.5}
-        />
-        <Circle cx="78%" cy="100%" fill={color.accentYellow} r="25.5" />
       </Svg>
+      {/*
+        Sun and ring are plain Views anchored to the band's BOTTOM, not SVG
+        percentages, because the band's height depends on the safe-area inset
+        and on whether the greeting or address wraps. Anchoring to the bottom
+        keeps the sun on the search bar's edge at every height.
+      */}
+      <View style={styles.sunRing} />
+      <View style={styles.sun} />
     </View>
   );
 }
@@ -237,26 +247,6 @@ export function HomeCategoryGrid({
   );
 }
 
-export function HomePromoBanner() {
-  return (
-    <View style={styles.promoOuter}>
-      <View style={styles.promoCard}>
-        <View style={styles.promoBadge}>
-          <MaterialIcons color={color.text} name="star" size={12} />
-          <Text style={styles.promoBadgeText}>Featured</Text>
-        </View>
-        <Text style={styles.promoTitle}>Support Local.{'\n'}Hire with Confidence.</Text>
-        <Text style={styles.promoBody}>
-          Barangay-verified neighbours, right here in your community. Payment and the final
-          agreement happen outside Konektado.
-        </Text>
-        <View pointerEvents="none" style={styles.promoGlyph}>
-          <MaterialIcons color={color.accentYellow} name="volunteer-activism" size={72} />
-        </View>
-      </View>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   hero: {
@@ -266,12 +256,34 @@ const styles = StyleSheet.create({
     // Solid fill is the fallback, not decoration: the band's text is white, so
     // if the SVG ever fails to paint it must still be blue, never white.
     backgroundColor: '#4587D7',
-    borderBottomLeftRadius: HERO_BAND_RADIUS,
-    borderBottomRightRadius: HERO_BAND_RADIUS,
-    // Clips the sun circle into the half sun the Figma shows.
+    borderBottomLeftRadius: HERO_BAND_RADIUS_LEFT,
+    borderBottomRightRadius: HERO_BAND_RADIUS_RIGHT,
     overflow: 'hidden',
     paddingBottom: HERO_BAND_BOTTOM_GAP,
     paddingHorizontal: HERO_SIDE_PADDING,
+  },
+  sun: {
+    backgroundColor: color.accentYellow,
+    borderRadius: HERO_SUN_RADIUS,
+    // Centre sits on the search bar's top edge, so the bar clips its lower half.
+    bottom: -(HERO_SUN_RADIUS - HERO_SEARCH_OVERLAP),
+    height: HERO_SUN_RADIUS * 2,
+    left: HERO_SUN_CENTRE_X,
+    marginLeft: -HERO_SUN_RADIUS,
+    position: 'absolute',
+    width: HERO_SUN_RADIUS * 2,
+  },
+  sunRing: {
+    borderColor: color.accentYellow,
+    borderRadius: HERO_SUN_RING_RADIUS,
+    borderWidth: 1.5,
+    bottom: -(HERO_SUN_RING_RADIUS - HERO_SEARCH_OVERLAP),
+    height: HERO_SUN_RING_RADIUS * 2,
+    left: HERO_SUN_CENTRE_X,
+    marginLeft: -HERO_SUN_RING_RADIUS,
+    opacity: 0.35,
+    position: 'absolute',
+    width: HERO_SUN_RING_RADIUS * 2,
   },
   heroTopRow: {
     alignItems: 'center',
@@ -439,52 +451,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     minHeight: 30,
     textAlign: 'center',
-  },
-  promoOuter: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  promoCard: {
-    backgroundColor: color.cardTint,
-    borderRadius: radius.lg,
-    gap: 8,
-    overflow: 'hidden',
-    padding: 16,
-  },
-  promoBadge: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: color.accentYellow,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  promoBadgeText: {
-    color: color.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  promoTitle: {
-    color: '#0B2545',
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  promoBody: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-    maxWidth: '78%',
-  },
-  promoGlyph: {
-    bottom: -8,
-    opacity: 0.35,
-    position: 'absolute',
-    right: -6,
   },
   pressed: {
     opacity: 0.75,
