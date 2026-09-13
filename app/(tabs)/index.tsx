@@ -320,8 +320,13 @@ export default function HomeScreen() {
   const [optionalSetupDismissed, setOptionalSetupDismissed] = useState(false);
   const [profileCompletionStatus, setProfileCompletionStatus] =
     useState<ProfileCompletionStatus | null>(null);
-  const [isCheckingSetupStatus, setIsCheckingSetupStatus] = useState(false);
+  // Latches true after the first completion check and is never reset. Profile
+  // refreshes (app foreground, 30s fallback poll) re-run the check in the
+  // background without hiding an already-visible setup prompt. The ref mirrors
+  // the state so the async callbacks below read the current value instead of a
+  // stale closure, without adding the flag to the effect's dependencies.
   const [hasLoadedSetupStatus, setHasLoadedSetupStatus] = useState(false);
+  const hasLoadedSetupStatusRef = useRef(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
@@ -358,19 +363,31 @@ export default function HomeScreen() {
       };
     }
 
-    setIsCheckingSetupStatus(true);
-    setHasLoadedSetupStatus(false);
+    // Stale-while-revalidate: keep showing the last known prompt while the
+    // check re-runs, and only fall back to "no prompt" if the very first check
+    // fails. Clearing state up front made the banner unmount and remount on
+    // every app foreground and every poll tick.
+    const keepPreviousOnFailure = () => {
+      if (!active) return;
+      // A failed refresh must not wipe a prompt the user can already see; only
+      // the very first check is allowed to settle on "no prompt".
+      if (hasLoadedSetupStatusRef.current) return;
+      setProfileCompletionStatus(null);
+    };
+
     getMyProfileCompletion()
       .then((result) => {
         if (!active) return;
-        setProfileCompletionStatus(result.error ? null : result.data);
+        if (result.error) {
+          keepPreviousOnFailure();
+          return;
+        }
+        setProfileCompletionStatus(result.data);
       })
-      .catch(() => {
-        if (active) setProfileCompletionStatus(null);
-      })
+      .catch(keepPreviousOnFailure)
       .finally(() => {
         if (!active) return;
-        setIsCheckingSetupStatus(false);
+        hasLoadedSetupStatusRef.current = true;
         setHasLoadedSetupStatus(true);
       });
 
@@ -534,8 +551,9 @@ export default function HomeScreen() {
     [profileCompletionStatus, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
   );
   const needsProfileSetup = Boolean(setupNudge);
-  const shouldShowSetupPrompt =
-    hasLoadedSetupStatus && !isCheckingSetupStatus && needsProfileSetup;
+  // Gated on the first check only. Background refreshes no longer toggle this,
+  // so the prompt stays mounted instead of blinking on every app foreground.
+  const shouldShowSetupPrompt = hasLoadedSetupStatus && needsProfileSetup;
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
