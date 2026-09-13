@@ -28,6 +28,7 @@ import type {
   JobSummary,
   RateType,
 } from '@/types/marketplace.types';
+import { createEnrichmentTimer } from '@/utils/perf-timing';
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
@@ -342,14 +343,16 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
   // moderation maps rows rather than filtering them, so the client ids are
   // already known from `rows`. `loadClientStats` cannot join them - it needs
   // `jobs`, which is derived from `profiles` via the verified-client filter.
+  const perf = createEnrichmentTimer('searchJobs'); // TEMPORARY: measurement only
   const [visibleRows, profiles] = await Promise.all([
-    applyPublicPhotoVisibilityToRows(rows, 'job_photo'),
-    loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id)),
+    perf.step('photoVisibility', applyPublicPhotoVisibilityToRows(rows, 'job_photo')),
+    perf.step('profiles', loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id))),
   ]);
   const jobs = visibleRows
     .map((row) => mapJob(row, profiles))
     .filter((job) => isPublicProfileVerified(job.client));
-  const stats = await loadClientStats(jobs.map((job) => job.clientId));
+  const stats = await perf.step('stats', loadClientStats(jobs.map((job) => job.clientId)));
+  perf.done(rows.length);
 
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
 }

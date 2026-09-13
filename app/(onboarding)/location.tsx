@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 
-import { BottomSheet } from '@/components/BottomSheet';
+import { ServiceAreaSheet } from '@/components/ServiceAreaSheet';
 import {
     OnboardingButton,
     OnboardingFormScaffold,
@@ -310,57 +310,6 @@ function AddressInputField({
   );
 }
 
-function ServiceAreaSheet({
-  onChoose,
-  onClose,
-  visible,
-}: {
-  onChoose: () => void;
-  onClose: () => void;
-  visible: boolean;
-}) {
-  return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeight="58%">
-      <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Choose service area</Text>
-      </View>
-
-      <View style={styles.sheetSection}>
-        <Text style={styles.sheetSectionTitle}>Available now</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onChoose}
-          style={({ pressed }) => [styles.sheetListRow, pressed && styles.pressed]}>
-          <View style={styles.optionIcon}>
-            <MaterialIcons color={onboardingColors.actionBlue} name="check" size={14} />
-          </View>
-          <View style={styles.sheetOptionCopy}>
-            <Text style={styles.sheetOptionText}>Brgy. {DEFAULT_BARANGAY}</Text>
-            <Text style={styles.sheetOptionSubtext}>
-              {DEFAULT_CITY}, {DEFAULT_PROVINCE}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
-
-      <View style={styles.sheetSection}>
-        <Text style={styles.sheetSectionTitle}>More areas</Text>
-        <View style={[styles.sheetListRow, styles.sheetOptionDisabled]}>
-          <View style={styles.optionIconPlaceholder} />
-          <View style={styles.sheetOptionCopy}>
-            <Text style={styles.sheetOptionTextMuted}>Other barangays in Santo Tomas</Text>
-            <Text style={styles.sheetOptionSubtextMuted}>Not available yet</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.sheetFooter}>
-        <OnboardingButton label="Done" onPress={onClose} />
-      </View>
-    </BottomSheet>
-  );
-}
-
 const styles = StyleSheet.create({
   content: {
     gap: 16,
@@ -570,82 +519,6 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: '#B91C1C',
-  },
-  sheetHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: -2,
-  },
-  sheetTitle: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  sheetSection: {
-    gap: 6,
-  },
-  sheetSectionTitle: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  sheetListRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    minHeight: 46,
-    paddingHorizontal: 2,
-    paddingVertical: 6,
-  },
-  optionIcon: {
-    alignItems: 'center',
-    backgroundColor: '#EEF5FF',
-    borderRadius: 999,
-    height: 20,
-    justifyContent: 'center',
-    width: 20,
-  },
-  optionIconPlaceholder: {
-    height: 20,
-    width: 20,
-  },
-  sheetOptionCopy: {
-    flex: 1,
-    gap: 1,
-    minWidth: 0,
-  },
-  sheetOptionDisabled: {
-    opacity: 0.62,
-  },
-  sheetOptionText: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  sheetOptionSubtext: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  sheetOptionTextMuted: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  sheetOptionSubtextMuted: {
-    color: onboardingColors.placeholder,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  sheetFooter: {
-    paddingTop: 2,
   },
   pressed: {
     opacity: 0.72,

@@ -25,6 +25,7 @@ import type {
   ServiceDetail,
   ServiceSearchResult,
 } from '@/types/marketplace.types';
+import { createEnrichmentTimer } from '@/utils/perf-timing';
 import { supabase } from '@/utils/supabase';
 
 const SERVICE_COLUMNS =
@@ -426,11 +427,13 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
   // `photo_urls` inside each row (it maps, never filters), so the provider ids
   // are already known from `rows`. Running them together turns three sequential
   // round trips into one. No step is skipped - only the ordering changed.
+  const perf = createEnrichmentTimer('searchServices'); // TEMPORARY: measurement only
   const [visibleRows, profiles, stats] = await Promise.all([
-    applyPublicPhotoVisibilityToRows(rows, 'service_photo'),
-    loadPublicProfiles(rows.map((row) => row.provider_id)),
-    loadProviderStats(rows.map((row) => row.provider_id)),
+    perf.step('photoVisibility', applyPublicPhotoVisibilityToRows(rows, 'service_photo')),
+    perf.step('profiles', loadPublicProfiles(rows.map((row) => row.provider_id))),
+    perf.step('stats', loadProviderStats(rows.map((row) => row.provider_id))),
   ]);
+  perf.done(rows.length);
 
   return {
     data: visibleRows

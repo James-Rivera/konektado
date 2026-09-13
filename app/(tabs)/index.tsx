@@ -13,6 +13,7 @@ import {
   type HomeCategoryTile,
 } from '@/components/home/HomeDiscoveryUI';
 import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
+import { ServiceAreaSheet } from '@/components/ServiceAreaSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
@@ -163,9 +164,20 @@ function getHomeGreeting(firstName: string | null | undefined, fullName: string 
 }
 
 /**
- * The user's own coarse address line. House number, block/lot, and other
- * private address parts are deliberately never shown here.
+ * The user's own coarse address line, formatted as "<street>, Brgy. <name>".
+ * House number, block/lot, and other private address parts are deliberately
+ * never shown here.
+ *
+ * Stored barangay values are inconsistent: the DB column defaults to
+ * "Barangay San Pedro" while onboarding writes DEFAULT_BARANGAY ("San Pedro").
+ * Strip any existing prefix before adding "Brgy." so the label cannot read
+ * "Brgy. Barangay San Pedro".
  */
+function formatBarangayLabel(barangay: string | null | undefined) {
+  const name = compactText(barangay).replace(/^(barangay|brgy\.?)\s+/i, '');
+  return name ? `Brgy. ${name}` : '';
+}
+
 function getHomeLocationLabel({
   barangay,
   city,
@@ -175,14 +187,11 @@ function getHomeLocationLabel({
   city: string | null | undefined;
   street: string | null | undefined;
 }) {
-  const parts = [
-    compactText(street),
-    compactText(barangay) ? `Brgy. ${compactText(barangay)}` : '',
-    compactText(city),
-  ].filter(Boolean);
+  const parts = [compactText(street), formatBarangayLabel(barangay)].filter(Boolean);
 
-  if (!parts.length) return 'Set your barangay in Profile';
-  return parts.slice(0, 2).join(', ');
+  if (parts.length) return parts.join(', ');
+  // Fall back to the city only when neither street nor barangay is set.
+  return compactText(city) || 'Set your barangay in Profile';
 }
 
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
@@ -331,6 +340,7 @@ export default function HomeScreen() {
   const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [feedFiltersVisible, setFeedFiltersVisible] = useState(false);
+  const [serviceAreaVisible, setServiceAreaVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
@@ -811,7 +821,7 @@ export default function HomeScreen() {
             locationLabel={locationLabel}
             onNotifications={() => router.push('/notifications' as never)}
             onOpenFilters={openFeedFilters}
-            onOpenLocation={() => router.push('/profile/settings' as never)}
+            onOpenLocation={() => setServiceAreaVisible(true)}
             onOpenSearch={() => openSearch()}
             topInset={topInset}
             unreadCount={unreadNotificationCount}
@@ -853,6 +863,16 @@ export default function HomeScreen() {
           onPersonalizeHomeSearch={openDiscoveryPreferences}
           onReset={resetFeedFilters}
           visible={feedFiltersVisible}
+        />
+        {/*
+          Same sheet the onboarding location step uses. Home opens it without a
+          selection handler, so it shows the current barangay and explains that
+          other areas are not covered yet.
+        */}
+        <ServiceAreaSheet
+          onClose={() => setServiceAreaVisible(false)}
+          title="Your service area"
+          visible={serviceAreaVisible}
         />
       </SafeAreaView>
     </View>
@@ -1102,12 +1122,14 @@ function HomeFeedCardSkeleton({
 }
 
 const styles = StyleSheet.create({
+  // Home sits on white per the Figma. Feed cards keep their own 2px separator,
+  // so card separation does not depend on a grey screen behind them.
   screen: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   safeArea: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   headerStack: {
@@ -1126,10 +1148,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: space.md,
-  },
-  feed: {
-    backgroundColor: color.screenBackground,
-    gap: 2,
   },
   feedSeparator: {
     backgroundColor: color.screenBackground,
