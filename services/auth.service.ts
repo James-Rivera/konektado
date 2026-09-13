@@ -421,6 +421,34 @@ export async function getCurrentAuthUser(): Promise<
   };
 }
 
+export async function signOutCurrentUser(): Promise<ServiceResult<void>> {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    return { data: null, error: error.message || "Could not sign out. Please try again." };
+  }
+
+  return { data: undefined, error: null };
+}
+
+/**
+ * Mirrors the chosen role onto the auth user's metadata. The profile row stays
+ * the source of truth, so callers can treat a failure here as recoverable.
+ */
+export async function setSignupRoleMetadata(
+  role: OnboardingIntent,
+): Promise<ServiceResult<void>> {
+  const { error } = await supabase.auth.updateUser({
+    data: { app_role: role, role },
+  });
+
+  if (error) {
+    return { data: null, error: error.message || "Could not sync the selected role." };
+  }
+
+  return { data: undefined, error: null };
+}
+
 export async function getCurrentSignupRole(): Promise<
   ServiceResult<OnboardingIntent | null>
 > {

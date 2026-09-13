@@ -422,9 +422,15 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
-  const visibleRows = await applyPublicPhotoVisibilityToRows(rows, 'service_photo');
-  const profiles = await loadPublicProfiles(visibleRows.map((row) => row.provider_id));
-  const stats = await loadProviderStats(visibleRows.map((row) => row.provider_id));
+  // These three enrichment steps are independent: photo moderation only edits
+  // `photo_urls` inside each row (it maps, never filters), so the provider ids
+  // are already known from `rows`. Running them together turns three sequential
+  // round trips into one. No step is skipped - only the ordering changed.
+  const [visibleRows, profiles, stats] = await Promise.all([
+    applyPublicPhotoVisibilityToRows(rows, 'service_photo'),
+    loadPublicProfiles(rows.map((row) => row.provider_id)),
+    loadProviderStats(rows.map((row) => row.provider_id)),
+  ]);
 
   return {
     data: visibleRows

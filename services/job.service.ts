@@ -338,8 +338,14 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
-  const visibleRows = await applyPublicPhotoVisibilityToRows(rows, 'job_photo');
-  const profiles = await loadPublicProfiles(visibleRows.map((row) => row.client_id ?? row.owner_id));
+  // Photo moderation and the public-safe profile lookup are independent: photo
+  // moderation maps rows rather than filtering them, so the client ids are
+  // already known from `rows`. `loadClientStats` cannot join them - it needs
+  // `jobs`, which is derived from `profiles` via the verified-client filter.
+  const [visibleRows, profiles] = await Promise.all([
+    applyPublicPhotoVisibilityToRows(rows, 'job_photo'),
+    loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id)),
+  ]);
   const jobs = visibleRows
     .map((row) => mapJob(row, profiles))
     .filter((job) => isPublicProfileVerified(job.client));

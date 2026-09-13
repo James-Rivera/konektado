@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { color, radius, space, typography } from '@/constants/theme';
-import { supabase } from '@/utils/supabase';
+import { signOutCurrentUser } from '@/services/auth.service';
 
 export type AdminSection = 'verifications' | 'reports' | 'users' | 'settings';
 export type AdminTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
@@ -94,9 +94,9 @@ export function AdminScreenShell({
         text: 'Log out',
         style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase.auth.signOut();
+          const { error } = await signOutCurrentUser();
           if (error) {
-            Alert.alert('Log out', error.message);
+            Alert.alert('Log out', error);
             return;
           }
 
