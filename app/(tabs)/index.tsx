@@ -4,21 +4,26 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { HomeSetupNudge } from '@/components/home/HomeDashboardUI';
 import {
-    HomeFilterPill,
-    HomeFilterTabs,
-    HomeSectionHeader,
-    HomeSetupNudge,
-    HomeTopHeader,
-} from '@/components/home/HomeDashboardUI';
+  HomeCategoryGrid,
+  HomeHero,
+  HomePromoBanner,
+  HomeSectionLink,
+  type HomeCategoryTile,
+} from '@/components/home/HomeDiscoveryUI';
 import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
-import { homeFilters, type HomeFilter } from '@/constants/demo-data';
+import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
+import { type HomeFilter } from '@/constants/demo-data';
+import { type SearchMode } from '@/constants/search-demo-data';
 import {
   getDisplayLabelForMvpService,
   getDisplayTitleForMvpService,
+  getOrderedDiscoveryGroupsForMode,
+  type DiscoveryGroupKey,
 } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -110,6 +115,74 @@ function mapFeedTypeToHomeFilter(feedType: HomeFeedType): HomeFilter {
   if (feedType === 'jobs') return 'Jobs';
   if (feedType === 'services') return 'Services';
   return 'For you';
+}
+
+/**
+ * Home reuses the Search segmented control. `jobs` means "I am looking for work"
+ * and `workers` means "I want to hire help", matching Search's own mode values so
+ * the selection can be handed straight to the Search route.
+ */
+const HOME_MODE_LABELS: Record<SearchMode, string> = {
+  jobs: 'Find work',
+  workers: 'Hire help',
+};
+
+function mapHomeFilterToSearchMode(filter: HomeFilter): SearchMode | null {
+  if (filter === 'Jobs') return 'jobs';
+  if (filter === 'Services') return 'workers';
+  return null;
+}
+
+function mapSearchModeToHomeFilter(mode: SearchMode): HomeFilter {
+  return mode === 'jobs' ? 'Jobs' : 'Services';
+}
+
+/** Search reads its mode from a `Jobs` / `Services` route param. */
+function mapSearchModeToRouteFilter(mode: SearchMode) {
+  return mode === 'jobs' ? 'Jobs' : 'Services';
+}
+
+const ALL_CATEGORIES_TILE_KEY = '__all_services__';
+
+/**
+ * One icon per controlled-taxonomy discovery group. Tiles are generated from
+ * `SEARCH_DISCOVERY_GROUPS`, so Home can never show a category that Search
+ * cannot filter by.
+ */
+const DISCOVERY_GROUP_ICONS: Record<DiscoveryGroupKey, HomeCategoryTile['icon']> = {
+  'Home & Local Help': 'home-repair-service',
+  'Errands & Assistance': 'directions-run',
+  'Learning & Tutoring': 'school',
+  'Digital & Document Help': 'design-services',
+  'Tech Setup Help': 'devices',
+};
+
+function getHomeGreeting(firstName: string | null | undefined, fullName: string | null | undefined) {
+  const name = compactText(firstName) || compactText(fullName).split(' ')[0] || '';
+  return name ? `Kamusta, ${name}!` : 'Kamusta!';
+}
+
+/**
+ * The user's own coarse address line. House number, block/lot, and other
+ * private address parts are deliberately never shown here.
+ */
+function getHomeLocationLabel({
+  barangay,
+  city,
+  street,
+}: {
+  barangay: string | null | undefined;
+  city: string | null | undefined;
+  street: string | null | undefined;
+}) {
+  const parts = [
+    compactText(street),
+    compactText(barangay) ? `Brgy. ${compactText(barangay)}` : '',
+    compactText(city),
+  ].filter(Boolean);
+
+  if (!parts.length) return 'Set your barangay in Profile';
+  return parts.slice(0, 2).join(', ');
 }
 
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
@@ -407,6 +480,45 @@ export default function HomeScreen() {
   }, [appliedFeedFilters, feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
+
+  const searchMode = mapHomeFilterToSearchMode(selectedFilter);
+  /** Used when the feed is on the mixed "For you" variant and no segment is active. */
+  const searchModeFallback: SearchMode = useMemo(
+    () =>
+      resolveHomeFeedMode({ activeRole: profile?.active_role, preferences }) === 'client'
+        ? 'workers'
+        : 'jobs',
+    [preferences, profile?.active_role],
+  );
+
+  const greeting = getHomeGreeting(profile?.first_name, profile?.full_name);
+  const locationLabel = getHomeLocationLabel({
+    barangay: profile?.barangay,
+    city: profile?.city,
+    street: profile?.street,
+  });
+
+  // Category tiles follow the same preference-aware group ordering that Search uses.
+  const categoryTiles = useMemo<HomeCategoryTile[]>(() => {
+    const orderedGroups = getOrderedDiscoveryGroupsForMode({
+      mode: searchMode ?? searchModeFallback,
+      preferences,
+    });
+
+    return [
+      ...orderedGroups.map((group) => ({
+        key: group,
+        icon: DISCOVERY_GROUP_ICONS[group],
+        label: group,
+      })),
+      {
+        key: ALL_CATEGORIES_TILE_KEY,
+        icon: 'grid-view' as const,
+        label: 'All services',
+      },
+    ];
+  }, [preferences, searchMode, searchModeFallback]);
+
   const activeFeedFilterCount = getHomeFeedFilterCount(appliedFeedFilters);
   const hasAppliedFeedFilters =
     activeFeedFilterCount > 0 || appliedFeedFilters.feedType !== DEFAULT_HOME_FEED_FILTERS.feedType;
@@ -509,6 +621,46 @@ export default function HomeScreen() {
     });
   }, [draftFeedFilters.feedType, preferences, profile?.active_role, router]);
 
+  /**
+   * Home is the only entry point into Search now, so it hands over the current
+   * Find work / Hire help mode and, optionally, a taxonomy discovery group.
+   */
+  const openSearch = useCallback(
+    (options?: { group?: DiscoveryGroupKey; openFilters?: boolean }) => {
+      const mode = mapHomeFilterToSearchMode(selectedFilter) ?? searchModeFallback;
+
+      router.push({
+        pathname: '/(tabs)/search',
+        params: {
+          filter: mapSearchModeToRouteFilter(mode),
+          ...(options?.group ? { group: options.group } : {}),
+          ...(options?.openFilters ? { openFilters: '1' } : {}),
+        },
+      });
+    },
+    [router, searchModeFallback, selectedFilter],
+  );
+
+  const openCategory = useCallback(
+    (key: string) => {
+      if (key === ALL_CATEGORIES_TILE_KEY) {
+        openSearch({ openFilters: true });
+        return;
+      }
+
+      openSearch({ group: key as DiscoveryGroupKey });
+    },
+    [openSearch],
+  );
+
+  const changeSearchMode = useCallback((mode: SearchMode) => {
+    const filter = mapSearchModeToHomeFilter(mode);
+    const feedType = mapHomeFilterToFeedType(filter);
+    setSelectedFilter(filter);
+    setAppliedFeedFilters((current) => ({ ...current, feedType }));
+    setDraftFeedFilters((current) => ({ ...current, feedType }));
+  }, []);
+
   const openDiscoveryPreferences = useCallback(() => {
     setFeedFiltersVisible(false);
     router.push('/profile/discovery-preferences' as never);
@@ -549,13 +701,6 @@ export default function HomeScreen() {
     setDraftFeedFilters(DEFAULT_HOME_FEED_FILTERS);
   }, []);
 
-  const changeQuickFeedFilter = useCallback((filter: HomeFilter) => {
-    const feedType = mapHomeFilterToFeedType(filter);
-    setSelectedFilter(filter);
-    setAppliedFeedFilters((current) => ({ ...current, feedType }));
-    setDraftFeedFilters((current) => ({ ...current, feedType }));
-  }, []);
-
   const keyExtractor = useCallback((item: HomeFeedItem) => item.key, []);
 
   const renderFeedItem = useCallback(
@@ -586,16 +731,24 @@ export default function HomeScreen() {
             title={setupNudge.title}
           />
         ) : null}
-        <HomeSectionHeader
-          activeFilterCount={activeFeedFilterCount}
-          onFilterPress={openFeedFilters}
+
+        <HomeSectionLink onAction={() => openSearch()} title="Explore services" />
+        <HomeCategoryGrid onSelect={openCategory} tiles={categoryTiles} />
+
+        <HomePromoBanner />
+
+        <HomeSectionLink
+          onAction={() => openSearch()}
+          title={selectedFilter === 'Services' ? 'Nearby providers' : 'Nearby you'}
         />
       </>
     ),
     [
+      categoryTiles,
+      openCategory,
+      openSearch,
       openSetupAction,
-      activeFeedFilterCount,
-      openFeedFilters,
+      selectedFilter,
       setupNudge,
       shouldShowSetupPrompt,
     ],
@@ -634,21 +787,25 @@ export default function HomeScreen() {
         <Animated.View
           onLayout={handleHeaderLayout}
           style={[styles.headerStack, { transform: [{ translateY: headerTranslateY }] }]}>
-          <HomeTopHeader
+          <HomeHero
+            activeFilterCount={activeFeedFilterCount}
+            greeting={greeting}
+            locationLabel={locationLabel}
             onNotifications={() => router.push('/notifications' as never)}
+            onOpenFilters={openFeedFilters}
+            onOpenLocation={() => router.push('/profile/settings' as never)}
+            onOpenSearch={() => openSearch()}
             topInset={topInset}
             unreadCount={unreadNotificationCount}
           />
-          <HomeFilterTabs>
-            {homeFilters.map((filter) => (
-              <HomeFilterPill
-                key={filter}
-                label={filter}
-                onPress={() => changeQuickFeedFilter(filter)}
-                selected={selectedFilter === filter}
-              />
-            ))}
-          </HomeFilterTabs>
+          <View style={styles.modeRow}>
+            <SearchSegmentedControl
+              flush
+              labels={HOME_MODE_LABELS}
+              mode={searchMode}
+              onChange={changeSearchMode}
+            />
+          </View>
         </Animated.View>
 
         <FlatList
@@ -942,6 +1099,12 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 10,
+  },
+  modeRow: {
+    backgroundColor: color.background,
+    paddingBottom: 10,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   content: {
     paddingBottom: space.md,

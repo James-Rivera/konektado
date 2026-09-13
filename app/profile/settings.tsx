@@ -88,12 +88,10 @@ export default function ProfileSettingsScreen() {
             subtitle="Optional proof, certificates, and work evidence"
             onPress={() => router.push('/profile/credentials')}
           />
-          <SettingsRow
-            icon="inventory"
-            title="Manage posts"
-            subtitle="View active jobs and service posts"
-            onPress={() => router.push('/post/active')}
-          />
+          {/*
+            Listing management intentionally lives in the Post tab only, so it has
+            one obvious home. Profile history sections still deep-link into it.
+          */}
         </SettingsSection>
 
         <SettingsSection title="Personalization">

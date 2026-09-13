@@ -17,12 +17,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="search"
-        options={{
-          title: 'Search',
-        }}
-      />
-      <Tabs.Screen
         name="post"
         options={{
           title: 'Post',
@@ -38,6 +32,20 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+        }}
+      />
+      {/*
+        Search keeps its route and all of its filtering, taxonomy, and
+        personalization logic. It is simply no longer a bottom-navigation
+        destination: `BottomNav` only renders routes listed in its `TAB_META`,
+        so Search stays fully navigable from the Home search bar and the Home
+        category grid. It is deliberately NOT hidden with `href: null`, which
+        can drop the screen from the navigator and break `router.push`.
+      */}
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
         }}
       />
     </Tabs>

@@ -53,13 +53,15 @@ async function removeExistingBottomNavUnreadChannels(channelName: string) {
   );
 }
 
+// Primary navigation is Home / Post / Messages / Profile. Search is still a real
+// route, but it is entered from the Home search bar instead of the tab bar, so it
+// is intentionally absent here: `visibleRoutes` only renders routes listed below.
 const TAB_META: Record<
   string,
   { label: string; activeIcon: MaterialIconName; inactiveIcon: MaterialIconName }
 > = {
   index: { label: 'Home', activeIcon: 'home', inactiveIcon: 'home' },
-  search: { label: 'Search', activeIcon: 'search', inactiveIcon: 'search' },
-  post: { label: 'Post', activeIcon: 'add-box', inactiveIcon: 'add-box' },
+  post: { label: 'Post', activeIcon: 'add-circle', inactiveIcon: 'add-circle-outline' },
   messages: {
     label: 'Messages',
     activeIcon: 'chat',
