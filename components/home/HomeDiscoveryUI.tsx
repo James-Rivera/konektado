@@ -8,39 +8,64 @@ import { color, radius } from '@/constants/theme';
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
 /**
+ * Hero metrics measured from the Figma frame (390x844):
+ *   status bar ends 38, greeting 65, location 100, search 143-188,
+ *   blue band bottom ~146, segmented control 207.
+ * Kept as named constants so the relationships stay readable, and applied as
+ * padding/margin rather than absolute positions so the band reflows when the
+ * greeting or address wraps on narrow screens.
+ */
+const HERO_TOP_GAP = 27; // 65 - 38
+const HERO_BAND_BOTTOM_GAP = 27; // band bottom (146) - location bottom (119)
+const HERO_SEARCH_OVERLAP = 3; // band bottom (146) - search top (143)
+const HERO_SEARCH_HEIGHT = 45;
+const HERO_SEARCH_BOTTOM_GAP = 19; // segmented control (207) - search bottom (188)
+const HERO_SIDE_PADDING = 24;
+const HERO_BAND_RADIUS = 24;
+
+/**
  * Blue hero band used behind the greeting, location, and search entry.
  * Uses `react-native-svg` because the project does not depend on
  * `expo-linear-gradient`.
  */
+/**
+ * Values sampled from the Figma frame (390x844), so the band matches the design
+ * rather than approximating it:
+ *   gradient  diagonal, #4587D7 (top-left) -> #69A4EC (bottom-right, = brand primary)
+ *   sun       #FCC03B circle, r 25.5, centred at 78% width ON the band's bottom
+ *             edge, so the band's `overflow: hidden` clips it to a half sun
+ *   ring      concentric white arc, r 39.5
+ *
+ * Positions are proportional (percentages) so the band scales across widths;
+ * only the sun's radius is fixed, because it is an icon, not a layout element.
+ */
 function HeroBackground() {
   return (
-    <View pointerEvents="none" style={styles.heroBackground}>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {/*
         `StyleSheet.absoluteFill` on the Svg itself is required: with only
         height="100%"/width="100%" the SVG viewport collapses inside an
         absolutely positioned parent, so the gradient Rect paints a sliver and
-        the whole band reads as white. This matches the working gradients in
-        `(onboarding)/complete.tsx` and `FigmaOnboarding.tsx`.
+        the whole band reads as white.
       */}
       <Svg height="100%" style={StyleSheet.absoluteFill} width="100%">
         <Defs>
-          <LinearGradient id="homeHeroGradient" x1="0" x2="0" y1="0" y2="1">
-            <Stop offset="0" stopColor="#7CB6F7" />
-            <Stop offset="0.55" stopColor="#4B8BDB" />
-            <Stop offset="1" stopColor="#3C7FD2" />
+          <LinearGradient id="homeHeroGradient" x1="0" x2="1" y1="0" y2="0.65">
+            <Stop offset="0" stopColor="#4587D7" />
+            <Stop offset="1" stopColor="#69A4EC" />
           </LinearGradient>
         </Defs>
         <Rect fill="url(#homeHeroGradient)" height="100%" width="100%" />
-        <Circle cx="86%" cy="30%" fill={color.accentYellow} opacity={0.95} r="38" />
         <Circle
-          cx="86%"
-          cy="30%"
+          cx="78%"
+          cy="100%"
           fill="none"
-          opacity={0.3}
-          r="62"
+          opacity={0.28}
+          r="39.5"
           stroke={color.white}
           strokeWidth={1.5}
         />
+        <Circle cx="78%" cy="100%" fill={color.accentYellow} r="25.5" />
       </Svg>
     </View>
   );
@@ -68,42 +93,51 @@ export function HomeHero({
   unreadCount?: number;
 }) {
   return (
-    <View style={[styles.hero, { paddingTop: topInset + 12 }]}>
-      <HeroBackground />
+    <View style={styles.hero}>
+      {/*
+        The blue band wraps only the greeting and location. The search bar sits
+        below it and overlaps its bottom edge by SEARCH_OVERLAP, which is what
+        makes it read as straddling the blue/white boundary in the Figma.
+        The band is sized by its content, not a fixed height, so it stays
+        correct when the greeting or address wraps.
+      */}
+      <View style={[styles.heroBand, { paddingTop: Math.max(topInset, 8) + HERO_TOP_GAP }]}>
+        <HeroBackground />
 
-      <View style={styles.heroTopRow}>
-        <Text numberOfLines={1} style={styles.greeting}>
-          {greeting}
-        </Text>
+        <View style={styles.heroTopRow}>
+          <Text numberOfLines={1} style={styles.greeting}>
+            {greeting}
+          </Text>
+          <Pressable
+            accessibilityLabel="Notifications"
+            accessibilityRole="button"
+            onPress={onNotifications}
+            style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}>
+            <MaterialIcons color={color.white} name="notifications" size={24} />
+            {unreadCount > 0 ? (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+
         <Pressable
-          accessibilityLabel="Notifications"
-          accessibilityRole="button"
-          onPress={onNotifications}
-          style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}>
-          <MaterialIcons color={color.white} name="notifications" size={24} />
-          {unreadCount > 0 ? (
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-            </View>
+          accessibilityHint={onOpenLocation ? 'Opens your service area' : undefined}
+          accessibilityLabel={`Your location: ${locationLabel}`}
+          accessibilityRole={onOpenLocation ? 'button' : 'text'}
+          disabled={!onOpenLocation}
+          onPress={onOpenLocation}
+          style={({ pressed }) => [styles.locationRow, pressed && styles.pressed]}>
+          <MaterialIcons color={color.accentYellow} name="location-on" size={19} />
+          <Text numberOfLines={1} style={styles.locationText}>
+            {locationLabel}
+          </Text>
+          {onOpenLocation ? (
+            <MaterialIcons color={color.white} name="keyboard-arrow-down" size={18} />
           ) : null}
         </Pressable>
       </View>
-
-      <Pressable
-        accessibilityHint={onOpenLocation ? 'Opens your address settings' : undefined}
-        accessibilityLabel={`Your location: ${locationLabel}`}
-        accessibilityRole={onOpenLocation ? 'button' : 'text'}
-        disabled={!onOpenLocation}
-        onPress={onOpenLocation}
-        style={({ pressed }) => [styles.locationRow, pressed && styles.pressed]}>
-        <MaterialIcons color={color.accentYellow} name="location-on" size={19} />
-        <Text numberOfLines={1} style={styles.locationText}>
-          {locationLabel}
-        </Text>
-        {onOpenLocation ? (
-          <MaterialIcons color={color.white} name="keyboard-arrow-down" size={18} />
-        ) : null}
-      </Pressable>
 
       <View style={styles.searchRow}>
         <Pressable
@@ -226,22 +260,18 @@ export function HomePromoBanner() {
 
 const styles = StyleSheet.create({
   hero: {
-    overflow: 'hidden',
-    paddingBottom: 18,
-    paddingHorizontal: 24,
+    paddingBottom: HERO_SEARCH_BOTTOM_GAP,
   },
-  heroBackground: {
-    // Solid fill is the fallback, not decoration: the hero's text is white, so
-    // if the SVG ever fails to paint the band must still be blue, never white.
-    backgroundColor: '#4B8BDB',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    bottom: 0,
-    left: 0,
+  heroBand: {
+    // Solid fill is the fallback, not decoration: the band's text is white, so
+    // if the SVG ever fails to paint it must still be blue, never white.
+    backgroundColor: '#4587D7',
+    borderBottomLeftRadius: HERO_BAND_RADIUS,
+    borderBottomRightRadius: HERO_BAND_RADIUS,
+    // Clips the sun circle into the half sun the Figma shows.
     overflow: 'hidden',
-    position: 'absolute',
-    right: 0,
-    top: 0,
+    paddingBottom: HERO_BAND_BOTTOM_GAP,
+    paddingHorizontal: HERO_SIDE_PADDING,
   },
   heroTopRow: {
     alignItems: 'center',
@@ -287,8 +317,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
-    marginTop: 6,
-    minHeight: 24,
+    marginTop: 3, // Figma: greeting bottom 97 -> location top 100
+    minHeight: 19,
   },
   locationText: {
     color: color.white,
@@ -298,7 +328,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   searchRow: {
-    marginTop: 18,
+    // Negative margin pulls the bar up over the band's bottom edge so it
+    // straddles the blue/white boundary, as measured in the Figma.
+    marginTop: -HERO_SEARCH_OVERLAP,
+    paddingHorizontal: HERO_SIDE_PADDING,
   },
   searchBar: {
     alignItems: 'center',
@@ -307,7 +340,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     flexDirection: 'row',
     gap: 10,
-    minHeight: 48,
+    minHeight: HERO_SEARCH_HEIGHT,
     paddingHorizontal: 16,
     shadowColor: '#0B2545',
     shadowOffset: { height: 4, width: 0 },

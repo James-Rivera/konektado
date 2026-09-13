@@ -760,7 +760,7 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        <HomeSectionLink onAction={() => openSearch()} title="Explore services" />
+        <HomeSectionLink onAction={() => openSearch()} title="Explore Services" />
         <HomeCategoryGrid onSelect={openCategory} tiles={categoryTiles} />
 
         <HomePromoBanner />
