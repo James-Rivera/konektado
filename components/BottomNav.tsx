@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,6 +12,9 @@ import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 type BottomNavUnreadChannel = ReturnType<typeof supabase.channel>;
+
+/** Coalesces bursts of realtime events into a single unread-count refresh. */
+const UNREAD_REFRESH_DEBOUNCE_MS = 400;
 
 const reportedRealtimeStatuses = new Set<string>();
 
@@ -53,13 +56,15 @@ async function removeExistingBottomNavUnreadChannels(channelName: string) {
   );
 }
 
+// Primary navigation is Home / Post / Messages / Profile. Search is still a real
+// route, but it is entered from the Home search bar instead of the tab bar, so it
+// is intentionally absent here: `visibleRoutes` only renders routes listed below.
 const TAB_META: Record<
   string,
   { label: string; activeIcon: MaterialIconName; inactiveIcon: MaterialIconName }
 > = {
   index: { label: 'Home', activeIcon: 'home', inactiveIcon: 'home' },
-  search: { label: 'Search', activeIcon: 'search', inactiveIcon: 'search' },
-  post: { label: 'Post', activeIcon: 'add-box', inactiveIcon: 'add-box' },
+  post: { label: 'Post', activeIcon: 'add-circle', inactiveIcon: 'add-circle-outline' },
   messages: {
     label: 'Messages',
     activeIcon: 'chat',
@@ -74,6 +79,8 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
   const [unreadMessages, setUnreadMessages] = useState(0);
   const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const refreshUnread = useCallback(() => {
     if (!profile?.id) {
       setUnreadMessages(0);
@@ -87,6 +94,30 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
       );
     });
   }, [profile?.id]);
+
+  /**
+   * Realtime-driven refreshes are coalesced. `listMyConversations()` costs three
+   * round trips (inbox RPC + conversations + conversation_reads) just to derive
+   * one badge number, so a burst of messages must not run it once per event.
+   * Mount, focus, and the subscription-failure fallback stay immediate.
+   */
+  const scheduleUnreadRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      refreshUnread();
+    }, UNREAD_REFRESH_DEBOUNCE_MS);
+  }, [refreshUnread]);
+
+  useEffect(
+    () => () => {
+      if (!refreshTimerRef.current) return;
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     refreshUnread();
@@ -111,8 +142,30 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
 
         channel = supabase
           .channel(channelName)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, refreshUnread)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_reads' }, refreshUnread);
+          // `messages` is intentionally unfiltered. Participation is decided by
+          // the `messages_select_participant` RLS policy, which joins to
+          // `conversations`; postgres_changes filters only compare a single
+          // column on the changed row, so that join cannot be expressed here.
+          // A `conversation_id=in.(...)` list would also miss the first message
+          // of any newly created conversation. RLS already limits delivery to
+          // this user's own conversations.
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'messages' },
+            scheduleUnreadRefresh,
+          )
+          // `conversation_reads` does carry `user_id` on the row, so it can be
+          // filtered directly, matching what the Messages inbox already does.
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'conversation_reads',
+              filter: `user_id=eq.${profile.id}`,
+            },
+            scheduleUnreadRefresh,
+          );
 
         channel.subscribe((status, error) => {
           if (cancelled) return;
@@ -143,7 +196,7 @@ export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps)
         warnBottomNavRealtime(`Could not remove channel ${channelName}.`, error);
       });
     };
-  }, [profile?.id, refreshUnread]);
+  }, [profile?.id, refreshUnread, scheduleUnreadRefresh]);
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>

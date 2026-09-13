@@ -67,9 +67,9 @@ import {
   type InternalDemoVerificationStatus,
   type PublicDemoImageAsset,
 } from '@/services/internal-demo-editor.service';
+import { signOutCurrentUser } from '@/services/auth.service';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
 import { getPublicImageValidationError } from '@/utils/image-processing';
-import { supabase } from '@/utils/supabase';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 type EditorSection = 'overview' | 'profile' | 'jobs' | 'services' | 'photos' | 'verification' | 'activity';
@@ -264,7 +264,7 @@ export default function InternalDemoContentEditorScreen() {
         text: 'Log out',
         style: 'destructive',
         onPress: async () => {
-          await supabase.auth.signOut();
+          await signOutCurrentUser();
           router.replace('/internal/login');
         },
       },

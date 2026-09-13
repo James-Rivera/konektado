@@ -31,8 +31,8 @@ import {
   reviewVerificationRequest,
   type VerificationRequestDetail,
 } from '@/services/admin.service';
+import { signOutCurrentUser } from '@/services/auth.service';
 import type { VerificationStatus } from '@/types/verification.types';
-import { supabase } from '@/utils/supabase';
 import {
   NEEDS_CORRECTION_REASONS,
   NAME_MISMATCH_REASON,
@@ -105,9 +105,9 @@ export default function AdminVerificationReviewScreen() {
         text: 'Log out',
         style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase.auth.signOut();
+          const { error } = await signOutCurrentUser();
           if (error) {
-            Alert.alert('Log out', error.message);
+            Alert.alert('Log out', error);
             return;
           }
 

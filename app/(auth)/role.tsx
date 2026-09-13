@@ -24,7 +24,7 @@ import {
 } from '@/components/onboarding/FigmaOnboarding';
 import { useProfile } from '@/hooks/use-profile';
 import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
-import { supabase } from '@/utils/supabase';
+import { getCurrentAuthUser, setSignupRoleMetadata } from '@/services/auth.service';
 
 type SessionUser = {
   email: string | null;
@@ -92,10 +92,10 @@ export default function RoleScreen() {
 
     let active = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    getCurrentAuthUser().then(({ data }) => {
       if (!active) return;
 
-      setSessionUser(data.user ? { id: data.user.id, email: data.user.email ?? null } : null);
+      setSessionUser(data ? { id: data.id, email: data.email } : null);
       setCheckingSession(false);
     });
 
@@ -160,9 +160,7 @@ export default function RoleScreen() {
       return;
     }
 
-    const { error: metaError } = await supabase.auth.updateUser({
-      data: { app_role: selectedRole, role: selectedRole },
-    });
+    const { error: metaError } = await setSignupRoleMetadata(selectedRole);
 
     setSubmitting(false);
 

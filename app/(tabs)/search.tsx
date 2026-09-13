@@ -33,6 +33,7 @@ import {
   getServicesForDiscoveryGroup,
   getServicesForDiscoveryGroupAndWorkType,
   getStoredMvpServiceOption,
+  isDiscoveryGroupKey,
 } from '@/constants/service-taxonomy';
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -127,10 +128,14 @@ export default function SearchScreen() {
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const params = useLocalSearchParams<{
     filter?: string | string[];
+    group?: string | string[];
     openFilters?: string | string[];
+    q?: string | string[];
   }>();
   const filterParam = getParamValue(params.filter);
+  const groupParam = getParamValue(params.group);
   const openFiltersParam = getParamValue(params.openFilters);
+  const queryParam = getParamValue(params.q);
   const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
   const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
@@ -477,6 +482,19 @@ export default function SearchScreen() {
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
   }, [orderedGroups, revealControlsAtTop]);
 
+  /**
+   * Search is no longer a bottom-navigation destination, so it needs an explicit
+   * way back to Home for users who arrived here from the Home search bar.
+   */
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)');
+  }, [router]);
+
   const handleOpenFilters = useCallback(() => {
     setDraftFilters(appliedFilters);
     setIsFilterSheetVisible(true);
@@ -494,6 +512,31 @@ export default function SearchScreen() {
     handleOpenFilters();
     router.setParams({ openFilters: undefined });
   }, [handleOpenFilters, isFocused, openFiltersParam, revealControlsAtTop, router]);
+
+  /**
+   * Home can hand over a taxonomy discovery group and/or a starting query.
+   * Applied only once preferences have settled, because the `orderedGroups`
+   * effect resets `browseGroup`/filters whenever preference ordering changes.
+   */
+  useEffect(() => {
+    if (!isFocused || profileLoading) return;
+    if (!groupParam && !queryParam) return;
+
+    revealControlsAtTop();
+
+    if (isDiscoveryGroupKey(groupParam)) {
+      const nextGroup = groupParam;
+      setBrowseGroup(nextGroup);
+      setAppliedFilters((current) => ({ ...current, serviceGroup: nextGroup, service: 'all' }));
+      setDraftFilters((current) => ({ ...current, serviceGroup: nextGroup, service: 'all' }));
+    }
+
+    if (queryParam) {
+      setQuery(queryParam);
+    }
+
+    router.setParams({ group: undefined, q: undefined });
+  }, [groupParam, isFocused, profileLoading, queryParam, revealControlsAtTop, router]);
 
   const handleDraftFilterChange = useCallback(
     <K extends keyof SearchDiscoveryFilters,>(key: K, value: SearchDiscoveryFilters[K]) => {
@@ -677,7 +720,7 @@ export default function SearchScreen() {
     () => (
       <>
         <View style={[styles.searchModule, { paddingTop: topInset + 12 }]}>
-          <SearchHeaderRow flush onChangeText={setQuery} value={query} />
+          <SearchHeaderRow flush onBack={handleBack} onChangeText={setQuery} value={query} />
           <SearchSegmentedControl flush mode={mode} onChange={handleModeChange} />
         </View>
         <PopularServicesSection
@@ -696,6 +739,7 @@ export default function SearchScreen() {
       collapsedBrowseServices,
       groupOptions,
       groupedBrowseServices,
+      handleBack,
       handleChipPress,
       handleGroupPress,
       handleModeChange,

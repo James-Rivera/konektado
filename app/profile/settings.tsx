@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CurrentUserIdentityRow, getProfileDisplayName } from '@/components/profile/CurrentUserIdentity';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { supabase } from '@/utils/supabase';
+import { signOutCurrentUser } from '@/services/auth.service';
 
 type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -24,9 +24,9 @@ export default function ProfileSettingsScreen() {
         text: 'Log out',
         style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase.auth.signOut();
+          const { error } = await signOutCurrentUser();
           if (error) {
-            Alert.alert('Log out', error.message);
+            Alert.alert('Log out', error);
             return;
           }
           router.replace('/(auth)');
@@ -88,12 +88,10 @@ export default function ProfileSettingsScreen() {
             subtitle="Optional proof, certificates, and work evidence"
             onPress={() => router.push('/profile/credentials')}
           />
-          <SettingsRow
-            icon="inventory"
-            title="Manage posts"
-            subtitle="View active jobs and service posts"
-            onPress={() => router.push('/post/active')}
-          />
+          {/*
+            Listing management intentionally lives in the Post tab only, so it has
+            one obvious home. Profile history sections still deep-link into it.
+          */}
         </SettingsSection>
 
         <SettingsSection title="Personalization">

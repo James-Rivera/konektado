@@ -9,10 +9,14 @@ export function SearchSegmentedControl({
   mode,
   onChange,
   flush = false,
+  labels = searchModeLabels,
 }: {
-  mode: SearchMode;
+  /** `null` renders both segments unselected (Home's mixed "For you" feed). */
+  mode: SearchMode | null;
   onChange: (mode: SearchMode) => void;
   flush?: boolean;
+  /** Home reuses this control with its own wording ("Find work" / "Hire help"). */
+  labels?: Record<SearchMode, string>;
 }) {
   return (
     <View style={[styles.container, flush && styles.containerFlush]}>
@@ -31,7 +35,7 @@ export function SearchSegmentedControl({
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
-              {searchModeLabels[item]}
+              {labels[item]}
             </Text>
           </Pressable>
         );

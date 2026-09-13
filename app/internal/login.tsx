@@ -17,9 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { adminPalette } from '@/components/admin/AdminShell';
 import { color, radius, space } from '@/constants/theme';
-import { signInWithEmailPassword } from '@/services/auth.service';
+import { signInWithEmailPassword, signOutCurrentUser } from '@/services/auth.service';
 import { getInternalDemoEditorAccess } from '@/services/internal-demo-editor.service';
-import { supabase } from '@/utils/supabase';
 
 export default function InternalLoginScreen() {
   const router = useRouter();
@@ -70,7 +69,7 @@ export default function InternalLoginScreen() {
       return;
     }
 
-    await supabase.auth.signOut();
+    await signOutCurrentUser();
     setLoading(false);
     setErrorMessage(access.error ?? 'This account is not allowed to use the internal demo editor.');
   };

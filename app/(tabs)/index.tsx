@@ -4,21 +4,27 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { HomeSetupNudge } from '@/components/home/HomeDashboardUI';
 import {
-    HomeFilterPill,
-    HomeFilterTabs,
-    HomeSectionHeader,
-    HomeSetupNudge,
-    HomeTopHeader,
-} from '@/components/home/HomeDashboardUI';
+  HomeCategoryGrid,
+  HomeHero,
+  HomeSectionLink,
+  type HomeCategoryTile,
+} from '@/components/home/HomeDiscoveryUI';
+import { HomeFeaturedCarousel } from '@/components/home/HomeFeaturedCarousel';
 import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
+import { ServiceAreaSheet } from '@/components/ServiceAreaSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
-import { homeFilters, type HomeFilter } from '@/constants/demo-data';
+import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
+import { type HomeFilter } from '@/constants/demo-data';
+import { type SearchMode } from '@/constants/search-demo-data';
 import {
   getDisplayLabelForMvpService,
   getDisplayTitleForMvpService,
+  getOrderedDiscoveryGroupsForMode,
+  type DiscoveryGroupKey,
 } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -110,6 +116,82 @@ function mapFeedTypeToHomeFilter(feedType: HomeFeedType): HomeFilter {
   if (feedType === 'jobs') return 'Jobs';
   if (feedType === 'services') return 'Services';
   return 'For you';
+}
+
+/**
+ * Home reuses the Search segmented control. `jobs` means "I am looking for work"
+ * and `workers` means "I want to hire help", matching Search's own mode values so
+ * the selection can be handed straight to the Search route.
+ */
+const HOME_MODE_LABELS: Record<SearchMode, string> = {
+  jobs: 'Find work',
+  workers: 'Hire help',
+};
+
+function mapHomeFilterToSearchMode(filter: HomeFilter): SearchMode | null {
+  if (filter === 'Jobs') return 'jobs';
+  if (filter === 'Services') return 'workers';
+  return null;
+}
+
+function mapSearchModeToHomeFilter(mode: SearchMode): HomeFilter {
+  return mode === 'jobs' ? 'Jobs' : 'Services';
+}
+
+/** Search reads its mode from a `Jobs` / `Services` route param. */
+function mapSearchModeToRouteFilter(mode: SearchMode) {
+  return mode === 'jobs' ? 'Jobs' : 'Services';
+}
+
+const ALL_CATEGORIES_TILE_KEY = '__all_services__';
+
+/**
+ * One icon per controlled-taxonomy discovery group. Tiles are generated from
+ * `SEARCH_DISCOVERY_GROUPS`, so Home can never show a category that Search
+ * cannot filter by.
+ */
+const DISCOVERY_GROUP_ICONS: Record<DiscoveryGroupKey, HomeCategoryTile['icon']> = {
+  'Home & Local Help': 'home-repair-service',
+  'Errands & Assistance': 'directions-run',
+  'Learning & Tutoring': 'school',
+  'Digital & Document Help': 'design-services',
+  'Tech Setup Help': 'devices',
+};
+
+function getHomeGreeting(firstName: string | null | undefined, fullName: string | null | undefined) {
+  const name = compactText(firstName) || compactText(fullName).split(' ')[0] || '';
+  return name ? `Kamusta, ${name}!` : 'Kamusta!';
+}
+
+/**
+ * The user's own coarse address line, formatted as "<street>, Brgy. <name>".
+ * House number, block/lot, and other private address parts are deliberately
+ * never shown here.
+ *
+ * Stored barangay values are inconsistent: the DB column defaults to
+ * "Barangay San Pedro" while onboarding writes DEFAULT_BARANGAY ("San Pedro").
+ * Strip any existing prefix before adding "Brgy." so the label cannot read
+ * "Brgy. Barangay San Pedro".
+ */
+function formatBarangayLabel(barangay: string | null | undefined) {
+  const name = compactText(barangay).replace(/^(barangay|brgy\.?)\s+/i, '');
+  return name ? `Brgy. ${name}` : '';
+}
+
+function getHomeLocationLabel({
+  barangay,
+  city,
+  street,
+}: {
+  barangay: string | null | undefined;
+  city: string | null | undefined;
+  street: string | null | undefined;
+}) {
+  const parts = [compactText(street), formatBarangayLabel(barangay)].filter(Boolean);
+
+  if (parts.length) return parts.join(', ');
+  // Fall back to the city only when neither street nor barangay is set.
+  return compactText(city) || 'Set your barangay in Profile';
 }
 
 function mapJobToHomeFeedCard(job: JobSummary): HomeFeedCardProps {
@@ -247,12 +329,18 @@ export default function HomeScreen() {
   const [optionalSetupDismissed, setOptionalSetupDismissed] = useState(false);
   const [profileCompletionStatus, setProfileCompletionStatus] =
     useState<ProfileCompletionStatus | null>(null);
-  const [isCheckingSetupStatus, setIsCheckingSetupStatus] = useState(false);
+  // Latches true after the first completion check and is never reset. Profile
+  // refreshes (app foreground, 30s fallback poll) re-run the check in the
+  // background without hiding an already-visible setup prompt. The ref mirrors
+  // the state so the async callbacks below read the current value instead of a
+  // stale closure, without adding the flag to the effect's dependencies.
   const [hasLoadedSetupStatus, setHasLoadedSetupStatus] = useState(false);
+  const hasLoadedSetupStatusRef = useRef(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [feedFiltersVisible, setFeedFiltersVisible] = useState(false);
+  const [serviceAreaVisible, setServiceAreaVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const headerHeightRef = useRef(0);
@@ -285,19 +373,31 @@ export default function HomeScreen() {
       };
     }
 
-    setIsCheckingSetupStatus(true);
-    setHasLoadedSetupStatus(false);
+    // Stale-while-revalidate: keep showing the last known prompt while the
+    // check re-runs, and only fall back to "no prompt" if the very first check
+    // fails. Clearing state up front made the banner unmount and remount on
+    // every app foreground and every poll tick.
+    const keepPreviousOnFailure = () => {
+      if (!active) return;
+      // A failed refresh must not wipe a prompt the user can already see; only
+      // the very first check is allowed to settle on "no prompt".
+      if (hasLoadedSetupStatusRef.current) return;
+      setProfileCompletionStatus(null);
+    };
+
     getMyProfileCompletion()
       .then((result) => {
         if (!active) return;
-        setProfileCompletionStatus(result.error ? null : result.data);
+        if (result.error) {
+          keepPreviousOnFailure();
+          return;
+        }
+        setProfileCompletionStatus(result.data);
       })
-      .catch(() => {
-        if (active) setProfileCompletionStatus(null);
-      })
+      .catch(keepPreviousOnFailure)
       .finally(() => {
         if (!active) return;
-        setIsCheckingSetupStatus(false);
+        hasLoadedSetupStatusRef.current = true;
         setHasLoadedSetupStatus(true);
       });
 
@@ -407,6 +507,45 @@ export default function HomeScreen() {
   }, [appliedFeedFilters, feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
+
+  const searchMode = mapHomeFilterToSearchMode(selectedFilter);
+  /** Used when the feed is on the mixed "For you" variant and no segment is active. */
+  const searchModeFallback: SearchMode = useMemo(
+    () =>
+      resolveHomeFeedMode({ activeRole: profile?.active_role, preferences }) === 'client'
+        ? 'workers'
+        : 'jobs',
+    [preferences, profile?.active_role],
+  );
+
+  const greeting = getHomeGreeting(profile?.first_name, profile?.full_name);
+  const locationLabel = getHomeLocationLabel({
+    barangay: profile?.barangay,
+    city: profile?.city,
+    street: profile?.street,
+  });
+
+  // Category tiles follow the same preference-aware group ordering that Search uses.
+  const categoryTiles = useMemo<HomeCategoryTile[]>(() => {
+    const orderedGroups = getOrderedDiscoveryGroupsForMode({
+      mode: searchMode ?? searchModeFallback,
+      preferences,
+    });
+
+    return [
+      ...orderedGroups.map((group) => ({
+        key: group,
+        icon: DISCOVERY_GROUP_ICONS[group],
+        label: group,
+      })),
+      {
+        key: ALL_CATEGORIES_TILE_KEY,
+        icon: 'grid-view' as const,
+        label: 'All services',
+      },
+    ];
+  }, [preferences, searchMode, searchModeFallback]);
+
   const activeFeedFilterCount = getHomeFeedFilterCount(appliedFeedFilters);
   const hasAppliedFeedFilters =
     activeFeedFilterCount > 0 || appliedFeedFilters.feedType !== DEFAULT_HOME_FEED_FILTERS.feedType;
@@ -422,8 +561,9 @@ export default function HomeScreen() {
     [profileCompletionStatus, optionalSetupDismissed, preferences, profile?.active_role, selectedFilter],
   );
   const needsProfileSetup = Boolean(setupNudge);
-  const shouldShowSetupPrompt =
-    hasLoadedSetupStatus && !isCheckingSetupStatus && needsProfileSetup;
+  // Gated on the first check only. Background refreshes no longer toggle this,
+  // so the prompt stays mounted instead of blinking on every app foreground.
+  const shouldShowSetupPrompt = hasLoadedSetupStatus && needsProfileSetup;
 
   const setHeaderVisible = (visible: boolean) => {
     if (!headerHeightRef.current) return;
@@ -509,6 +649,46 @@ export default function HomeScreen() {
     });
   }, [draftFeedFilters.feedType, preferences, profile?.active_role, router]);
 
+  /**
+   * Home is the only entry point into Search now, so it hands over the current
+   * Find work / Hire help mode and, optionally, a taxonomy discovery group.
+   */
+  const openSearch = useCallback(
+    (options?: { group?: DiscoveryGroupKey; openFilters?: boolean }) => {
+      const mode = mapHomeFilterToSearchMode(selectedFilter) ?? searchModeFallback;
+
+      router.push({
+        pathname: '/(tabs)/search',
+        params: {
+          filter: mapSearchModeToRouteFilter(mode),
+          ...(options?.group ? { group: options.group } : {}),
+          ...(options?.openFilters ? { openFilters: '1' } : {}),
+        },
+      });
+    },
+    [router, searchModeFallback, selectedFilter],
+  );
+
+  const openCategory = useCallback(
+    (key: string) => {
+      if (key === ALL_CATEGORIES_TILE_KEY) {
+        openSearch({ openFilters: true });
+        return;
+      }
+
+      openSearch({ group: key as DiscoveryGroupKey });
+    },
+    [openSearch],
+  );
+
+  const changeSearchMode = useCallback((mode: SearchMode) => {
+    const filter = mapSearchModeToHomeFilter(mode);
+    const feedType = mapHomeFilterToFeedType(filter);
+    setSelectedFilter(filter);
+    setAppliedFeedFilters((current) => ({ ...current, feedType }));
+    setDraftFeedFilters((current) => ({ ...current, feedType }));
+  }, []);
+
   const openDiscoveryPreferences = useCallback(() => {
     setFeedFiltersVisible(false);
     router.push('/profile/discovery-preferences' as never);
@@ -549,13 +729,6 @@ export default function HomeScreen() {
     setDraftFeedFilters(DEFAULT_HOME_FEED_FILTERS);
   }, []);
 
-  const changeQuickFeedFilter = useCallback((filter: HomeFilter) => {
-    const feedType = mapHomeFilterToFeedType(filter);
-    setSelectedFilter(filter);
-    setAppliedFeedFilters((current) => ({ ...current, feedType }));
-    setDraftFeedFilters((current) => ({ ...current, feedType }));
-  }, []);
-
   const keyExtractor = useCallback((item: HomeFeedItem) => item.key, []);
 
   const renderFeedItem = useCallback(
@@ -586,16 +759,24 @@ export default function HomeScreen() {
             title={setupNudge.title}
           />
         ) : null}
-        <HomeSectionHeader
-          activeFilterCount={activeFeedFilterCount}
-          onFilterPress={openFeedFilters}
+
+        <HomeSectionLink onAction={() => openSearch()} title="Explore Services" />
+        <HomeCategoryGrid onSelect={openCategory} tiles={categoryTiles} />
+
+        <HomeFeaturedCarousel />
+
+        <HomeSectionLink
+          onAction={() => openSearch()}
+          title={selectedFilter === 'Services' ? 'Nearby providers' : 'Nearby you'}
         />
       </>
     ),
     [
+      categoryTiles,
+      openCategory,
+      openSearch,
       openSetupAction,
-      activeFeedFilterCount,
-      openFeedFilters,
+      selectedFilter,
       setupNudge,
       shouldShowSetupPrompt,
     ],
@@ -634,21 +815,25 @@ export default function HomeScreen() {
         <Animated.View
           onLayout={handleHeaderLayout}
           style={[styles.headerStack, { transform: [{ translateY: headerTranslateY }] }]}>
-          <HomeTopHeader
+          <HomeHero
+            activeFilterCount={activeFeedFilterCount}
+            greeting={greeting}
+            locationLabel={locationLabel}
             onNotifications={() => router.push('/notifications' as never)}
+            onOpenFilters={openFeedFilters}
+            onOpenLocation={() => setServiceAreaVisible(true)}
+            onOpenSearch={() => openSearch()}
             topInset={topInset}
             unreadCount={unreadNotificationCount}
           />
-          <HomeFilterTabs>
-            {homeFilters.map((filter) => (
-              <HomeFilterPill
-                key={filter}
-                label={filter}
-                onPress={() => changeQuickFeedFilter(filter)}
-                selected={selectedFilter === filter}
-              />
-            ))}
-          </HomeFilterTabs>
+          <View style={styles.modeRow}>
+            <SearchSegmentedControl
+              flush
+              labels={HOME_MODE_LABELS}
+              mode={searchMode}
+              onChange={changeSearchMode}
+            />
+          </View>
         </Animated.View>
 
         <FlatList
@@ -678,6 +863,16 @@ export default function HomeScreen() {
           onPersonalizeHomeSearch={openDiscoveryPreferences}
           onReset={resetFeedFilters}
           visible={feedFiltersVisible}
+        />
+        {/*
+          Same sheet the onboarding location step uses. Home opens it without a
+          selection handler, so it shows the current barangay and explains that
+          other areas are not covered yet.
+        */}
+        <ServiceAreaSheet
+          onClose={() => setServiceAreaVisible(false)}
+          title="Your service area"
+          visible={serviceAreaVisible}
         />
       </SafeAreaView>
     </View>
@@ -927,12 +1122,14 @@ function HomeFeedCardSkeleton({
 }
 
 const styles = StyleSheet.create({
+  // Home sits on white per the Figma. Feed cards keep their own 2px separator,
+  // so card separation does not depend on a grey screen behind them.
   screen: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   safeArea: {
-    backgroundColor: color.screenBackground,
+    backgroundColor: color.background,
     flex: 1,
   },
   headerStack: {
@@ -943,12 +1140,14 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 10,
   },
+  modeRow: {
+    backgroundColor: color.background,
+    paddingBottom: 10,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
   content: {
     paddingBottom: space.md,
-  },
-  feed: {
-    backgroundColor: color.screenBackground,
-    gap: 2,
   },
   feedSeparator: {
     backgroundColor: color.screenBackground,
