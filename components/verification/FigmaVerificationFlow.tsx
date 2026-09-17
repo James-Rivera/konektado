@@ -966,20 +966,22 @@ function CaptureScreen({
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [captureLoading, setCaptureLoading] = useState(false);
-  const [requestedPermission, setRequestedPermission] = useState(false);
+  // A latch for "have we already asked", never rendered. A ref rather than
+  // state, so asking for the camera does not also schedule a re-render.
+  const requestedPermissionRef = useRef(false);
   const needsFrontCamera = frame === 'face';
   const cameraGranted = Boolean(permission?.granted);
   const cameraBlocked = Boolean(permission && !permission.granted && !permission.canAskAgain);
   const canUseCamera = !file && cameraGranted && !cameraError;
 
   useEffect(() => {
-    if (file || requestedPermission || !permission || permission.granted || !permission.canAskAgain) {
+    if (file || requestedPermissionRef.current || !permission || permission.granted || !permission.canAskAgain) {
       return;
     }
 
-    setRequestedPermission(true);
+    requestedPermissionRef.current = true;
     void requestPermission();
-  }, [file, permission, requestPermission, requestedPermission]);
+  }, [file, permission, requestPermission]);
 
   const tryCameraAgain = async () => {
     setCameraError(null);
