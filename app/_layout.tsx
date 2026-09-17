@@ -2,7 +2,7 @@ import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
-} from "@react-navigation/native";
+} from "expo-router/react-navigation";
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from "expo-font";
 import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
@@ -14,7 +14,6 @@ import "react-native-reanimated";
 
 import { AppSplashScreen } from "@/components/app-splash-screen";
 import { FeedbackProvider } from "@/components/FeedbackProvider";
-import { color } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { ProfileProvider } from "@/hooks/use-profile";
 import { useProfileStatus } from "@/hooks/use-profile-status";
@@ -56,7 +55,7 @@ export default function RootLayout() {
         <FeedbackProvider>
           <ProfileProvider>
             <RootNavigator />
-            <StatusBar backgroundColor={color.background} style="dark" translucent={false} />
+            <StatusBar style="dark" />
           </ProfileProvider>
         </FeedbackProvider>
       </SafeAreaProvider>

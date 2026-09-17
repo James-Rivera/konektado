@@ -135,7 +135,7 @@ export function GradientImageScreen({
         <OnboardingBackgroundLayer layer={previousLayer} opacity={previousOpacity} />
       ) : null}
       <OnboardingBackgroundLayer layer={currentLayer} opacity={fade} />
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: `rgba(0, 0, 0, ${darkness})` }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0, 0, 0, ${darkness})` }]} />
       <Svg height="100%" pointerEvents="none" style={StyleSheet.absoluteFill} width="100%">
         <Defs>
           <LinearGradient id="onboardingBlueOverlay" x1="0" x2="0" y1="0" y2="1">
@@ -710,10 +710,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   backgroundFrame: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     height: '100%',
     width: '100%',
   },
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   otpHiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     color: 'transparent',
     fontSize: 1,
     opacity: 0.01,

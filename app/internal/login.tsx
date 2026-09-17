@@ -76,7 +76,7 @@ export default function InternalLoginScreen() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-      <StatusBar backgroundColor={adminPalette.blue} style="light" />
+      <StatusBar style="light" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.content}

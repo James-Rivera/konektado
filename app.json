@@ -20,10 +20,6 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "androidNavigationBar": {
-      "backgroundColor": "#000000",
-      "barStyle": "light-content"
-    },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
@@ -60,7 +56,9 @@
         }
       ],
       "expo-image",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

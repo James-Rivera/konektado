@@ -166,7 +166,7 @@ export default function AuthIntroScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
       <ScrollView
         ref={scrollRef}
         horizontal

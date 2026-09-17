@@ -24,7 +24,7 @@ export default function OnboardingCompleteScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
       <Svg height="100%" style={StyleSheet.absoluteFill} width="100%">
         <Defs>
           <LinearGradient id="completeGradient" x1="0" x2="0" y1="0" y2="1">
