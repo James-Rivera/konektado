@@ -76,14 +76,16 @@ export function GradientImageScreen({
   contentStyle,
   safeAreaEdges = ['top', 'bottom'],
 }: GradientImageScreenProps) {
-  const fade = useRef(new Animated.Value(1)).current;
+  const [fade] = useState(() => new Animated.Value(1));
   const [previousLayer, setPreviousLayer] = useState<BackgroundLayer | null>(null);
-  const currentLayerRef = useRef<BackgroundLayer>({
+  const [currentLayer, setCurrentLayer] = useState<BackgroundLayer>(() => ({
     imageStyle: backgroundImageStyle,
     resizeMode: backgroundResizeMode,
     source,
-  });
-  const [currentLayer, setCurrentLayer] = useState<BackgroundLayer>(currentLayerRef.current);
+  }));
+  // Seeded from the mount-time state rather than the other way around, so the
+  // ref is never read during render. Both still start as the same object.
+  const currentLayerRef = useRef<BackgroundLayer>(currentLayer);
 
   useEffect(() => {
     const nextLayer = {
@@ -350,7 +352,7 @@ type OnboardingLoadingOverlayProps = {
 };
 
 export function OnboardingLoadingOverlay({ visible }: OnboardingLoadingOverlayProps) {
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (!visible) {

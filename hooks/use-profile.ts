@@ -360,6 +360,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     [authenticated, error, loading, preferences, profile, refresh, user, version],
   );
 
+  // `value` carries `refresh`, a useCallback that reads activeRef/inFlightRef/
+  // pendingLoadRef to de-duplicate concurrent loads. react-hooks/refs flags any
+  // ref-touching function passed into a call during render; here the call is
+  // createElement, which only stores it on the context value. `refresh` runs
+  // from effects and event handlers, never during render.
+  // eslint-disable-next-line react-hooks/refs
   return createElement(ProfileContext.Provider, { value }, children);
 }
 

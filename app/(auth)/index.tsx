@@ -53,7 +53,7 @@ const CAROUSEL_SLIDES = [...INTRO_SLIDES, INTRO_SLIDES[0]];
 export default function AuthIntroScreen() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const [progressAnim] = useState(() => new Animated.Value(0));
   const pageRef = useRef(0);
   const scrollTransitionRef = useRef<Animated.CompositeAnimation | null>(null);
   const { width } = useWindowDimensions();

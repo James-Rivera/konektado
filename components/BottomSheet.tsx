@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,8 +34,8 @@ interface BottomSheetProps {
  */
 export function BottomSheet({ children, maxHeight = '82%', onClose, visible }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const sheetTranslateY = useRef(new Animated.Value(500)).current;
+  const [backdropOpacity] = useState(() => new Animated.Value(0));
+  const [sheetTranslateY] = useState(() => new Animated.Value(500));
 
   useEffect(() => {
     if (visible) {

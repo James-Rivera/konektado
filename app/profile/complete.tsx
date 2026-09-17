@@ -166,26 +166,6 @@ export default function CompleteProfileScreen() {
     handledFocusTargetRef.current = null;
   }, [focusTarget]);
 
-  useEffect(() => {
-    let active = true;
-
-    getMyProfileCompletion().then((result) => {
-      if (!active) return;
-
-      if (result.error || !result.data) {
-        setError(result.error ?? 'Could not load profile details.');
-      } else {
-        hydrateForms(result.data);
-      }
-
-      setLoading(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const hydrateForms = (nextStatus: ProfileCompletionStatus) => {
     setStatus(nextStatus);
     setAvatarUrl(nextStatus.core.avatarUrl);
@@ -221,6 +201,26 @@ export default function CompleteProfileScreen() {
       preferredSchedule: nextStatus.hiring.preferredSchedule,
     });
   };
+
+  useEffect(() => {
+    let active = true;
+
+    getMyProfileCompletion().then((result) => {
+      if (!active) return;
+
+      if (result.error || !result.data) {
+        setError(result.error ?? 'Could not load profile details.');
+      } else {
+        hydrateForms(result.data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const scrollToFocusTarget = useCallback(() => {
     if (loading || !focusTarget || handledFocusTargetRef.current === focusTarget) return;

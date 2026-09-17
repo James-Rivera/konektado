@@ -256,6 +256,11 @@ export default function ConversationDetailScreen() {
 
     setSendError(null);
     const tempMessage: ThreadMessage = {
+      // onSend is an event handler -- it only runs from the send button and the
+      // retry/prompt presses below, never during render -- so an unstable id is
+      // exactly what we want here: it tags one optimistic message until the
+      // server assigns the real id. react-hooks/purity cannot see that.
+      // eslint-disable-next-line react-hooks/purity
       id: retryMessageId ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       conversationId,
       senderId: profile?.id ?? '',
