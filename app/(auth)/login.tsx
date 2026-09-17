@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
     AuthShell,
@@ -10,6 +10,7 @@ import {
     onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
 import { signInWithEmailPassword } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (result.error) {
-      Alert.alert('Sign in failed', result.error);
+      showAlert('Sign in failed', result.error);
     }
   };
 

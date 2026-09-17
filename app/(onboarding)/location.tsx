@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 
 import { ServiceAreaSheet } from '@/components/ServiceAreaSheet';
 import {
@@ -14,6 +14,7 @@ import {
 import { DEFAULT_BARANGAY, DEFAULT_CITY, DEFAULT_PROVINCE } from '@/services/onboarding.service';
 
 import { useOnboarding } from './onboarding-context';
+import { showAlert } from '@/utils/alert';
 
 type AddressStep = 'area' | 'address';
 
@@ -66,7 +67,7 @@ export default function LocationStep() {
     const hasTasteSetupRole = role === 'provider' || role === 'client';
 
     if (!hasTasteSetupRole) {
-      Alert.alert(
+      showAlert(
         'Choose how you will use Konektado',
         'Select whether you want to find work or hire someone before choosing services.',
       );

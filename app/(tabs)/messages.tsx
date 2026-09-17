@@ -2,7 +2,6 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -35,6 +34,7 @@ import { isPresenceActive } from '@/services/marketplace.helpers';
 import { getUnreadNotificationCount } from '@/services/notification.service';
 import type { ConversationSummary } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
+import { showAlert } from '@/utils/alert';
 
 type InboxFilter = 'all' | 'jobs' | 'services' | 'unread';
 
@@ -86,7 +86,7 @@ export default function MessagesScreen() {
         if (!active) return;
 
         if (result.error || !result.data) {
-          Alert.alert('Messages', result.error ?? 'Could not load conversations.');
+          showAlert('Messages', result.error ?? 'Could not load conversations.');
         } else {
           setConversationPreviewCache(result.data, profileId);
           setConversations(result.data);

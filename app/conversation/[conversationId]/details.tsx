@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -31,6 +31,7 @@ import {
 } from '@/services/marketplace.helpers';
 import { createReview, getMyJobReviewState } from '@/services/review.service';
 import type { ConversationDetail, JobReviewState, Review } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -66,7 +67,7 @@ export default function ConversationDetailsScreen() {
 
     getConversation(conversationId).then((result) => {
       if (result.error) {
-        Alert.alert('Details', result.error);
+        showAlert('Details', result.error);
       } else {
         setConversation(result.data);
       }
@@ -178,7 +179,7 @@ export default function ConversationDetailsScreen() {
 
     const result = await markWorkerHired({ conversationId });
     if (result.error) {
-      Alert.alert('Mark hired', result.error);
+      showAlert('Mark hired', result.error);
       return;
     }
 
@@ -193,7 +194,7 @@ export default function ConversationDetailsScreen() {
     setCompleting(false);
 
     if (result.error) {
-      Alert.alert('Mark completed', result.error);
+      showAlert('Mark completed', result.error);
       return;
     }
 
@@ -246,7 +247,7 @@ export default function ConversationDetailsScreen() {
     setReporting(false);
 
     if (result.error) {
-      Alert.alert('Report user', result.error);
+      showAlert('Report user', result.error);
       return;
     }
 
@@ -260,7 +261,7 @@ export default function ConversationDetailsScreen() {
 
     const result = await archiveConversation({ conversationId });
     if (result.error) {
-      Alert.alert('Archive conversation', result.error);
+      showAlert('Archive conversation', result.error);
       return;
     }
 

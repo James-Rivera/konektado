@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,6 +26,7 @@ import type {
   CredentialType,
   CreateCredentialInput,
 } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 const CREDENTIAL_TYPES: { value: CredentialType; label: string }[] = [
   { value: 'tesda', label: 'TESDA' },
@@ -57,7 +57,7 @@ export default function ProfileCredentialsScreen() {
     setLoading(false);
 
     if (result.error || !result.data) {
-      Alert.alert('Credentials', result.error ?? 'Could not load credentials.');
+      showAlert('Credentials', result.error ?? 'Could not load credentials.');
       return;
     }
 
@@ -87,7 +87,7 @@ export default function ProfileCredentialsScreen() {
 
   const saveCredential = async () => {
     if (!title.trim()) {
-      Alert.alert('Credential title', 'Enter the credential or proof name.');
+      showAlert('Credential title', 'Enter the credential or proof name.');
       return;
     }
 
@@ -102,7 +102,7 @@ export default function ProfileCredentialsScreen() {
     setSaving(false);
 
     if (result.error || !result.data) {
-      Alert.alert('Credentials', result.error ?? 'Could not save this credential.');
+      showAlert('Credentials', result.error ?? 'Could not save this credential.');
       return;
     }
 

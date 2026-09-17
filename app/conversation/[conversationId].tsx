@@ -3,7 +3,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
     Keyboard,
     KeyboardAvoidingView,
     Modal,
@@ -47,6 +46,7 @@ import {
 } from '@/services/profile-completion.service';
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
+import { showAlert } from '@/utils/alert';
 
 const JOB_PROMPTS = ['Where is the exact location?', 'What should I bring?', 'Send me your location'];
 const SERVICE_PROMPTS = ['Are you available?', 'Can we discuss the schedule?', 'How much is your rate?'];
@@ -107,7 +107,7 @@ export default function ConversationDetailScreen() {
 
       if (result.error) {
         setConversationError(result.error);
-        Alert.alert('Conversation', result.error);
+        showAlert('Conversation', result.error);
       } else {
         setConversation(result.data);
         void markConversationRead(conversationId).then((readResult) => {
@@ -304,7 +304,7 @@ export default function ConversationDetailScreen() {
           getCompletionModeForError(result.error) ??
           (conversation?.clientId === profile?.id ? 'hiring' : 'work');
         replaceMessage(tempMessage.id, null);
-        Alert.alert(getCompletionTitleForMode(mode), result.error, [
+        showAlert(getCompletionTitleForMode(mode), result.error, [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -333,7 +333,7 @@ export default function ConversationDetailScreen() {
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
     if ((asset.size ?? 0) > 10 * 1024 * 1024) {
-      Alert.alert('Image attachment', 'Choose an image smaller than 10 MB.');
+      showAlert('Image attachment', 'Choose an image smaller than 10 MB.');
       return;
     }
     setSelectedAttachment({
@@ -349,7 +349,7 @@ export default function ConversationDetailScreen() {
     const result = await markWorkerHired({ conversationId });
 
     if (result.error) {
-      Alert.alert('Mark hired', result.error);
+      showAlert('Mark hired', result.error);
       return;
     }
 

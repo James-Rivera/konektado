@@ -2,7 +2,6 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -30,6 +29,7 @@ import {
   type ReportStatus,
   type ReportSummary,
 } from '@/services/report.service';
+import { showAlert } from '@/utils/alert';
 
 type ReportFilter = ReportStatus | 'received';
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
@@ -113,7 +113,7 @@ export default function AdminReportsScreen() {
     setUpdatingId(null);
 
     if (result.error || !result.data) {
-      Alert.alert('Update report', result.error ?? 'Could not update this report.');
+      showAlert('Update report', result.error ?? 'Could not update this report.');
       return;
     }
 

@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -32,6 +31,7 @@ import {
   type VerificationRequestDetail,
 } from '@/services/admin.service';
 import { signOutCurrentUser } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 import type { VerificationStatus } from '@/types/verification.types';
 import {
   NEEDS_CORRECTION_REASONS,
@@ -99,7 +99,7 @@ export default function AdminVerificationReviewScreen() {
   const selectedFile = viewerIndex === null ? null : request?.files[viewerIndex] ?? null;
 
   const signOut = () => {
-    Alert.alert('Log out', 'End this barangay admin session?', [
+    showAlert('Log out', 'End this barangay admin session?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',
@@ -107,7 +107,7 @@ export default function AdminVerificationReviewScreen() {
         onPress: async () => {
           const { error } = await signOutCurrentUser();
           if (error) {
-            Alert.alert('Log out', error);
+            showAlert('Log out', error);
             return;
           }
 
@@ -124,7 +124,7 @@ export default function AdminVerificationReviewScreen() {
   const approve = () => {
     if (!request || !canReview) return;
 
-    Alert.alert(
+    showAlert(
       'Approve verification?',
       'This will mark the resident as Barangay Verified.',
       [
@@ -141,7 +141,7 @@ export default function AdminVerificationReviewScreen() {
     if (!decisionModal) return;
 
     if (decisionModal === 'rejected' && !decisionNote.trim()) {
-      Alert.alert('Rejection reason required', 'Provide a reason so the resident knows what to fix.');
+      showAlert('Rejection reason required', 'Provide a reason so the resident knows what to fix.');
       return;
     }
 
@@ -169,7 +169,7 @@ export default function AdminVerificationReviewScreen() {
     setSubmittingDecision(false);
 
     if (result.error || !result.data) {
-      Alert.alert('Review request', result.error ?? 'Could not save this review.');
+      showAlert('Review request', result.error ?? 'Could not save this review.');
       return;
     }
 
@@ -177,7 +177,7 @@ export default function AdminVerificationReviewScreen() {
     setDecisionModal(null);
     setDecisionNote('');
     setCorrectionReason(NAME_MISMATCH_REASON);
-    Alert.alert(
+    showAlert(
       decision === 'approved'
         ? 'Verification approved'
         : decision === 'needs_more_info'
@@ -194,14 +194,14 @@ export default function AdminVerificationReviewScreen() {
 
   const openSecurely = async (file: VerificationFile | null) => {
     if (!file?.url) {
-      Alert.alert('Open file', 'A secure file link could not be prepared.');
+      showAlert('Open file', 'A secure file link could not be prepared.');
       return;
     }
 
     try {
       await Linking.openURL(file.url);
     } catch {
-      Alert.alert('Open file', 'Could not open this uploaded file.');
+      showAlert('Open file', 'Could not open this uploaded file.');
     }
   };
 

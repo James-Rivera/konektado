@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -48,6 +47,7 @@ import type {
 import type { LegalNameEditPolicy } from '@/types/legal-name.types';
 import { getAvatarDisplayUrl } from '@/utils/image-processing';
 import { NAME_CORRECTION_REQUEST_EXPLANATION } from '@/utils/verified-name-policy';
+import { showAlert } from '@/utils/alert';
 
 type FormMode = ProfileCompletionMode;
 type ProfileFocusTarget =
@@ -297,7 +297,7 @@ export default function CompleteProfileScreen() {
     setUploadingAvatar(false);
 
     if (uploaded.error || !uploaded.data) {
-      Alert.alert('Profile photo', uploaded.error ?? 'Could not upload this photo.');
+      showAlert('Profile photo', uploaded.error ?? 'Could not upload this photo.');
       return;
     }
 
@@ -403,7 +403,7 @@ export default function CompleteProfileScreen() {
                   onChange={setCore}
                   onShowPhotoGuidelines={() => setPhotoGuidelinesVisible(true)}
                   onRequestNameCorrection={() => {
-                    Alert.alert('Request name correction', NAME_CORRECTION_REQUEST_EXPLANATION);
+                    showAlert('Request name correction', NAME_CORRECTION_REQUEST_EXPLANATION);
                   }}
                 />
               ) : roleLockedByCore ? (

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import {
     CheckRow,
@@ -13,6 +13,7 @@ import {
 import { getDisplayLabelForOfferedDeliveryMode } from '@/constants/service-taxonomy';
 
 import { useOnboarding } from './onboarding-context';
+import { showAlert } from '@/utils/alert';
 
 export default function ReviewStep() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function ReviewStep() {
 
   const submit = async () => {
     if (role !== 'provider' && role !== 'client') {
-      Alert.alert(
+      showAlert(
         'Choose how you will use Konektado',
         'Select whether you want to find work or hire someone before reviewing your details.',
       );

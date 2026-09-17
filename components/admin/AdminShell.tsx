@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { color, radius, space, typography } from '@/constants/theme';
 import { signOutCurrentUser } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 
 export type AdminSection = 'verifications' | 'reports' | 'users' | 'settings';
 export type AdminTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
@@ -88,7 +88,7 @@ export function AdminScreenShell({
   const router = useRouter();
 
   const signOut = () => {
-    Alert.alert('Log out', 'End this barangay admin session?', [
+    showAlert('Log out', 'End this barangay admin session?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',
@@ -96,7 +96,7 @@ export function AdminScreenShell({
         onPress: async () => {
           const { error } = await signOutCurrentUser();
           if (error) {
-            Alert.alert('Log out', error);
+            showAlert('Log out', error);
             return;
           }
 

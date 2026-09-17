@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -21,6 +21,7 @@ import {
 } from '@/services/profile-completion.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 import { getCardImageUrl } from '@/utils/image-processing';
+import { showAlert } from '@/utils/alert';
 
 type JobDraft = {
   title: string;
@@ -168,7 +169,7 @@ export default function CreateJobPreviewScreen() {
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'hiring';
-        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
+        showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -178,7 +179,7 @@ export default function CreateJobPreviewScreen() {
         return;
       }
 
-      Alert.alert('Could not publish post', result.error ?? 'Please try again.');
+      showAlert('Could not publish post', result.error ?? 'Please try again.');
       return;
     }
 
@@ -204,7 +205,7 @@ export default function CreateJobPreviewScreen() {
 
     if (!jobId && (saved?.error || !saved?.data)) {
       setPublishing(false);
-      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      showAlert('Draft', saved?.error ?? 'Could not save this draft.');
       return;
     }
 
@@ -224,7 +225,7 @@ export default function CreateJobPreviewScreen() {
       const saved = await saveCurrentDraft();
       setPublishing(false);
       if (saved?.error || !saved?.data) {
-        Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+        showAlert('Draft', saved?.error ?? 'Could not save this draft.');
         return;
       }
     }

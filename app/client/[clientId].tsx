@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -22,6 +22,7 @@ import {
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import type { JobSummary, PublicClientProfile } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -104,7 +105,7 @@ export default function PublicClientProfileScreen() {
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'work';
-        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
+        showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -114,7 +115,7 @@ export default function PublicClientProfileScreen() {
         return;
       }
 
-      Alert.alert('Message client', result.error ?? 'Could not open the conversation.');
+      showAlert('Message client', result.error ?? 'Could not open the conversation.');
       return;
     }
 

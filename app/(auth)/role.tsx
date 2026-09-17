@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
     LayoutAnimation,
     Platform,
     Pressable,
@@ -25,6 +24,7 @@ import {
 import { useProfile } from '@/hooks/use-profile';
 import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 import { getCurrentAuthUser, setSignupRoleMetadata } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 
 type SessionUser = {
   email: string | null;
@@ -127,7 +127,7 @@ export default function RoleScreen() {
 
   const continueWithRole = async () => {
     if (!selectedRole) {
-      Alert.alert('Choose how you will use Konektado', 'Select one option to continue.');
+      showAlert('Choose how you will use Konektado', 'Select one option to continue.');
       return;
     }
 
@@ -143,7 +143,7 @@ export default function RoleScreen() {
     }
 
     if (!recoveredUser) {
-      Alert.alert('Session still loading', 'Please wait a moment, then try again.');
+      showAlert('Session still loading', 'Please wait a moment, then try again.');
       return;
     }
 
@@ -156,7 +156,7 @@ export default function RoleScreen() {
 
     if (saveError) {
       setSubmitting(false);
-      Alert.alert('Could not save role', saveError.message);
+      showAlert('Could not save role', saveError.message);
       return;
     }
 

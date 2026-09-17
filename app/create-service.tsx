@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -46,6 +45,7 @@ import type {
   ServiceDraftSummary,
   UpsertServiceDraftInput,
 } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 const MAX_SERVICE_PHOTOS = 10;
 const MAX_SERVICE_TITLE_LENGTH = 80;
@@ -206,7 +206,7 @@ export default function CreateServiceScreen() {
       if (!active) return;
 
       if (result.error || !result.data) {
-        Alert.alert('Service', result.error ?? 'Could not load this service.');
+        showAlert('Service', result.error ?? 'Could not load this service.');
         router.back();
         return;
       }
@@ -251,7 +251,7 @@ export default function CreateServiceScreen() {
         if (!active) return;
 
         if (result.error || !result.data) {
-          Alert.alert('Draft', result.error ?? 'Could not load this draft.');
+          showAlert('Draft', result.error ?? 'Could not load this draft.');
         } else {
           hydrateService(result.data, {
             setAllowMessages,
@@ -277,7 +277,7 @@ export default function CreateServiceScreen() {
         }
       } catch {
         if (active) {
-          Alert.alert('Draft', 'Could not load this draft right now.');
+          showAlert('Draft', 'Could not load this draft right now.');
         }
       } finally {
         if (active) {
@@ -381,7 +381,7 @@ export default function CreateServiceScreen() {
 
   const onNext = async () => {
     if (uploadingPhotos) {
-      Alert.alert('Add Photos', 'Wait for the photos to finish uploading.');
+      showAlert('Add Photos', 'Wait for the photos to finish uploading.');
       return;
     }
     const serviceInput = buildServiceInput();
@@ -415,7 +415,7 @@ export default function CreateServiceScreen() {
       setSavingService(false);
 
       if (result.error || !result.data) {
-        Alert.alert('Service', result.error ?? 'Could not save this service.');
+        showAlert('Service', result.error ?? 'Could not save this service.');
         return;
       }
 
@@ -999,7 +999,7 @@ function showDraftSaveAlert(error?: string | null) {
     console.warn('Service draft save failed', error);
   }
 
-  Alert.alert('Draft', 'We could not save your draft. Please try again.');
+  showAlert('Draft', 'We could not save your draft. Please try again.');
 }
 
 function CreateServiceSkeleton() {
@@ -1080,7 +1080,7 @@ async function addPhotos(
 ) {
   const remaining = MAX_SERVICE_PHOTOS - currentPhotos.length;
   if (remaining <= 0) {
-    Alert.alert('Add Photos', 'You can add up to 10 photos.');
+    showAlert('Add Photos', 'You can add up to 10 photos.');
     return;
   }
 
@@ -1104,7 +1104,7 @@ async function addPhotos(
   setUploadingPhotos(false);
 
   if (uploaded.error || !uploaded.data) {
-    Alert.alert('Add Photos', uploaded.error ?? 'Could not upload photos.');
+    showAlert('Add Photos', uploaded.error ?? 'Could not upload photos.');
     return;
   }
 

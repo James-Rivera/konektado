@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFeedback } from '@/components/FeedbackProvider';
@@ -14,6 +14,7 @@ import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketpla
 import { getMyJobReviewState } from '@/services/review.service';
 import { listMyServices, updateServiceAvailability } from '@/services/service-profile.service';
 import type { JobReviewState, JobSummary, ProviderService } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 type ManageTarget =
   | { job: JobSummary; type: 'job' }
@@ -63,7 +64,7 @@ export default function ActivePostsScreen() {
           if (!active) return;
 
           if (jobResult.error || !jobResult.data) {
-            Alert.alert('Active posts', jobResult.error ?? 'Could not load your posts.');
+            showAlert('Active posts', jobResult.error ?? 'Could not load your posts.');
           } else {
             setJobs(jobResult.data);
             const completedJobs = jobResult.data.filter((job) => job.status === 'completed');
@@ -87,7 +88,7 @@ export default function ActivePostsScreen() {
           }
         } catch {
           if (active) {
-            Alert.alert('Active posts', 'Could not refresh your active posts right now.');
+            showAlert('Active posts', 'Could not refresh your active posts right now.');
           }
         } finally {
           if (active) {
@@ -162,7 +163,7 @@ export default function ActivePostsScreen() {
     setUpdatingKey(null);
 
     if (result.error || !result.data) {
-      Alert.alert('Manage post', result.error ?? 'Could not update this job.');
+      showAlert('Manage post', result.error ?? 'Could not update this job.');
       return;
     }
 
@@ -178,7 +179,7 @@ export default function ActivePostsScreen() {
     setUpdatingKey(null);
 
     if (result.error || !result.data) {
-      Alert.alert('Manage service', result.error ?? 'Could not update this service.');
+      showAlert('Manage service', result.error ?? 'Could not update this service.');
       return;
     }
 
@@ -198,7 +199,7 @@ export default function ActivePostsScreen() {
     onConfirm: () => void;
     title: string;
   }) => {
-    Alert.alert(title, body, [
+    showAlert(title, body, [
       { text: 'Cancel', style: 'cancel' },
       { text: label, style: 'destructive', onPress: onConfirm },
     ]);
@@ -248,7 +249,7 @@ export default function ActivePostsScreen() {
       : getServiceManagementActions({
           isActive: manageTarget.service.isActive,
           onDeactivate: () =>
-            Alert.alert(
+            showAlert(
               'Deactivate this service?',
               'This hides the service from search. You can reactivate it later from your posts.',
               [

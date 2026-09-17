@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { useFeedback } from '@/components/FeedbackProvider';
 import { KonektadoWordmark } from '@/components/KonektadoWordmark';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import {
@@ -39,6 +39,10 @@ import type { OnboardingIntent } from '@/utils/save-role';
 type AccountStep = 'email' | 'code';
 const EMAIL_OTP_LENGTH = 6;
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function normalizeRole(raw: unknown): OnboardingIntent | null {
   if (raw === 'client' || raw === 'provider') return raw;
   if (Array.isArray(raw) && (raw[0] === 'client' || raw[0] === 'provider')) {
@@ -52,6 +56,7 @@ export default function RegisterScreen() {
   const params = useLocalSearchParams();
   const selectedRole = useMemo(() => normalizeRole(params.role), [params.role]);
   const { height } = useWindowDimensions();
+  const { showErrorToast } = useFeedback();
 
   const [step, setStep] = useState<AccountStep>('email');
   const [email, setEmail] = useState('');
@@ -60,6 +65,8 @@ export default function RegisterScreen() {
   const [resendingCode, setResendingCode] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(60);
   const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [accountExists, setAccountExists] = useState(false);
   const verifyingCodeRef = useRef(false);
 
   const compactHeight = height < 760;
@@ -75,20 +82,36 @@ export default function RegisterScreen() {
     return () => clearTimeout(timer);
   }, [resendSeconds, step]);
 
+  /**
+   * Alert.alert is a no-op on react-native-web, so every failure has to land
+   * somewhere the user can actually see it on both platforms.
+   */
+  const reportError = (message: string) => {
+    setFormError(message);
+    setAccountExists(message === ACCOUNT_EXISTS_SIGNUP_MESSAGE);
+    showErrorToast(message);
+  };
+
+  const clearError = () => {
+    setFormError(null);
+    setAccountExists(false);
+  };
+
   const requestCode = async () => {
     if (loading || resendingCode) return;
 
+    if (!isValidEmail(normalizedEmail)) {
+      reportError('Enter a valid email address.');
+      return;
+    }
+
+    clearError();
     setLoading(true);
     const result = await requestSignupEmailOtp({ email: normalizedEmail, role: selectedRole });
     setLoading(false);
 
     if (result.error) {
-      if (result.error === ACCOUNT_EXISTS_SIGNUP_MESSAGE) {
-        showAccountExistsAlert();
-        return;
-      }
-
-      Alert.alert('Could not send code', result.error);
+      reportError(result.error);
       return;
     }
 
@@ -100,12 +123,13 @@ export default function RegisterScreen() {
   const resendCode = async () => {
     if (resendSeconds > 0 || loading || resendingCode) return;
 
+    clearError();
     setResendingCode(true);
     const result = await resendSignupEmailOtp({ email: normalizedEmail, role: selectedRole });
     setResendingCode(false);
 
     if (result.error) {
-      Alert.alert('Could not resend code', result.error);
+      reportError(result.error);
       return;
     }
 
@@ -117,6 +141,7 @@ export default function RegisterScreen() {
     if (code.length !== EMAIL_OTP_LENGTH || loading || verifyingCodeRef.current) return;
 
     verifyingCodeRef.current = true;
+    clearError();
     setLoading(true);
     const result = await verifySignupEmailOtp({ email: normalizedEmail, token: code });
     setLoading(false);
@@ -124,12 +149,7 @@ export default function RegisterScreen() {
 
     if (result.error) {
       setOtp('');
-      if (result.error === ACCOUNT_EXISTS_SIGNUP_MESSAGE) {
-        showAccountExistsAlert();
-        return;
-      }
-
-      Alert.alert('Invalid code', result.error);
+      reportError(result.error);
       return;
     }
 
@@ -149,29 +169,18 @@ export default function RegisterScreen() {
     }
   };
 
-  const showAccountExistsAlert = () => {
-    Alert.alert(
-      'Account already exists',
-      ACCOUNT_EXISTS_SIGNUP_MESSAGE,
-      [
-        {
-          text: 'Forgot password?',
-          onPress: () => {
-            router.replace({ pathname: '/(auth)/forgot-password', params: { email: normalizedEmail } });
-          },
-        },
-        {
-          text: 'Go to Log In',
-          onPress: () => router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } }),
-        },
-      ],
-    );
-  };
+  const goToLogin = () =>
+    router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } });
+
+  const goToForgotPassword = () =>
+    router.replace({ pathname: '/(auth)/forgot-password', params: { email: normalizedEmail } });
 
   const goBack = () => {
     if (loading) return;
 
     if (step === 'code') {
+      clearError();
+      setOtp('');
       setStep('email');
       return;
     }
@@ -209,11 +218,19 @@ export default function RegisterScreen() {
             autoComplete="email"
             keyboardType="email-address"
             label="Email"
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              if (formError) clearError();
+            }}
             textContentType="emailAddress"
             value={email}
           />
           <Text style={styles.instructionText}>{"We'll send you a code to verify your email."}</Text>
+          <InlineFormError
+            message={formError}
+            onForgotPassword={accountExists ? goToForgotPassword : undefined}
+            onLogin={accountExists ? goToLogin : undefined}
+          />
         </View>
       </View>
     </AccountStepFrame>
@@ -249,6 +266,12 @@ export default function RegisterScreen() {
         value={otp}
       />
 
+      <InlineFormError
+        message={formError}
+        onForgotPassword={accountExists ? goToForgotPassword : undefined}
+        onLogin={accountExists ? goToLogin : undefined}
+      />
+
       <View style={styles.infoNote}>
         <View style={styles.infoIcon}>
           <Text style={styles.infoIconText}>i</Text>
@@ -282,6 +305,38 @@ export default function RegisterScreen() {
         </View>
         <PrimaryButton label="Done" onPress={() => setLanguageSheetVisible(false)} />
       </BottomSheet>
+    </View>
+  );
+}
+
+function InlineFormError({
+  message,
+  onForgotPassword,
+  onLogin,
+}: {
+  message: string | null;
+  onForgotPassword?: () => void;
+  onLogin?: () => void;
+}) {
+  if (!message) return null;
+
+  return (
+    <View accessibilityLiveRegion="polite" style={styles.errorBlock}>
+      <Text style={styles.errorText}>{message}</Text>
+      {onLogin || onForgotPassword ? (
+        <View style={styles.errorActions}>
+          {onLogin ? (
+            <Pressable accessibilityRole="button" onPress={onLogin}>
+              <Text style={styles.errorAction}>Go to Log In</Text>
+            </Pressable>
+          ) : null}
+          {onForgotPassword ? (
+            <Pressable accessibilityRole="button" onPress={onForgotPassword}>
+              <Text style={styles.errorAction}>Forgot password?</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -535,5 +590,29 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     width: '100%',
+  },
+  errorBlock: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+    padding: 12,
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    gap: 18,
+  },
+  errorAction: {
+    color: '#69A4EC',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 13,
+    lineHeight: 20,
   },
 });

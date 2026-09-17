@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
 import { useRouter, useSegments } from 'expo-router';
 
 import { AppSplashScreen } from '@/components/app-splash-screen';
@@ -11,6 +10,7 @@ import {
 } from '@/services/onboarding.service';
 import { useProfile } from '@/hooks/use-profile';
 import type { OnboardingDraft, OnboardingIntent, VerificationUpload } from '@/types/onboarding.types';
+import { showAlert } from '@/utils/alert';
 
 export type { OnboardingDraft, VerificationUpload };
 
@@ -46,7 +46,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       if (!active) return;
 
       if (result.error || !result.data) {
-        Alert.alert('Not signed in', result.error ?? 'Please sign in again to continue.');
+        showAlert('Not signed in', result.error ?? 'Please sign in again to continue.');
         setLoading(false);
         return;
       }
@@ -90,7 +90,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const saveProfile = useCallback(async () => {
     if (!userMeta || !cachedRole) {
-      Alert.alert('Not signed in', 'Please sign in again to continue.');
+      showAlert('Not signed in', 'Please sign in again to continue.');
       return false;
     }
 
@@ -105,7 +105,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       });
 
       if (result.error) {
-        Alert.alert('Could not save profile', result.error);
+        showAlert('Could not save profile', result.error);
         return false;
       }
 

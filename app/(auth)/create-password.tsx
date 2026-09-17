@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState, type ReactNode } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -26,6 +25,7 @@ import {
 } from '@/components/onboarding/FigmaOnboarding';
 import { getCurrentAuthUser, getCurrentSignupRole, setSignupPassword } from '@/services/auth.service';
 import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
+import { showAlert } from '@/utils/alert';
 
 function normalizeRole(raw: unknown): OnboardingIntent | null {
   if (raw === 'client' || raw === 'provider') return raw;
@@ -63,7 +63,7 @@ export default function CreatePasswordScreen() {
     if (loading) return;
 
     if (!passwordHasLength || !passwordHasSpecial) {
-      Alert.alert('Password requirements', 'Use 8 to 20 characters and include at least one special character.');
+      showAlert('Password requirements', 'Use 8 to 20 characters and include at least one special character.');
       return;
     }
 
@@ -74,7 +74,7 @@ export default function CreatePasswordScreen() {
 
     if (roleResult.error) {
       setLoading(false);
-      Alert.alert('Session expired', roleResult.error);
+      showAlert('Session expired', roleResult.error);
       router.replace('/(auth)/role');
       return;
     }
@@ -84,7 +84,7 @@ export default function CreatePasswordScreen() {
 
     if (passwordResult.error) {
       setLoading(false);
-      Alert.alert('Could not save password', passwordResult.error);
+      showAlert('Could not save password', passwordResult.error);
       return;
     }
 
@@ -92,7 +92,7 @@ export default function CreatePasswordScreen() {
 
     if (userResult.error || !userResult.data) {
       setLoading(false);
-      Alert.alert('Session expired', userResult.error ?? 'Please verify your email again to continue.');
+      showAlert('Session expired', userResult.error ?? 'Please verify your email again to continue.');
       router.replace('/(auth)/role');
       return;
     }
@@ -108,7 +108,7 @@ export default function CreatePasswordScreen() {
 
       if (saveRoleError) {
         setLoading(false);
-        Alert.alert('Could not save role', saveRoleError.message);
+        showAlert('Could not save role', saveRoleError.message);
         return;
       }
     }
@@ -123,7 +123,7 @@ export default function CreatePasswordScreen() {
       <AccountStepFrame
         contentStyle={[styles.passwordContent, compactHeight ? styles.passwordContentCompact : undefined]}
         footer={<OnboardingButton label="Next" loading={loading} onPress={savePassword} style={styles.primaryButton} />}
-        onBack={() => Alert.alert('Create password', 'Create a password before continuing to onboarding.')}
+        onBack={() => showAlert('Create password', 'Create a password before continuing to onboarding.')}
       >
         <View style={styles.formTitleBlock}>
           <Text style={styles.title}>Create a Password</Text>

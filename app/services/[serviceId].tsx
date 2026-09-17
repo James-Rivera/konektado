@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
@@ -42,6 +42,7 @@ import { getServiceDetail, updateServiceAvailability } from '@/services/service-
 import { getPublicWorkerProfile } from '@/services/worker-profile.service';
 import type { ProviderService, PublicWorkerProfile, ServiceDetail } from '@/types/marketplace.types';
 import { getDetailImageUrl } from '@/utils/image-processing';
+import { showAlert } from '@/utils/alert';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -172,7 +173,7 @@ export default function ServicePublicWorkerProfileScreen() {
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'hiring';
-        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
+        showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -182,7 +183,7 @@ export default function ServicePublicWorkerProfileScreen() {
         return;
       }
 
-      Alert.alert('Message worker', result.error ?? 'Could not open the conversation.');
+      showAlert('Message worker', result.error ?? 'Could not open the conversation.');
       return;
     }
 

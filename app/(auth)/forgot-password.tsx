@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -35,6 +34,7 @@ import {
   setRecoveredPassword,
   verifyPasswordResetEmailOtp,
 } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 
 type RecoveryStep = 'email' | 'code' | 'password';
 
@@ -108,7 +108,7 @@ export default function ForgotPasswordScreen() {
     setLoading(false);
 
     if (result.error) {
-      Alert.alert('Could not send code', result.error);
+      showAlert('Could not send code', result.error);
       return;
     }
 
@@ -127,7 +127,7 @@ export default function ForgotPasswordScreen() {
     setResendingCode(false);
 
     if (result.error) {
-      Alert.alert('Could not resend code', result.error);
+      showAlert('Could not resend code', result.error);
       return;
     }
 
@@ -146,7 +146,7 @@ export default function ForgotPasswordScreen() {
 
     if (result.error) {
       setOtp('');
-      Alert.alert('Invalid code', result.error);
+      showAlert('Invalid code', result.error);
       return;
     }
 
@@ -164,7 +164,7 @@ export default function ForgotPasswordScreen() {
     if (loading) return;
 
     if (!passwordReady) {
-      Alert.alert('Password requirements', 'Use 8 to 20 characters, include a special character, and confirm the same password.');
+      showAlert('Password requirements', 'Use 8 to 20 characters, include a special character, and confirm the same password.');
       return;
     }
 
@@ -173,7 +173,7 @@ export default function ForgotPasswordScreen() {
     setLoading(false);
 
     if (result.error) {
-      Alert.alert('Could not save password', result.error);
+      showAlert('Could not save password', result.error);
       return;
     }
 

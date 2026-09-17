@@ -82,6 +82,12 @@ function toAuthMessage(message: string, fallback: string) {
     return "The code is incorrect or has expired. Request a new code and try again.";
   }
 
+  // GoTrue surfaces every mail-transport failure as a 500 "Error sending ...
+  // email". Keep the backend wording out of the UI and point at the retry path.
+  if (normalized.includes("error sending")) {
+    return "We could not send the email right now. Please try again in a moment, or contact support if it keeps failing.";
+  }
+
   if (
     normalized.includes("already registered") ||
     normalized.includes("already exists")
@@ -425,7 +431,19 @@ export async function signOutCurrentUser(): Promise<ServiceResult<void>> {
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    return { data: null, error: error.message || "Could not sign out. Please try again." };
+    // supabase-js only clears the stored session after the server call
+    // succeeds (401/403/404 aside), so a network failure here leaves the user
+    // signed in. Say so plainly instead of implying the session ended.
+    const normalized = error.message?.toLowerCase() ?? "";
+    const isNetworkFailure =
+      normalized.includes("fetch") || normalized.includes("network");
+
+    return {
+      data: null,
+      error: isNetworkFailure
+        ? "Could not reach the server, so you are still signed in on this device. Check your connection and try again."
+        : error.message || "Could not sign out. Please try again.",
+    };
   }
 
   return { data: undefined, error: null };

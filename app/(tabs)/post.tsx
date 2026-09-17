@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
@@ -20,6 +20,7 @@ import type {
   ProviderService,
   ServiceDraftSummary,
 } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 type PostingDraft =
   | { kind: 'job'; record: JobDraftSummary }
@@ -65,13 +66,13 @@ export default function PostScreen() {
           if (!active) return;
 
           if (jobResult.error || !jobResult.data) {
-            Alert.alert('Posts', jobResult.error ?? 'Could not load jobs.');
+            showAlert('Posts', jobResult.error ?? 'Could not load jobs.');
           } else {
             setJobs(jobResult.data);
           }
 
           if (draftResult.error || !draftResult.data) {
-            Alert.alert('Drafts', draftResult.error ?? 'Could not load drafts.');
+            showAlert('Drafts', draftResult.error ?? 'Could not load drafts.');
           } else {
             setDrafts(draftResult.data);
           }
@@ -83,13 +84,13 @@ export default function PostScreen() {
           }
 
           if (serviceDraftResult.error || !serviceDraftResult.data) {
-            Alert.alert('Drafts', serviceDraftResult.error ?? 'Could not load service drafts.');
+            showAlert('Drafts', serviceDraftResult.error ?? 'Could not load service drafts.');
           } else {
             setServiceDrafts(serviceDraftResult.data);
           }
         } catch {
           if (active) {
-            Alert.alert('Posts', 'Could not refresh your posts right now.');
+            showAlert('Posts', 'Could not refresh your posts right now.');
           }
         } finally {
           if (active) {

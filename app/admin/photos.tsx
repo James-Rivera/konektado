@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -23,6 +23,7 @@ import {
   type AdminPhotoSource,
   type AdminPublicPhotoItem,
 } from '@/services/admin-photo.service';
+import { showAlert } from '@/utils/alert';
 
 type PhotoFilter = AdminPhotoSource | 'all';
 
@@ -159,7 +160,7 @@ function PhotoAuditCard({ photo }: { photo: AdminPublicPhotoItem }) {
 
   const handleOpenPhotoSource = () => {
     if (!action.route) {
-      Alert.alert('Photo source unavailable', 'This photo source is unavailable.');
+      showAlert('Photo source unavailable', 'This photo source is unavailable.');
       return;
     }
 

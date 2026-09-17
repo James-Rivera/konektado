@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import {
@@ -25,6 +25,7 @@ import {
 } from '@/constants/service-taxonomy';
 
 import { useOnboarding } from './onboarding-context';
+import { showAlert } from '@/utils/alert';
 
 type ServiceSetupSheet =
   | 'providerWorkSetup'
@@ -213,7 +214,7 @@ export default function JobStep() {
 
   const next = () => {
     if (!collectsOffered && !collectsNeeded) {
-      Alert.alert(
+      showAlert(
         'Choose how you will use Konektado',
         'Select whether you want to find work or hire someone before choosing services.',
       );

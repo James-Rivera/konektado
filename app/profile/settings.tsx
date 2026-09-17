@@ -1,13 +1,14 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CurrentUserIdentityRow, getProfileDisplayName } from '@/components/profile/CurrentUserIdentity';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { signOutCurrentUser } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 
 type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -18,7 +19,7 @@ export default function ProfileSettingsScreen() {
   const displayName = getProfileDisplayName(profile);
 
   const confirmLogout = () => {
-    Alert.alert('Log out', 'End this session on this device?', [
+    showAlert('Log out', 'End this session on this device?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',
@@ -26,7 +27,7 @@ export default function ProfileSettingsScreen() {
         onPress: async () => {
           const { error } = await signOutCurrentUser();
           if (error) {
-            Alert.alert('Log out', error);
+            showAlert('Log out', error);
             return;
           }
           router.replace('/(auth)');

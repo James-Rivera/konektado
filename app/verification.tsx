@@ -1,7 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
 
 import {
   FigmaVerificationFlow,
@@ -28,6 +27,7 @@ import {
   isNameMismatchCorrectionReason,
   NAME_CORRECTION_MESSAGE,
 } from '@/utils/verified-name-policy';
+import { showAlert } from '@/utils/alert';
 
 type VerificationFormState = CreateVerificationRequestInput;
 
@@ -75,13 +75,13 @@ export default function VerificationGateScreen() {
       if (!active) return;
 
       if (result.error) {
-        Alert.alert('Verification', result.error);
+        showAlert('Verification', result.error);
         setLoadingPrefill(false);
         return;
       }
 
       if (!result.data) {
-        Alert.alert('Verification', 'Could not load your verification details.');
+        showAlert('Verification', 'Could not load your verification details.');
         setLoadingPrefill(false);
         return;
       }
@@ -209,7 +209,7 @@ export default function VerificationGateScreen() {
       const message = result.error ?? 'Could not send a verification code.';
       const hasUsableChallenge = Boolean(form.contactOtpChallengeId && canVerify);
       if (result.errorCode === 'unauthorized') {
-        Alert.alert('Contact verification', message);
+        showAlert('Contact verification', message);
         return false;
       }
 
@@ -230,7 +230,7 @@ export default function VerificationGateScreen() {
       }
 
       if (!hasUsableChallenge) {
-        Alert.alert(
+        showAlert(
           'Contact verification unavailable',
           'We could not start contact verification right now. Please try again shortly.',
         );
@@ -243,7 +243,7 @@ export default function VerificationGateScreen() {
     }
 
     if (!result.data.canVerify) {
-      Alert.alert('Contact verification', 'Could not start contact verification.');
+      showAlert('Contact verification', 'Could not start contact verification.');
       return false;
     }
 
@@ -341,7 +341,7 @@ export default function VerificationGateScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      showAlert(
         'Upload from Gallery',
         'Photo library access is needed to choose an image. You can try again or use the camera.',
       );
@@ -436,12 +436,12 @@ export default function VerificationGateScreen() {
       setSubmitting(false);
 
       if (result.error) {
-        Alert.alert('Verification request', result.error);
+        showAlert('Verification request', result.error);
         return;
       }
 
       if (!result.data) {
-        Alert.alert('Verification request', 'Could not submit your verification request.');
+        showAlert('Verification request', 'Could not submit your verification request.');
         return;
       }
 
@@ -455,7 +455,7 @@ export default function VerificationGateScreen() {
     const validationMessage = validateStep();
 
     if (validationMessage) {
-      Alert.alert('Check your details', validationMessage);
+      showAlert('Check your details', validationMessage);
       return;
     }
 
@@ -479,7 +479,7 @@ export default function VerificationGateScreen() {
       setContactVerifying(false);
       if (result.error) {
         if (result.errorCode === 'unauthorized') {
-          Alert.alert('Contact verification', result.error);
+          showAlert('Contact verification', result.error);
           return;
         }
 

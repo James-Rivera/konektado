@@ -3,7 +3,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -52,6 +52,7 @@ import type {
     ProfileCompletionStatus,
 } from '@/types/profile.types';
 import type { UserPreferences } from '@/types/onboarding.types';
+import { showAlert } from '@/utils/alert';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -165,7 +166,7 @@ export default function ProfileScreen() {
     const destination = getProfileCompletionDestination(action);
 
     if (destination.type === 'message') {
-      Alert.alert(destination.title, destination.message);
+      showAlert(destination.title, destination.message);
       return;
     }
 
@@ -281,7 +282,7 @@ export default function ProfileScreen() {
         onViewPublicProfile={() => {
           setQuickActionsVisible(false);
           if (!profile?.id) {
-            Alert.alert('Public profile', 'Sign in again to preview your public profile.');
+            showAlert('Public profile', 'Sign in again to preview your public profile.');
             return;
           }
 

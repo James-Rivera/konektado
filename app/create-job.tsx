@@ -5,7 +5,6 @@ import type { ReactNode } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -46,6 +45,7 @@ import type {
   RateType,
   UpsertJobDraftInput,
 } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 const MAX_JOB_PHOTOS = 10;
 
@@ -544,14 +544,14 @@ export default function CreateJobScreen() {
         if (!active) return;
 
         if (result.error || !result.data) {
-          Alert.alert('Draft', result.error ?? 'Could not load this draft.');
+          showAlert('Draft', result.error ?? 'Could not load this draft.');
         } else {
           const loadedDraft = draftFromRecord(result.data);
           if (loadedDraft) setDraft(loadedDraft);
         }
       } catch {
         if (active) {
-          Alert.alert('Draft', 'Could not load this draft right now.');
+          showAlert('Draft', 'Could not load this draft right now.');
         }
       } finally {
         if (active) {
@@ -574,7 +574,7 @@ export default function CreateJobScreen() {
     void getOwnedJobForEdit(jobId).then((result) => {
       if (!active) return;
       if (result.error || !result.data) {
-        Alert.alert('Edit job', result.error ?? 'Could not load this job.');
+        showAlert('Edit job', result.error ?? 'Could not load this job.');
         router.back();
       } else {
         const loadedDraft = draftFromRecord(result.data);
@@ -772,7 +772,7 @@ export default function CreateJobScreen() {
 
   const openServicePicker = () => {
     if (!draft.category) {
-      Alert.alert('Service Needed', 'Choose a job category first.');
+      showAlert('Service Needed', 'Choose a job category first.');
       return;
     }
     setServicePickerVisible(true);
@@ -801,7 +801,7 @@ export default function CreateJobScreen() {
 
     const remaining = MAX_JOB_PHOTOS - draft.photoUrls.length;
     if (remaining <= 0) {
-      Alert.alert('Add Photos', 'You can add up to 10 photos.');
+      showAlert('Add Photos', 'You can add up to 10 photos.');
       return;
     }
 
@@ -828,7 +828,7 @@ export default function CreateJobScreen() {
     setUploadingPhotos(false);
 
     if (uploaded.error || !uploaded.data) {
-      Alert.alert('Add Photos', uploaded.error ?? 'Could not upload photos.');
+      showAlert('Add Photos', uploaded.error ?? 'Could not upload photos.');
       return;
     }
 
@@ -840,7 +840,7 @@ export default function CreateJobScreen() {
 
   const onNext = async () => {
     if (uploadingPhotos) {
-      Alert.alert('Add Photos', 'Wait for the photos to finish uploading.');
+      showAlert('Add Photos', 'Wait for the photos to finish uploading.');
       return;
     }
 
@@ -867,7 +867,7 @@ export default function CreateJobScreen() {
     setSavingDraft(false);
 
     if (!saved || saved.error || !saved.data) {
-      Alert.alert('Draft', saved?.error ?? 'Could not save this draft.');
+      showAlert('Draft', saved?.error ?? 'Could not save this draft.');
       return;
     }
 

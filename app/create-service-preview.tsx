@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -27,6 +27,7 @@ import { deleteServiceDraft, saveServiceDraft } from '@/services/service-draft.s
 import { createService } from '@/services/service-profile.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
+import { showAlert } from '@/utils/alert';
 
 type ServiceDraft = {
   allowMessages: boolean;
@@ -218,7 +219,7 @@ export default function CreateServicePreviewScreen() {
       setPublishing(false);
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'work';
-        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
+        showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -228,7 +229,7 @@ export default function CreateServicePreviewScreen() {
         return;
       }
 
-      Alert.alert('Could not publish service', result.error ?? 'Please try again.');
+      showAlert('Could not publish service', result.error ?? 'Please try again.');
       return;
     }
 
@@ -358,7 +359,7 @@ function showDraftSaveAlert(error?: string | null) {
     console.warn('Service draft save failed', error);
   }
 
-  Alert.alert('Draft', 'We could not save your draft. Please try again.');
+  showAlert('Draft', 'We could not save your draft. Please try again.');
 }
 
 function VerificationGateModal({

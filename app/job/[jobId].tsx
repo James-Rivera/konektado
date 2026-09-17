@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
@@ -37,6 +37,7 @@ import {
 import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getDetailImageUrl } from '@/utils/image-processing';
+import { showAlert } from '@/utils/alert';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -83,7 +84,7 @@ export default function JobDetailScreen() {
       if (!active) return;
 
       if (result.error) {
-        Alert.alert('Job details', result.error);
+        showAlert('Job details', result.error);
       } else {
         setJob(result.data);
       }
@@ -187,7 +188,7 @@ export default function JobDetailScreen() {
       if (result.error || !result.data) {
         if (isProfileCompletionRequiredError(result.error)) {
           const mode = getCompletionModeForError(result.error) ?? 'work';
-          Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
+          showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
             { text: 'Later', style: 'cancel' },
             {
               text: 'Complete profile',
@@ -197,7 +198,7 @@ export default function JobDetailScreen() {
           return;
         }
 
-        Alert.alert('Message', result.error ?? 'Could not open the conversation.');
+        showAlert('Message', result.error ?? 'Could not open the conversation.');
         return;
       }
 
@@ -243,7 +244,7 @@ export default function JobDetailScreen() {
     setReporting(false);
 
     if (result.error) {
-      Alert.alert('Report job', result.error);
+      showAlert('Report job', result.error);
       return;
     }
 
@@ -265,7 +266,7 @@ export default function JobDetailScreen() {
     setUpdatingPost(false);
 
     if (result.error || !result.data) {
-      Alert.alert('Manage job', result.error ?? 'Could not update this job.');
+      showAlert('Manage job', result.error ?? 'Could not update this job.');
       return;
     }
 
@@ -291,7 +292,7 @@ export default function JobDetailScreen() {
     onConfirm: () => void;
     title: string;
   }) => {
-    Alert.alert(title, body, [
+    showAlert(title, body, [
       { text: 'Cancel', style: 'cancel' },
       { text: label, style: 'destructive', onPress: onConfirm },
     ]);

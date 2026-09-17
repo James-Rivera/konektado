@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Image,
   Linking,
   Modal,
@@ -68,6 +67,7 @@ import {
   type PublicDemoImageAsset,
 } from '@/services/internal-demo-editor.service';
 import { signOutCurrentUser } from '@/services/auth.service';
+import { showAlert } from '@/utils/alert';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
 import { getPublicImageValidationError } from '@/utils/image-processing';
 
@@ -254,11 +254,11 @@ export default function InternalDemoContentEditorScreen() {
       return;
     }
 
-    Alert.alert('Preview public profile', 'This resident does not have a worker or client role to preview yet.');
+    showAlert('Preview public profile', 'This resident does not have a worker or client role to preview yet.');
   };
 
   const signOut = () => {
-    Alert.alert('Log out', 'End this internal editor session?', [
+    showAlert('Log out', 'End this internal editor session?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',
@@ -1261,14 +1261,14 @@ function JobForm({
     const result = await deactivateEditableJob(job.id);
     setSaving(false);
     if (result.error || !result.data) {
-      Alert.alert('Deactivate job', result.error ?? 'Could not deactivate this job.');
+      showAlert('Deactivate job', result.error ?? 'Could not deactivate this job.');
       return;
     }
     await onSaved('Job deactivated');
   };
 
   const confirmDeactivate = () => {
-    Alert.alert('Deactivate this job?', 'This hides the job from public discovery. You can reactivate it later by changing its status.', [
+    showAlert('Deactivate this job?', 'This hides the job from public discovery. You can reactivate it later by changing its status.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Deactivate', style: 'destructive', onPress: () => void deactivate() },
     ]);
@@ -1547,14 +1547,14 @@ function ServiceForm({
     const result = await deactivateEditableService(service.id);
     setSaving(false);
     if (result.error || !result.data) {
-      Alert.alert('Deactivate service', result.error ?? 'Could not deactivate this service.');
+      showAlert('Deactivate service', result.error ?? 'Could not deactivate this service.');
       return;
     }
     await onSaved('Service deactivated');
   };
 
   const confirmDeactivate = () => {
-    Alert.alert('Deactivate this service?', 'This hides the service from public discovery. You can reactivate it later from this editor.', [
+    showAlert('Deactivate this service?', 'This hides the service from public discovery. You can reactivate it later from this editor.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Deactivate', style: 'destructive', onPress: () => void deactivate() },
     ]);
@@ -1711,16 +1711,16 @@ function VerificationRequestEditor({
     const result = await updateVerificationNotes(request.id, { adminNote, documentType, residentNote });
     setSaving(false);
     if (result.error || !result.data) {
-      Alert.alert('Verification notes', result.error ?? 'Could not save verification notes.');
+      showAlert('Verification notes', result.error ?? 'Could not save verification notes.');
       return;
     }
-    Alert.alert('Verification notes', 'Notes saved.');
+    showAlert('Verification notes', 'Notes saved.');
   };
 
   const previewFile = async (file: EditableVerificationFile) => {
     const result = await createSignedVerificationFileUrl(file.filePath ?? '');
     if (result.error || !result.data) {
-      Alert.alert('Verification document', result.error ?? 'Could not create a signed link.');
+      showAlert('Verification document', result.error ?? 'Could not create a signed link.');
       return;
     }
     onPreview(result.data, formatFileType(file.fileType));
@@ -1757,7 +1757,7 @@ function VerificationRequestEditor({
     setUploadingFileId(null);
 
     if (result.error || !result.data) {
-      Alert.alert('Verification file', result.error ?? 'Could not upload this private file.');
+      showAlert('Verification file', result.error ?? 'Could not upload this private file.');
       return;
     }
 
@@ -1765,7 +1765,7 @@ function VerificationRequestEditor({
       if (!targetFile) return [...current, result.data];
       return current.map((item) => (item.id === targetFile.id ? result.data : item));
     });
-    Alert.alert('Verification file', targetFile ? 'File replaced.' : 'File added.');
+    showAlert('Verification file', targetFile ? 'File replaced.' : 'File added.');
   };
 
   return (
@@ -1885,12 +1885,12 @@ function PublicPhotosPreview({ user }: { user: EditableUserDetail }) {
     setModeratingId(null);
 
     if (result.error || !result.data) {
-      Alert.alert('Public photo review', result.error ?? 'Could not save this photo review.');
+      showAlert('Public photo review', result.error ?? 'Could not save this photo review.');
       return;
     }
 
     setPhotoStatuses((current) => ({ ...current, [photo.id]: result.data.action }));
-    Alert.alert('Public photo review', `${formatStatus(result.data.action)} saved.`);
+    showAlert('Public photo review', `${formatStatus(result.data.action)} saved.`);
   };
 
   return (
@@ -1954,7 +1954,7 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
     const result = await updateEditableConversationStatus(conversation.id, status);
     setSavingActivityId(null);
     if (result.error || !result.data) {
-      Alert.alert('Conversation status', result.error ?? 'Could not update this conversation.');
+      showAlert('Conversation status', result.error ?? 'Could not update this conversation.');
       return;
     }
     setConversations((current) =>
@@ -1972,7 +1972,7 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
     const result = await updateEditableReportStatus(report.id, status);
     setSavingActivityId(null);
     if (result.error || !result.data) {
-      Alert.alert('Report status', result.error ?? 'Could not update this report.');
+      showAlert('Report status', result.error ?? 'Could not update this report.');
       return;
     }
     setReports((current) => current.map((item) => (item.id === report.id ? result.data : item)));

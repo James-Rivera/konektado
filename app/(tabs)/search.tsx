@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -58,6 +58,7 @@ import { createReport } from '@/services/report.service';
 import { searchServices } from '@/services/service-profile.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
+import { showAlert } from '@/utils/alert';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -632,7 +633,7 @@ export default function SearchScreen() {
       setReporting(false);
 
       if (result.error) {
-        Alert.alert(reportTarget.label, result.error);
+        showAlert(reportTarget.label, result.error);
         return;
       }
 

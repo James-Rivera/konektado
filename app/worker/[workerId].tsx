@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -22,6 +22,7 @@ import {
 } from '@/services/profile-completion.service';
 import { getPublicWorkerProfile } from '@/services/worker-profile.service';
 import type { ProviderService, PublicWorkerProfile } from '@/types/marketplace.types';
+import { showAlert } from '@/utils/alert';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -104,7 +105,7 @@ export default function PublicWorkerProfileScreen() {
     if (result.error || !result.data) {
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'hiring';
-        Alert.alert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
+        showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
           { text: 'Later', style: 'cancel' },
           {
             text: 'Complete profile',
@@ -114,7 +115,7 @@ export default function PublicWorkerProfileScreen() {
         return;
       }
 
-      Alert.alert('Message worker', result.error ?? 'Could not open the conversation.');
+      showAlert('Message worker', result.error ?? 'Could not open the conversation.');
       return;
     }
 
