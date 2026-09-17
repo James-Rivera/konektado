@@ -70,12 +70,12 @@ Onboarding and verification rules:
 - Home default filter comes from `user_preferences.intent`: provider opens Jobs, client opens Services, both or missing opens For you.
 - Do not require all ID, services, and credential details before the user can view the app.
 - Use Supabase email OTP signup plus password creation for the MVP; login is email/password.
-- Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing, but the Magic Link and Confirm sign up email templates must include `{{ .Token }}` for the app's email-code flow.
+- Custom SMTP is not required by design, and the Magic Link and Confirm sign up email templates must include `{{ .Token }}` for the app's email-code flow. If OTP sends fail, check Supabase Auth Logs for the SMTP rejection before changing app code.
 - Supabase Auth OTP length must be configured to 6 digits. The app and email template intentionally accept/display exactly six digits.
 - In app code, onboarding email OTP codes must be handled through `services/auth.service.ts`. The MVP signup path is email -> OTP -> create password: call `signInWithOtp({ email, options: { shouldCreateUser: true, data } })`, resend by calling `signInWithOtp()` again, verify with `verifyOtp({ type: 'email' })`, then save the real password with `updateUser({ password })` after Supabase creates a session.
 - Do not use SMS/mobile OTP for account authentication. The approved barangay verification flow separately uses server-side contact OTP with restricted local simulation.
 - Phone-first account entry remains a future option when provider access and device testing are available.
-- Current auth state as of 2026-05-03, Asia/Shanghai: root cause found and fixed. Supabase Auth was configured to generate 8-digit OTP codes while the app and email template displayed and accepted 6 digits. Supabase Auth OTP length is now set to 6 digits. The UI is guarded 6-digit auto-submit.
+- Current auth state as of 2026-09-17, Asia/Shanghai: Supabase Auth OTP length is 6 digits and the UI is guarded 6-digit auto-submit (fixed 2026-05-03). Registration now surfaces failures inline plus a toast instead of `Alert.alert`, which is a no-op on web and made every signup error invisible there. Supabase Auth mail delivery returned `500 Error sending confirmation email` for a non-deliverable probe address on 2026-09-17; this is unconfirmed for real recipients and is tracked in `docs/07-auth-and-permissions.md`.
 - Before barangay verification, users are unverified viewers.
 - Unverified viewers may browse limited public content but may not post jobs, create public service posts, message users, save if verification-gated, or leave reviews.
 - The verification flow is where heavier requirements belong: contact confirmation, email confirmation, optional phone number, ID documents, services, credentials, selfie/photo for manual barangay comparison, and supporting details.

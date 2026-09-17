@@ -43,15 +43,19 @@ Active MVP password recovery flow:
 
 Current OTP troubleshooting note:
 
-- 2026-05-03, Asia/Shanghai: root cause found. Supabase Auth was configured to generate 8-digit OTP codes while the app and email template displayed and accepted 6 digits. Supabase Auth OTP length has been set to 6 digits.
-- Next check: confirm the Supabase Dashboard **Magic Link** and **Confirm sign up** templates both contain the six-box `{{ .Token }}` email, request a fresh code, and confirm the code auto-submits after six digits.
+- 2026-05-03, Asia/Shanghai: Supabase Auth was configured to generate 8-digit OTP codes while the app and email template displayed and accepted 6 digits. Supabase Auth OTP length has been set to 6 digits.
+- 2026-09-17, Asia/Shanghai: signup appeared to hang on the email step with no error. Two separate causes:
+  1. **App side (fixed).** `app/(auth)/register.tsx` reported every failure through `Alert.alert`, which is a no-op on `react-native-web`. On the web build the user tapped Next, the spinner flashed, and nothing appeared. Registration now renders inline errors and a toast on both platforms.
+  2. **Backend side (open).** `POST /auth/v1/otp` returned `500 unexpected_failure` / `Error sending confirmation email` for the probe address. Not a rate limit; that returns `429 over_email_send_rate_limit`. The probe used a non-deliverable reserved domain, so this has **not** been shown to affect real recipients. Confirm before acting on it.
+- Next check: open Supabase **Logs -> Auth Logs** and search the failing `error_id` to read the verbatim SMTP rejection. If Auth SMTP is Resend, also confirm a verified sending domain exists; without one Resend only delivers to the account owner's address, which would let signup work for the owner and fail for every other tester.
+- Note: `supabase/functions/verification-email` calls the Resend API directly and does **not** share a transport with Supabase Auth. Resend activity from that function says nothing about signup OTP delivery.
 
 Required behavior:
 
 - Users register with Supabase email OTP, then create a password for email/password login.
 - Sign Up must only continue for new accounts. Existing account emails must not enter onboarding, update passwords from the signup path, create duplicate profile rows, or silently route to the dashboard.
-- Duplicate-email signup copy: `This email already has a Konektado account. Please log in instead.` Actions: `Go to Log In` and `Forgot password?`.
-- Do not require custom SMTP for the MVP. Supabase's default email sender is acceptable for local/demo testing.
+- Duplicate-email signup copy: `This email already has a Konektado account. Please log in instead.` Actions: `Go to Log In` and `Forgot password?`. These render as inline links in the registration form, not as a modal alert, because a web dialog cannot carry two follow-up actions.
+- Custom SMTP is not required by design, but signup depends on Supabase Auth actually delivering mail. If OTP sends fail, treat mail transport as a deploy dependency and verify it before blaming app code. See the OTP troubleshooting note above.
 - The Supabase Auth email templates used by the signup OTP path must include `{{ .Token }}` so users receive a 6-digit code. Supabase Auth OTP length must be configured to 6 digits. For MVP signup, the app uses `signInWithOtp`; keep both **Magic Link** and **Confirm sign up** templates aligned.
 - The Supabase Auth **Password Recovery** template must also include `{{ .Token }}` and should avoid link-only copy, because the app verifies recovery through a six-box code entry flow.
 - In app code, verify signup email codes only through the auth service. Keep the request/resend/verify methods on Supabase email OTP/passwordless auth.

@@ -126,6 +126,8 @@ router.push(`/jobs/${result.data.id}`);
 - Validate form inputs before calling services.
 - Services should normalize common errors like duplicate job conversations.
 - Destructive actions require confirmation.
+- Never import `Alert` from `react-native`. `react-native-web` ships it as a no-op, so on web the dialog never renders and any action behind its buttons becomes unreachable. Use `showAlert` from `utils/alert.ts` instead; it keeps native `Alert` and falls back to browser dialogs on web.
+- Every failure path must be visible on both native and web. Prefer inline errors or `FeedbackProvider` toasts; reserve `showAlert` for confirmations and interruptions.
 
 Examples:
 

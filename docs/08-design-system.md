@@ -203,6 +203,7 @@ Use feedback with the lightest interaction cost that still protects the user:
 - Use toast/snackbar feedback after routine success such as saving, posting, uploading, or completing a lightweight update.
 - Use inline field errors beside the affected input when a value needs correction.
 - Reserve modal alerts for destructive confirmation, legal/privacy acknowledgment, permission decisions, profile/verification gates, or serious errors that truly require interruption.
+- Modal alerts must go through `showAlert` (`utils/alert.ts`), never `Alert` from `react-native`, which is a no-op on web. When a decision needs more than one follow-up action, use inline actions in the screen instead; browser dialogs cannot carry them.
 
 Examples:
 
