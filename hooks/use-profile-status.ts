@@ -277,6 +277,13 @@ export function useProfileStatus(): ProfileStatus {
       setStatusState((current) => ({ ...current, loading: true }));
     }
 
+    // `user_roles` is only one of several role sources, so a failed read must
+    // not decide the whole status. Scoped narrowly here: a wider catch used to
+    // report `authenticated: false` on any throw, which bounced a signed-in
+    // user to the auth stack on a single network blip (the profile refresh
+    // that drives this runs every 30s).
+    let userRolesRole: string | null = null;
+
     try {
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -287,60 +294,52 @@ export function useProfileStatus(): ProfileStatus {
 
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
 
-      const metadataRole = user.user_metadata?.role as string | null | undefined;
-      const needsSignupPassword = user.user_metadata?.signup_password_required === true;
-      const needsPasswordRecovery =
-        user.user_metadata?.password_recovery_pending === true;
-      const userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
-      const roleSources = [
-        preferences?.intent,
-        metadataRole,
-        profile?.active_role,
-        profile?.role,
-        userRolesRole,
-        activeRoleFromIntent(metadataRole),
-      ];
-      const candidateRole =
-        roleSources.find((role) => isOnboardingIntent(role))?.toLowerCase() ?? null;
-      const isAdmin = roleSources.some((role) => isAdminRole(role));
-      const needsRole = !isAdmin && !candidateRole;
-      const hasName = Boolean(
-        profile?.full_name?.trim() ||
-          (profile?.first_name?.trim() && profile?.last_name?.trim()),
-      );
-      const hasCompletedTasteSetup = Boolean(preferences?.onboardingCompletedAt);
-
-      const needsProfile =
-        !isAdmin && (!hasName || !hasCompletedTasteSetup || !candidateRole);
-
-      hasLoadedStatusRef.current = true;
-      setStatusState({
-        loading: false,
-        authenticated: true,
-        needsRole,
-        needsProfile,
-        needsSignupPassword,
-        needsPasswordRecovery,
-        needsCertificationReview: false,
-        isAdmin,
-        profile: profile ?? null,
-      });
+      userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
     } catch (error) {
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
-      warnProfileStatusRealtime('Could not load profile status.', error);
-      hasLoadedStatusRef.current = true;
-      setStatusState({
-        loading: false,
-        authenticated: false,
-        needsRole: false,
-        needsProfile: false,
-        needsSignupPassword: false,
-        needsPasswordRecovery: false,
-        needsCertificationReview: false,
-        isAdmin: false,
-        profile: null,
-      });
+      warnProfileStatusRealtime(
+        'Could not read user_roles; falling back to preferences, metadata, and the profile row.',
+        error,
+      );
     }
+
+    const metadataRole = user.user_metadata?.role as string | null | undefined;
+    const needsSignupPassword = user.user_metadata?.signup_password_required === true;
+    const needsPasswordRecovery =
+      user.user_metadata?.password_recovery_pending === true;
+    const roleSources = [
+      preferences?.intent,
+      metadataRole,
+      profile?.active_role,
+      profile?.role,
+      userRolesRole,
+      activeRoleFromIntent(metadataRole),
+    ];
+    const candidateRole =
+      roleSources.find((role) => isOnboardingIntent(role))?.toLowerCase() ?? null;
+    const isAdmin = roleSources.some((role) => isAdminRole(role));
+    const needsRole = !isAdmin && !candidateRole;
+    const hasName = Boolean(
+      profile?.full_name?.trim() ||
+        (profile?.first_name?.trim() && profile?.last_name?.trim()),
+    );
+    const hasCompletedTasteSetup = Boolean(preferences?.onboardingCompletedAt);
+
+    const needsProfile =
+      !isAdmin && (!hasName || !hasCompletedTasteSetup || !candidateRole);
+
+    hasLoadedStatusRef.current = true;
+    setStatusState({
+      loading: false,
+      authenticated: true,
+      needsRole,
+      needsProfile,
+      needsSignupPassword,
+      needsPasswordRecovery,
+      needsCertificationReview: false,
+      isAdmin,
+      profile: profile ?? null,
+    });
   }, [authenticated, preferences, profile, profileLoading, setStatusState, user]);
 
   const loadStatusRef = useRef(loadStatus);
