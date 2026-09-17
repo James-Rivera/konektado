@@ -353,6 +353,23 @@ export async function verifyPasswordResetEmailOtp({
     };
   }
 
+  // verifyOtp({ type: "recovery" }) mints a full, persisted session. Without a
+  // marker, reloading or backing out of the reset screen drops the visitor
+  // into the app with complete account access and no password. Flag it on the
+  // user so route guards can pen the session to the reset screen, and fail
+  // closed if the flag cannot be written.
+  const { error: markError } = await supabase.auth.updateUser({
+    data: { password_recovery_pending: true },
+  });
+
+  if (markError) {
+    await supabase.auth.signOut();
+    return {
+      data: null,
+      error: "Could not start the password reset securely. Please request a new code.",
+    };
+  }
+
   return {
     data: {
       email: data.user.email ?? normalizedEmail,
@@ -367,7 +384,10 @@ export async function setRecoveredPassword({
 }: {
   password: string;
 }): Promise<ServiceResult<void>> {
-  const { error } = await supabase.auth.updateUser({ password });
+  const { error } = await supabase.auth.updateUser({
+    password,
+    data: { password_recovery_pending: false },
+  });
 
   if (error) {
     return {
@@ -425,6 +445,14 @@ export async function getCurrentAuthUser(): Promise<
     },
     error: null,
   };
+}
+
+/**
+ * Ends a verified-but-incomplete password reset. The recovery session is a
+ * full session, so leaving the screen must drop it rather than navigate away.
+ */
+export async function abandonPasswordRecovery(): Promise<void> {
+  await supabase.auth.signOut();
 }
 
 export async function signOutCurrentUser(): Promise<ServiceResult<void>> {
@@ -499,7 +527,7 @@ export async function signInWithEmailPassword({
     return { data: null, error: "Enter your password." };
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: normalizedEmail,
     password,
   });
@@ -509,6 +537,15 @@ export async function signInWithEmailPassword({
       data: null,
       error: toAuthMessage(error.message, "Sign in failed. Please try again."),
     };
+  }
+
+  // An abandoned reset leaves the flag set. Anyone who can sign in with the
+  // real password is already fully authorized, so clear it rather than pinning
+  // them to the reset screen forever.
+  if (data.user?.user_metadata?.password_recovery_pending === true) {
+    await supabase.auth.updateUser({
+      data: { password_recovery_pending: false },
+    });
   }
 
   return { data: undefined, error: null };

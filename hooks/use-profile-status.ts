@@ -207,6 +207,7 @@ export type ProfileStatus = {
   needsRole: boolean;
   needsProfile: boolean;
   needsSignupPassword: boolean;
+  needsPasswordRecovery: boolean;
   needsCertificationReview: boolean;
   isAdmin: boolean;
   profile: {
@@ -232,6 +233,7 @@ export function useProfileStatus(): ProfileStatus {
     needsRole: false,
     needsProfile: false,
     needsSignupPassword: false,
+    needsPasswordRecovery: false,
     needsCertificationReview: false,
     isAdmin: false,
     profile: null,
@@ -263,6 +265,7 @@ export function useProfileStatus(): ProfileStatus {
         needsRole: false,
         needsProfile: false,
         needsSignupPassword: false,
+        needsPasswordRecovery: false,
         needsCertificationReview: false,
         isAdmin: false,
         profile: null,
@@ -286,6 +289,8 @@ export function useProfileStatus(): ProfileStatus {
 
       const metadataRole = user.user_metadata?.role as string | null | undefined;
       const needsSignupPassword = user.user_metadata?.signup_password_required === true;
+      const needsPasswordRecovery =
+        user.user_metadata?.password_recovery_pending === true;
       const userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
       const roleSources = [
         preferences?.intent,
@@ -315,6 +320,7 @@ export function useProfileStatus(): ProfileStatus {
         needsRole,
         needsProfile,
         needsSignupPassword,
+        needsPasswordRecovery,
         needsCertificationReview: false,
         isAdmin,
         profile: profile ?? null,
@@ -329,6 +335,7 @@ export function useProfileStatus(): ProfileStatus {
         needsRole: false,
         needsProfile: false,
         needsSignupPassword: false,
+        needsPasswordRecovery: false,
         needsCertificationReview: false,
         isAdmin: false,
         profile: null,

@@ -67,8 +67,15 @@ function RootNavigator() {
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
   const segments = useSegments();
-  const { loading, authenticated, needsRole, needsProfile, needsSignupPassword, isAdmin } =
-    useProfileStatus();
+  const {
+    loading,
+    authenticated,
+    needsRole,
+    needsProfile,
+    needsSignupPassword,
+    needsPasswordRecovery,
+    isAdmin,
+  } = useProfileStatus();
   const [hasResolvedInitialStatus, setHasResolvedInitialStatus] = useState(false);
 
   useEffect(() => {
@@ -86,6 +93,8 @@ function RootNavigator() {
     const isInternalRoute = activeGroup === "internal";
     const targetGroup = !authenticated
       ? "(auth)"
+      : needsPasswordRecovery
+        ? "(auth)"
       : needsSignupPassword
         ? "(auth)"
       : needsRole
@@ -98,6 +107,8 @@ function RootNavigator() {
 
     const targetPath = !authenticated
       ? "/(auth)"
+      : needsPasswordRecovery
+        ? "/(auth)/forgot-password"
       : needsSignupPassword
         ? "/(auth)/create-password"
       : needsRole
@@ -117,6 +128,10 @@ function RootNavigator() {
       (needsRole || needsProfile);
     const isRecoveringPassword =
       activeGroup === "(auth)" && routeSegments[1] === "forgot-password";
+    // Mirrors isMissingSignupPasswordRoute: a verified recovery session is a
+    // full session, so pen it to the reset screen until a new password lands.
+    const isMissingPasswordRecoveryRoute =
+      needsPasswordRecovery && !isRecoveringPassword;
     const isMissingSignupPasswordRoute =
       needsSignupPassword &&
       !(activeGroup === "(auth)" && routeSegments[1] === "create-password");
@@ -143,6 +158,7 @@ function RootNavigator() {
       ["client", "job", "services", "worker"].includes(String(activeGroup));
 
     if (
+      (!isInternalRoute && isMissingPasswordRecoveryRoute) ||
       (!isInternalRoute && isMissingSignupPasswordRoute) ||
       (
         !isInternalRoute &&
@@ -160,6 +176,7 @@ function RootNavigator() {
     authenticated,
     isAdmin,
     loading,
+    needsPasswordRecovery,
     needsProfile,
     needsRole,
     needsSignupPassword,

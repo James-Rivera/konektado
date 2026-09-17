@@ -29,6 +29,7 @@ import {
 } from '@/components/onboarding/FigmaOnboarding';
 import { useFeedback } from '@/components/FeedbackProvider';
 import {
+  abandonPasswordRecovery,
   requestPasswordResetEmailOtp,
   resendPasswordResetEmailOtp,
   setRecoveredPassword,
@@ -51,7 +52,7 @@ function hasSpecialCharacter(value: string) {
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { showSuccessToast } = useFeedback();
+  const { showInfoToast, showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const { height } = useWindowDimensions();
   const compactHeight = height < 760;
@@ -67,6 +68,10 @@ export default function ForgotPasswordScreen() {
   const [resendingCode, setResendingCode] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(60);
   const verifyingCodeRef = useRef(false);
+  // True once the recovery OTP has minted a session. From here the only exits
+  // are "set a new password" or "sign out"; navigating away would leave a
+  // fully authorized session behind.
+  const [codeVerified, setCodeVerified] = useState(false);
 
   const normalizedEmail = email.trim().toLowerCase();
   const passwordHasLength = password.length >= 8 && password.length <= 20;
@@ -74,7 +79,12 @@ export default function ForgotPasswordScreen() {
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const passwordReady = passwordHasLength && passwordHasSpecial && passwordsMatch;
 
-  const goToLogin = () => {
+  const goToLogin = async () => {
+    if (codeVerified) {
+      await abandonPasswordRecovery();
+      setCodeVerified(false);
+    }
+
     if (normalizedEmail) {
       router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } });
       return;
@@ -150,6 +160,7 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    setCodeVerified(true);
     setStep('password');
   };
 
@@ -177,17 +188,27 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    setCodeVerified(false);
     showSuccessToast('Password updated');
-    goToLogin();
+    void goToLogin();
   };
 
   const goBack = () => {
     if (loading) return;
 
+    // Leaving the password step abandons a live recovery session, so end it and
+    // restart from the email step rather than keeping it alive in the UI.
     if (step === 'password') {
       setPassword('');
       setConfirmPassword('');
-      setStep('code');
+      setOtp('');
+      setStep('email');
+
+      if (codeVerified) {
+        setCodeVerified(false);
+        void abandonPasswordRecovery();
+        showInfoToast('Password reset cancelled. Request a new code to try again.');
+      }
       return;
     }
 
@@ -196,7 +217,7 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    goToLogin();
+    void goToLogin();
   };
 
   const renderEmailStep = () => (
