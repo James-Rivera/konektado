@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from "expo-router/react-navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -342,7 +342,7 @@ export default function HomeScreen() {
   const [feedFiltersVisible, setFeedFiltersVisible] = useState(false);
   const [serviceAreaVisible, setServiceAreaVisible] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const [headerTranslateY] = useState(() => new Animated.Value(0));
   const headerHeightRef = useRef(0);
   const headerVisibleRef = useRef(true);
   const initialHomeFilterAppliedRef = useRef(false);

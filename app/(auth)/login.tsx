@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -15,17 +15,20 @@ import { showAlert } from '@/utils/alert';
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
-  const [email, setEmail] = useState('');
+  const paramEmail = Array.isArray(params.email) ? params.email[0] : params.email;
+  const [email, setEmail] = useState(paramEmail ?? '');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const nextEmail = Array.isArray(params.email) ? params.email[0] : params.email;
-    if (nextEmail) {
-      setEmail(nextEmail);
-    }
-  }, [params.email]);
+  // Seeded from the route param above, then kept in step if the param changes
+  // (arriving here from register or forgot-password with a different address).
+  // Done during render so the field is never briefly blank.
+  const [lastParamEmail, setLastParamEmail] = useState(paramEmail);
+  if (paramEmail !== lastParamEmail) {
+    setLastParamEmail(paramEmail);
+    if (paramEmail) setEmail(paramEmail);
+  }
 
   const onLogin = async () => {
     if (loading) return;

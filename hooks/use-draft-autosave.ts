@@ -52,14 +52,20 @@ export function useDraftAutosave<Input, Record extends DraftRecord>({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
-  draftIdRef.current = draftId;
-  enabledRef.current = enabled;
-  hydratedRef.current = hydrated;
-  inputRef.current = input;
-  isMeaningfulRef.current = isMeaningful;
-  onDraftIdChangeRef.current = onDraftIdChange;
-  saveDraftRef.current = saveDraft;
-  serializeRef.current = serialize;
+  // Latest-value refs, so the debounce timer and the save chain always read
+  // current props without re-subscribing. Written after commit rather than
+  // during render: everything that reads them (timers, the flush callback,
+  // unmount cleanup) runs after the commit that set them.
+  useEffect(() => {
+    draftIdRef.current = draftId;
+    enabledRef.current = enabled;
+    hydratedRef.current = hydrated;
+    inputRef.current = input;
+    isMeaningfulRef.current = isMeaningful;
+    onDraftIdChangeRef.current = onDraftIdChange;
+    saveDraftRef.current = saveDraft;
+    serializeRef.current = serialize;
+  });
 
   const clearTimer = useCallback(() => {
     if (!timerRef.current) return;

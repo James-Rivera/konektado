@@ -158,33 +158,17 @@ export default function CompleteProfileScreen() {
   const [work, setWork] = useState<WorkProfileInput>(emptyWork);
   const [hiring, setHiring] = useState<HiringProfileInput>(emptyHiring);
 
-  useEffect(() => {
+  // `mode` is seeded from initialMode above, so this only has to follow later
+  // changes to the route param. Done during render rather than in an effect.
+  const [lastInitialMode, setLastInitialMode] = useState(initialMode);
+  if (initialMode !== lastInitialMode) {
+    setLastInitialMode(initialMode);
     setMode(initialMode);
-  }, [initialMode]);
+  }
 
   useEffect(() => {
     handledFocusTargetRef.current = null;
   }, [focusTarget]);
-
-  useEffect(() => {
-    let active = true;
-
-    getMyProfileCompletion().then((result) => {
-      if (!active) return;
-
-      if (result.error || !result.data) {
-        setError(result.error ?? 'Could not load profile details.');
-      } else {
-        hydrateForms(result.data);
-      }
-
-      setLoading(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const hydrateForms = (nextStatus: ProfileCompletionStatus) => {
     setStatus(nextStatus);
@@ -221,6 +205,26 @@ export default function CompleteProfileScreen() {
       preferredSchedule: nextStatus.hiring.preferredSchedule,
     });
   };
+
+  useEffect(() => {
+    let active = true;
+
+    getMyProfileCompletion().then((result) => {
+      if (!active) return;
+
+      if (result.error || !result.data) {
+        setError(result.error ?? 'Could not load profile details.');
+      } else {
+        hydrateForms(result.data);
+      }
+
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const scrollToFocusTarget = useCallback(() => {
     if (loading || !focusTarget || handledFocusTargetRef.current === focusTarget) return;

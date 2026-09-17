@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -61,17 +61,21 @@ export function GroupedServicePickerSheet({
   const [customServiceText, setCustomServiceText] = useState('');
   const [applying, setApplying] = useState(false);
 
-  useEffect(() => {
-    if (!visible) {
+  // Re-seed the drafts from props on open and clear the text inputs on close.
+  // Done during render rather than in an effect so the sheet never paints one
+  // frame of the previous session's selection.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setActiveCategory(selectedCategory ?? categories[0] ?? '');
+      setDraftServices(selectedServices);
+      setDraftCustomServices(selectedCustomServices);
+    } else {
       setQuery('');
       setCustomServiceText('');
-      return;
     }
-
-    setActiveCategory(selectedCategory ?? categories[0] ?? '');
-    setDraftServices(selectedServices);
-    setDraftCustomServices(selectedCustomServices);
-  }, [categories, selectedCategory, selectedCustomServices, selectedServices, visible]);
+  }
 
   const visibleServices = useMemo(() => {
     const categoryServices = servicesByCategory[activeCategory] ?? [];

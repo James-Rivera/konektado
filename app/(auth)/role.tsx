@@ -182,7 +182,7 @@ export default function RoleScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
       <GradientImageScreen
         backgroundTransitionDuration={460}
         blueOpacity={0.4}

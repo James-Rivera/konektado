@@ -41,12 +41,12 @@ type TrustPayload = {
   completedJobsCount?: number | string | null;
   jobsPostedCount?: number | string | null;
   recentReviews?: ReviewRow[] | null;
-  recentHistory?: Array<{
+  recentHistory?: {
     id: string;
     title: string;
     service_label?: string | null;
     completed_at: string;
-  }> | null;
+  }[] | null;
 };
 
 async function mapReviewRows(rows: ReviewRow[]): Promise<Review[]> {

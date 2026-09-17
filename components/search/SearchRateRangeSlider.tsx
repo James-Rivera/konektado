@@ -89,11 +89,19 @@ export function SearchRateRangeSlider({
     [maximumValue, minimumValue, trackWidth, updateThumb],
   );
 
+  // react-hooks/refs sees that createThumbPanResponder touches valueRef and
+  // dragStartRef and assumes the read could happen during render.
+  // PanResponder.create only stores the handlers; the ref reads are inside
+  // onPanResponderGrant/onPanResponderMove, which fire on gesture. Restructuring
+  // to satisfy the rule would mean rebuilding both responders on every
+  // trackWidth change, which is worse.
   const minimumPanResponder = useMemo(
+    // eslint-disable-next-line react-hooks/refs
     () => createThumbPanResponder('minimum'),
     [createThumbPanResponder],
   );
   const maximumPanResponder = useMemo(
+    // eslint-disable-next-line react-hooks/refs
     () => createThumbPanResponder('maximum'),
     [createThumbPanResponder],
   );

@@ -76,14 +76,16 @@ export function GradientImageScreen({
   contentStyle,
   safeAreaEdges = ['top', 'bottom'],
 }: GradientImageScreenProps) {
-  const fade = useRef(new Animated.Value(1)).current;
+  const [fade] = useState(() => new Animated.Value(1));
   const [previousLayer, setPreviousLayer] = useState<BackgroundLayer | null>(null);
-  const currentLayerRef = useRef<BackgroundLayer>({
+  const [currentLayer, setCurrentLayer] = useState<BackgroundLayer>(() => ({
     imageStyle: backgroundImageStyle,
     resizeMode: backgroundResizeMode,
     source,
-  });
-  const [currentLayer, setCurrentLayer] = useState<BackgroundLayer>(currentLayerRef.current);
+  }));
+  // Seeded from the mount-time state rather than the other way around, so the
+  // ref is never read during render. Both still start as the same object.
+  const currentLayerRef = useRef<BackgroundLayer>(currentLayer);
 
   useEffect(() => {
     const nextLayer = {
@@ -135,7 +137,7 @@ export function GradientImageScreen({
         <OnboardingBackgroundLayer layer={previousLayer} opacity={previousOpacity} />
       ) : null}
       <OnboardingBackgroundLayer layer={currentLayer} opacity={fade} />
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: `rgba(0, 0, 0, ${darkness})` }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0, 0, 0, ${darkness})` }]} />
       <Svg height="100%" pointerEvents="none" style={StyleSheet.absoluteFill} width="100%">
         <Defs>
           <LinearGradient id="onboardingBlueOverlay" x1="0" x2="0" y1="0" y2="1">
@@ -350,7 +352,7 @@ type OnboardingLoadingOverlayProps = {
 };
 
 export function OnboardingLoadingOverlay({ visible }: OnboardingLoadingOverlayProps) {
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (!visible) {
@@ -710,10 +712,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   backgroundFrame: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     height: '100%',
     width: '100%',
   },
@@ -957,7 +959,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   otpHiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     color: 'transparent',
     fontSize: 1,
     opacity: 0.01,

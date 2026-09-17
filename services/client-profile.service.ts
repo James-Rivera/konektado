@@ -7,21 +7,6 @@ import { supabase } from '@/utils/supabase';
 
 const PUBLIC_JOB_COLUMNS =
   'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
-const JOB_HISTORY_COLUMNS =
-  'id, title, category, service_needed, barangay, location_text, status, closed_at, updated_at, created_at';
-
-type JobHistoryRow = {
-  id: string;
-  title: string | null;
-  category: string | null;
-  service_needed: string | null;
-  barangay: string | null;
-  location_text: string | null;
-  status: string;
-  closed_at: string | null;
-  updated_at: string;
-  created_at: string;
-};
 
 type ClientProfileRow = {
   user_id: string;
@@ -139,19 +124,8 @@ export async function getPublicClientProfile(
   };
 }
 
-function uniqueList(values: Array<string | null | undefined>) {
+function uniqueList(values: (string | null | undefined)[]) {
   return Array.from(
     new Set(values.map((value) => compactText(value)).filter(Boolean)),
   );
-}
-
-function mapJobHistoryItem(row: JobHistoryRow): PublicProfileHistoryItem {
-  return {
-    id: row.id,
-    title: compactText(row.title) || compactText(row.service_needed) || compactText(row.category) || 'Completed hire',
-    serviceLabel: compactText(row.service_needed) || null,
-    category: compactText(row.category) || null,
-    locationText: compactText(row.location_text) || compactText(row.barangay) || null,
-    completedAt: row.closed_at ?? row.updated_at ?? row.created_at,
-  };
 }

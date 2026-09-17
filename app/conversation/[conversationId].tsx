@@ -21,6 +21,7 @@ import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonCircle } from '@/components/Skeleton';
 import { color, radius } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useImageFallback } from '@/hooks/use-image-fallback';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import {
     getConversation,
@@ -82,7 +83,6 @@ export default function ConversationDetailScreen() {
   const [conversationReady, setConversationReady] = useState(false);
   const [conversationError, setConversationError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [avatarFailed, setAvatarFailed] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(false);
   const [visibleTimestampId, setVisibleTimestampId] = useState<string | null>(null);
   const [selectedAttachment, setSelectedAttachment] = useState<MessageAttachmentDraft | null>(null);
@@ -227,9 +227,7 @@ export default function ConversationDetailScreen() {
   );
   const prompts = isJobConversation ? JOB_PROMPTS : SERVICE_PROMPTS;
 
-  useEffect(() => {
-    setAvatarFailed(false);
-  }, [avatarUrl]);
+  const { failed: avatarFailed, onImageError: onAvatarError } = useImageFallback(avatarUrl);
 
   const replaceMessage = (messageId: string, nextMessage: ThreadMessage | null) => {
     setConversation((current) => {
@@ -256,6 +254,11 @@ export default function ConversationDetailScreen() {
 
     setSendError(null);
     const tempMessage: ThreadMessage = {
+      // onSend is an event handler -- it only runs from the send button and the
+      // retry/prompt presses below, never during render -- so an unstable id is
+      // exactly what we want here: it tags one optimistic message until the
+      // server assigns the real id. react-hooks/purity cannot see that.
+      // eslint-disable-next-line react-hooks/purity
       id: retryMessageId ?? `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       conversationId,
       senderId: profile?.id ?? '',
@@ -389,7 +392,7 @@ export default function ConversationDetailScreen() {
           <View style={styles.headerAvatar}>
             {avatarUrl && !avatarFailed ? (
               <CachedRemoteImage
-                onError={() => setAvatarFailed(true)}
+                onError={onAvatarError}
                 uri={avatarUrl}
                 style={styles.headerAvatarImage}
               />

@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from "expo-router/react-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -160,7 +160,7 @@ export default function SearchScreen() {
   const [reportTarget, setReportTarget] = useState<SearchActionTarget | null>(null);
   const [reporting, setReporting] = useState(false);
   const searchRequestRef = useRef(0);
-  const controlsTranslateY = useRef(new Animated.Value(0)).current;
+  const [controlsTranslateY] = useState(() => new Animated.Value(0));
   const controlsHeightRef = useRef(0);
   const controlsVisibleRef = useRef(true);
   const lastScrollOffset = useRef(0);

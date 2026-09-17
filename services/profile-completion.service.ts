@@ -1060,7 +1060,7 @@ function splitServices(value: string | null | undefined) {
   return uniqueList((value ?? '').split(','));
 }
 
-function uniqueList(values: Array<string | null | undefined>) {
+function uniqueList(values: (string | null | undefined)[]) {
   return Array.from(
     new Set(values.map((value) => compactText(value)).filter(Boolean)),
   );

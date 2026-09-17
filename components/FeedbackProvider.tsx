@@ -41,8 +41,8 @@ const FeedbackContext = createContext<FeedbackContextValue | undefined>(undefine
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(20)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const [translateY] = useState(() => new Animated.Value(20));
+  const [opacity] = useState(() => new Animated.Value(0));
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextIdRef = useRef(0);
   const [toast, setToast] = useState<FeedbackMessage | null>(null);

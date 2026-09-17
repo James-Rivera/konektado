@@ -18,21 +18,6 @@ import { supabase } from '@/utils/supabase';
 
 const SERVICE_COLUMNS =
   'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
-const JOB_HISTORY_COLUMNS =
-  'id, title, category, service_needed, barangay, location_text, status, closed_at, updated_at, created_at';
-
-type JobHistoryRow = {
-  id: string;
-  title: string | null;
-  category: string | null;
-  service_needed: string | null;
-  barangay: string | null;
-  location_text: string | null;
-  status: string;
-  closed_at: string | null;
-  updated_at: string;
-  created_at: string;
-};
 
 type ProviderProfileRow = {
   user_id: string;
@@ -167,18 +152,7 @@ function splitServices(value: string | null | undefined) {
   return uniqueList((value ?? '').split(','));
 }
 
-function mapJobHistoryItem(row: JobHistoryRow): PublicProfileHistoryItem {
-  return {
-    id: row.id,
-    title: compactText(row.title) || compactText(row.service_needed) || compactText(row.category) || 'Completed work',
-    serviceLabel: compactText(row.service_needed) || null,
-    category: compactText(row.category) || null,
-    locationText: compactText(row.location_text) || compactText(row.barangay) || null,
-    completedAt: row.closed_at ?? row.updated_at ?? row.created_at,
-  };
-}
-
-function uniqueList(values: Array<string | null | undefined>) {
+function uniqueList(values: (string | null | undefined)[]) {
   return Array.from(
     new Set(values.map((value) => compactText(value)).filter(Boolean)),
   );
