@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -31,10 +31,13 @@ export function PostOptionPickerSheet({
   onSelect,
 }: PostOptionPickerSheetProps) {
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
+  // Clear the search when the sheet closes. Done during render rather than in
+  // an effect so a stale query never survives into a reopen's first frame.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (!visible) setQuery('');
-  }, [visible]);
+  }
 
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

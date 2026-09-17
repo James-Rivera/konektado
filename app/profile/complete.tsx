@@ -158,9 +158,13 @@ export default function CompleteProfileScreen() {
   const [work, setWork] = useState<WorkProfileInput>(emptyWork);
   const [hiring, setHiring] = useState<HiringProfileInput>(emptyHiring);
 
-  useEffect(() => {
+  // `mode` is seeded from initialMode above, so this only has to follow later
+  // changes to the route param. Done during render rather than in an effect.
+  const [lastInitialMode, setLastInitialMode] = useState(initialMode);
+  if (initialMode !== lastInitialMode) {
+    setLastInitialMode(initialMode);
     setMode(initialMode);
-  }, [initialMode]);
+  }
 
   useEffect(() => {
     handledFocusTargetRef.current = null;

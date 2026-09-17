@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -47,13 +47,16 @@ export function ReportSheet({
 }) {
   const [reason, setReason] = useState('');
   const [details, setDetails] = useState('');
-
-  useEffect(() => {
+  // Clear the draft report when the sheet closes. Done during render rather
+  // than in an effect so a reopen never shows the previous report for a frame.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (!visible) {
       setReason('');
       setDetails('');
     }
-  }, [visible]);
+  }
 
   const helperText = useMemo(() => {
     if (description) return description;
