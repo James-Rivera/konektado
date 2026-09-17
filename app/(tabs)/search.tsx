@@ -183,13 +183,24 @@ export default function SearchScreen() {
     void refreshSavedPosts();
   }, [isFocused, profileLoading, refreshSavedPosts]);
 
-  useEffect(() => {
+  // Filters and the browse group are seeded from the current group ordering, so
+  // they reset when the mode switches or when discovery preferences change the
+  // ordering. Compared by value, not identity: `getOrderedDiscoveryGroupsForMode`
+  // returns a fresh array for every new `preferences` object, and `useProfile`
+  // polls a fresh one every 30s (plus on foreground and realtime events), so
+  // resetting on identity wiped the user's applied filters mid-session and
+  // re-ran the search. Done during render rather than in an effect so a reset
+  // never renders one commit late.
+  const orderedGroupsKey = `${mode}:${orderedGroups.join('|')}`;
+  const [lastOrderedGroupsKey, setLastOrderedGroupsKey] = useState(orderedGroupsKey);
+  if (orderedGroupsKey !== lastOrderedGroupsKey) {
+    setLastOrderedGroupsKey(orderedGroupsKey);
     const nextDefaultFilters = buildDefaultFilters();
     const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextDefaultFilters.workType, orderedGroups);
     setAppliedFilters(nextDefaultFilters);
     setDraftFilters(nextDefaultFilters);
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
-  }, [orderedGroups]);
+  }
 
   useEffect(() => {
     if (browseGroupsForWorkType.includes(browseGroup)) return;
@@ -516,8 +527,8 @@ export default function SearchScreen() {
 
   /**
    * Home can hand over a taxonomy discovery group and/or a starting query.
-   * Applied only once preferences have settled, because the `orderedGroups`
-   * effect resets `browseGroup`/filters whenever preference ordering changes.
+   * Applied only once preferences have settled, because the ordering reset
+   * above clears `browseGroup`/filters whenever preference ordering changes.
    */
   useEffect(() => {
     if (!isFocused || profileLoading) return;
