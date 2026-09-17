@@ -1,10 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { color, radius, typography } from '@/constants/theme';
+import { useImageFallback } from '@/hooks/use-image-fallback';
 
 export type WorkerCardProps = {
   name: string;
@@ -45,11 +45,7 @@ export function WorkerCard({
   onViewProfile,
   onSave,
 }: WorkerCardProps) {
-  const [avatarFailed, setAvatarFailed] = useState(false);
-
-  useEffect(() => {
-    setAvatarFailed(false);
-  }, [avatarUrl]);
+  const { failed: avatarFailed, onImageError: onAvatarError } = useImageFallback(avatarUrl);
 
   return (
     <Pressable
@@ -63,7 +59,7 @@ export function WorkerCard({
             <View style={styles.avatar}>
               {avatarUrl && !avatarFailed ? (
                 <CachedRemoteImage
-                  onError={() => setAvatarFailed(true)}
+                  onError={onAvatarError}
                   uri={avatarUrl}
                   style={styles.avatarImage}
                 />
@@ -123,11 +119,7 @@ export function WorkerCard({
 }
 
 function WorkerPhoto({ imageUrl }: { imageUrl: string }) {
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [imageUrl]);
+  const { failed, onImageError } = useImageFallback(imageUrl);
 
   if (failed) {
     return (
@@ -139,7 +131,7 @@ function WorkerPhoto({ imageUrl }: { imageUrl: string }) {
 
   return (
     <CachedRemoteImage
-      onError={() => setFailed(true)}
+      onError={onImageError}
       uri={imageUrl}
       style={styles.photo}
     />

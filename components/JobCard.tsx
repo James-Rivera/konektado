@@ -1,9 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { color, radius, typography } from '@/constants/theme';
+import { useImageFallback } from '@/hooks/use-image-fallback';
 
 export type JobCardProps = {
   postedAt: string;
@@ -108,11 +108,7 @@ export function JobCard({
 }
 
 function JobPhoto({ imageUrl }: { imageUrl: string }) {
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [imageUrl]);
+  const { failed, onImageError } = useImageFallback(imageUrl);
 
   if (failed) {
     return (
@@ -124,7 +120,7 @@ function JobPhoto({ imageUrl }: { imageUrl: string }) {
 
   return (
     <CachedRemoteImage
-      onError={() => setFailed(true)}
+      onError={onImageError}
       uri={imageUrl}
       style={styles.photo}
     />

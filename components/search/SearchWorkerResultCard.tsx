@@ -1,11 +1,11 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonAvatar, SkeletonChip } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
+import { useImageFallback } from '@/hooks/use-image-fallback';
 import type { SearchWorkerItem } from '@/constants/search-demo-data';
 
 export function SearchWorkerResultCard({
@@ -170,17 +170,13 @@ function Avatar({
   isActive: boolean;
   name: string;
 }) {
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [imageUrl]);
+  const { failed, onImageError } = useImageFallback(imageUrl);
 
   return (
     <View style={styles.avatar}>
       {imageUrl && !failed ? (
         <CachedRemoteImage
-          onError={() => setFailed(true)}
+          onError={onImageError}
           uri={imageUrl}
           style={styles.avatarImage}
         />
