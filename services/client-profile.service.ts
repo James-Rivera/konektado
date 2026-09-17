@@ -124,7 +124,7 @@ export async function getPublicClientProfile(
   };
 }
 
-function uniqueList(values: Array<string | null | undefined>) {
+function uniqueList(values: (string | null | undefined)[]) {
   return Array.from(
     new Set(values.map((value) => compactText(value)).filter(Boolean)),
   );

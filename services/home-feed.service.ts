@@ -68,14 +68,14 @@ export function getDefaultHomeFilter(context: HomeFeedRankingContext) {
 }
 
 export function rankHomeFeedJobs<T>(
-  jobs: Array<{ item: T; job: JobSummary }>,
+  jobs: { item: T; job: JobSummary }[],
   context: HomeFeedRankingContext,
 ) {
   return rankJobs(jobs, context).map(({ item }) => item);
 }
 
 export function rankHomeFeedWorkers<T>(
-  workers: Array<{ item: T; service: ServiceSearchResult }>,
+  workers: { item: T; service: ServiceSearchResult }[],
   context: HomeFeedRankingContext,
 ) {
   return rankWorkers(workers, context).map(({ item }) => item);
@@ -87,8 +87,8 @@ export function buildHomeForYouFeed<TJob, TWorker>({
   workers,
 }: {
   context: HomeFeedRankingContext;
-  jobs: Array<{ item: TJob; job: JobSummary }>;
-  workers: Array<{ item: TWorker; service: ServiceSearchResult }>;
+  jobs: { item: TJob; job: JobSummary }[];
+  workers: { item: TWorker; service: ServiceSearchResult }[];
 }) {
   const mode = resolveHomeFeedMode(context);
   const rankedJobs = rankJobs(jobs, context);
@@ -121,8 +121,8 @@ export function applyHomeFeedFilters<TJob, TWorker>({
 }: {
   context: HomeFeedRankingContext;
   filters: HomeFeedFilters;
-  jobs: Array<{ item: TJob; job: JobSummary }>;
-  workers: Array<{ item: TWorker; service: ServiceSearchResult }>;
+  jobs: { item: TJob; job: JobSummary }[];
+  workers: { item: TWorker; service: ServiceSearchResult }[];
 }) {
   const visibleJobs = filters.feedType === 'services'
     ? []
@@ -160,8 +160,8 @@ function buildFilteredMixedFeed<TJob, TWorker>({
 }: {
   context: HomeFeedRankingContext;
   filters: HomeFeedFilters;
-  jobs: Array<{ item: TJob; job: JobSummary }>;
-  workers: Array<{ item: TWorker; service: ServiceSearchResult }>;
+  jobs: { item: TJob; job: JobSummary }[];
+  workers: { item: TWorker; service: ServiceSearchResult }[];
 }) {
   const rankedJobs = sortFilteredJobs(jobs, context, filters);
   const rankedWorkers = sortFilteredWorkers(workers, context, filters);
@@ -201,7 +201,7 @@ function buildFilteredMixedFeed<TJob, TWorker>({
 }
 
 function rankJobs<T>(
-  jobs: Array<{ item: T; job: JobSummary }>,
+  jobs: { item: T; job: JobSummary }[],
   context: HomeFeedRankingContext,
 ): Ranked<T>[] {
   const mode = resolveHomeFeedMode(context);
@@ -216,7 +216,7 @@ function rankJobs<T>(
 }
 
 function sortFilteredJobs<T>(
-  jobs: Array<{ item: T; job: JobSummary }>,
+  jobs: { item: T; job: JobSummary }[],
   context: HomeFeedRankingContext,
   filters: HomeFeedFilters,
 ): Ranked<T>[] {
@@ -234,7 +234,7 @@ function sortFilteredJobs<T>(
 }
 
 function rankWorkers<T>(
-  workers: Array<{ item: T; service: ServiceSearchResult }>,
+  workers: { item: T; service: ServiceSearchResult }[],
   context: HomeFeedRankingContext,
 ): Ranked<T>[] {
   const mode = resolveHomeFeedMode(context);
@@ -249,7 +249,7 @@ function rankWorkers<T>(
 }
 
 function sortFilteredWorkers<T>(
-  workers: Array<{ item: T; service: ServiceSearchResult }>,
+  workers: { item: T; service: ServiceSearchResult }[],
   context: HomeFeedRankingContext,
   filters: HomeFeedFilters,
 ): Ranked<T>[] {
@@ -445,7 +445,7 @@ function getTaxonomyMatch({
 }: {
   candidateCategory?: string | null;
   candidatePrimaryService?: string | null;
-  candidateTextValues: Array<string | null | undefined>;
+  candidateTextValues: (string | null | undefined)[];
   customPreferences: string[];
   structuredPreferences: string[];
 }) {
@@ -483,7 +483,7 @@ function getTaxonomyMatch({
   return 0;
 }
 
-function hasSharedTaxonomyGroup(preferences: string[], candidates: Array<string | null | undefined>) {
+function hasSharedTaxonomyGroup(preferences: string[], candidates: (string | null | undefined)[]) {
   const candidateGroups = new Set(candidates
     .map(getTaxonomyGroup)
     .filter(Boolean));
@@ -568,14 +568,14 @@ function mergeWithPattern<TJob, TWorker>(
     primaryType,
     queues,
   }: {
-    pattern: Array<'job' | 'worker'>;
+    pattern: ('job' | 'worker')[];
     primaryType: 'job' | 'worker';
     queues: RankedQueues<TJob, TWorker>;
   },
 ) {
   const jobs = [...queues.jobs];
   const workers = [...queues.workers];
-  const mixed: Array<TJob | TWorker> = [];
+  const mixed: (TJob | TWorker)[] = [];
   let patternIndex = 0;
 
   while (jobs.length || workers.length) {
@@ -612,7 +612,7 @@ function mergeWithPattern<TJob, TWorker>(
 function mergeBalancedByScore<TJob, TWorker>(queues: RankedQueues<TJob, TWorker>) {
   const jobs = [...queues.jobs];
   const workers = [...queues.workers];
-  const mixed: Array<TJob | TWorker> = [];
+  const mixed: (TJob | TWorker)[] = [];
   let currentRunType: 'job' | 'worker' | null = null;
   let currentRunLength = 0;
 

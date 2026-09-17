@@ -268,7 +268,7 @@ export function getStoredMvpServiceOption(value: string | null | undefined): Mvp
   return NORMALIZED_MVP_SERVICE_LOOKUP.get(normalizeServiceLookupKey(value)) ?? null;
 }
 
-export function splitOfficialAndCustomServices(values: Array<string | null | undefined>) {
+export function splitOfficialAndCustomServices(values: (string | null | undefined)[]) {
   const official = new Set<MvpServiceOption>();
   const custom = new Set<string>();
 
@@ -308,7 +308,7 @@ export function getServiceSearchValues(value: string | null | undefined) {
   return [...values];
 }
 
-export function getServiceSearchValuesForOptions(values: Array<string | null | undefined>) {
+export function getServiceSearchValuesForOptions(values: (string | null | undefined)[]) {
   return Array.from(new Set(values.flatMap((value) => getServiceSearchValues(value))));
 }
 
@@ -337,7 +337,7 @@ export function getDisplayTitleForMvpService(
   return cleanTitle;
 }
 
-export function getDisplayServiceLabels(values: Array<string | null | undefined>) {
+export function getDisplayServiceLabels(values: (string | null | undefined)[]) {
   return values.map((value) => getDisplayLabelForMvpService(value));
 }
 
