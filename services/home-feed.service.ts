@@ -3,6 +3,7 @@ import {
   getCategoryForMvpService,
   isMvpServiceCategory,
   isMvpServiceOption,
+  getStoredMvpServiceOption,
   type MvpServiceCategory,
   type SearchWorkType,
 } from '@/constants/service-taxonomy';
@@ -310,7 +311,10 @@ function matchesCategory(
   filterCategory: HomeFeedFilters['category'],
 ) {
   if (filterCategory === 'all') return true;
-  return getTaxonomyGroup(candidateService) === filterCategory || getTaxonomyGroup(candidateCategory) === filterCategory;
+  return (
+    getTaxonomyCategory(candidateService) === filterCategory ||
+    getTaxonomyCategory(candidateCategory) === filterCategory
+  );
 }
 
 function matchesLocationPreference(
@@ -449,9 +453,13 @@ function getTaxonomyMatch({
   customPreferences: string[];
   structuredPreferences: string[];
 }) {
-  const normalizedPrimary = normalizeText(candidatePrimaryService);
-  const normalizedCategory = normalizeText(candidateCategory);
-  const normalizedStructured = structuredPreferences.map(normalizeText).filter(Boolean);
+  // Resolve through the taxonomy before comparing, so a listing stored under a
+  // legacy alias still matches the canonical preference it belongs to. Comparing
+  // raw text meant a job saved as `Basic home repair` scored zero against a
+  // `Minor home fix help` preference.
+  const normalizedPrimary = normalizeCandidateValue(candidatePrimaryService);
+  const normalizedCategory = normalizeCandidateValue(candidateCategory);
+  const normalizedStructured = structuredPreferences.map(normalizeCandidateValue).filter(Boolean);
 
   if (!normalizedStructured.length && !customPreferences.length) {
     return 0.25;
@@ -485,22 +493,35 @@ function getTaxonomyMatch({
 
 function hasSharedTaxonomyGroup(preferences: string[], candidates: (string | null | undefined)[]) {
   const candidateGroups = new Set(candidates
-    .map(getTaxonomyGroup)
+    .map(getTaxonomyCategory)
     .filter(Boolean));
 
   if (!candidateGroups.size) return false;
 
   return preferences.some((preference) => {
-    const preferenceGroup = getTaxonomyGroup(preference);
+    const preferenceGroup = getTaxonomyCategory(preference);
     return Boolean(preferenceGroup && candidateGroups.has(preferenceGroup));
   });
 }
 
-function getTaxonomyGroup(value: string | null | undefined) {
+/**
+ * Normalizes a stored service/category value for comparison, resolving legacy
+ * aliases to their canonical label first so old and new spellings rank alike.
+ */
+function normalizeCandidateValue(value: string | null | undefined) {
+  return normalizeText(getStoredMvpServiceOption(value) ?? value);
+}
+
+/**
+ * The canonical CATEGORY a value belongs to, used for the coarser
+ * shared-group scoring tier. Aliases resolve first.
+ */
+function getTaxonomyCategory(value: string | null | undefined) {
   if (!value) return null;
   if (isMvpServiceCategory(value)) return value;
-  if (isMvpServiceOption(value)) return getCategoryForMvpService(value);
-  return null;
+
+  const canonicalService = getStoredMvpServiceOption(value);
+  return canonicalService ? getCategoryForMvpService(canonicalService) : null;
 }
 
 function getLocationMatch({

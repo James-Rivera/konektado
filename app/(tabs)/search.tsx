@@ -111,12 +111,21 @@ type RankingContext = {
 const ALL_GROUP_OPTION = { key: 'all' as const, label: 'All groups' };
 const ALL_SERVICE_OPTION = { key: 'all' as const, label: 'All services' };
 const SEARCH_LIMIT = 40;
+/**
+ * Display labels for discovery groups. This indirection exists so group
+ * wording can change without touching stored values: group keys are route
+ * params and are never persisted.
+ */
 const SEARCH_RESULT_GROUP_LABELS: Record<DiscoveryGroupKey, string> = {
-  'Home & Local Help': 'Home & Local Help',
-  'Errands & Assistance': 'Errands & Assistance',
-  'Learning & Tutoring': 'Learning & Tutoring',
-  'Digital & Document Help': 'Digital & Document Help',
-  'Tech Setup Help': 'Tech Setup Help',
+  'Home & Errands': 'Home & Errands',
+  'Beauty & Personal Care': 'Beauty & Personal Care',
+  'Food & Baking': 'Food & Baking',
+  'Sewing & Tailoring': 'Sewing & Tailoring',
+  'Home Repair & Carpentry': 'Home Repair & Carpentry',
+  'Tutoring & Lessons': 'Tutoring & Lessons',
+  'Documents & Design': 'Documents & Design',
+  'Computer & Phone Help': 'Computer & Phone Help',
+  'More services': 'More services',
 };
 
 export default function SearchScreen() {
@@ -141,7 +150,7 @@ export default function SearchScreen() {
   const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
-  const [browseGroup, setBrowseGroup] = useState<DiscoveryGroupKey>('Home & Local Help');
+  const [browseGroup, setBrowseGroup] = useState<DiscoveryGroupKey>('Home & Errands');
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [workers, setWorkers] = useState<ServiceSearchResult[]>([]);

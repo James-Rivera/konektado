@@ -23,6 +23,7 @@ import {
     type MetricItem,
     type ProfileMode,
 } from '@/components/profile/ProfilePrimitives';
+import { getStoredMvpServiceOption } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
@@ -235,6 +236,9 @@ export default function ProfileScreen() {
                     mode: 'work',
                     optional: true,
                   })
+                }
+                onCreateListingForSkill={(skill) =>
+                  router.push({ pathname: '/create-service', params: { skill } })
                 }
                 onManageServices={() => router.push('/post/active')}
                 onOpenService={(serviceId) =>
@@ -455,6 +459,7 @@ function WorkProfileContent({
   history,
   onAction,
   onAddCredential,
+  onCreateListingForSkill,
   onManageServices,
   onOpenService,
   reviews,
@@ -465,6 +470,7 @@ function WorkProfileContent({
   history: PublicProfileHistoryItem[];
   onAction: (action: ProfileCompletionAction) => void;
   onAddCredential: () => void;
+  onCreateListingForSkill: (skill: string) => void;
   onManageServices: () => void;
   onOpenService: (serviceId: string) => void;
   reviews: Review[];
@@ -510,7 +516,11 @@ function WorkProfileContent({
 
       <ProfileSection title="Skills">
         {skillLabels.length ? (
-          <ProfilePillRow values={skillLabels} />
+          <ProfilePillRow
+            isSelectable={(value) => Boolean(getStoredMvpServiceOption(value))}
+            onSelect={onCreateListingForSkill}
+            values={skillLabels}
+          />
         ) : (
           <EmptyProfilePanel
             icon="handyman"

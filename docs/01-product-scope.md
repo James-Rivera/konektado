@@ -99,3 +99,12 @@ Demo acceptance standard:
 - Home and Search use live marketplace queries for jobs/services, hide own public posts from discovery, and use preferences for ordering and filter defaults.
 - Locked actions now route to a Figma-matched verification intro and users can submit a pending verification request with contact details, ID files, services/purpose, and supporting files.
 - Verification and marketplace setup are separate UX states. A verified user can browse, but `Verified · Setup incomplete` blocks messaging, hiring, applying/posting, and reviewing until the required Work/Hiring setup is complete.
+
+## Service Taxonomy Update (2026-09-18, DEC-106)
+
+- The controlled taxonomy is now 34 canonical services in four stored categories: Home & Local Help, Learning & Digital Help, Tech & Document Support, and Food & Personal Services.
+- Newly supported livelihood services: carpentry, painting, furniture repair or assembly, baking, home-cooked meals, party food trays, sewing, clothing alteration or repair, manicure or pedicure, haircut, makeup, massage, and phone or computer repair.
+- Residents browse eight display-only discovery groups on Home, with a Search-only More services fallback for custom listings.
+- Electrical work, plumbing, structural construction, and appliance internals remain out of scope and are enforced on the custom-service field.
+- The MVP stays taxonomy-only: no taxonomy tables, no specialty table, and no schema change. Structured taxonomy tables remain future work as listed above.
+- Listing classification is profile-driven with a deterministic fallback and no AI. See DEC-107 through DEC-110.

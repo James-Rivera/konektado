@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
+import { BottomSheet } from '@/components/BottomSheet';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
@@ -28,7 +29,22 @@ import {
   SERVICE_POST_CATEGORIES,
   SERVICE_POST_OPTIONS_BY_CATEGORY,
 } from '@/constants/service-post-options';
-import { getCategoryForMvpService } from '@/constants/service-taxonomy';
+import {
+  getCategoryForMvpService,
+  getDiscoveryGroupForService,
+  OTHER_SERVICE_CATEGORY_VALUE,
+  type MvpServiceOption,
+} from '@/constants/service-taxonomy';
+import {
+  buildListingClassification,
+  checkBlockedServiceText,
+  getCanonicalWorkProfileSkills,
+  MAX_CUSTOM_SERVICE_LENGTH,
+  resolveInitialClassification,
+  suggestServicesForText,
+  type ClassificationSource,
+  type ServiceSuggestion,
+} from '@/services/service-classification';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useDraftAutosave } from '@/hooks/use-draft-autosave';
 import { useProfile } from '@/hooks/use-profile';
@@ -98,11 +114,14 @@ export default function CreateServiceScreen() {
     serviceId?: string | string[];
     returnTo?: string | string[];
     focus?: string | string[];
+    /** Work Profile skill this listing was started from ("Create listing"). */
+    skill?: string | string[];
   }>();
   const initialDraftId = getParamValue(params.draftId);
   const serviceId = getParamValue(params.serviceId);
   const returnTo = getParamValue(params.returnTo);
   const focusTarget = getParamValue(params.focus);
+  const originSkill = getParamValue(params.skill);
   const scrollRef = useRef<ScrollView>(null);
   const rateRangeOffsetRef = useRef<number | null>(null);
   const handledFocusRef = useRef(false);
@@ -129,6 +148,15 @@ export default function CreateServiceScreen() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [servicePickerVisible, setServicePickerVisible] = useState(false);
+  // Profile-driven classification state. `classificationSource` drives the
+  // provenance line under "Listed under" so the resident can always see where
+  // the classification came from and change it.
+  const [classificationSource, setClassificationSource] = useState<ClassificationSource | null>(null);
+  const [workProfileSkills, setWorkProfileSkills] = useState<MvpServiceOption[]>([]);
+  const [skillChooserVisible, setSkillChooserVisible] = useState(false);
+  const [customSheetVisible, setCustomSheetVisible] = useState(false);
+  const [customServiceText, setCustomServiceText] = useState('');
+  const [customBlockedTerm, setCustomBlockedTerm] = useState<string | null>(null);
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
@@ -142,6 +170,38 @@ export default function CreateServiceScreen() {
   const tagOptions = useMemo(() => getServiceTagsForCategory(category), [category]);
   const selectedTagsText = useMemo(() => tags.join(', '), [tags]);
   const serviceGroup = getCategoryForMvpService(category);
+  const isCustomService = category === OTHER_SERVICE_CATEGORY_VALUE;
+  /** Display group for the "Listed under" line, e.g. "Baking · Food & Baking". */
+  const discoveryGroup = getDiscoveryGroupForService(category);
+  const classificationLabel = isCustomService ? customCategory.trim() : category;
+  const customSuggestions = useMemo(
+    () => suggestServicesForText(customServiceText),
+    [customServiceText],
+  );
+  /**
+   * Plain-language provenance. Residents should never have to guess whether a
+   * value was their choice or the app's.
+   */
+  const classificationProvenance = (() => {
+    // A hydrated draft or listing owns its stored classification, so treat it
+    // as `existing` unless the resident has changed it in this session.
+    const effectiveSource =
+      classificationSource ?? ((initialDraftId || serviceId) && category ? 'existing' : null);
+
+    switch (effectiveSource) {
+      case 'profile-origin':
+      case 'single-skill':
+        return 'Based on your Work Profile';
+      case 'suggestion':
+        return 'Matched from what you typed';
+      case 'custom':
+        return 'Listed as you wrote it';
+      case 'existing':
+        return 'Saved with this listing';
+      default:
+        return null;
+    }
+  })();
 
   const scrollToRateRange = useCallback(() => {
     if (loading || loadingDraft || loadingService || focusTarget !== 'rate-range' || handledFocusRef.current) return;
@@ -170,6 +230,15 @@ export default function CreateServiceScreen() {
     }
   }, [profile?.barangay]);
 
+  /**
+   * Seeds a NEW listing from the resident's Work Profile.
+   *
+   * Classification comes from `resolveInitialClassification`, which will
+   * preselect a sole skill but deliberately refuses to guess when the resident
+   * has several: multi-skilled residents get the chooser instead of a silent
+   * `offeredServices[0]` pick. Drafts and existing listings skip this entirely
+   * so a stored classification is never re-inferred.
+   */
   useEffect(() => {
     if (initialDraftId || serviceId || defaultsAppliedRef.current || loading) return;
     let active = true;
@@ -178,12 +247,26 @@ export default function CreateServiceScreen() {
       if (!active || result.error || !result.data) return;
 
       const { work } = result.data;
-      const defaultService = work.offeredServices[0] ?? null;
-      const customService = !defaultService ? work.customOfferedServices[0] : null;
       defaultsAppliedRef.current = true;
 
-      setCategory((current) => current || defaultService || (customService ? 'Other service' : current));
-      setCustomCategory((current) => current || customService || current);
+      const canonicalSkills = getCanonicalWorkProfileSkills([
+        ...work.offeredServices,
+        ...work.customOfferedServices,
+      ]);
+      setWorkProfileSkills(canonicalSkills);
+
+      const resolved = resolveInitialClassification({
+        originSkill,
+        workProfileSkills: canonicalSkills,
+      });
+
+      if (resolved.canonicalService) {
+        setCategory((current) => current || resolved.canonicalService || current);
+        setClassificationSource(resolved.source);
+      } else if (resolved.needsChooser) {
+        setSkillChooserVisible(true);
+      }
+
       setAvailability((current) => current || work.availability);
       setLocationBarangay((current) =>
         current && current !== profile?.barangay && current !== 'Barangay San Pedro'
@@ -195,7 +278,8 @@ export default function CreateServiceScreen() {
     return () => {
       active = false;
     };
-  }, [initialDraftId, loading, profile?.barangay, serviceId]);
+  }, [initialDraftId, loading, originSkill, profile?.barangay, serviceId]);
+
 
   useEffect(() => {
     if (!serviceId) return;
@@ -292,10 +376,64 @@ export default function CreateServiceScreen() {
     };
   }, [initialDraftId, serviceId]);
 
-  const selectCategory = (value: string) => {
+  const selectCategory = (value: string, source: ClassificationSource = 'chooser') => {
     setCategory(value);
     setCustomCategory('');
     setTags([]);
+    setClassificationSource(source);
+    setErrors((current) => ({ ...current, category: undefined, customCategory: undefined }));
+  };
+
+  /** Opens the "Something else" sheet, seeded with any existing wording. */
+  const openCustomSheet = () => {
+    setCustomServiceText(customCategory);
+    setCustomBlockedTerm(null);
+    setSkillChooserVisible(false);
+    setCustomSheetVisible(true);
+  };
+
+  /**
+   * Accepts a deterministic suggestion. The canonical service becomes the
+   * primary classification and the resident's own wording is preserved for
+   * display and search, so "Birthday cakes" stays visible under Baking.
+   */
+  const acceptSuggestion = (suggestion: ServiceSuggestion) => {
+    const wording = customServiceText.trim();
+    setCategory(suggestion.service);
+    setTags([]);
+    setCustomCategory(
+      wording.toLowerCase() === suggestion.service.toLowerCase() ? '' : wording,
+    );
+    setClassificationSource('suggestion');
+    setCustomBlockedTerm(null);
+    setCustomSheetVisible(false);
+    setErrors((current) => ({ ...current, category: undefined, customCategory: undefined }));
+  };
+
+  /**
+   * Keeps the resident's wording as a genuinely unknown service. It publishes
+   * normally and stays reachable through free-text Search and More services.
+   */
+  const keepCustomService = () => {
+    const wording = customServiceText.trim();
+
+    if (!wording) {
+      setErrors((current) => ({ ...current, customCategory: 'Describe the service you offer.' }));
+      return;
+    }
+
+    const blocked = checkBlockedServiceText(wording);
+    if (blocked.blocked) {
+      setCustomBlockedTerm(blocked.matchedTerm);
+      return;
+    }
+
+    setCategory(OTHER_SERVICE_CATEGORY_VALUE);
+    setCustomCategory(wording);
+    setTags([]);
+    setClassificationSource('custom');
+    setCustomBlockedTerm(null);
+    setCustomSheetVisible(false);
     setErrors((current) => ({ ...current, category: undefined, customCategory: undefined }));
   };
 
@@ -370,14 +508,38 @@ export default function CreateServiceScreen() {
     saveDraft: saveServiceDraft,
   });
 
-  const buildServiceInput = (): CreateServiceInput => ({
-    ...serviceDraftInput,
-    category,
-    title,
-    tags: Array.from(
-      new Set([serviceGroup, category, ...tags].filter((value): value is string => Boolean(value))),
-    ),
-  });
+  /**
+   * Normalizes the chosen classification before it is stored.
+   *
+   * A confirmed specialty keeps the canonical service as the primary
+   * classification and the resident's wording in `customCategory`; only a
+   * genuinely unknown service uses the `Other service` sentinel. The resident's
+   * wording is also carried into `tags` so free-text Search can find it.
+   */
+  const buildServiceInput = (): CreateServiceInput => {
+    const classification = buildListingClassification({
+      canonicalService: isCustomService ? null : category,
+      customWording: customCategory,
+    });
+
+    return {
+      ...serviceDraftInput,
+      category: classification.category,
+      customCategory: classification.customCategory ?? '',
+      title,
+      tags: Array.from(
+        new Set(
+          [
+            getCategoryForMvpService(classification.category),
+            getDiscoveryGroupForService(classification.category),
+            classification.category === OTHER_SERVICE_CATEGORY_VALUE ? null : classification.category,
+            classification.customCategory,
+            ...tags,
+          ].filter((value): value is string => Boolean(value)),
+        ),
+      ),
+    };
+  };
 
   const onNext = async () => {
     if (uploadingPhotos) {
@@ -386,9 +548,17 @@ export default function CreateServiceScreen() {
     }
     const serviceInput = buildServiceInput();
     const validation: ServiceDraftErrors = {};
-    if (!category.trim()) validation.category = 'Choose a service.';
-    if (category === 'Other service' && !customCategory.trim()) {
-      validation.customCategory = 'Describe the service so barangay admins can review it.';
+    if (!category.trim()) validation.category = 'Choose the main service for this listing.';
+    if (isCustomService && !customCategory.trim()) {
+      validation.customCategory = 'Describe the service you offer.';
+    }
+    // The custom escape hatch must not become a way around product scope, so
+    // re-check at publish time as well as on entry.
+    if (isCustomService) {
+      const blocked = checkBlockedServiceText(customCategory);
+      if (blocked.blocked) {
+        validation.customCategory = 'Konektado doesn’t support this type of service yet.';
+      }
     }
     if (!title.trim()) validation.title = 'Enter a short service title.';
     if (!description.trim()) validation.description = 'Describe what clients can expect from this service.';
@@ -517,8 +687,8 @@ export default function CreateServiceScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <Section
-            helper="Start with one clear service clients can find and understand quickly."
-            title="What service do you offer?">
+            helper="Start with a clear offer. Photos and a short title help clients understand it quickly."
+            title="What are you offering?">
             <CurrentUserIdentityRow subtitle={serviceId ? 'Editing a service post' : 'Creating a service post'} />
 
             {photoUrls.length ? (
@@ -576,56 +746,6 @@ export default function CreateServiceScreen() {
               <Text style={styles.helperStrong}>Optional</Text>, but photos help clients understand your past work.
             </Text>
 
-            <View style={styles.group}>
-              <Text style={styles.label}>Service</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setServicePickerVisible(true)}
-                style={({ pressed }) => [
-                  styles.selectBox,
-                  errors.category && styles.inputErrorBorder,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={[styles.selectText, !category && styles.placeholderText]} numberOfLines={1}>
-                  {category || 'Choose a service'}
-                </Text>
-                <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
-              </Pressable>
-              <Text style={styles.smallHelper}>One service per post. Create another post for a different service.</Text>
-              {serviceGroup ? <Text style={styles.smallHelper}>Category: {serviceGroup}</Text> : null}
-              <FieldError message={errors.category} />
-            </View>
-
-            <View style={styles.group}>
-              <Text style={styles.label}>Not listed?</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: category === 'Other service' }}
-                onPress={() => selectCategory('Other service')}
-                style={({ pressed }) => [
-                  styles.chip,
-                  category === 'Other service' && styles.chipActive,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={[styles.chipText, category === 'Other service' && styles.chipTextActive]}>
-                  Others / Specify
-                </Text>
-              </Pressable>
-              {category === 'Other service' ? (
-                <Field
-                  error={errors.customCategory}
-                  helperText="Custom services may be reviewed before they are shown widely."
-                  label="Specify service"
-                  onChangeText={(value) => {
-                    setCustomCategory(value);
-                    clearError('customCategory');
-                  }}
-                  placeholder="Example: Bicycle repair"
-                  value={customCategory}
-                />
-              ) : null}
-            </View>
-
             <Field
               error={errors.title}
               helperText={`${title.length}/${MAX_SERVICE_TITLE_LENGTH} characters. Keep it short and searchable.`}
@@ -636,14 +756,10 @@ export default function CreateServiceScreen() {
                 setTitle(value);
                 clearError('title');
               }}
-              placeholder="Example: Home cleaning help"
+              placeholder="Example: Custom birthday cakes for any occasion"
               value={title}
             />
-          </Section>
 
-          <Section
-            helper="Explain what clients can expect before they message you."
-            title="Service details">
             <Field
               error={errors.description}
               label="Description"
@@ -652,41 +768,9 @@ export default function CreateServiceScreen() {
                 setDescription(value);
                 clearError('description');
               }}
-              placeholder="Describe your service, tools, and experience"
+              placeholder="Tell clients what you offer, what is included, and how you work"
               value={description}
             />
-            <View style={styles.group}>
-              <Text style={styles.label}>Helpful tags</Text>
-              <Text style={styles.smallHelper}>Choose up to 4 tags to help clients understand this service.</Text>
-              {tagOptions.length ? (
-                <View style={styles.chipWrap}>
-                  {tagOptions.map((tag) => {
-                    const active = tags.includes(tag);
-                    return (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        key={tag}
-                        onPress={() => toggleTag(tag)}
-                        style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{tag}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View
-                  accessibilityLabel="Select a service to show available tags"
-                  accessibilityRole="text"
-                  style={styles.tagEmptyBox}>
-                  <View style={styles.tagEmptyIcon}>
-                    <MaterialIcons color={color.textSubtle} name="local-offer" size={18} />
-                  </View>
-                  <Text style={styles.tagEmptyText}>Choose a service to see helpful tags.</Text>
-                </View>
-              )}
-              <Text style={styles.smallHelper}>{selectedTagsText || 'No helpful tags added yet'}</Text>
-            </View>
           </Section>
 
           <Section
@@ -756,6 +840,118 @@ export default function CreateServiceScreen() {
               />
             </Section>
           </View>
+
+          {/*
+            Classification sits below the offer itself: residents describe what
+            they sell first, and only then confirm how it is listed. It is
+            always shown and always changeable — never invisible magic.
+          */}
+          <Section
+            helper="This is how clients find your listing in Search. Choose the main service; extras can stay in the title, description, or tags."
+            title="Listed under">
+            <View style={styles.group}>
+              {classificationLabel ? (
+                <View style={styles.classificationCard}>
+                  <View style={styles.classificationTextGroup}>
+                    <Text style={styles.classificationValue} numberOfLines={2}>
+                      {discoveryGroup && !isCustomService
+                        ? `${classificationLabel} · ${discoveryGroup}`
+                        : classificationLabel}
+                    </Text>
+                    {classificationProvenance ? (
+                      <Text style={styles.classificationProvenance}>{classificationProvenance}</Text>
+                    ) : null}
+                    {isCustomService ? (
+                      <Text style={styles.smallHelper}>
+                        New services are listed exactly as you wrote them. Clients can still find this
+                        through search and More services.
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    accessibilityLabel="Change how this listing is listed"
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() =>
+                      workProfileSkills.length > 1
+                        ? setSkillChooserVisible(true)
+                        : setServicePickerVisible(true)
+                    }
+                    style={({ pressed }) => [styles.classificationChange, pressed && styles.pressed]}>
+                    <Text style={styles.classificationChangeText}>Change</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    workProfileSkills.length > 1
+                      ? setSkillChooserVisible(true)
+                      : setServicePickerVisible(true)
+                  }
+                  style={({ pressed }) => [
+                    styles.selectBox,
+                    errors.category && styles.inputErrorBorder,
+                    pressed && styles.pressed,
+                  ]}>
+                  <Text style={[styles.selectText, styles.placeholderText]} numberOfLines={1}>
+                    Choose the main service
+                  </Text>
+                  <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={24} />
+                </Pressable>
+              )}
+              <FieldError message={errors.category ?? errors.customCategory} />
+            </View>
+
+            <View style={styles.group}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={openCustomSheet}
+                style={({ pressed }) => [styles.chip, isCustomService && styles.chipActive, pressed && styles.pressed]}>
+                <Text style={[styles.chipText, isCustomService && styles.chipTextActive]}>
+                  Something else
+                </Text>
+              </Pressable>
+              <Text style={styles.smallHelper}>
+                Use this if your service is not on the list. Type it in your own words.
+              </Text>
+            </View>
+
+            <View style={styles.group}>
+              <Text style={styles.label}>Helpful tags</Text>
+              <Text style={styles.smallHelper}>
+                Choose up to 4 tags to help clients understand this service.
+              </Text>
+              {tagOptions.length ? (
+                <View style={styles.chipWrap}>
+                  {tagOptions.map((tag) => {
+                    const active = tags.includes(tag);
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        key={tag}
+                        onPress={() => toggleTag(tag)}
+                        style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{tag}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View
+                  accessibilityLabel="Select a service to show available tags"
+                  accessibilityRole="text"
+                  style={styles.tagEmptyBox}>
+                  <View style={styles.tagEmptyIcon}>
+                    <MaterialIcons color={color.textSubtle} name="local-offer" size={18} />
+                  </View>
+                  <Text style={styles.tagEmptyText}>Choose a service to see helpful tags.</Text>
+                </View>
+              )}
+              <Text style={styles.smallHelper}>{selectedTagsText || 'No helpful tags added yet'}</Text>
+            </View>
+          </Section>
 
           <Section
             helper="Add optional details only when they help clients decide."
@@ -853,6 +1049,121 @@ export default function CreateServiceScreen() {
         title="Choose service"
         visible={servicePickerVisible}
       />
+      {/*
+        Shown to residents whose Work Profile lists several skills. Picking the
+        primary service here replaces the old silent `offeredServices[0]` guess.
+      */}
+      <BottomSheet onClose={() => setSkillChooserVisible(false)} visible={skillChooserVisible}>
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>What are you offering?</Text>
+          <Text style={styles.sheetDescription}>Based on your Work Profile</Text>
+          <View style={styles.chipWrap}>
+            {workProfileSkills.map((skill) => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: category === skill }}
+                key={skill}
+                onPress={() => {
+                  selectCategory(skill, 'chooser');
+                  setSkillChooserVisible(false);
+                }}
+                style={({ pressed }) => [
+                  styles.chip,
+                  category === skill && styles.chipActive,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={[styles.chipText, category === skill && styles.chipTextActive]}>
+                  {skill}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openCustomSheet}
+            style={({ pressed }) => [styles.sheetSecondaryAction, pressed && styles.pressed]}>
+            <MaterialIcons color={color.verificationBlue} name="add" size={18} />
+            <Text style={styles.sheetSecondaryActionText}>Something else</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setSkillChooserVisible(false);
+              setServicePickerVisible(true);
+            }}
+            style={({ pressed }) => [styles.sheetSecondaryAction, pressed && styles.pressed]}>
+            <MaterialIcons color={color.verificationBlue} name="list" size={18} />
+            <Text style={styles.sheetSecondaryActionText}>Browse all services</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
+
+      {/*
+        "Something else": the resident types in their own words, and matching is
+        deterministic. Suggestions are offered, never auto-applied, and clearly
+        excluded trades are refused with a plain message instead of being
+        silently dropped or filed under a generic repair category.
+      */}
+      <BottomSheet onClose={() => setCustomSheetVisible(false)} visible={customSheetVisible}>
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>What do you call this service?</Text>
+          <Text style={styles.sheetDescription}>
+            Type it the way you would say it, for example &quot;gumagawa ako ng cake&quot;.
+          </Text>
+          <TextInput
+            autoFocus
+            maxLength={MAX_CUSTOM_SERVICE_LENGTH}
+            onChangeText={(value) => {
+              setCustomServiceText(value);
+              setCustomBlockedTerm(null);
+              clearError('customCategory');
+            }}
+            placeholder="Example: Balloon decoration"
+            placeholderTextColor={color.textSubtle}
+            style={styles.sheetInput}
+            value={customServiceText}
+          />
+
+          {customBlockedTerm ? (
+            <View style={styles.sheetNotice}>
+              <MaterialIcons color={color.textMuted} name="info-outline" size={18} />
+              <Text style={styles.sheetNoticeText}>
+                Konektado doesn&apos;t support this type of service yet. Please describe a different
+                service you can offer.
+              </Text>
+            </View>
+          ) : null}
+
+          {!customBlockedTerm && customSuggestions.length ? (
+            <View style={styles.group}>
+              <Text style={styles.label}>Did you mean?</Text>
+              <View style={styles.chipWrap}>
+                {customSuggestions.map((suggestion) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={suggestion.service}
+                    onPress={() => acceptSuggestion(suggestion)}
+                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
+                    <Text style={styles.chipText}>{suggestion.service}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          <FieldError message={errors.customCategory} />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={keepCustomService}
+            style={({ pressed }) => [styles.sheetPrimaryAction, pressed && styles.pressed]}>
+            <Text style={styles.sheetPrimaryActionText}>
+              {customSuggestions.length ? 'None of these — use my wording' : 'Use my wording'}
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
+
       <BarangayPickerSheet
         description="Only your barangay is shown publicly."
         onClose={() => setBarangayPickerVisible(false)}
@@ -1218,6 +1529,90 @@ const styles = StyleSheet.create({
     ...typography.captionMedium,
     color: color.textSubtle,
     flex: 1,
+  },
+  classificationCard: {
+    alignItems: 'center',
+    backgroundColor: color.primarySoft,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  classificationTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  classificationValue: {
+    ...typography.bodyMedium,
+    color: color.text,
+  },
+  classificationProvenance: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  classificationChange: {
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xs,
+  },
+  classificationChangeText: {
+    ...typography.captionMedium,
+    color: color.verificationBlue,
+  },
+  sheetContent: {
+    gap: space.md,
+    paddingBottom: space.lg,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+  },
+  sheetTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+  },
+  sheetDescription: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  sheetInput: {
+    ...typography.bodyMedium,
+    backgroundColor: color.surfaceAlt,
+    borderRadius: radius.lg,
+    color: color.text,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  sheetNotice: {
+    alignItems: 'flex-start',
+    backgroundColor: color.surfaceAlt,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    gap: space.sm,
+    padding: space.md,
+  },
+  sheetNoticeText: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+    flex: 1,
+  },
+  sheetPrimaryAction: {
+    alignItems: 'center',
+    backgroundColor: color.verificationBlue,
+    borderRadius: radius.pill,
+    paddingVertical: space.md,
+  },
+  sheetPrimaryActionText: {
+    ...typography.bodyMedium,
+    color: color.white,
+  },
+  sheetSecondaryAction: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.xs,
+    paddingVertical: space.xs,
+  },
+  sheetSecondaryActionText: {
+    ...typography.bodyMedium,
+    color: color.verificationBlue,
   },
   chipWrap: {
     flexDirection: 'row',

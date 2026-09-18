@@ -160,6 +160,20 @@ Manual test examples:
 - Avoid backend libraries that lock the app to Supabase-specific UI patterns.
 - Keep migration-friendly architecture by isolating Supabase in `/services` and `/utils/supabase.ts`.
 
+## Service Taxonomy and Listing Classification Rules
+
+- `constants/service-taxonomy.ts` is the single source of truth. Keep `MVP_SERVICES_BY_CATEGORY` and the metadata maps declared with `as const satisfies`: a plain `Record<..., string[]>` annotation widens the literals, silently turns `MvpServiceOption` into `string`, and makes every metadata map non-exhaustive.
+- Adding a canonical service must stay a compile error until its work type and service tags exist. `npm run test:service-classification` proves this; do not weaken it to make an expansion compile.
+- Canonical categories are STORED (`jobs.category`, `services.category`). Discovery groups are DISPLAY-ONLY and never persisted, so renaming a group is a code change, while renaming a stored category or service would be a data migration.
+- Home renders `HOME_DISCOVERY_GROUPS` (eight primary groups). `SEARCH_DISCOVERY_GROUPS` adds `More services` for Search only. Never add `More services` to the Home grid (DEC-111).
+- Every listing has exactly ONE primary canonical service (DEC-108). Bundled extras belong in the title, description, or tags. Never introduce a second primary classification.
+- A listing owns its classification snapshot (DEC-109). Work Profile edits must never rewrite, reclassify, or unclassify a published listing. Only editing the listing changes it.
+- Classification is deterministic and offline (DEC-107). Never add an AI, LLM, embedding, or remote classifier to this path, and never let inference assign a service without explicit resident confirmation.
+- Classification must always be visible to the resident and always changeable.
+- A more specific wording under a known service is a specialty, not an unknown service: store the canonical value in `category` and the wording in `custom_category` with review status `none` (DEC-110).
+- Do not claim custom services are reviewed before they appear. `custom_category_review_status` is an editorial backlog signal, not a gate.
+- Keep `BLOCKED_SERVICE_TERMS` current so the custom-service field cannot be used to post excluded trades, and always tell the resident plainly instead of dropping their input.
+
 ## Database Rules
 
 - Use SQL migrations in `/sql`.

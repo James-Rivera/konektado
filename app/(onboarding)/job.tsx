@@ -195,7 +195,9 @@ export default function JobStep() {
         const category = getCategoryForMvpService(service);
         return Boolean(
           category &&
-            getServicesForMvpCategoryAndOfferedDeliveryMode(category, mode).includes(service),
+            getServicesForMvpCategoryAndOfferedDeliveryMode(category, mode).some(
+              (allowed) => allowed === service,
+            ),
         );
       }),
     );

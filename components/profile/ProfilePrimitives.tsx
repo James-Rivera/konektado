@@ -464,16 +464,51 @@ export function ProfileSection({
   );
 }
 
-export function ProfilePillRow({ values }: { values: string[] }) {
+/**
+ * Read-only pills by default. When `onSelect` is supplied, pills the caller
+ * marks selectable become buttons — used by the Work Profile so a skill can
+ * start a service listing without asking for its classification again.
+ */
+export function ProfilePillRow({
+  isSelectable,
+  onSelect,
+  selectActionLabel = 'Create listing',
+  values,
+}: {
+  isSelectable?: (value: string) => boolean;
+  onSelect?: (value: string) => void;
+  selectActionLabel?: string;
+  values: string[];
+}) {
   return (
     <View style={styles.pillRail}>
-      {values.map((value) => (
-        <View key={value} style={styles.servicePill}>
-          <Text numberOfLines={1} style={styles.servicePillText}>
-            {value}
-          </Text>
-        </View>
-      ))}
+      {values.map((value) => {
+        const selectable = Boolean(onSelect) && (isSelectable?.(value) ?? true);
+
+        if (!selectable) {
+          return (
+            <View key={value} style={styles.servicePill}>
+              <Text numberOfLines={1} style={styles.servicePillText}>
+                {value}
+              </Text>
+            </View>
+          );
+        }
+
+        return (
+          <Pressable
+            accessibilityHint={`${selectActionLabel} for ${value}`}
+            accessibilityRole="button"
+            key={value}
+            onPress={() => onSelect?.(value)}
+            style={({ pressed }) => [styles.servicePill, pressed && styles.pillPressed]}>
+            <Text numberOfLines={1} style={styles.servicePillText}>
+              {value}
+            </Text>
+            <MaterialIcons color={color.verificationBlue} name="add" size={14} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -1296,9 +1331,14 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     borderWidth: 1,
     borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: space['2xs'],
     justifyContent: 'center',
     minHeight: 30,
     paddingHorizontal: space.md,
+  },
+  pillPressed: {
+    opacity: 0.75,
   },
   servicePillText: {
     ...typography.captionMedium,

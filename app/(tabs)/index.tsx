@@ -24,7 +24,9 @@ import {
   getDisplayLabelForMvpService,
   getDisplayTitleForMvpService,
   getOrderedDiscoveryGroupsForMode,
+  HOME_DISCOVERY_GROUPS,
   type DiscoveryGroupKey,
+  type HomeDiscoveryGroupKey,
 } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -143,19 +145,21 @@ function mapSearchModeToRouteFilter(mode: SearchMode) {
   return mode === 'jobs' ? 'Jobs' : 'Services';
 }
 
-const ALL_CATEGORIES_TILE_KEY = '__all_services__';
-
 /**
- * One icon per controlled-taxonomy discovery group. Tiles are generated from
- * `SEARCH_DISCOVERY_GROUPS`, so Home can never show a category that Search
- * cannot filter by.
+ * One icon per primary Home discovery group. Tiles are generated from
+ * `HOME_DISCOVERY_GROUPS`, so Home can never show a category that Search
+ * cannot filter by, and the `More services` search fallback never becomes a
+ * ninth primary tile — it is reached through "See all" and Search instead.
  */
-const DISCOVERY_GROUP_ICONS: Record<DiscoveryGroupKey, HomeCategoryTile['icon']> = {
-  'Home & Local Help': 'home-repair-service',
-  'Errands & Assistance': 'directions-run',
-  'Learning & Tutoring': 'school',
-  'Digital & Document Help': 'design-services',
-  'Tech Setup Help': 'devices',
+const DISCOVERY_GROUP_ICONS: Record<HomeDiscoveryGroupKey, HomeCategoryTile['icon']> = {
+  'Home & Errands': 'home-repair-service',
+  'Beauty & Personal Care': 'spa',
+  'Food & Baking': 'bakery-dining',
+  'Sewing & Tailoring': 'content-cut',
+  'Home Repair & Carpentry': 'handyman',
+  'Tutoring & Lessons': 'school',
+  'Documents & Design': 'design-services',
+  'Computer & Phone Help': 'devices',
 };
 
 function getHomeGreeting(firstName: string | null | undefined, fullName: string | null | undefined) {
@@ -525,25 +529,21 @@ export default function HomeScreen() {
     street: profile?.street,
   });
 
-  // Category tiles follow the same preference-aware group ordering that Search uses.
+  // Category tiles follow the same preference-aware group ordering that Search
+  // uses, restricted to the eight primary Home groups. The long tail
+  // (`More services`, full filters) is reached through the section's "See all".
   const categoryTiles = useMemo<HomeCategoryTile[]>(() => {
     const orderedGroups = getOrderedDiscoveryGroupsForMode({
+      groups: HOME_DISCOVERY_GROUPS,
       mode: searchMode ?? searchModeFallback,
       preferences,
     });
 
-    return [
-      ...orderedGroups.map((group) => ({
-        key: group,
-        icon: DISCOVERY_GROUP_ICONS[group],
-        label: group,
-      })),
-      {
-        key: ALL_CATEGORIES_TILE_KEY,
-        icon: 'grid-view' as const,
-        label: 'All services',
-      },
-    ];
+    return orderedGroups.map((group) => ({
+      key: group,
+      icon: DISCOVERY_GROUP_ICONS[group],
+      label: group,
+    }));
   }, [preferences, searchMode, searchModeFallback]);
 
   const activeFeedFilterCount = getHomeFeedFilterCount(appliedFeedFilters);
@@ -671,11 +671,6 @@ export default function HomeScreen() {
 
   const openCategory = useCallback(
     (key: string) => {
-      if (key === ALL_CATEGORIES_TILE_KEY) {
-        openSearch({ openFilters: true });
-        return;
-      }
-
       openSearch({ group: key as DiscoveryGroupKey });
     },
     [openSearch],

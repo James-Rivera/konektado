@@ -373,18 +373,28 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
 
   if (text) {
     const escapedText = escapePostgrestFilterValue(text);
-    query = query.or(
-      [
-        `title.ilike.%${escapedText}%`,
-        `description.ilike.%${escapedText}%`,
-        `category.ilike.%${escapedText}%`,
-        `custom_category.ilike.%${escapedText}%`,
-        `availability_text.ilike.%${escapedText}%`,
-        `rate_text.ilike.%${escapedText}%`,
-        `barangay.ilike.%${escapedText}%`,
-        `location_text.ilike.%${escapedText}%`,
-      ].join(','),
-    );
+    const clauses = [
+      `title.ilike.%${escapedText}%`,
+      `description.ilike.%${escapedText}%`,
+      `category.ilike.%${escapedText}%`,
+      // The resident's own wording for a listing, e.g. "Birthday cakes".
+      `custom_category.ilike.%${escapedText}%`,
+      `availability_text.ilike.%${escapedText}%`,
+      `rate_text.ilike.%${escapedText}%`,
+      `barangay.ilike.%${escapedText}%`,
+      `location_text.ilike.%${escapedText}%`,
+    ];
+
+    // Tags carry bundled extras and specialties, so a search for "makeup"
+    // should also reach a Haircut listing that offers it. Arrays only support
+    // containment rather than ilike, so this is restricted to plain tokens that
+    // cannot break out of the PostgREST filter syntax.
+    const tagToken = getSearchableTagToken(text);
+    if (tagToken) {
+      clauses.push(`tags.cs.{"${tagToken}"}`);
+    }
+
+    query = query.or(clauses.join(','));
   }
 
   query = query.limit(limit);
@@ -443,6 +453,19 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
 function normalizeLimit(value: number | undefined) {
   if (!value || !Number.isFinite(value)) return 40;
   return Math.max(1, Math.min(80, Math.floor(value)));
+}
+
+/**
+ * A tag value safe to embed in a PostgREST `cs.{...}` array-containment filter.
+ *
+ * Tags are matched whole rather than as substrings, so only simple
+ * letter/number/space tokens qualify. Anything containing quotes, braces,
+ * commas, or other filter syntax is rejected instead of escaped.
+ */
+function getSearchableTagToken(value: string) {
+  const token = value.trim();
+  if (!token || token.length > 40) return null;
+  return /^[a-zA-Z0-9 ]+$/.test(token) ? token : null;
 }
 
 function escapePostgrestFilterValue(value: string) {
