@@ -465,50 +465,20 @@ export function ProfileSection({
 }
 
 /**
- * Read-only pills by default. When `onSelect` is supplied, pills the caller
- * marks selectable become buttons — used by the Work Profile so a skill can
- * start a service listing without asking for its classification again.
+ * Read-only pills. Skills are descriptive, so a pill is deliberately not
+ * tappable: creating a listing is a separate, explicitly labelled action, and
+ * a pill that both described a skill and posted a service would be ambiguous.
  */
-export function ProfilePillRow({
-  isSelectable,
-  onSelect,
-  selectActionLabel = 'Create listing',
-  values,
-}: {
-  isSelectable?: (value: string) => boolean;
-  onSelect?: (value: string) => void;
-  selectActionLabel?: string;
-  values: string[];
-}) {
+export function ProfilePillRow({ values }: { values: string[] }) {
   return (
     <View style={styles.pillRail}>
-      {values.map((value) => {
-        const selectable = Boolean(onSelect) && (isSelectable?.(value) ?? true);
-
-        if (!selectable) {
-          return (
-            <View key={value} style={styles.servicePill}>
-              <Text numberOfLines={1} style={styles.servicePillText}>
-                {value}
-              </Text>
-            </View>
-          );
-        }
-
-        return (
-          <Pressable
-            accessibilityHint={`${selectActionLabel} for ${value}`}
-            accessibilityRole="button"
-            key={value}
-            onPress={() => onSelect?.(value)}
-            style={({ pressed }) => [styles.servicePill, pressed && styles.pillPressed]}>
-            <Text numberOfLines={1} style={styles.servicePillText}>
-              {value}
-            </Text>
-            <MaterialIcons color={color.verificationBlue} name="add" size={14} />
-          </Pressable>
-        );
-      })}
+      {values.map((value) => (
+        <View key={value} style={styles.servicePill}>
+          <Text numberOfLines={1} style={styles.servicePillText}>
+            {value}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -1336,9 +1306,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 30,
     paddingHorizontal: space.md,
-  },
-  pillPressed: {
-    opacity: 0.75,
   },
   servicePillText: {
     ...typography.captionMedium,

@@ -53,6 +53,69 @@ export const DEFAULT_HOME_FEED_FILTERS: HomeFeedFilters = {
   sort: 'recommended',
 };
 
+/**
+ * Folds Work Profile skills into the ranking preferences used for provider /
+ * Find Work relevance.
+ *
+ * Skills live on `provider_profiles` while onboarding preferences live on
+ * `user_preferences`, so editing the Work Profile (or accepting the
+ * post-publish "Add to your Work Profile" prompt) previously had no effect on
+ * Home ranking at all. This merges the two into ONE ranking input rather than
+ * introducing a second source of truth: callers pass the already-merged,
+ * already-alias-resolved `work.offeredServices` from `getMyProfileCompletion`.
+ *
+ * `neededServices` is deliberately untouched. What a resident can offer and
+ * what they need hired are separate signals, and collapsing them would make
+ * Hire Help recommend the work they already do themselves.
+ */
+export function withWorkProfileSkills({
+  preferences,
+  workProfileSkills,
+  customWorkProfileSkills = [],
+}: {
+  preferences: UserPreferences | null;
+  workProfileSkills: string[];
+  customWorkProfileSkills?: string[];
+}): UserPreferences | null {
+  if (!workProfileSkills.length && !customWorkProfileSkills.length) return preferences;
+
+  const base: UserPreferences = preferences ?? {
+    customNeededServices: [],
+    customOfferedServices: [],
+    intent: 'provider',
+    neededServices: [],
+    offeredDeliveryMode: null,
+    offeredServices: [],
+    onboardingCompletedAt: null,
+  };
+
+  return {
+    ...base,
+    offeredServices: mergeUnique(base.offeredServices, workProfileSkills),
+    customOfferedServices: mergeUnique(base.customOfferedServices, customWorkProfileSkills),
+  };
+}
+
+function mergeUnique(left: string[], right: string[]) {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  [...left, ...right].forEach((value) => {
+    const clean = value?.trim();
+    if (!clean) return;
+
+    // Resolve aliases before de-duplicating so `Basic home repair` and
+    // `Minor home fix help` cannot both occupy the merged list.
+    const key = normalizeText(getStoredMvpServiceOption(clean) ?? clean);
+    if (!key || seen.has(key)) return;
+
+    seen.add(key);
+    merged.push(clean);
+  });
+
+  return merged;
+}
+
 export function resolveHomeFeedMode(context: HomeFeedRankingContext): HomeFeedMode {
   const activeRole = normalizeRole(context.activeRole);
   if (activeRole) return activeRole;

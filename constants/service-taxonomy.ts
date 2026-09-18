@@ -342,15 +342,23 @@ const NORMALIZED_MVP_SERVICE_LOOKUP = new Map<string, MvpServiceOption>([
   ),
 ]);
 
+/**
+ * The quick-pick list shown before a resident types anything.
+ *
+ * One service per Home discovery group, so the empty state spans the whole
+ * taxonomy instead of skewing toward digital work. Keeping it group-complete
+ * matters most for residents who do not yet have the words for their trade and
+ * are scanning for something recognisable.
+ */
 export const POPULAR_MVP_SERVICES = [
   'Cleaning',
-  'Laundry help',
+  'Carpentry',
+  'Baking',
+  'Sewing',
+  'Haircut',
   'Tutoring',
-  'Canva layout',
-  'Computer setup',
-  'Phone setup',
   'Document formatting',
-  'Delivery help',
+  'Computer setup',
 ] as const satisfies readonly MvpServiceOption[];
 
 export const MVP_CATEGORY_CONTEXT_TAGS = {

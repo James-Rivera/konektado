@@ -23,7 +23,6 @@ import { type SearchMode } from '@/constants/search-demo-data';
 import {
   getDisplayLabelForMvpService,
   getDisplayTitleForMvpService,
-  getOrderedDiscoveryGroupsForMode,
   HOME_DISCOVERY_GROUPS,
   type DiscoveryGroupKey,
   type HomeDiscoveryGroupKey,
@@ -58,6 +57,7 @@ import {
   type HomeFeedFilters,
   type HomeFeedType,
   resolveHomeFeedMode,
+  withWorkProfileSkills,
 } from '@/services/home-feed.service';
 import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
 import { getMyProfileCompletion } from '@/services/profile-completion.service';
@@ -487,11 +487,26 @@ export default function HomeScreen() {
     };
   }, [isFocused, profile?.id]);
 
+  /**
+   * Ranking preferences with Work Profile skills folded in, so the skills a
+   * resident maintains actually influence Find Work relevance. Hire Help keeps
+   * using their needed-service preferences untouched.
+   */
+  const rankingPreferences = useMemo(
+    () =>
+      withWorkProfileSkills({
+        preferences,
+        workProfileSkills: profileCompletionStatus?.work.offeredServices ?? [],
+        customWorkProfileSkills: profileCompletionStatus?.work.customOfferedServices ?? [],
+      }),
+    [preferences, profileCompletionStatus],
+  );
+
   const feedVariants = useMemo(() => {
     const rankingContext = {
       activeRole: profile?.active_role,
       city: profile?.city,
-      preferences,
+      preferences: rankingPreferences,
       userBarangay: profile?.barangay,
     };
     const jobCandidates = feedSources.jobs.map((item) => ({ item, job: item.job }));
@@ -508,7 +523,7 @@ export default function HomeScreen() {
       Services: filtered.services,
       'For you': filtered.all,
     };
-  }, [appliedFeedFilters, feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
+  }, [appliedFeedFilters, feedSources, rankingPreferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
 
@@ -529,22 +544,26 @@ export default function HomeScreen() {
     street: profile?.street,
   });
 
-  // Category tiles follow the same preference-aware group ordering that Search
-  // uses, restricted to the eight primary Home groups. The long tail
-  // (`More services`, full filters) is reached through the section's "See all".
-  const categoryTiles = useMemo<HomeCategoryTile[]>(() => {
-    const orderedGroups = getOrderedDiscoveryGroupsForMode({
-      groups: HOME_DISCOVERY_GROUPS,
-      mode: searchMode ?? searchModeFallback,
-      preferences,
-    });
-
-    return orderedGroups.map((group) => ({
-      key: group,
-      icon: DISCOVERY_GROUP_ICONS[group],
-      label: group,
-    }));
-  }, [preferences, searchMode, searchModeFallback]);
+  /**
+   * The eight primary tiles are positionally STABLE (DEC-117).
+   *
+   * They previously reordered by preference score and by Find work / Hire help
+   * mode, so the grid visibly reshuffled mid-session when the resident tapped
+   * the mode control. Residents navigate this grid by position, so it is
+   * rendered in the fixed `HOME_DISCOVERY_GROUPS` order for everyone, in every
+   * mode. Personalization still changes what is recommended in the feed below.
+   *
+   * Depends on nothing: the order is a constant, and this must stay that way.
+   */
+  const categoryTiles = useMemo<HomeCategoryTile[]>(
+    () =>
+      HOME_DISCOVERY_GROUPS.map((group) => ({
+        key: group,
+        icon: DISCOVERY_GROUP_ICONS[group],
+        label: group,
+      })),
+    [],
+  );
 
   const activeFeedFilterCount = getHomeFeedFilterCount(appliedFeedFilters);
   const hasAppliedFeedFilters =

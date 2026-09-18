@@ -47,3 +47,10 @@ Phase 3 remains out of scope for this pass:
 - The 13 new canonical services participate automatically: ranking is data-driven and enumerates nothing.
 - Home category tiles are ordered by preference score across `HOME_DISCOVERY_GROUPS` only, so the `More services` Search fallback can never appear as a Home tile.
 - Personalization still changes RANKING, not ACCESS. Every group stays in the list and no listing is filtered out by preferences, including custom `Other service` listings.
+
+## Work Profile Skills in Ranking (2026-09-18, DEC-117, DEC-118)
+
+- Work Profile skills now participate in provider / Find Work relevance. `withWorkProfileSkills` folds the merged `getMyProfileCompletion().work.offeredServices` into the ranking preferences, resolving aliases before de-duplicating. Previously skills lived on `provider_profiles` while ranking read `user_preferences`, so editing the Work Profile — or accepting the post-publish "Add to your Work Profile" prompt — changed nothing.
+- `neededServices` is deliberately untouched. Find Work uses what the resident can do; Hire Help uses what they need hired. The two signals never merge, so a client is never pushed toward the work they already do themselves.
+- Home discovery tiles are POSITIONALLY STABLE. The eight primary groups render in the fixed `HOME_DISCOVERY_GROUPS` order for every resident, role, and mode. They previously reordered by preference score and by Find work / Hire help, which reshuffled the grid mid-session when the resident tapped the mode control.
+- Personalization changes what Konektado recommends and in what order. It never changes where the primary navigation sits, whether a group exists, or whether a listing is reachable.

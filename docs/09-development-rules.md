@@ -174,6 +174,18 @@ Manual test examples:
 - Do not claim custom services are reviewed before they appear. `custom_category_review_status` is an editorial backlog signal, not a gate.
 - Keep `BLOCKED_SERVICE_TERMS` current so the custom-service field cannot be used to post excluded trades, and always tell the resident plainly instead of dropping their input.
 
+## Work Profile Skill Rules
+
+- Residents manage skills as a flat list of plain-language abilities (DEC-112). Never surface canonical categories or discovery groups while they are managing skills.
+- Every free-text skill or service entry point must go through `addSkillToList` (DEC-115). It is the single place that resolves aliases, de-duplicates on normalized text, enforces product-scope exclusions, and applies the cap. Do not re-implement any of those rules in a screen.
+- Adding a skill is search-first and searches the WHOLE taxonomy (DEC-113). Never scope skill search to the selected category; that is what made `karpintero` and `birthday cake` return nothing.
+- Matching suggests, the resident confirms (DEC-114). Never store an inferred service without an explicit tap. No AI, LLM, embedding, or remote classifier in this path.
+- `MAX_WORK_PROFILE_SKILLS` is 15 (DEC-116). Aliases and spelling variants must collapse before the cap is applied, so a duplicate never consumes a slot.
+- Skills are self-declared (DEC-119). Never label a skill verified, certified, or endorsed, and do not add a skill-review or endorsement workflow.
+- Work Profile skills feed provider / Find Work ranking through `withWorkProfileSkills` (DEC-118). Never merge them into `neededServices`; offered and needed are separate signals.
+- The eight Home discovery tiles are positionally stable (DEC-117). Do not sort them by preference, role, or mode. `getOrderedDiscoveryGroupsForMode` is for Search only.
+- Skill pills are read-only. Creating a listing is a separately labelled action (DEC-120), and both entry points open the same Create Service editor.
+
 ## Database Rules
 
 - Use SQL migrations in `/sql`.

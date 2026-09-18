@@ -180,6 +180,229 @@ export function suggestServicesForText(
     .map(({ service, confidence, matchedOn }) => ({ service, confidence, matchedOn }));
 }
 
+/** Hard ceiling on Work Profile skills (DEC-116). */
+export const MAX_WORK_PROFILE_SKILLS = 15;
+
+/** Above this, show a non-blocking focus reminder. Never prevents adding. */
+export const SKILL_FOCUS_REMINDER_THRESHOLD = 8;
+
+/** Shortest prefix the typo fallback will retry with. */
+const MIN_PREFIX_FALLBACK_LENGTH = 4;
+
+export type SkillSearchResult = {
+  service: MvpServiceOption;
+  /** The label/alias/tag that matched, so the UI can explain the hit. */
+  matchedOn: string;
+  confidence: SuggestionConfidence;
+};
+
+type SkillSearchCandidate = SkillSearchResult & { rank: number; position: number };
+
+/**
+ * Incremental search over the whole taxonomy for an Add Skill box.
+ *
+ * This is the mirror image of `suggestServicesForText`: there the typed value
+ * is a sentence and taxonomy phrases are looked for INSIDE it, whereas here the
+ * typed value is a fragment being looked for inside taxonomy labels. A search
+ * box needs the second direction, otherwise typing "car" finds nothing.
+ *
+ * Search is never scoped to a category: the resident should not have to know
+ * that Baking lives under Food & Personal Services before they can find it.
+ *
+ * Tiers, best first: exact canonical/alias, canonical label, alias, tag.
+ * Within a tier, earlier matches (prefixes) outrank later substring hits.
+ */
+export function searchSkillOptions(
+  query: string | null | undefined,
+  limit = 8,
+): SkillSearchResult[] {
+  const normalizedQuery = normalizeServiceText(query);
+  if (!normalizedQuery || limit <= 0) return [];
+
+  const direct = collectSkillMatches(normalizedQuery, limit);
+  if (direct.length) return direct;
+
+  // Deterministic typo tolerance: retry with shorter prefixes of the query so
+  // "carpentery" still reaches Carpentry through "carpent". No fuzzy distance
+  // scoring, so the behaviour stays explainable and testable.
+  if (normalizedQuery.length > MIN_PREFIX_FALLBACK_LENGTH) {
+    for (
+      let length = normalizedQuery.length - 1;
+      length >= MIN_PREFIX_FALLBACK_LENGTH;
+      length -= 1
+    ) {
+      const matches = collectSkillMatches(normalizedQuery.slice(0, length), limit);
+      if (matches.length) return matches;
+    }
+  }
+
+  // Last resort: treat the input as a sentence ("gumagawa ako ng cake").
+  return suggestServicesForText(query, limit).map(({ service, matchedOn, confidence }) => ({
+    service,
+    matchedOn,
+    confidence,
+  }));
+}
+
+function collectSkillMatches(normalizedQuery: string, limit: number): SkillSearchResult[] {
+  const bestByService = new Map<MvpServiceOption, SkillSearchCandidate>();
+
+  const consider = (
+    service: MvpServiceOption,
+    phrase: string,
+    confidence: SuggestionConfidence,
+    rank: number,
+  ) => {
+    const normalizedPhrase = normalizeServiceText(phrase);
+    if (!normalizedPhrase) return;
+
+    const position = normalizedPhrase.indexOf(normalizedQuery);
+    if (position < 0) return;
+
+    // An exact whole-phrase hit always wins over a partial one.
+    const effectiveRank = normalizedPhrase === normalizedQuery ? 0 : rank;
+    const existing = bestByService.get(service);
+
+    if (
+      existing &&
+      (existing.rank < effectiveRank ||
+        (existing.rank === effectiveRank && existing.position <= position))
+    ) {
+      return;
+    }
+
+    bestByService.set(service, { service, matchedOn: phrase, confidence, rank: effectiveRank, position });
+  };
+
+  MVP_SERVICE_OPTIONS.forEach((service) => consider(service, service, 'exact', 1));
+
+  Object.entries(LEGACY_MVP_SERVICE_ALIASES).forEach(([alias, service]) => {
+    consider(service, alias, 'alias', 2);
+  });
+
+  MVP_SERVICE_OPTIONS.forEach((service) => {
+    MVP_SERVICE_TAGS[service].forEach((tag) => consider(service, tag, 'keyword', 3));
+  });
+
+  return [...bestByService.values()]
+    .sort((left, right) => {
+      if (left.rank !== right.rank) return left.rank - right.rank;
+      if (left.position !== right.position) return left.position - right.position;
+      return left.service.localeCompare(right.service);
+    })
+    .slice(0, limit)
+    .map(({ service, matchedOn, confidence }) => ({ service, matchedOn, confidence }));
+}
+
+export type SkillListState = {
+  /** Canonical taxonomy services. */
+  skills: string[];
+  /** Free-text skills with no canonical equivalent. */
+  customSkills: string[];
+};
+
+export type AddSkillOutcome =
+  | { status: 'added'; state: SkillListState; canonicalService: MvpServiceOption | null }
+  | { status: 'duplicate'; state: SkillListState }
+  | { status: 'blocked'; matchedTerm: string | null }
+  | { status: 'limit'; limit: number }
+  | { status: 'empty' };
+
+/**
+ * The single place a skill gets added to a Work Profile.
+ *
+ * Every free-text entry point routes through here so alias resolution,
+ * normalized de-duplication, product-scope exclusions, and the skill cap
+ * cannot drift apart between the Work Profile, onboarding, and the picker.
+ */
+export function addSkillToList({
+  input,
+  state,
+  limit = MAX_WORK_PROFILE_SKILLS,
+}: {
+  input: string | null | undefined;
+  state: SkillListState;
+  limit?: number;
+}): AddSkillOutcome {
+  const value = input?.trim();
+  if (!value) return { status: 'empty' };
+
+  // Product scope is enforced before anything is stored, and an excluded trade
+  // is never quietly resolved into an allowed neighbouring service.
+  const blocked = checkBlockedServiceText(value);
+  if (blocked.blocked) {
+    return { status: 'blocked', matchedTerm: blocked.matchedTerm };
+  }
+
+  const canonical = getStoredMvpServiceOption(value);
+
+  if (canonical) {
+    if (state.skills.some((skill) => getStoredMvpServiceOption(skill) === canonical)) {
+      return { status: 'duplicate', state };
+    }
+
+    if (countSkills(state) >= limit) return { status: 'limit', limit };
+
+    return {
+      status: 'added',
+      canonicalService: canonical,
+      state: { skills: [...state.skills, canonical], customSkills: state.customSkills },
+    };
+  }
+
+  const normalized = normalizeServiceText(value);
+  if (state.customSkills.some((skill) => normalizeServiceText(skill) === normalized)) {
+    return { status: 'duplicate', state };
+  }
+
+  if (countSkills(state) >= limit) return { status: 'limit', limit };
+
+  return {
+    status: 'added',
+    canonicalService: null,
+    state: { skills: state.skills, customSkills: [...state.customSkills, value] },
+  };
+}
+
+/** Unique skill count, after alias and spelling collapse. */
+export function countSkills(state: SkillListState): number {
+  const normalized = normalizeSkillList(state);
+  return normalized.skills.length + normalized.customSkills.length;
+}
+
+/**
+ * Collapses aliases, casing, and spacing so duplicates never consume a slot:
+ * `Carpentry` + `karpintero` is one skill, and so is
+ * `Balloon decoration` + `balloon  decoration!`.
+ */
+export function normalizeSkillList(state: SkillListState): SkillListState {
+  const skills: MvpServiceOption[] = [];
+  const seenCanonical = new Set<MvpServiceOption>();
+  const customSkills: string[] = [];
+  const seenCustom = new Set<string>();
+
+  [...state.skills, ...state.customSkills].forEach((value) => {
+    const clean = value?.trim();
+    if (!clean) return;
+
+    const canonical = getStoredMvpServiceOption(clean);
+    if (canonical) {
+      if (!seenCanonical.has(canonical)) {
+        seenCanonical.add(canonical);
+        skills.push(canonical);
+      }
+      return;
+    }
+
+    const key = normalizeServiceText(clean);
+    if (!key || seenCustom.has(key)) return;
+    seenCustom.add(key);
+    customSkills.push(clean);
+  });
+
+  return { skills, customSkills };
+}
+
 /**
  * Normalizes Work Profile skills into canonical services, resolving legacy
  * aliases and dropping duplicates and sentinels. Order is preserved so the

@@ -65,6 +65,8 @@ import { showAlert } from '@/utils/alert';
 
 const MAX_SERVICE_PHOTOS = 10;
 const MAX_SERVICE_TITLE_LENGTH = 80;
+/** Above this many Work Profile skills, the chooser gains a search box. */
+const SKILL_FILTER_THRESHOLD = 6;
 
 const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
   { value: 'any', label: 'Any level' },
@@ -157,6 +159,8 @@ export default function CreateServiceScreen() {
   const [customSheetVisible, setCustomSheetVisible] = useState(false);
   const [customServiceText, setCustomServiceText] = useState('');
   const [customBlockedTerm, setCustomBlockedTerm] = useState<string | null>(null);
+  // Only surfaced once the chooser would otherwise become a long chip wall.
+  const [skillFilter, setSkillFilter] = useState('');
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
@@ -178,6 +182,11 @@ export default function CreateServiceScreen() {
     () => suggestServicesForText(customServiceText),
     [customServiceText],
   );
+  const visibleWorkProfileSkills = useMemo(() => {
+    const needle = skillFilter.trim().toLowerCase();
+    if (!needle) return workProfileSkills;
+    return workProfileSkills.filter((skill) => skill.toLowerCase().includes(needle));
+  }, [skillFilter, workProfileSkills]);
   /**
    * Plain-language provenance. Residents should never have to guess whether a
    * value was their choice or the app's.
@@ -1053,12 +1062,26 @@ export default function CreateServiceScreen() {
         Shown to residents whose Work Profile lists several skills. Picking the
         primary service here replaces the old silent `offeredServices[0]` guess.
       */}
-      <BottomSheet onClose={() => setSkillChooserVisible(false)} visible={skillChooserVisible}>
+      <BottomSheet
+        onClose={() => {
+          setSkillChooserVisible(false);
+          setSkillFilter('');
+        }}
+        visible={skillChooserVisible}>
         <View style={styles.sheetContent}>
           <Text style={styles.sheetTitle}>What are you offering?</Text>
           <Text style={styles.sheetDescription}>Based on your Work Profile</Text>
+          {workProfileSkills.length > SKILL_FILTER_THRESHOLD ? (
+            <TextInput
+              onChangeText={setSkillFilter}
+              placeholder="Search your skills"
+              placeholderTextColor={color.textSubtle}
+              style={styles.sheetInput}
+              value={skillFilter}
+            />
+          ) : null}
           <View style={styles.chipWrap}>
-            {workProfileSkills.map((skill) => (
+            {visibleWorkProfileSkills.map((skill) => (
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ selected: category === skill }}
@@ -1066,6 +1089,7 @@ export default function CreateServiceScreen() {
                 onPress={() => {
                   selectCategory(skill, 'chooser');
                   setSkillChooserVisible(false);
+                  setSkillFilter('');
                 }}
                 style={({ pressed }) => [
                   styles.chip,

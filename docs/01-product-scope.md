@@ -108,3 +108,15 @@ Demo acceptance standard:
 - Electrical work, plumbing, structural construction, and appliance internals remain out of scope and are enforced on the custom-service field.
 - The MVP stays taxonomy-only: no taxonomy tables, no specialty table, and no schema change. Structured taxonomy tables remain future work as listed above.
 - Listing classification is profile-driven with a deterministic fallback and no AI. See DEC-107 through DEC-110.
+
+## Work Profile Skills and Home Stability (2026-09-18, DEC-112 to DEC-120)
+
+- Residents manage abilities as a flat, editable skill list. Canonical categories, discovery groups, aliases, and work type stay internal.
+- Adding a skill is search-first across the whole taxonomy, resolves local terms, and always allows a custom entry. Matching suggests; the resident confirms.
+- Work Profile skills are capped at 15 for deployment, with a non-blocking focus reminder from 8. Aliases and spelling variants collapse and never consume a slot.
+- Skills are self-declared. Barangay verification covers identity, residency, and platform eligibility only, and there is no skill-verification workflow.
+- Product-scope exclusions are enforced on every free-text skill/service entry point, not just on listings.
+- Work Profile skills influence provider / Find Work ranking. Hiring preferences continue to drive Hire Help independently.
+- The eight primary Home discovery groups are positionally stable for every resident, role, and mode. Personalization changes recommendations, not primary navigation placement.
+- Work Profile and Post are two entry points into the same listing-creation system. Listings keep their own classification snapshot.
+- Still taxonomy-only: no skill table, no normalized taxonomy tables, no schema change.

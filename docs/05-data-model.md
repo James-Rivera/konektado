@@ -709,3 +709,20 @@ The taxonomy expansion required NO schema change. Taxonomy values are plain `tex
 | `provider_profiles.service_type` | Comma-joined canonical services | Legacy text boundary; still the Work Profile skill source. |
 
 Discovery groups are never persisted. They are derived at read time from the stored service, so group labels can change without touching data.
+
+## Work Profile Skill Storage (2026-09-18, DEC-112, DEC-116, DEC-118)
+
+The skill-list UX required NO schema change. Skills continue to use the existing columns.
+
+| Column | Holds | Notes |
+| --- | --- | --- |
+| `provider_profiles.service_type` | Canonical skills, comma-joined | No canonical service contains a comma, and custom skills never enter this field, so the round-trip is safe. |
+| `provider_profiles.custom_offered_services` | `text[]` | Free-text skills with no canonical equivalent. Stored verbatim. |
+| `user_preferences.offered_services` / `custom_offered_services` | `text[]` | Onboarding signal. Merged with the Work Profile by `getMyProfileCompletion`. |
+| `provider_profiles.custom_service_review_status` | `none` / `pending` | Editorial backlog signal only. It is NOT a visibility gate; custom skills appear immediately. |
+
+The 15-skill cap is an application rule (`MAX_WORK_PROFILE_SKILLS`), not a database constraint. Aliases and spelling variants are collapsed by `normalizeSkillList` before the cap is applied, so a duplicate never consumes a slot.
+
+Home ranking reads the merged view through `withWorkProfileSkills`, so `provider_profiles` and `user_preferences` remain two stores feeding one ranking input rather than a second source of truth.
+
+A normalized `profile_skills` table remains future work, justified only by per-skill credentials, proficiency, endorsements, or city-scale analytics — none of which are in scope for this deployment.

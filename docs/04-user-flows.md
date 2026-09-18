@@ -319,3 +319,17 @@ Listing creation is listing-first: the resident describes the offer, then confir
 7. A confirmed suggestion stores the canonical service plus the resident wording. Rejecting every suggestion publishes the service as written under the More services group.
 8. Preview then Publish. Publishing still requires barangay verification and Work Profile readiness.
 9. After a successful publish, if the service is not already in the Work Profile, the resident is offered Add to Work Profile. The profile is only changed when they accept, and dismissing never blocks navigation.
+
+## Work Profile Skills (2026-09-18, DEC-112 to DEC-116, DEC-120)
+
+Residents manage abilities as a plain list. They never see canonical categories or discovery groups while managing skills.
+
+1. Work Profile shows Skills as read-only pills with an Add/Edit action.
+2. Add Skill opens a search-first sheet. Before anything is typed it offers quick picks spanning all eight discovery groups, with category browsing collapsed behind "Browse by type".
+3. Typing searches the whole taxonomy and resolves aliases and local terms: `karpintero` to Carpentry, `panahi` to Sewing, `birthday cake` to Baking, `lutong bahay` to Home-cooked meals, `masahe` to Massage, `gupit` to Haircut, `pabili` to Errands, `phone repair` to Phone or computer repair. A shortening-prefix fallback covers typos such as `carpentery`.
+4. Matching only suggests. The resident taps a result to add it; nothing is added automatically.
+5. When nothing matches, the sheet offers to add exactly what they typed, and the skill is stored verbatim.
+6. Excluded trades are refused in plain language and are never mapped into an allowed neighbouring service.
+7. Aliases and spelling variants collapse, so a duplicate never consumes one of the 15 slots. A non-blocking focus reminder appears from 8 skills.
+
+Creating a listing from a skill: skill pills stay read-only, and "Create a listing from a skill" opens a chooser that routes into the same Create Service editor with the skill pre-set. Post remains the listing-management destination (DEC-093), and the published listing owns its own classification snapshot (DEC-109).
