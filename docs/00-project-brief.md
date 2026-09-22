@@ -149,7 +149,7 @@ Important product language:
 - Prototype: Expo Go / React Native project in this repository.
 - UI source of truth: Figma file for Konektado.
 - Current implementation direction: Expo Router, Supabase Auth, PostgreSQL tables, and React hooks.
-- Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Services filters, service/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
+- Current visual direction from Figma: mobile-first feed with a hero search entry, a Find work / Hire help segmented control, an eight-tile Explore Services grid, service/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
 
 ## Current Implementation Limitations
 

@@ -24,9 +24,9 @@ Current Figma direction observed from the dashboard:
 - Blue primary actions used sparingly.
 - Green verification badge only where trust state is central, not repeated on every feed card.
 - Rounded pill filters and action buttons.
-- Bottom navigation with Home, Search, Post, Messages, and Profile.
-- Search as a main destination for "Search nearby jobs or services".
-- The Konektado wordmark/header belongs on Home only. Other bottom tabs use clear screen-specific titles where they improve orientation; Search uses the search field and mode control as its header module.
+- Bottom navigation with Home, Post, Messages, and Profile (DEC-121).
+- Search is entered from Home rather than from the tab bar, and uses the search field and mode control as its header module.
+- The Konektado wordmark/header belongs on Home only. Other bottom tabs use clear screen-specific titles where they improve orientation.
 - Feed sections for jobs and services.
 - Home feed uses one unified card shell for mixed job and service posts.
 - Post dashboard for creating and managing job/service posts.
@@ -339,13 +339,14 @@ Current exceptions that remain separate for now:
 
 ### Bottom Navigation
 
-Tabs:
+Tabs (DEC-121):
 
 - Home
-- Search
 - Post
 - Messages
 - Profile
+
+Search is not a tab. It keeps its route and is entered from the Home search bar, the Explore Services grid, and the Home feed-filter sheet. `BottomNav` renders only the routes listed in its `TAB_META`, which is what keeps Search off the bar while leaving `router.push` working.
 
 MVP note:
 
@@ -355,7 +356,7 @@ Header rule:
 
 - Home uses the Konektado brand header because it is the landing/community feed.
 - Messages, Post, and Profile should use task-specific screen titles instead of repeating the brand wordmark. This keeps bottom-tab destinations easier to identify and scales better as each tab gains its own tools and actions.
-- Search is the exception: because the active bottom tab and search input already communicate the screen purpose, the Search tab should start with a safe-area-aware search module instead of a large repeated title.
+- Search is the exception: because the search input already communicates the screen purpose, Search should start with a safe-area-aware search module instead of a large repeated title. Since it is entered from Home rather than the tab bar, that module also carries the back affordance.
 - Notification access can appear on screens where it is contextually useful, but it should not force the Home brand header onto secondary tabs.
 
 ### Messages
@@ -388,7 +389,7 @@ Usage:
 Rules:
 
 - Keep search input prominent.
-- On the Search tab, start with the search input rather than a large "Search" title. Use top safe-area padding plus about 12-16px so the input feels intentional, not cramped.
+- On the Search screen, start with the search input rather than a large "Search" title. Use top safe-area padding plus about 12-16px so the input feels intentional, not cramped.
 - Align the search input and Find Jobs / Find Services segmented control to the same parent width so they read as one search module.
 - Pair with filter controls for category, location, and verification status.
 - Search belongs in the bottom navigation as its own intentional discovery destination.
