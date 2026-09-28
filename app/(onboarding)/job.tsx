@@ -24,6 +24,8 @@ import {
   type OfferedDeliveryMode,
 } from '@/constants/service-taxonomy';
 
+import { checkBlockedServiceText } from '@/services/service-classification';
+
 import { useOnboarding } from './onboarding-context';
 import { showAlert } from '@/utils/alert';
 
@@ -195,7 +197,9 @@ export default function JobStep() {
         const category = getCategoryForMvpService(service);
         return Boolean(
           category &&
-            getServicesForMvpCategoryAndOfferedDeliveryMode(category, mode).includes(service),
+            getServicesForMvpCategoryAndOfferedDeliveryMode(category, mode).some(
+              (allowed) => allowed === service,
+            ),
         );
       }),
     );
@@ -228,6 +232,24 @@ export default function JobStep() {
     const parsedCustomOfferedServices = parseCustomServices(customOffered);
     const finalOffered = uniqueValues([...offeredServices, ...parsedCustomOfferedServices]);
     const finalNeeded = uniqueValues([...neededServices, ...customNeededServices]);
+
+    // Product scope is enforced on every free-text service entry point, so the
+    // onboarding "other service" box cannot be used to get around it.
+    const blockedOffered = parsedCustomOfferedServices.find(
+      (service) => checkBlockedServiceText(service).blocked,
+    );
+    if (collectsOffered && blockedOffered) {
+      setInlineHelper(`Konektado doesn’t support "${blockedOffered}" yet. Try a different service.`);
+      return;
+    }
+
+    const blockedNeeded = customNeededServices.find(
+      (service) => checkBlockedServiceText(service).blocked,
+    );
+    if (collectsNeeded && blockedNeeded) {
+      setNeededHelper(`Konektado doesn’t support "${blockedNeeded}" yet. Try a different service.`);
+      return;
+    }
 
     if (collectsOffered && !offeredDeliveryMode) {
       setInlineHelper('Choose your work setup first.');

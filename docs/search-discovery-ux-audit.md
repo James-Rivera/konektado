@@ -1,6 +1,12 @@
 # Konektado Search Discovery UX Audit
 
 > Resolved on 2026-06-15: `Minor home fix help` is now the canonical MVP taxonomy label. References to `Basic home repair` below describe the pre-cleanup state and remain only as audit history or legacy compatibility context.
+>
+> Superseded on 2026-09-18 by DEC-106, DEC-110, and DEC-111. This file is audit history from the five-group taxonomy and no longer describes current behaviour. Three corrections matter for anyone reading it:
+>
+> 1. **`Cooking` was never a banned category.** It appears below under "High-Risk/Excluded Category Check" only because it was *absent* at the time, listed alongside genuinely excluded trades. That placement was ambiguous and is withdrawn: food preparation, baking, and home-cooked meals are supported services under DEC-106. The excluded list is electrical work, plumbing, structural construction, and appliance work involving wiring or internal disassembly.
+> 2. **The repair narrowing is superseded.** Carpentry, painting, and furniture repair or assembly are now allowed canonical services, and `Minor home fix help` remains alongside them. Electrical and plumbing stay excluded, now enforced by `BLOCKED_SERVICE_TERMS`.
+> 3. **The five discovery groups are replaced** by eight primary Home groups plus a Search-only `More services` fallback. Group labels below (`Errands & Assistance`, `Learning & Tutoring`, `Digital & Document Help`, `Tech Setup Help`) no longer exist.
 
 ## Summary
 
@@ -188,7 +194,7 @@ Not found in Search/Home/demo/seed data as active categories:
 - `Plumbing`
 - `Construction`
 - `Appliance repair`
-- `Cooking`
+- `Cooking` (NOT excluded - see the correction at the top of this file; supported since DEC-106)
 
 One doc-only inconsistency remains:
 
@@ -710,7 +716,7 @@ Still appears in:
 - `Plumbing`
 - `Construction`
 - `Appliance repair`
-- `Cooking`
+- `Cooking` (NOT excluded - see the correction at the top of this file; supported since DEC-106)
 
 ### Recommendation
 

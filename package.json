@@ -12,7 +12,8 @@
     "vercel-build": "expo export -p web",
     "lint": "expo lint",
     "test:verification-email": "node ./scripts/test-verification-email.js",
-    "refresh:cloud-demo-taxonomy": "node ./scripts/refresh-cloud-demo-taxonomy.js"
+    "refresh:cloud-demo-taxonomy": "node ./scripts/refresh-cloud-demo-taxonomy.js",
+    "test:service-classification": "node -e \"require('node:fs').rmSync('.test-build',{recursive:true,force:true})\" && node scripts/check-taxonomy-exhaustiveness.cjs && tsc -p tsconfig.test.json && node --require ./scripts/test-alias-hook.cjs --test \".test-build/tests/*.test.js\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

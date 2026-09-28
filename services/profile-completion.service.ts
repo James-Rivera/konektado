@@ -1,4 +1,7 @@
-import { splitOfficialAndCustomServices } from '@/constants/service-taxonomy';
+import {
+  getStoredMvpServiceOption,
+  splitOfficialAndCustomServices,
+} from '@/constants/service-taxonomy';
 import type { ServiceResult } from '@/services/auth.service';
 import {
   compactText,
@@ -311,6 +314,40 @@ export async function saveCoreProfile(input: CoreProfileInput): Promise<ServiceR
   }
 
   return getMyProfileCompletion();
+}
+
+/**
+ * Adds one canonical service to the resident's Work Profile, leaving every
+ * other work field untouched.
+ *
+ * Used only by the explicit post-publish "Add to Work Profile" prompt: the
+ * profile is never mutated unless the resident accepts. Adding a service the
+ * profile already covers is a no-op, so repeated accepts cannot duplicate it.
+ */
+export async function addServiceToWorkProfile(
+  service: string,
+): Promise<ServiceResult<ProfileCompletionStatus>> {
+  const canonicalService = getStoredMvpServiceOption(service);
+  if (!canonicalService) {
+    return { data: null, error: 'That service is not part of the Konektado service list.' };
+  }
+
+  const completion = await getMyProfileCompletion();
+  if (completion.error || !completion.data) return completion;
+
+  const { work } = completion.data;
+  if (work.offeredServices.includes(canonicalService)) {
+    return completion;
+  }
+
+  return saveWorkProfile({
+    headline: work.headline,
+    bio: work.bio,
+    offeredServices: [...work.offeredServices, canonicalService],
+    serviceArea: work.serviceArea,
+    availability: work.availability,
+    customOfferedServices: work.customOfferedServices,
+  });
 }
 
 export async function saveWorkProfile(input: WorkProfileInput): Promise<ServiceResult<ProfileCompletionStatus>> {

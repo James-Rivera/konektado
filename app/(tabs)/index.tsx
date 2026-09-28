@@ -23,8 +23,9 @@ import { type SearchMode } from '@/constants/search-demo-data';
 import {
   getDisplayLabelForMvpService,
   getDisplayTitleForMvpService,
-  getOrderedDiscoveryGroupsForMode,
+  HOME_DISCOVERY_GROUPS,
   type DiscoveryGroupKey,
+  type HomeDiscoveryGroupKey,
 } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
@@ -56,6 +57,7 @@ import {
   type HomeFeedFilters,
   type HomeFeedType,
   resolveHomeFeedMode,
+  withWorkProfileSkills,
 } from '@/services/home-feed.service';
 import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
 import { getMyProfileCompletion } from '@/services/profile-completion.service';
@@ -143,19 +145,21 @@ function mapSearchModeToRouteFilter(mode: SearchMode) {
   return mode === 'jobs' ? 'Jobs' : 'Services';
 }
 
-const ALL_CATEGORIES_TILE_KEY = '__all_services__';
-
 /**
- * One icon per controlled-taxonomy discovery group. Tiles are generated from
- * `SEARCH_DISCOVERY_GROUPS`, so Home can never show a category that Search
- * cannot filter by.
+ * One icon per primary Home discovery group. Tiles are generated from
+ * `HOME_DISCOVERY_GROUPS`, so Home can never show a category that Search
+ * cannot filter by, and the `More services` search fallback never becomes a
+ * ninth primary tile — it is reached through "See all" and Search instead.
  */
-const DISCOVERY_GROUP_ICONS: Record<DiscoveryGroupKey, HomeCategoryTile['icon']> = {
-  'Home & Local Help': 'home-repair-service',
-  'Errands & Assistance': 'directions-run',
-  'Learning & Tutoring': 'school',
-  'Digital & Document Help': 'design-services',
-  'Tech Setup Help': 'devices',
+const DISCOVERY_GROUP_ICONS: Record<HomeDiscoveryGroupKey, HomeCategoryTile['icon']> = {
+  'Home & Errands': 'home-repair-service',
+  'Beauty & Personal Care': 'spa',
+  'Food & Baking': 'bakery-dining',
+  'Sewing & Tailoring': 'content-cut',
+  'Home Repair & Carpentry': 'handyman',
+  'Tutoring & Lessons': 'school',
+  'Documents & Design': 'design-services',
+  'Computer & Phone Help': 'devices',
 };
 
 function getHomeGreeting(firstName: string | null | undefined, fullName: string | null | undefined) {
@@ -483,11 +487,26 @@ export default function HomeScreen() {
     };
   }, [isFocused, profile?.id]);
 
+  /**
+   * Ranking preferences with Work Profile skills folded in, so the skills a
+   * resident maintains actually influence Find Work relevance. Hire Help keeps
+   * using their needed-service preferences untouched.
+   */
+  const rankingPreferences = useMemo(
+    () =>
+      withWorkProfileSkills({
+        preferences,
+        workProfileSkills: profileCompletionStatus?.work.offeredServices ?? [],
+        customWorkProfileSkills: profileCompletionStatus?.work.customOfferedServices ?? [],
+      }),
+    [preferences, profileCompletionStatus],
+  );
+
   const feedVariants = useMemo(() => {
     const rankingContext = {
       activeRole: profile?.active_role,
       city: profile?.city,
-      preferences,
+      preferences: rankingPreferences,
       userBarangay: profile?.barangay,
     };
     const jobCandidates = feedSources.jobs.map((item) => ({ item, job: item.job }));
@@ -504,7 +523,7 @@ export default function HomeScreen() {
       Services: filtered.services,
       'For you': filtered.all,
     };
-  }, [appliedFeedFilters, feedSources, preferences, profile?.active_role, profile?.barangay, profile?.city]);
+  }, [appliedFeedFilters, feedSources, rankingPreferences, profile?.active_role, profile?.barangay, profile?.city]);
 
   const feed = feedVariants[selectedFilter];
 
@@ -525,26 +544,26 @@ export default function HomeScreen() {
     street: profile?.street,
   });
 
-  // Category tiles follow the same preference-aware group ordering that Search uses.
-  const categoryTiles = useMemo<HomeCategoryTile[]>(() => {
-    const orderedGroups = getOrderedDiscoveryGroupsForMode({
-      mode: searchMode ?? searchModeFallback,
-      preferences,
-    });
-
-    return [
-      ...orderedGroups.map((group) => ({
+  /**
+   * The eight primary tiles are positionally STABLE (DEC-117).
+   *
+   * They previously reordered by preference score and by Find work / Hire help
+   * mode, so the grid visibly reshuffled mid-session when the resident tapped
+   * the mode control. Residents navigate this grid by position, so it is
+   * rendered in the fixed `HOME_DISCOVERY_GROUPS` order for everyone, in every
+   * mode. Personalization still changes what is recommended in the feed below.
+   *
+   * Depends on nothing: the order is a constant, and this must stay that way.
+   */
+  const categoryTiles = useMemo<HomeCategoryTile[]>(
+    () =>
+      HOME_DISCOVERY_GROUPS.map((group) => ({
         key: group,
         icon: DISCOVERY_GROUP_ICONS[group],
         label: group,
       })),
-      {
-        key: ALL_CATEGORIES_TILE_KEY,
-        icon: 'grid-view' as const,
-        label: 'All services',
-      },
-    ];
-  }, [preferences, searchMode, searchModeFallback]);
+    [],
+  );
 
   const activeFeedFilterCount = getHomeFeedFilterCount(appliedFeedFilters);
   const hasAppliedFeedFilters =
@@ -671,11 +690,6 @@ export default function HomeScreen() {
 
   const openCategory = useCallback(
     (key: string) => {
-      if (key === ALL_CATEGORIES_TILE_KEY) {
-        openSearch({ openFilters: true });
-        return;
-      }
-
       openSearch({ group: key as DiscoveryGroupKey });
     },
     [openSearch],

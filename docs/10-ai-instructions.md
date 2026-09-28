@@ -28,12 +28,19 @@ MVP features:
 - Ratings and feedback.
 - Basic admin dashboard.
 
-Controlled MVP taxonomy:
-- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, minor home fix help, and yard or outdoor help.
+Controlled MVP taxonomy (34 canonical services in 4 stored categories, DEC-106):
+- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, minor home fix help, yard or outdoor help, carpentry, painting, and furniture repair or assembly.
 - Learning & Digital Help: tutoring, encoding, Canva layout, presentation design, social media help, basic computer lessons, and school project guidance.
-- Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, and resume or form assistance.
+- Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, resume or form assistance, and phone or computer repair.
+- Food & Personal Services: baking, home-cooked meals, party food trays, sewing, clothing alteration or repair, manicure or pedicure, haircut, makeup, and massage.
 - This is a taxonomy-only MVP. Do not add schema fields such as `service_type`, `risk_level`, `location_required`, or category tables unless explicitly requested later.
-- Minor home fix help covers non-licensed household maintenance only, such as loose hinges, shelves, handles, and curtain-rod adjustments. Exclude plumbing, electrical work, construction, and appliance work involving wiring or internal disassembly.
+- Canonical categories are STORED (`jobs.category`, `services.category`). Discovery groups are DISPLAY-ONLY and are never persisted, so their labels can change freely.
+- Home renders the eight primary discovery groups from `HOME_DISCOVERY_GROUPS` in a four-column grid. `More services` is a Search/See-all fallback for custom listings and must never become a ninth Home tile (DEC-111).
+- Minor home fix help covers non-licensed household maintenance only, such as loose hinges, shelves, handles, and curtain-rod adjustments. Carpentry, painting, and furniture repair or assembly are now allowed separately. Electrical work, plumbing, structural construction, and appliance work involving wiring or internal disassembly remain excluded, and `BLOCKED_SERVICE_TERMS` enforces that on the custom-service field.
+- Phone or computer repair covers software fixes, cleaning, and simple part replacement. Exclude board-level repair, liquid-damage restoration, and guaranteed data recovery.
+- Every listing has exactly ONE primary canonical service (DEC-108). Bundled extras belong in the title, description, or tags and must never create a second primary classification.
+- Listing classification is a snapshot (DEC-109). Work Profile edits never rewrite a published listing.
+- Service classification is deterministic and offline (DEC-107). Never add AI, an LLM, an embedding service, or any remote classifier to this path.
 - Barangay verification confirms resident identity and platform eligibility; it does not certify professional competence.
 
 Out of scope for MVP:

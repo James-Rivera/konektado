@@ -432,17 +432,20 @@ const styles = StyleSheet.create({
   categoryTile: {
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     paddingVertical: 10,
-    width: '33.333%',
+    // Four columns: the Figma "Explore Services" area is an eight-item 4x2
+    // grid. A three-column grid left the eight primary groups on a ragged
+    // last row.
+    width: '25%',
   },
   categoryIcon: {
     alignItems: 'center',
     backgroundColor: color.primarySoft,
     borderRadius: radius.lg,
-    height: 58,
+    height: 52,
     justifyContent: 'center',
-    width: 58,
+    width: 52,
   },
   categoryLabel: {
     color: color.textMuted,

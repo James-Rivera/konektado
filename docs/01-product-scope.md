@@ -99,3 +99,24 @@ Demo acceptance standard:
 - Home and Search use live marketplace queries for jobs/services, hide own public posts from discovery, and use preferences for ordering and filter defaults.
 - Locked actions now route to a Figma-matched verification intro and users can submit a pending verification request with contact details, ID files, services/purpose, and supporting files.
 - Verification and marketplace setup are separate UX states. A verified user can browse, but `Verified · Setup incomplete` blocks messaging, hiring, applying/posting, and reviewing until the required Work/Hiring setup is complete.
+
+## Service Taxonomy Update (2026-09-18, DEC-106)
+
+- The controlled taxonomy is now 34 canonical services in four stored categories: Home & Local Help, Learning & Digital Help, Tech & Document Support, and Food & Personal Services.
+- Newly supported livelihood services: carpentry, painting, furniture repair or assembly, baking, home-cooked meals, party food trays, sewing, clothing alteration or repair, manicure or pedicure, haircut, makeup, massage, and phone or computer repair.
+- Residents browse eight display-only discovery groups on Home, with a Search-only More services fallback for custom listings.
+- Electrical work, plumbing, structural construction, and appliance internals remain out of scope and are enforced on the custom-service field.
+- The MVP stays taxonomy-only: no taxonomy tables, no specialty table, and no schema change. Structured taxonomy tables remain future work as listed above.
+- Listing classification is profile-driven with a deterministic fallback and no AI. See DEC-107 through DEC-110.
+
+## Work Profile Skills and Home Stability (2026-09-18, DEC-112 to DEC-120)
+
+- Residents manage abilities as a flat, editable skill list. Canonical categories, discovery groups, aliases, and work type stay internal.
+- Adding a skill is search-first across the whole taxonomy, resolves local terms, and always allows a custom entry. Matching suggests; the resident confirms.
+- Work Profile skills are capped at 15 for deployment, with a non-blocking focus reminder from 8. Aliases and spelling variants collapse and never consume a slot.
+- Skills are self-declared. Barangay verification covers identity, residency, and platform eligibility only, and there is no skill-verification workflow.
+- Product-scope exclusions are enforced on every free-text skill/service entry point, not just on listings.
+- Work Profile skills influence provider / Find Work ranking. Hiring preferences continue to drive Hire Help independently.
+- The eight primary Home discovery groups are positionally stable for every resident, role, and mode. Personalization changes recommendations, not primary navigation placement.
+- Work Profile and Post are two entry points into the same listing-creation system. Listings keep their own classification snapshot.
+- Still taxonomy-only: no skill table, no normalized taxonomy tables, no schema change.

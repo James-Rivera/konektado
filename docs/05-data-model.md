@@ -694,3 +694,35 @@ Important constraints:
 - Public app filtering uses the `public_content_visibility` view, which exposes only `content_type`, `content_id`, `source_id`, `owner_id`, `image_url`, and `visibility`.
 - Hiding a public image removes it from app UI but does not revoke an already-public storage URL. Physical storage takedown is a future phase.
 
+## Service Classification Storage (2026-09-18, DEC-106/DEC-108/DEC-110)
+
+The taxonomy expansion required NO schema change. Taxonomy values are plain `text` / `text[]`, with no enum and no CHECK constraint on service values.
+
+| Column | Holds | Notes |
+| --- | --- | --- |
+| `services.category` | The single PRIMARY canonical service, or the `Other service` sentinel | Drives every structured filter. Despite the column name it stores a SERVICE, not a category. |
+| `services.custom_category` | The resident own wording | Two uses: a specialty under a known service (for example Birthday cakes under Baking), or the full service name for an unknown service. Participates in free-text Search. |
+| `services.custom_category_review_status` | `none` or `pending` | Editorial backlog signal only. It is NOT a visibility gate and nothing withholds a listing based on it. A specialty is `none`; only a genuinely unknown service is `pending`. |
+| `services.tags` | Canonical category, discovery group, service, resident wording, and chosen context tags | Carries bundled extras so free-text Search can find them without creating a second primary classification. |
+| `jobs.category` / `jobs.service_needed` | Canonical category and service | Unchanged. `jobs` has no custom-category column. |
+| `user_preferences.offered_services` / `needed_services` | Canonical services | Legacy alias values still resolve at read time. |
+| `provider_profiles.service_type` | Comma-joined canonical services | Legacy text boundary; still the Work Profile skill source. |
+
+Discovery groups are never persisted. They are derived at read time from the stored service, so group labels can change without touching data.
+
+## Work Profile Skill Storage (2026-09-18, DEC-112, DEC-116, DEC-118)
+
+The skill-list UX required NO schema change. Skills continue to use the existing columns.
+
+| Column | Holds | Notes |
+| --- | --- | --- |
+| `provider_profiles.service_type` | Canonical skills, comma-joined | No canonical service contains a comma, and custom skills never enter this field, so the round-trip is safe. |
+| `provider_profiles.custom_offered_services` | `text[]` | Free-text skills with no canonical equivalent. Stored verbatim. |
+| `user_preferences.offered_services` / `custom_offered_services` | `text[]` | Onboarding signal. Merged with the Work Profile by `getMyProfileCompletion`. |
+| `provider_profiles.custom_service_review_status` | `none` / `pending` | Editorial backlog signal only. It is NOT a visibility gate; custom skills appear immediately. |
+
+The 15-skill cap is an application rule (`MAX_WORK_PROFILE_SKILLS`), not a database constraint. Aliases and spelling variants are collapsed by `normalizeSkillList` before the cap is applied, so a duplicate never consumes a slot.
+
+Home ranking reads the merged view through `withWorkProfileSkills`, so `provider_profiles` and `user_preferences` remain two stores feeding one ranking input rather than a second source of truth.
+
+A normalized `profile_skills` table remains future work, justified only by per-skill credentials, proficiency, endorsements, or city-scale analytics — none of which are in scope for this deployment.

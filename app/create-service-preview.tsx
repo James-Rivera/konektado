@@ -18,11 +18,14 @@ import {
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import {
+  addServiceToWorkProfile,
   getCompletionModeForError,
   getCompletionTitleForMode,
+  getMyProfileCompletion,
   getProfileSetupGateMessage,
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
+import { shouldSuggestAddingToWorkProfile } from '@/services/service-classification';
 import { deleteServiceDraft, saveServiceDraft } from '@/services/service-draft.service';
 import { createService } from '@/services/service-profile.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
@@ -127,7 +130,7 @@ function getPreviewTags(draft: ServiceDraft) {
 
 export default function CreateServicePreviewScreen() {
   const router = useRouter();
-  const { showSuccessToast } = useFeedback();
+  const { showErrorToast, showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{
     draft?: string | string[];
     draftId?: string | string[];
@@ -239,7 +242,58 @@ export default function CreateServicePreviewScreen() {
       console.warn('Service draft cleanup failed after publish', deleteResult.error);
     }
     await refresh();
+
+    // Only after a confirmed publish, and never as a gate on navigation.
+    await offerToAddServiceToWorkProfile(draft.category);
+
     router.replace(returnTo === 'profile' ? '/(tabs)/profile' : '/(tabs)/post');
+  };
+
+  /**
+   * Offers to add the published service to the resident's Work Profile so
+   * clients can find them for it. The profile is only ever changed when the
+   * resident explicitly accepts; dismissing leaves it untouched, and a failure
+   * here must not affect the listing that was already published.
+   */
+  const offerToAddServiceToWorkProfile = async (publishedCategory: string) => {
+    const completion = await getMyProfileCompletion();
+    if (completion.error || !completion.data) return;
+
+    const serviceToAdd = shouldSuggestAddingToWorkProfile({
+      publishedCategory,
+      workProfileSkills: [
+        ...completion.data.work.offeredServices,
+        ...completion.data.work.customOfferedServices,
+      ],
+    });
+
+    if (!serviceToAdd) return;
+
+    await new Promise<void>((resolve) => {
+      showAlert(
+        'Add this to your Work Profile?',
+        `You listed this under ${serviceToAdd}. Adding it to your Work Profile helps clients find you for it.`,
+        [
+          { text: 'Not now', style: 'cancel', onPress: () => resolve() },
+          {
+            text: 'Add to profile',
+            onPress: () => {
+              void addServiceToWorkProfile(serviceToAdd)
+                .then(async (result) => {
+                  if (result.error) {
+                    showErrorToast('Could not update your Work Profile.');
+                    return;
+                  }
+
+                  showSuccessToast(`${serviceToAdd} added to your Work Profile`);
+                  await refresh();
+                })
+                .finally(() => resolve());
+            },
+          },
+        ],
+      );
+    });
   };
 
   const startVerification = async () => {

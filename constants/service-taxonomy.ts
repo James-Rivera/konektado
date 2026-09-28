@@ -4,11 +4,22 @@ export const MVP_SERVICE_CATEGORIES = [
   'Home & Local Help',
   'Learning & Digital Help',
   'Tech & Document Support',
+  'Food & Personal Services',
 ] as const;
 
 export type MvpServiceCategory = (typeof MVP_SERVICE_CATEGORIES)[number];
 
-export const MVP_SERVICES_BY_CATEGORY: Record<MvpServiceCategory, string[]> = {
+/**
+ * The controlled canonical service vocabulary, grouped by the category that is
+ * stored in `jobs.category` / `services.category`.
+ *
+ * `as const satisfies` is load-bearing: a plain `Record<MvpServiceCategory,
+ * string[]>` annotation widens every literal to `string`, which silently turns
+ * `MvpServiceOption` into `string` and makes every `Record<MvpServiceOption,
+ * ...>` map below non-exhaustive. Adding a service must be a compile error
+ * until its metadata is filled in, so the literals have to survive.
+ */
+export const MVP_SERVICES_BY_CATEGORY = {
   'Home & Local Help': [
     'Cleaning',
     'Laundry help',
@@ -17,6 +28,9 @@ export const MVP_SERVICES_BY_CATEGORY: Record<MvpServiceCategory, string[]> = {
     'Home assistance',
     'Minor home fix help',
     'Yard or outdoor help',
+    'Carpentry',
+    'Painting',
+    'Furniture repair or assembly',
   ],
   'Learning & Digital Help': [
     'Tutoring',
@@ -35,16 +49,39 @@ export const MVP_SERVICES_BY_CATEGORY: Record<MvpServiceCategory, string[]> = {
     'Basic troubleshooting',
     'Document formatting',
     'Resume or form assistance',
+    'Phone or computer repair',
   ],
-};
+  'Food & Personal Services': [
+    'Baking',
+    'Home-cooked meals',
+    'Party food trays',
+    'Sewing',
+    'Clothing alteration or repair',
+    'Manicure or pedicure',
+    'Haircut',
+    'Makeup',
+    'Massage',
+  ],
+} as const satisfies Record<MvpServiceCategory, readonly string[]>;
 
-export const MVP_SERVICE_OPTIONS = MVP_SERVICE_CATEGORIES.flatMap(
-  (category) => MVP_SERVICES_BY_CATEGORY[category],
+export type MvpServiceOption =
+  (typeof MVP_SERVICES_BY_CATEGORY)[MvpServiceCategory][number];
+
+export const MVP_SERVICE_OPTIONS: readonly MvpServiceOption[] = MVP_SERVICE_CATEGORIES.flatMap(
+  (category) => [...MVP_SERVICES_BY_CATEGORY[category]],
 );
 
-export type MvpServiceOption = (typeof MVP_SERVICE_OPTIONS)[number];
-
+/** Onboarding/preference sentinel for "my service is not on this list". */
 export const OTHER_SERVICE_OPTION = 'Others / Specify' as const;
+
+/**
+ * Listing sentinel stored in `services.category` when a resident published a
+ * genuinely unknown service. Their own wording lives in
+ * `services.custom_category`. This is deliberately NOT a canonical service:
+ * it must never appear in a taxonomy picker, but it must stay discoverable,
+ * so `getDiscoveryGroupForService` maps it to the `More services` group.
+ */
+export const OTHER_SERVICE_CATEGORY_VALUE = 'Other service' as const;
 
 export type ServiceSelectionValue = MvpServiceOption | typeof OTHER_SERVICE_OPTION;
 
@@ -66,27 +103,60 @@ export const OFFERED_DELIVERY_MODE_HELPERS: Record<OfferedDeliveryMode, string> 
 
 export type SearchWorkType = 'physical' | 'digital' | 'either';
 
+/**
+ * The eight primary discovery groups rendered by the Home "Explore Services"
+ * grid. These are display-only: they are never written to the database, so the
+ * labels can change without a data migration.
+ */
+export const HOME_DISCOVERY_GROUPS = [
+  'Home & Errands',
+  'Beauty & Personal Care',
+  'Food & Baking',
+  'Sewing & Tailoring',
+  'Home Repair & Carpentry',
+  'Tutoring & Lessons',
+  'Documents & Design',
+  'Computer & Phone Help',
+] as const;
+
+export type HomeDiscoveryGroupKey = (typeof HOME_DISCOVERY_GROUPS)[number];
+
+/**
+ * Search fallback bucket for published listings whose service is genuinely
+ * outside the controlled taxonomy (`services.category = 'Other service'`).
+ * Deliberately excluded from `HOME_DISCOVERY_GROUPS`: the Figma Home grid is
+ * eight primary shortcuts, and this must stay reachable through Search and
+ * "See all" instead of becoming a ninth tile.
+ */
+export const MORE_SERVICES_GROUP = 'More services' as const;
+
 export const SEARCH_DISCOVERY_GROUPS = [
-  'Home & Local Help',
-  'Errands & Assistance',
-  'Learning & Tutoring',
-  'Digital & Document Help',
-  'Tech Setup Help',
+  ...HOME_DISCOVERY_GROUPS,
+  MORE_SERVICES_GROUP,
 ] as const;
 
 export type DiscoveryGroupKey = (typeof SEARCH_DISCOVERY_GROUPS)[number];
 
-export const SEARCH_DISCOVERY_SERVICES_BY_GROUP: Record<DiscoveryGroupKey, MvpServiceOption[]> = {
-  'Home & Local Help': [
+export const SEARCH_DISCOVERY_SERVICES_BY_GROUP = {
+  'Home & Errands': [
     'Cleaning',
     'Laundry help',
+    'Errands',
+    'Delivery help',
     'Home assistance',
-    'Minor home fix help',
     'Yard or outdoor help',
   ],
-  'Errands & Assistance': ['Errands', 'Delivery help'],
-  'Learning & Tutoring': ['Tutoring', 'Basic computer lessons', 'School project guidance'],
-  'Digital & Document Help': [
+  'Beauty & Personal Care': ['Manicure or pedicure', 'Haircut', 'Makeup', 'Massage'],
+  'Food & Baking': ['Baking', 'Home-cooked meals', 'Party food trays'],
+  'Sewing & Tailoring': ['Sewing', 'Clothing alteration or repair'],
+  'Home Repair & Carpentry': [
+    'Minor home fix help',
+    'Carpentry',
+    'Painting',
+    'Furniture repair or assembly',
+  ],
+  'Tutoring & Lessons': ['Tutoring', 'Basic computer lessons', 'School project guidance'],
+  'Documents & Design': [
     'Encoding',
     'Canva layout',
     'Presentation design',
@@ -94,16 +164,20 @@ export const SEARCH_DISCOVERY_SERVICES_BY_GROUP: Record<DiscoveryGroupKey, MvpSe
     'Document formatting',
     'Resume or form assistance',
   ],
-  'Tech Setup Help': [
+  'Computer & Phone Help': [
     'Computer setup',
     'Phone setup',
     'WiFi/router help',
     'Printer setup',
     'Basic troubleshooting',
+    'Phone or computer repair',
   ],
-};
+  // Holds no canonical service on purpose: it matches the `Other service`
+  // sentinel, not taxonomy members.
+  [MORE_SERVICES_GROUP]: [],
+} as const satisfies Record<DiscoveryGroupKey, readonly MvpServiceOption[]>;
 
-export const SEARCH_WORK_TYPE_BY_SERVICE: Record<MvpServiceOption, SearchWorkType> = {
+export const SEARCH_WORK_TYPE_BY_SERVICE = {
   Cleaning: 'physical',
   'Laundry help': 'physical',
   Errands: 'physical',
@@ -125,7 +199,20 @@ export const SEARCH_WORK_TYPE_BY_SERVICE: Record<MvpServiceOption, SearchWorkTyp
   'Basic troubleshooting': 'either',
   'Document formatting': 'digital',
   'Resume or form assistance': 'digital',
-};
+  Carpentry: 'physical',
+  Painting: 'physical',
+  'Furniture repair or assembly': 'physical',
+  'Phone or computer repair': 'either',
+  Baking: 'physical',
+  'Home-cooked meals': 'physical',
+  'Party food trays': 'physical',
+  Sewing: 'physical',
+  'Clothing alteration or repair': 'physical',
+  'Manicure or pedicure': 'physical',
+  Haircut: 'physical',
+  Makeup: 'physical',
+  Massage: 'physical',
+} as const satisfies Record<MvpServiceOption, SearchWorkType>;
 
 function normalizeServiceLookupKey(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -162,7 +249,91 @@ export const LEGACY_MVP_SERVICE_ALIASES: Record<string, MvpServiceOption> = {
   Troubleshooting: 'Basic troubleshooting',
   Resume: 'Resume or form assistance',
   Forms: 'Resume or form assistance',
+
+  // Repair and carpentry (DEC-106 widened this scope beyond `Minor home fix help`).
+  Karpintero: 'Carpentry',
+  Carpintero: 'Carpentry',
+  'Carpentry work': 'Carpentry',
+  Woodwork: 'Carpentry',
+  Pintor: 'Painting',
+  'House painting': 'Painting',
+  'Furniture assembly': 'Furniture repair or assembly',
+  'Furniture repair': 'Furniture repair or assembly',
+
+  // Food.
+  Cake: 'Baking',
+  Cakes: 'Baking',
+  'Birthday cake': 'Baking',
+  'Birthday cakes': 'Baking',
+  Pastry: 'Baking',
+  Pastries: 'Baking',
+  Bread: 'Baking',
+  Cupcakes: 'Baking',
+  'Lutong bahay': 'Home-cooked meals',
+  'Lutong-bahay': 'Home-cooked meals',
+  Ulam: 'Home-cooked meals',
+  'Packed meals': 'Home-cooked meals',
+  Cooking: 'Home-cooked meals',
+  'Food trays': 'Party food trays',
+  Bilao: 'Party food trays',
+
+  // Sewing.
+  Panahi: 'Sewing',
+  Mananahi: 'Sewing',
+  Patahi: 'Sewing',
+  Tailoring: 'Sewing',
+  Dressmaking: 'Sewing',
+  Alterations: 'Clothing alteration or repair',
+  'Clothing repair': 'Clothing alteration or repair',
+  Hemming: 'Clothing alteration or repair',
+
+  // Beauty and personal care.
+  Manicure: 'Manicure or pedicure',
+  Pedicure: 'Manicure or pedicure',
+  Gupit: 'Haircut',
+  Barbero: 'Haircut',
+  Haircutting: 'Haircut',
+  'Makeup artist': 'Makeup',
+  'Make-up': 'Makeup',
+  Masahe: 'Massage',
+
+  // Errands.
+  Pabili: 'Errands',
+
+  // Device repair.
+  'Computer repair': 'Phone or computer repair',
+  'Laptop repair': 'Phone or computer repair',
+  'Phone repair': 'Phone or computer repair',
+  'Cellphone repair': 'Phone or computer repair',
+  'Device repair': 'Phone or computer repair',
 };
+
+/**
+ * Product-scope guard for the custom-service escape hatch.
+ *
+ * Konektado excludes licensed/high-risk trades (see DEC-050 and DEC-106). The
+ * custom-service field must not become a way around that, and broad repair
+ * wording must never quietly absorb electrical or plumbing work. These are
+ * normalized word/phrase fragments, not a legal classification.
+ */
+export const BLOCKED_SERVICE_TERMS: readonly string[] = [
+  'electrician',
+  'electrical',
+  'electrical wiring',
+  'electric wiring',
+  'kuryente',
+  'kuryenteng',
+  'wiring',
+  'rewiring',
+  'plumber',
+  'plumbing',
+  'tubero',
+  'structural construction',
+  'house construction',
+  'building construction',
+  'load bearing',
+  'roof framing',
+];
 
 const NORMALIZED_MVP_SERVICE_LOOKUP = new Map<string, MvpServiceOption>([
   ...MVP_SERVICE_OPTIONS.map((service) => [normalizeServiceLookupKey(service), service] as const),
@@ -171,18 +342,26 @@ const NORMALIZED_MVP_SERVICE_LOOKUP = new Map<string, MvpServiceOption>([
   ),
 ]);
 
+/**
+ * The quick-pick list shown before a resident types anything.
+ *
+ * One service per Home discovery group, so the empty state spans the whole
+ * taxonomy instead of skewing toward digital work. Keeping it group-complete
+ * matters most for residents who do not yet have the words for their trade and
+ * are scanning for something recognisable.
+ */
 export const POPULAR_MVP_SERVICES = [
   'Cleaning',
-  'Laundry help',
+  'Carpentry',
+  'Baking',
+  'Sewing',
+  'Haircut',
   'Tutoring',
-  'Canva layout',
-  'Computer setup',
-  'Phone setup',
   'Document formatting',
-  'Delivery help',
+  'Computer setup',
 ] as const satisfies readonly MvpServiceOption[];
 
-export const MVP_CATEGORY_CONTEXT_TAGS: Record<MvpServiceCategory, string[]> = {
+export const MVP_CATEGORY_CONTEXT_TAGS = {
   'Home & Local Help': [
     'Nearby',
     'Same day',
@@ -210,9 +389,18 @@ export const MVP_CATEGORY_CONTEXT_TAGS: Record<MvpServiceCategory, string[]> = {
     'Document help',
     'Short task',
   ],
-};
+  'Food & Personal Services': [
+    'Home service',
+    'Pickup',
+    'Advance order',
+    'By appointment',
+    'Same day',
+    'Weekend',
+    'Custom order',
+  ],
+} as const satisfies Record<MvpServiceCategory, readonly string[]>;
 
-export const MVP_SERVICE_TAGS: Record<MvpServiceOption, string[]> = {
+export const MVP_SERVICE_TAGS = {
   Cleaning: ['Regular cleaning', 'Deep clean', 'Indoor', 'Same day', 'Supplies ready', 'Weekly'],
   'Laundry help': ['Wash and fold', 'Ironing', 'Pickup available', 'Rush', 'Blankets', 'Weekly'],
   Errands: ['Nearby only', 'Same day', 'Short task', 'Pickup help', 'Senior help'],
@@ -234,7 +422,39 @@ export const MVP_SERVICE_TAGS: Record<MvpServiceOption, string[]> = {
   'Basic troubleshooting': ['Device check', 'Setup help', 'Home visit', 'Short task'],
   'Document formatting': ['Forms', 'Resume', 'School document', 'Online', 'Printing-ready'],
   'Resume or form assistance': ['Resume', 'Forms', 'Encoding', 'Online', 'Document help'],
-};
+  Carpentry: ['Shelves', 'Cabinets', 'Doors', 'Wood repair', 'Tools ready', 'Custom build'],
+  Painting: ['Interior', 'Exterior', 'Furniture paint', 'Touch-up', 'Materials ready'],
+  'Furniture repair or assembly': [
+    'Assembly',
+    'Wood repair',
+    'Refinishing',
+    'Home visit',
+    'Short task',
+  ],
+  'Phone or computer repair': [
+    'Software fix',
+    'Virus removal',
+    'Cleaning',
+    'Upgrade',
+    'Home visit',
+    'Diagnosis first',
+  ],
+  Baking: ['Cakes', 'Pastries', 'Bread', 'Custom order', 'Advance order', 'Pickup'],
+  'Home-cooked meals': ['Packed meals', 'Daily orders', 'Pickup', 'Delivery available', 'Ulam'],
+  'Party food trays': ['Trays', 'Events', 'Advance order', 'Bulk order', 'Pickup'],
+  Sewing: ['Custom fit', 'School uniform', 'Curtains', 'Repairs', 'Pickup available'],
+  'Clothing alteration or repair': [
+    'Hemming',
+    'Resizing',
+    'Zipper repair',
+    'School uniform',
+    'Rush',
+  ],
+  'Manicure or pedicure': ['Home service', 'Shop-based', 'By appointment', 'Gel', 'Weekend'],
+  Haircut: ['Home service', 'Shop-based', 'Kids', 'Adults', 'By appointment'],
+  Makeup: ['Events', 'Bridal', 'Home service', 'By appointment', 'Weekend'],
+  Massage: ['Home service', 'Shop-based', 'By appointment', 'Adults only', 'Relaxation'],
+} as const satisfies Record<MvpServiceOption, readonly string[]>;
 
 export function isMvpServiceCategory(value: string | null | undefined): value is MvpServiceCategory {
   return MVP_SERVICE_CATEGORIES.includes(value as MvpServiceCategory);
@@ -248,6 +468,13 @@ export function isOtherServiceOption(
   value: string | null | undefined,
 ): value is typeof OTHER_SERVICE_OPTION {
   return value === OTHER_SERVICE_OPTION;
+}
+
+/** True for the `Other service` sentinel stored on genuinely custom listings. */
+export function isOtherServiceCategoryValue(
+  value: string | null | undefined,
+): value is typeof OTHER_SERVICE_CATEGORY_VALUE {
+  return value === OTHER_SERVICE_CATEGORY_VALUE;
 }
 
 export function isOfferedDeliveryMode(value: string | null | undefined): value is OfferedDeliveryMode {
@@ -341,20 +568,21 @@ export function getDisplayServiceLabels(values: (string | null | undefined)[]) {
   return values.map((value) => getDisplayLabelForMvpService(value));
 }
 
-export function getServicesForMvpCategory(category: string | null | undefined) {
-  return isMvpServiceCategory(category) ? MVP_SERVICES_BY_CATEGORY[category] : [];
+export function getServicesForMvpCategory(category: string | null | undefined): MvpServiceOption[] {
+  return isMvpServiceCategory(category) ? [...MVP_SERVICES_BY_CATEGORY[category]] : [];
 }
 
 export function getDisplayLabelForOfferedDeliveryMode(value: string | null | undefined) {
   return isOfferedDeliveryMode(value) ? OFFERED_DELIVERY_MODE_LABELS[value] : '';
 }
 
-export function getTagsForMvpCategory(category: string | null | undefined) {
-  return isMvpServiceCategory(category) ? MVP_CATEGORY_CONTEXT_TAGS[category] : [];
+export function getTagsForMvpCategory(category: string | null | undefined): string[] {
+  return isMvpServiceCategory(category) ? [...MVP_CATEGORY_CONTEXT_TAGS[category]] : [];
 }
 
-export function getTagsForMvpService(service: string | null | undefined) {
-  return isMvpServiceOption(service) ? MVP_SERVICE_TAGS[service] : [];
+export function getTagsForMvpService(service: string | null | undefined): string[] {
+  const storedService = getStoredMvpServiceOption(service);
+  return storedService ? [...MVP_SERVICE_TAGS[storedService]] : [];
 }
 
 export function getCategoryForMvpService(service: string | null | undefined): MvpServiceCategory | null {
@@ -362,23 +590,35 @@ export function getCategoryForMvpService(service: string | null | undefined): Mv
   if (!storedService) return null;
 
   return (
-    MVP_SERVICE_CATEGORIES.find((category) => MVP_SERVICES_BY_CATEGORY[category].includes(storedService)) ??
-    null
+    MVP_SERVICE_CATEGORIES.find((category) =>
+      (MVP_SERVICES_BY_CATEGORY[category] as readonly MvpServiceOption[]).includes(storedService),
+    ) ?? null
   );
 }
 
+/**
+ * The single primary discovery group for a stored service value.
+ *
+ * The `Other service` sentinel resolves to `More services` so that genuinely
+ * custom listings stay reachable from Search instead of falling out of every
+ * structured filter.
+ */
 export function getDiscoveryGroupForService(service: string | null | undefined): DiscoveryGroupKey | null {
+  if (isOtherServiceCategoryValue(service?.trim())) return MORE_SERVICES_GROUP;
+
   const storedService = getStoredMvpServiceOption(service);
   if (!storedService) return null;
 
   return (
     SEARCH_DISCOVERY_GROUPS.find((group) =>
-      SEARCH_DISCOVERY_SERVICES_BY_GROUP[group].includes(storedService),
+      (SEARCH_DISCOVERY_SERVICES_BY_GROUP[group] as readonly MvpServiceOption[]).includes(
+        storedService,
+      ),
     ) ?? null
   );
 }
 
-export function getServicesForDiscoveryGroup(group: DiscoveryGroupKey | 'all') {
+export function getServicesForDiscoveryGroup(group: DiscoveryGroupKey | 'all'): MvpServiceOption[] {
   if (group === 'all') return [...MVP_SERVICE_OPTIONS];
   return [...SEARCH_DISCOVERY_SERVICES_BY_GROUP[group]];
 }
@@ -449,11 +689,16 @@ export function getDiscoveryGroupsForWorkType(
 ) {
   if (workType === 'either') return [...groups];
 
-  return groups.filter((group) =>
-    SEARCH_DISCOVERY_SERVICES_BY_GROUP[group].some((service) =>
-      doesServiceMatchWorkType(service, workType),
-    ),
-  );
+  return groups.filter((group) => {
+    // `More services` holds no canonical service, so a membership test would
+    // always drop it. Custom listings can be either work type, so keep the
+    // fallback bucket reachable under every filter.
+    if (group === MORE_SERVICES_GROUP) return true;
+
+    return (SEARCH_DISCOVERY_SERVICES_BY_GROUP[group] as readonly MvpServiceOption[]).some(
+      (service) => doesServiceMatchWorkType(service, workType),
+    );
+  });
 }
 
 export function getServicesForDiscoveryGroupAndWorkType(
@@ -523,33 +768,42 @@ export function getDefaultSearchWorkTypeForMode({
   return 'physical' as const;
 }
 
-export function getOrderedDiscoveryGroupsForMode({
+/**
+ * Orders discovery groups by how well they match the user's stored
+ * preferences. Ranking only — every group stays in the returned list, because
+ * personalization must change ordering, never access.
+ *
+ * `groups` lets Home pass `HOME_DISCOVERY_GROUPS` so the eight primary tiles
+ * never include the `More services` search fallback.
+ */
+export function getOrderedDiscoveryGroupsForMode<Group extends DiscoveryGroupKey>({
+  groups,
   mode,
   preferences,
 }: {
+  groups?: readonly Group[];
   mode: 'jobs' | 'workers';
   preferences: UserPreferences | null;
-}) {
+}): Group[] {
+  const orderedGroups = (groups ?? SEARCH_DISCOVERY_GROUPS) as readonly Group[];
   const preferredServices = getPreferenceServicesForMode({ mode, preferences });
-  const fallbackOrder = new Map<DiscoveryGroupKey, number>(
-    SEARCH_DISCOVERY_GROUPS.map((group, index) => [group, index]),
+  const fallbackOrder = new Map<Group, number>(
+    orderedGroups.map((group, index) => [group, index]),
   );
 
   if (!preferredServices.length) {
-    return [...SEARCH_DISCOVERY_GROUPS];
+    return [...orderedGroups];
   }
 
-  const groupScores = new Map<DiscoveryGroupKey, number>(
-    SEARCH_DISCOVERY_GROUPS.map((group) => [group, 0]),
-  );
+  const groupScores = new Map<Group, number>(orderedGroups.map((group) => [group, 0]));
 
   preferredServices.forEach((service) => {
-    const group = getDiscoveryGroupForService(service);
-    if (!group) return;
+    const group = getDiscoveryGroupForService(service) as Group | null;
+    if (!group || !groupScores.has(group)) return;
     groupScores.set(group, (groupScores.get(group) ?? 0) + 1);
   });
 
-  return [...SEARCH_DISCOVERY_GROUPS].sort((left, right) => {
+  return [...orderedGroups].sort((left, right) => {
     const scoreDiff = (groupScores.get(right) ?? 0) - (groupScores.get(left) ?? 0);
     if (scoreDiff !== 0) return scoreDiff;
     return (fallbackOrder.get(left) ?? 0) - (fallbackOrder.get(right) ?? 0);

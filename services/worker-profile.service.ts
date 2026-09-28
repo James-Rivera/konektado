@@ -8,7 +8,7 @@ import { listApprovedCredentialsForProvider } from '@/services/credential.servic
 import {
   compactText,
   formatPublicLocation,
-  loadPublicProfiles,
+  loadPublicProfilesWithError,
   mapService,
   type ServiceRow,
 } from '@/services/marketplace.helpers';
@@ -52,14 +52,14 @@ export async function getPublicWorkerProfile(
 
   const sourceServiceId = compactText(options.sourceServiceId) || null;
   const [
-    profiles,
+    profilesResult,
     providerResult,
     servicesResult,
     selectedServiceResult,
     credentialResult,
     trustResult,
   ] = await Promise.all([
-    loadPublicProfiles([id]),
+    loadPublicProfilesWithError([id]),
     supabase
       .rpc('get_public_provider_profile_summaries', { p_user_ids: [id] }),
     supabase
@@ -81,13 +81,18 @@ export async function getPublicWorkerProfile(
     getPublicProfileTrustSummary(id, 'worker'),
   ]);
 
+  // A failed profile lookup is a real error, not "this worker does not exist".
+  // It used to be swallowed, so any RPC failure rendered as "Worker not found".
+  if (profilesResult.error) return { data: null, error: profilesResult.error };
   if (providerResult.error) return { data: null, error: providerResult.error.message };
   if (servicesResult.error) return { data: null, error: servicesResult.error.message };
   if (selectedServiceResult.error) return { data: null, error: selectedServiceResult.error.message };
   if (credentialResult.error) return { data: null, error: credentialResult.error };
   if (trustResult.error) return { data: null, error: trustResult.error };
 
-  const profile = profiles.get(id);
+  // Reached only when the lookup SUCCEEDED but returned no row, which the RPC
+  // does on purpose for a profile the caller may not view (DEC-072, docs/07).
+  const profile = profilesResult.profiles.get(id);
   if (!profile) return { data: null, error: null };
 
   const [visibleSelectedService] = selectedServiceResult.data

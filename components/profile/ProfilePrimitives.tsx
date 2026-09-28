@@ -464,6 +464,11 @@ export function ProfileSection({
   );
 }
 
+/**
+ * Read-only pills. Skills are descriptive, so a pill is deliberately not
+ * tappable: creating a listing is a separate, explicitly labelled action, and
+ * a pill that both described a skill and posted a service would be ambiguous.
+ */
 export function ProfilePillRow({ values }: { values: string[] }) {
   return (
     <View style={styles.pillRail}>
@@ -1296,6 +1301,8 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     borderWidth: 1,
     borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: space['2xs'],
     justifyContent: 'center',
     minHeight: 30,
     paddingHorizontal: space.md,

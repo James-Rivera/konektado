@@ -37,6 +37,10 @@ import {
     saveWorkProfile,
 } from '@/services/profile-completion.service';
 import { uploadProfilePhoto } from '@/services/profile-photo.service';
+import {
+    MAX_WORK_PROFILE_SKILLS,
+    SKILL_FOCUS_REMINDER_THRESHOLD,
+} from '@/services/service-classification';
 import type {
     CoreProfileInput,
     HiringProfileInput,
@@ -857,8 +861,14 @@ function WorkForm({
           emptyText="Choose the skills you want neighbors to know you can generally do."
           label="Skills"
           selectedServices={value.offeredServices}
-          sheetDescription="Pick the things you know how to do. Active services are created separately in Post."
-          sheetTitle="Choose skills"
+          addLabel="Add skill"
+          focusReminderThreshold={SKILL_FOCUS_REMINDER_THRESHOLD}
+          maxSelections={MAX_WORK_PROFILE_SKILLS}
+          quickPicksLabel="Common skills"
+          reviewNote="Skills you add yourself appear on your profile as you wrote them."
+          searchPlaceholder="Search or type a skill..."
+          sheetDescription="Type what you can do, for example karpintero or birthday cake."
+          sheetTitle="What can you do?"
           onChange={(offeredServices, customOfferedServices) =>
             onChange({ ...value, offeredServices, customOfferedServices })
           }
@@ -920,6 +930,8 @@ function HiringForm({
           emptyText="Choose the categories you usually hire for."
           label="Common needs"
           selectedServices={value.neededServices}
+          quickPicksLabel="Common needs"
+          searchPlaceholder="Search or type what you need..."
           sheetDescription="Pick the Konektado categories you commonly hire for."
           sheetTitle="Choose common needs"
           onChange={(neededServices, customNeededServices) =>
@@ -952,17 +964,30 @@ function HiringForm({
 }
 
 function ServiceSelectionField({
+  addLabel = 'Add services',
   customServices,
   emptyText,
+  focusReminderThreshold,
   label,
+  maxSelections,
+  quickPicksLabel,
+  reviewNote,
+  searchPlaceholder = 'Search services',
   selectedServices,
   sheetDescription,
   sheetTitle,
   onChange,
 }: {
+  addLabel?: string;
   customServices: string[];
   emptyText: string;
+  focusReminderThreshold?: number;
   label: string;
+  maxSelections?: number;
+  quickPicksLabel?: string;
+  /** Optional note shown under the pills when custom entries exist. */
+  reviewNote?: string;
+  searchPlaceholder?: string;
   selectedServices: string[];
   sheetDescription: string;
   sheetTitle: string;
@@ -1026,25 +1051,26 @@ function ServiceSelectionField({
           onPress={() => setPickerVisible(true)}
           style={({ pressed }) => [styles.emptyServicePicker, pressed && styles.pressed]}>
           <MaterialIcons color={color.primary} name="add-circle-outline" size={20} />
-          <Text style={styles.emptyServicePickerText}>Add services</Text>
+          <Text style={styles.emptyServicePickerText}>{addLabel}</Text>
         </Pressable>
       )}
 
-      {customServices.length ? (
-        <Text style={styles.serviceReviewNote}>
-          Custom services may be reviewed before being shown widely.
-        </Text>
+      {customServices.length && reviewNote ? (
+        <Text style={styles.serviceReviewNote}>{reviewNote}</Text>
       ) : null}
 
       <GroupedServicePickerSheet
         categories={MVP_SERVICE_CATEGORIES}
         description={sheetDescription}
+        focusReminderThreshold={focusReminderThreshold}
+        maxSelections={maxSelections}
         mode="multi"
         onApplyMulti={({ selectedServices: nextSelected, customServices: nextCustom }) =>
           onChange(nextSelected, nextCustom)
         }
         onClose={() => setPickerVisible(false)}
-        searchPlaceholder="Search services"
+        quickPicksLabel={quickPicksLabel}
+        searchPlaceholder={searchPlaceholder}
         selectedCustomServices={customServices}
         selectedServices={selectedServices}
         servicesByCategory={MVP_SERVICES_BY_CATEGORY}

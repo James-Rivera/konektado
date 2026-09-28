@@ -102,13 +102,20 @@ Payments, agreements, scheduling details, final negotiation, file exchange, and 
 
 ## Controlled MVP Service Taxonomy
 
-The taxonomy-only MVP supports selected services under three controlled groups:
+The taxonomy-only MVP supports 34 controlled services under four stored categories (DEC-106):
 
-- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, minor home fix help, and yard or outdoor help.
+- Home & Local Help: cleaning, laundry help, errands, delivery help, home assistance, minor home fix help, yard or outdoor help, carpentry, painting, and furniture repair or assembly.
 - Learning & Digital Help: tutoring, encoding, Canva layout, presentation design, social media help, basic computer lessons, and school project guidance.
-- Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, and resume or form assistance.
+- Tech & Document Support: computer setup, phone setup, WiFi/router help, printer setup, basic troubleshooting, document formatting, resume or form assistance, and phone or computer repair.
+- Food & Personal Services: baking, home-cooked meals, party food trays, sewing, clothing alteration or repair, manicure or pedicure, haircut, makeup, and massage.
 
-Minor home fix help is limited to non-licensed household maintenance such as loose hinges, shelves, handles, and curtain-rod adjustments. High-risk or hard-to-moderate services are excluded from the MVP, including plumbing, licensed electrical work, construction, appliance repair involving wiring or internal disassembly, gaming services, legal/medical/financial advice, academic cheating, account selling or sharing, and government document falsification.
+Residents discover these through eight user-facing groups, which are display-only and separate from the stored categories above: Home & Errands, Beauty & Personal Care, Food & Baking, Sewing & Tailoring, Home Repair & Carpentry, Tutoring & Lessons, Documents & Design, and Computer & Phone Help. A ninth Search-only group, More services, carries listings whose service is outside the controlled taxonomy so custom providers stay discoverable.
+
+Minor home fix help is limited to non-licensed household maintenance such as loose hinges, shelves, handles, and curtain-rod adjustments. Carpentry, painting, and furniture repair or assembly are allowed as separate services. Phone or computer repair covers software fixes, cleaning, and simple part replacement, and excludes board-level repair, liquid-damage restoration, and guaranteed data recovery.
+
+High-risk or hard-to-moderate services remain excluded from the MVP, including plumbing, licensed electrical work, structural construction, appliance repair involving wiring or internal disassembly, gaming services, legal/medical/financial advice, academic cheating, account selling or sharing, and government document falsification. The custom-service field enforces the trade exclusions deterministically and tells the resident plainly when a service is not supported.
+
+Barangay verification confirms resident identity, residency, and platform eligibility. It does not certify professional competence, regulatory compliance, or service quality for any of these services.
 
 ## Current Product Direction
 
@@ -142,7 +149,7 @@ Important product language:
 - Prototype: Expo Go / React Native project in this repository.
 - UI source of truth: Figma file for Konektado.
 - Current implementation direction: Expo Router, Supabase Auth, PostgreSQL tables, and React hooks.
-- Current visual direction from Figma: mobile-first feed with search, For you/Jobs/Services filters, service/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
+- Current visual direction from Figma: mobile-first feed with a hero search entry, a Find work / Hire help segmented control, an eight-tile Explore Services grid, service/job cards, post dashboard, message flows, dual-mode profile, and bottom navigation for Home, Post, Messages, and Profile.
 
 ## Current Implementation Limitations
 

@@ -34,7 +34,19 @@ export function useSavedPosts() {
       return result;
     }
 
-    replaceSavedKeys(new Set(result.data.map((item) => getSavedPostKey(item))));
+    const serverKeys = new Set(result.data.map((item) => getSavedPostKey(item)));
+
+    // A toggle that is still in flight is not in this snapshot yet, so taking
+    // the server set wholesale flips the row back under the user (Search
+    // refreshes on focus, which is exactly when a just-tapped save is still
+    // pending). Keys with a pending write keep their optimistic value;
+    // `toggleSaved` reconciles them against its own result.
+    for (const key of pendingKeysRef.current) {
+      if (savedKeysRef.current.has(key)) serverKeys.add(key);
+      else serverKeys.delete(key);
+    }
+
+    replaceSavedKeys(serverKeys);
     return result;
   }, [replaceSavedKeys]);
 

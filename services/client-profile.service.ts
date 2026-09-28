@@ -1,6 +1,11 @@
 import type { ServiceResult } from '@/services/auth.service';
 import { applyPublicPhotoVisibilityToRows } from '@/services/content-visibility.service';
-import { compactText, loadPublicProfiles, mapJob, type JobRow } from '@/services/marketplace.helpers';
+import {
+  compactText,
+  loadPublicProfilesWithError,
+  mapJob,
+  type JobRow,
+} from '@/services/marketplace.helpers';
 import { getPublicProfileTrustSummary } from '@/services/review.service';
 import type { PublicClientProfile, PublicProfileHistoryItem } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
@@ -42,14 +47,14 @@ export async function getPublicClientProfile(
   const sourceJobId = compactText(options.sourceJobId) || null;
 
   const [
-    publicProfiles,
+    publicProfilesResult,
     clientProfileResult,
     jobsResult,
     selectedJobResult,
     trustResult,
   ] =
     await Promise.all([
-      loadPublicProfiles([id]),
+      loadPublicProfilesWithError([id]),
       supabase
         .rpc('get_public_client_profile_summaries', { p_user_ids: [id] }),
       supabase
@@ -70,12 +75,18 @@ export async function getPublicClientProfile(
       getPublicProfileTrustSummary(id, 'client'),
     ]);
 
-  const profile = publicProfiles.get(id) ?? null;
-  if (!profile) return { data: null, error: null };
+  // Real errors are checked FIRST. The "not viewable" check used to run before
+  // them, so any failure below was also masked as "Client not found".
+  if (publicProfilesResult.error) return { data: null, error: publicProfilesResult.error };
   if (clientProfileResult.error) return { data: null, error: clientProfileResult.error.message };
   if (jobsResult.error) return { data: null, error: jobsResult.error.message };
   if (selectedJobResult.error) return { data: null, error: selectedJobResult.error.message };
   if (trustResult.error) return { data: null, error: trustResult.error };
+
+  // Reached only when the lookup SUCCEEDED but returned no row, which the RPC
+  // does on purpose for a profile the caller may not view (DEC-072, docs/07).
+  const profile = publicProfilesResult.profiles.get(id) ?? null;
+  if (!profile) return { data: null, error: null };
 
   const jobs = ((jobsResult.data as JobRow[] | null) ?? []).filter(
     (job) => (job.client_id ?? job.owner_id) === id,
@@ -84,10 +95,10 @@ export async function getPublicClientProfile(
   const visibleSelectedJobRows = selectedJobResult.data
     ? await applyPublicPhotoVisibilityToRows([selectedJobResult.data as JobRow], 'job_photo')
     : [];
-  const selectedJob = visibleSelectedJobRows[0] ? mapJob(visibleSelectedJobRows[0], publicProfiles) : null;
+  const selectedJob = visibleSelectedJobRows[0] ? mapJob(visibleSelectedJobRows[0], publicProfilesResult.profiles) : null;
   const activeJobs = visibleJobs
     .filter((job) => job.id !== selectedJob?.id)
-    .map((job) => mapJob(job, publicProfiles));
+    .map((job) => mapJob(job, publicProfilesResult.profiles));
   const clientProfile = ((clientProfileResult.data as ClientProfileRow[] | null) ?? [])[0] ?? null;
   const trust = trustResult.data;
   const commonNeeds = uniqueList([

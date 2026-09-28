@@ -305,3 +305,31 @@ Rules:
 - Reviews should not expose private contact or ID document information.
 - Review comments are shown only as controlled completed-interaction feedback. Do not add open public comment threads to job/service posts.
 - Empty profile state: `No reviews yet. Reviews will appear after completed jobs.`
+
+## Service Listing Creation (2026-09-18, DEC-107/DEC-108/DEC-110)
+
+Listing creation is listing-first: the resident describes the offer, then confirms how it is listed.
+
+1. Entry is either Post -> I offer a service, or a Work Profile skill -> Create listing (which carries that skill as the classification and skips the chooser).
+2. Classification is resolved in a fixed order: stored value when editing a listing or draft, explicit Work Profile origin, a sole Work Profile skill (preselected and labelled), an explicit chooser when the resident has several skills, then deterministic matching on typed text.
+3. A resident with several skills always chooses. The app never silently uses the first skill.
+4. The form collects photos, title, description, rate range, availability, and service area, and only then shows Listed under with the service, its discovery group, a provenance line, and a Change action.
+5. Something else lets the resident type in their own words. Deterministic canonical, alias, and tag matching offers up to three suggestions, which the resident confirms or rejects. Nothing is assigned without confirmation.
+6. Clearly excluded trades (electrical, plumbing, structural construction) are refused inline with a plain message. The submission is never silently dropped or filed under a generic repair category.
+7. A confirmed suggestion stores the canonical service plus the resident wording. Rejecting every suggestion publishes the service as written under the More services group.
+8. Preview then Publish. Publishing still requires barangay verification and Work Profile readiness.
+9. After a successful publish, if the service is not already in the Work Profile, the resident is offered Add to Work Profile. The profile is only changed when they accept, and dismissing never blocks navigation.
+
+## Work Profile Skills (2026-09-18, DEC-112 to DEC-116, DEC-120)
+
+Residents manage abilities as a plain list. They never see canonical categories or discovery groups while managing skills.
+
+1. Work Profile shows Skills as read-only pills with an Add/Edit action.
+2. Add Skill opens a search-first sheet. Before anything is typed it offers quick picks spanning all eight discovery groups, with category browsing collapsed behind "Browse by type".
+3. Typing searches the whole taxonomy and resolves aliases and local terms: `karpintero` to Carpentry, `panahi` to Sewing, `birthday cake` to Baking, `lutong bahay` to Home-cooked meals, `masahe` to Massage, `gupit` to Haircut, `pabili` to Errands, `phone repair` to Phone or computer repair. A shortening-prefix fallback covers typos such as `carpentery`.
+4. Matching only suggests. The resident taps a result to add it; nothing is added automatically.
+5. When nothing matches, the sheet offers to add exactly what they typed, and the skill is stored verbatim.
+6. Excluded trades are refused in plain language and are never mapped into an allowed neighbouring service.
+7. Aliases and spelling variants collapse, so a duplicate never consumes one of the 15 slots. A non-blocking focus reminder appears from 8 skills.
+
+Creating a listing from a skill: skill pills stay read-only, and "Create a listing from a skill" opens a chooser that routes into the same Create Service editor with the skill pre-set. Post remains the listing-management destination (DEC-093), and the published listing owns its own classification snapshot (DEC-109).

@@ -72,6 +72,7 @@ export default function ProfileScreen() {
   const [workerReviews, setWorkerReviews] = useState<Review[]>([]);
   const [clientReviews, setClientReviews] = useState<Review[]>([]);
   const [quickActionsVisible, setQuickActionsVisible] = useState(false);
+  const [listingSkillSheetVisible, setListingSkillSheetVisible] = useState(false);
   const hasLoadedProfileDataRef = useRef(false);
 
   useEffect(() => {
@@ -236,6 +237,7 @@ export default function ProfileScreen() {
                     optional: true,
                   })
                 }
+                onCreateListingForSkill={() => setListingSkillSheetVisible(true)}
                 onManageServices={() => router.push('/post/active')}
                 onOpenService={(serviceId) =>
                   router.push({ pathname: '/services/[serviceId]', params: { serviceId } })
@@ -295,6 +297,45 @@ export default function ProfileScreen() {
         }}
         visible={quickActionsVisible}
       />
+
+      {/*
+        Path B into Create Service. Both this and Post -> Offer a service open
+        the same listing editor; this one simply carries the chosen skill so
+        the resident is not asked to classify the listing again.
+      */}
+      <BottomSheet
+        onClose={() => setListingSkillSheetVisible(false)}
+        visible={listingSkillSheetVisible}>
+        <View style={styles.listingSkillSheet}>
+          <Text style={styles.listingSkillTitle}>Which skill are you offering?</Text>
+          <Text style={styles.listingSkillDescription}>
+            This starts a new service listing. You can still change it before posting.
+          </Text>
+          <View style={styles.listingSkillRow}>
+            {(completion?.work.offeredServices ?? []).map((skill) => (
+              <Pressable
+                accessibilityRole="button"
+                key={skill}
+                onPress={() => {
+                  setListingSkillSheetVisible(false);
+                  router.push({ pathname: '/create-service', params: { skill } });
+                }}
+                style={({ pressed }) => [styles.listingSkillChip, pressed && styles.pressed]}>
+                <Text style={styles.listingSkillChipText}>{skill}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setListingSkillSheetVisible(false);
+              router.push('/create-service');
+            }}
+            style={({ pressed }) => [styles.listingSkillSecondary, pressed && styles.pressed]}>
+            <Text style={styles.listingSkillSecondaryText}>Something else</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -455,6 +496,7 @@ function WorkProfileContent({
   history,
   onAction,
   onAddCredential,
+  onCreateListingForSkill,
   onManageServices,
   onOpenService,
   reviews,
@@ -465,6 +507,7 @@ function WorkProfileContent({
   history: PublicProfileHistoryItem[];
   onAction: (action: ProfileCompletionAction) => void;
   onAddCredential: () => void;
+  onCreateListingForSkill: () => void;
   onManageServices: () => void;
   onOpenService: (serviceId: string) => void;
   reviews: Review[];
@@ -508,9 +551,29 @@ function WorkProfileContent({
         )}
       </ProfileSection>
 
+      {/*
+        Skills describe what the resident can do. Listings are what they are
+        actively offering, and they are created and managed in Post (DEC-093).
+        The pills stay read-only and the listing action is labelled outright,
+        so tapping a skill can never be mistaken for posting a service.
+      */}
       <ProfileSection title="Skills">
         {skillLabels.length ? (
-          <ProfilePillRow values={skillLabels} />
+          <>
+            <ProfilePillRow values={skillLabels} />
+            <Text style={styles.sectionNote}>
+              Skills are provided by the resident. They say what you can do, not what you are
+              offering right now.
+            </Text>
+            <Pressable
+              accessibilityLabel="Create a listing from one of your skills"
+              accessibilityRole="button"
+              onPress={onCreateListingForSkill}
+              style={({ pressed }) => [styles.sectionAction, pressed && styles.pressed]}>
+              <MaterialIcons color={color.primary} name="add" size={18} />
+              <Text style={styles.sectionActionText}>Create a listing from a skill</Text>
+            </Pressable>
+          </>
         ) : (
           <EmptyProfilePanel
             icon="handyman"
@@ -1116,5 +1179,60 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72,
+  },
+  sectionNote: {
+    ...typography.captionMedium,
+    color: color.textSubtle,
+    marginTop: space.sm,
+  },
+  sectionAction: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.xs,
+    marginTop: space.sm,
+    paddingVertical: space.xs,
+  },
+  sectionActionText: {
+    ...typography.bodyMedium,
+    color: color.primary,
+  },
+  listingSkillSheet: {
+    gap: space.md,
+    paddingBottom: space.lg,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+  },
+  listingSkillTitle: {
+    ...typography.sectionTitle,
+    color: color.text,
+  },
+  listingSkillDescription: {
+    ...typography.captionMedium,
+    color: color.textMuted,
+  },
+  listingSkillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+  },
+  listingSkillChip: {
+    backgroundColor: color.primarySoft,
+    borderColor: color.primary,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  listingSkillChipText: {
+    ...typography.bodyMedium,
+    color: color.primary,
+  },
+  listingSkillSecondary: {
+    alignItems: 'center',
+    paddingVertical: space.sm,
+  },
+  listingSkillSecondaryText: {
+    ...typography.bodyMedium,
+    color: color.textMuted,
   },
 });

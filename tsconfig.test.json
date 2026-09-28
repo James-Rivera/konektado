@@ -1,0 +1,31 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "target": "es2022",
+    "lib": [
+      "es2022"
+    ],
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "constants/service-taxonomy.ts",
+    "services/service-classification.ts",
+    "services/home-feed.service.ts",
+    "types/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".test-build"
+  ]
+}

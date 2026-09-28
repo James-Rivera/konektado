@@ -125,7 +125,15 @@ export function PublicWorkerProfileView({
 
         <Section title="Skills">
           {profile.skills.length ? (
-            <LimitedTagRow primary={displayService(profile.skills[0])} tags={profile.skills.slice(1)} />
+            <>
+              <LimitedTagRow primary={displayService(profile.skills[0])} tags={profile.skills.slice(1)} />
+              {/*
+                Skills are self-declared. Barangay verification covers identity
+                and residency, never competence, so the two must not read as
+                one trust signal.
+              */}
+              <Text style={styles.skillsNote}>Skills are provided by the resident.</Text>
+            </>
           ) : (
             <EmptyPublicCard
               icon="handyman"
@@ -952,6 +960,11 @@ const styles = StyleSheet.create({
   bodyText: {
     ...typography.body,
     color: color.textMuted,
+  },
+  skillsNote: {
+    ...typography.captionMedium,
+    color: color.textSubtle,
+    marginTop: space.sm,
   },
   metricGrid: {
     flexDirection: 'row',
