@@ -142,9 +142,9 @@ export default function PublicWorkerProfileScreen() {
         ) : null}
         {!loading && !error && !profile ? (
           <EmptyState
-            description="This worker profile is no longer available."
+            description="This profile can’t be viewed right now. Profiles appear here once barangay verification is complete."
             icon="person-search"
-            title="Worker not found"
+            title="Profile not available"
           />
         ) : null}
         {!loading && !currentProfileLoading && profile ? (

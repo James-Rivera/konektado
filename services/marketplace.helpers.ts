@@ -622,12 +622,32 @@ export function isPublicProfileVerified(profile: PublicProfileSummary | null | u
   return Boolean(profile?.barangayVerifiedAt || profile?.verifiedAt);
 }
 
-export async function loadPublicProfiles(userIds: string[]) {
+/**
+ * Loads public-safe profile summaries AND reports whether the lookup failed.
+ *
+ * `get_public_profile_summaries` deliberately returns no row for a profile the
+ * caller may not see (unverified, and not the caller's own or an admin's).
+ * That is indistinguishable from "the RPC failed" unless the error is kept, so
+ * screens that show a single person must use this instead of
+ * `loadPublicProfiles`. Otherwise a network blip, a permission error, or a
+ * missing migration renders as a misleading "not found".
+ */
+export async function loadPublicProfilesWithError(userIds: string[]): Promise<{
+  profiles: Map<string, PublicProfileSummary>;
+  error: string | null;
+}> {
   const ids = Array.from(new Set(userIds.filter(Boolean)));
-  if (!ids.length) return new Map<string, PublicProfileSummary>();
+  if (!ids.length) return { profiles: new Map<string, PublicProfileSummary>(), error: null };
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .rpc('get_public_profile_summaries', { p_user_ids: ids });
+
+  if (error) {
+    if (__DEV__) {
+      console.warn('get_public_profile_summaries failed', error.message);
+    }
+    return { profiles: new Map<string, PublicProfileSummary>(), error: error.message };
+  }
 
   const profiles = new Map(
     ((data as ProfileRow[] | null) ?? [])
@@ -636,7 +656,17 @@ export async function loadPublicProfiles(userIds: string[]) {
       .map((profile) => [profile.id, profile]),
   );
 
-  return applyPublicPhotoVisibilityToProfiles(profiles);
+  return { profiles: await applyPublicPhotoVisibilityToProfiles(profiles), error: null };
+}
+
+/**
+ * Map-only variant for list surfaces (feed, Search, conversations), where a
+ * missing profile just drops or de-emphasises one card. Single-profile screens
+ * should call `loadPublicProfilesWithError` so failures are not hidden.
+ */
+export async function loadPublicProfiles(userIds: string[]) {
+  const { profiles } = await loadPublicProfilesWithError(userIds);
+  return profiles;
 }
 
 export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>): JobSummary {
