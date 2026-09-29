@@ -12,6 +12,7 @@ import {
 import { color } from '@/constants/theme';
 import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { startJobConversation } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { getPublicClientProfile } from '@/services/client-profile.service';
@@ -23,6 +24,7 @@ import {
 } from '@/services/profile-completion.service';
 import type { JobSummary, PublicClientProfile } from '@/types/marketplace.types';
 import { showAlert } from '@/utils/alert';
+import type { VerificationGateCopy } from '@/utils/verification-gate';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -75,12 +77,12 @@ export default function PublicClientProfileScreen() {
     };
   }, [clientId, sourceJobId]);
 
-  const isVerified = Boolean(currentProfile?.barangay_verified_at || currentProfile?.verified_at);
+  const { getCopy: getGateCopy, requireVerified } = useVerificationGate();
   const isOwnProfile = Boolean(profile && currentProfile?.id === profile.id);
   const messageJob = getMessageJob(profile);
   const cta = getClientCta({
     isOwnProfile,
-    isVerified,
+    gateCopy: getGateCopy('message'),
     job: messageJob,
   });
 
@@ -88,10 +90,7 @@ export default function PublicClientProfileScreen() {
     if (!profile) return;
     if (cta.disabled && cta.reason !== 'verification') return;
 
-    if (!isVerified) {
-      router.push('/verification');
-      return;
-    }
+    if (!requireVerified('message')) return;
 
     if (!messageJob) return;
 
@@ -176,11 +175,11 @@ function getMessageJob(profile: PublicClientProfile | null): JobSummary | null {
 
 function getClientCta({
   isOwnProfile,
-  isVerified,
+  gateCopy,
   job,
 }: {
   isOwnProfile: boolean;
-  isVerified: boolean;
+  gateCopy: VerificationGateCopy | null;
   job: JobSummary | null;
 }) {
   if (isOwnProfile) {
@@ -210,11 +209,11 @@ function getClientCta({
     };
   }
 
-  if (!isVerified) {
+  if (gateCopy) {
     return {
       disabled: false,
-      helper: 'Complete barangay verification to message workers and clients.',
-      label: 'Verify to message',
+      helper: gateCopy.helper,
+      label: gateCopy.ctaLabel,
       reason: 'verification',
     };
   }

@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,22 +21,26 @@ import {
   FloatingOnboardingInput,
   OnboardingBackButton,
   OnboardingButton,
-  OnboardingLoadingOverlay,
   OnboardingTextInput,
   OtpCodeInput,
   PasswordRequirementRow,
   ProgressBars,
   onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
+import { AccountFlowError, accountFlowStyles } from '@/components/onboarding/AccountFlowUI';
 import { useFeedback } from '@/components/FeedbackProvider';
+import { PHONE_AUTH_ENABLED } from '@/constants/auth-config';
 import {
   abandonPasswordRecovery,
   requestPasswordResetEmailOtp,
+  requestPasswordResetPhoneOtp,
   resendPasswordResetEmailOtp,
+  resendPasswordResetPhoneOtp,
   setRecoveredPassword,
   verifyPasswordResetEmailOtp,
+  verifyPasswordResetPhoneOtp,
 } from '@/services/auth.service';
-import { showAlert } from '@/utils/alert';
+import { formatPhilippineMobile, looksLikePhoneNumber } from '@/utils/phone';
 
 type RecoveryStep = 'email' | 'code' | 'password';
 
@@ -53,11 +58,15 @@ function hasSpecialCharacter(value: string) {
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { showInfoToast, showSuccessToast } = useFeedback();
-  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    email?: string | string[];
+    identifier?: string | string[];
+  }>();
   const { height } = useWindowDimensions();
   const compactHeight = height < 760;
 
   const [step, setStep] = useState<RecoveryStep>('email');
+  // Holds a mobile number instead when phone auth is on, like the login field.
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
@@ -67,13 +76,18 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(60);
+  // One error surface: the inline block under the field. It also works on web,
+  // where Alert is a no-op.
+  const [formError, setFormError] = useState<string | null>(null);
   const verifyingCodeRef = useRef(false);
   // True once the recovery OTP has minted a session. From here the only exits
   // are "set a new password" or "sign out"; navigating away would leave a
   // fully authorized session behind.
   const [codeVerified, setCodeVerified] = useState(false);
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const usePhone = PHONE_AUTH_ENABLED && looksLikePhoneNumber(email);
+  const normalizedEmail = usePhone ? '' : email.trim().toLowerCase();
+  const destinationLabel = usePhone ? formatPhilippineMobile(email) : normalizedEmail;
   const passwordHasLength = password.length >= 8 && password.length <= 20;
   const passwordHasSpecial = hasSpecialCharacter(password);
   const passwordsMatch = password.length > 0 && password === confirmPassword;
@@ -85,6 +99,11 @@ export default function ForgotPasswordScreen() {
       setCodeVerified(false);
     }
 
+    if (usePhone) {
+      router.replace({ pathname: '/(auth)/login', params: { identifier: email.trim() } });
+      return;
+    }
+
     if (normalizedEmail) {
       router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } });
       return;
@@ -94,11 +113,11 @@ export default function ForgotPasswordScreen() {
   };
 
   useEffect(() => {
-    const nextEmail = getParamValue(params.email);
+    const nextEmail = getParamValue(params.identifier) ?? getParamValue(params.email);
     if (nextEmail) {
       setEmail(nextEmail);
     }
-  }, [params.email]);
+  }, [params.email, params.identifier]);
 
   useEffect(() => {
     if (step !== 'code' || resendSeconds <= 0) return;
@@ -113,12 +132,15 @@ export default function ForgotPasswordScreen() {
   const requestCode = async () => {
     if (loading || resendingCode) return;
 
+    setFormError(null);
     setLoading(true);
-    const result = await requestPasswordResetEmailOtp({ email: normalizedEmail });
+    const result = usePhone
+      ? await requestPasswordResetPhoneOtp({ phone: email })
+      : await requestPasswordResetEmailOtp({ email: normalizedEmail });
     setLoading(false);
 
     if (result.error) {
-      showAlert('Could not send code', result.error);
+      setFormError(result.error);
       return;
     }
 
@@ -132,12 +154,15 @@ export default function ForgotPasswordScreen() {
   const resendCode = async () => {
     if (resendSeconds > 0 || loading || resendingCode) return;
 
+    setFormError(null);
     setResendingCode(true);
-    const result = await resendPasswordResetEmailOtp({ email: normalizedEmail });
+    const result = usePhone
+      ? await resendPasswordResetPhoneOtp({ phone: email })
+      : await resendPasswordResetEmailOtp({ email: normalizedEmail });
     setResendingCode(false);
 
     if (result.error) {
-      showAlert('Could not resend code', result.error);
+      setFormError(result.error);
       return;
     }
 
@@ -149,14 +174,17 @@ export default function ForgotPasswordScreen() {
     if (code.length !== EMAIL_OTP_LENGTH || loading || verifyingCodeRef.current) return;
 
     verifyingCodeRef.current = true;
+    setFormError(null);
     setLoading(true);
-    const result = await verifyPasswordResetEmailOtp({ email: normalizedEmail, token: code });
+    const result = usePhone
+      ? await verifyPasswordResetPhoneOtp({ phone: email, token: code })
+      : await verifyPasswordResetEmailOtp({ email: normalizedEmail, token: code });
     setLoading(false);
     verifyingCodeRef.current = false;
 
     if (result.error) {
       setOtp('');
-      showAlert('Invalid code', result.error);
+      setFormError(result.error);
       return;
     }
 
@@ -175,16 +203,17 @@ export default function ForgotPasswordScreen() {
     if (loading) return;
 
     if (!passwordReady) {
-      showAlert('Password requirements', 'Use 8 to 20 characters, include a special character, and confirm the same password.');
+      setFormError('Use 8 to 20 characters, include a special character, and confirm the same password.');
       return;
     }
 
+    setFormError(null);
     setLoading(true);
     const result = await setRecoveredPassword({ password });
     setLoading(false);
 
     if (result.error) {
-      showAlert('Could not save password', result.error);
+      setFormError(result.error);
       return;
     }
 
@@ -195,6 +224,8 @@ export default function ForgotPasswordScreen() {
 
   const goBack = () => {
     if (loading) return;
+
+    setFormError(null);
 
     // Leaving the password step abandons a live recovery session, so end it and
     // restart from the email step rather than keeping it alive in the UI.
@@ -220,6 +251,12 @@ export default function ForgotPasswordScreen() {
     void goToLogin();
   };
 
+  const errorBlock = formError ? (
+    <AccountFlowError>
+      <Text style={accountFlowStyles.errorText}>{formError}</Text>
+    </AccountFlowError>
+  ) : null;
+
   const renderEmailStep = () => (
     <AuthShell
       onClose={() => router.replace('/(auth)/login')}
@@ -238,17 +275,23 @@ export default function ForgotPasswordScreen() {
     >
       <View style={styles.emailForm}>
         <Text style={styles.emailHelper}>
-          Enter your account email and we&apos;ll send a 6-digit reset code.
+          {PHONE_AUTH_ENABLED
+            ? "Enter your account mobile number or email and we'll send a 6-digit reset code."
+            : "Enter your account email and we'll send a 6-digit reset code."}
         </Text>
         <OnboardingTextInput
           autoCapitalize="none"
-          autoComplete="email"
+          autoComplete={PHONE_AUTH_ENABLED ? 'username' : 'email'}
           keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="Email"
-          textContentType="emailAddress"
+          onChangeText={(value) => {
+            setEmail(value);
+            if (formError) setFormError(null);
+          }}
+          placeholder={PHONE_AUTH_ENABLED ? 'Mobile number or email' : 'Email'}
+          textContentType={PHONE_AUTH_ENABLED ? 'username' : 'emailAddress'}
           value={email}
         />
+        {errorBlock}
       </View>
 
       <OnboardingButton label="Send reset code" loading={loading} onPress={requestCode} style={styles.submitButton} />
@@ -266,7 +309,9 @@ export default function ForgotPasswordScreen() {
       </View>
 
       <View style={styles.codeDetails}>
-        <Text style={styles.descriptionText}>Enter the 6-digit password reset code sent to {normalizedEmail || 'your email'}.</Text>
+        <Text style={styles.descriptionText}>
+          Enter the 6-digit password reset code sent to {destinationLabel || (usePhone ? 'your phone' : 'your email')}.
+        </Text>
         <Pressable
           accessibilityRole="button"
           disabled={resendSeconds > 0 || loading || resendingCode}
@@ -285,12 +330,23 @@ export default function ForgotPasswordScreen() {
         value={otp}
       />
 
+      {errorBlock}
+
+      {/* The code auto-submits on the sixth digit, so there is no button to
+          carry a spinner. Show progress inline under the code boxes. */}
+      {loading ? (
+        <View accessibilityLiveRegion="polite" style={styles.checkingRow}>
+          <ActivityIndicator color={onboardingColors.textMuted} size="small" />
+          <Text style={styles.checkingText}>Checking code...</Text>
+        </View>
+      ) : null}
+
       <View style={styles.infoNote}>
         <View style={styles.infoIcon}>
           <Text style={styles.infoIconText}>i</Text>
         </View>
         <Text style={styles.infoText}>
-          Enter the code from your <Text style={styles.infoTextStrong}>email</Text>. This lets us confirm the account before changing the password.
+          Enter the code from your <Text style={styles.infoTextStrong}>{usePhone ? 'SMS' : 'email'}</Text>. This lets us confirm the account before changing the password.
         </Text>
       </View>
     </RecoveryStepFrame>
@@ -328,6 +384,7 @@ export default function ForgotPasswordScreen() {
           onTrailingIconPress={() => setConfirmPasswordVisible((visible) => !visible)}
           value={confirmPassword}
         />
+        {errorBlock}
       </View>
 
       <View style={styles.passwordChecklist}>
@@ -343,7 +400,6 @@ export default function ForgotPasswordScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
       {step === 'email' ? renderEmailStep() : step === 'code' ? renderCodeStep() : renderPasswordStep()}
-      <OnboardingLoadingOverlay visible={loading} />
     </View>
   );
 }
@@ -470,6 +526,17 @@ const styles = StyleSheet.create({
   },
   resendTextDisabled: {
     opacity: 1,
+  },
+  checkingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  checkingText: {
+    color: onboardingColors.textMuted,
+    fontFamily: 'Satoshi-Regular',
+    fontSize: 12,
+    lineHeight: 20,
   },
   infoNote: {
     alignItems: 'flex-start',

@@ -147,15 +147,26 @@ describe('client profile surfaces lookup failures', () => {
 });
 
 describe('screen copy for a profile the caller may not view', () => {
-  const screens = ['app/worker/[workerId].tsx', 'app/client/[clientId].tsx', 'app/services/[serviceId].tsx'];
+  const screens = ['app/worker/[workerId].tsx', 'app/client/[clientId].tsx'];
 
   it('no longer claims the person does not exist', () => {
-    screens.forEach((screen) => {
+    [...screens, 'app/services/[serviceId].tsx'].forEach((screen) => {
       const source = readSource(screen);
       assert.doesNotMatch(source, /title="(Worker|Client) not found"/, `${screen} still says "not found"`);
       assert.doesNotMatch(source, /is no longer available\."/, `${screen} still says "no longer available"`);
-      assert.match(source, /title="Profile not available"/, `${screen} should use the honest title`);
     });
+    screens.forEach((screen) => {
+      assert.match(readSource(screen), /title="Profile not available"/, `${screen} should use the honest title`);
+    });
+  });
+
+  it('never blocks a loaded service on its worker summary', () => {
+    // The worker summary only enriches Service Details. When it fails, the
+    // screen used to show "Profile not available" on top of the service for a
+    // verified worker. The detail view falls back to the service's provider.
+    const source = readSource('app/services/[serviceId].tsx');
+    assert.doesNotMatch(source, /Profile not available/, 'service detail must not show the profile empty state');
+    assert.match(source, /workerProfile=\{profile\}/, 'service detail still passes the optional worker summary');
   });
 
   it('keeps a separate error state so real failures are shown with their message', () => {

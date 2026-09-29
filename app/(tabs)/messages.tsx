@@ -17,6 +17,7 @@ import { PresenceDot } from '@/components/PresenceDot';
 import { Skeleton, SkeletonAvatar } from '@/components/Skeleton';
 import { color, radius, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import {
     type ConversationPreviewEvent,
     emitConversationPreviewUpdate,
@@ -58,7 +59,7 @@ export default function MessagesScreen() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const hasLoadedOnceRef = useRef(hasCachedConversations);
   const conversationsRef = useRef(conversations);
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const { isPending: isVerificationPending, isVerified } = useVerificationGate();
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -274,7 +275,10 @@ export default function MessagesScreen() {
             <MessageRow isLoading />
           </View>
         ) : !isVerified ? (
-          <LockedMessagesCard onVerify={() => router.push('/verification')} />
+          <LockedMessagesCard
+            onVerify={() => router.push('/verification')}
+            pending={isVerificationPending}
+          />
         ) : (
           <>
           <View style={styles.searchBox}>
@@ -464,19 +468,25 @@ const MessageRow = memo(function MessageRow({
   );
 });
 
-function LockedMessagesCard({ onVerify }: { onVerify: () => void }) {
+function LockedMessagesCard({ onVerify, pending }: { onVerify: () => void; pending: boolean }) {
   return (
     <View style={styles.lockedCard}>
-      <MaterialIcons color={color.textSubtle} name="speaker-notes-off" size={42} />
-      <Text style={styles.lockedTitle}>Messaging unlocks after verification</Text>
+      <MaterialIcons
+        color={pending ? color.accentYellow : color.textSubtle}
+        name={pending ? 'hourglass-top' : 'speaker-notes-off'}
+        size={42}
+      />
+      <Text style={styles.lockedTitle}>
+        {pending ? 'Your verification is under review' : 'Messaging unlocks after verification'}
+      </Text>
       <Text style={styles.lockedBody}>
-        You can browse the marketplace now. Barangay approval is required before sending or
-        receiving messages.
+        {pending
+          ? 'Barangay staff are checking your documents. Keep browsing; messaging unlocks as soon as you are approved.'
+          : 'You can browse the marketplace now. Barangay approval is required before sending or receiving messages.'}
       </Text>
       <Pressable accessibilityRole="button" onPress={onVerify} style={styles.verifyButton}>
-        <Text style={styles.verifyButtonText}>Start verification</Text>
+        <Text style={styles.verifyButtonText}>{pending ? 'View status' : 'Start verification'}</Text>
       </Pressable>
-      <Text style={styles.lockedLink}>Maybe later</Text>
     </View>
   );
 }
@@ -793,13 +803,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 14,
     lineHeight: 18,
-  },
-  lockedLink: {
-    color: color.textMuted,
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
   },
   pressed: {
     opacity: 0.72,

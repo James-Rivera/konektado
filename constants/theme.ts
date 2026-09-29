@@ -5,6 +5,9 @@ export const color = {
   verificationBlue: '#0D99FF',
   primaryPressed: '#4F8FDC',
   primarySoft: '#EEF5FF',
+  // Brand `primary` is too light for text (about 2.6:1 on white). Use this for
+  // blue text such as rates and links: about 5.1:1 on white, 4.6:1 on primarySoft.
+  primaryText: '#2F6FBF',
   accentYellow: '#FCC03B',
   brandYellow: '#F2E640',
   success: '#7BBE7A',

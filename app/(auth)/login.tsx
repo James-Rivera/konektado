@@ -9,13 +9,18 @@ import {
     OnboardingTextInput,
     onboardingColors,
 } from '@/components/onboarding/FigmaOnboarding';
-import { signInWithEmailPassword } from '@/services/auth.service';
+import { PHONE_AUTH_ENABLED } from '@/constants/auth-config';
+import { signInWithEmailPassword, signInWithPhonePassword } from '@/services/auth.service';
 import { showAlert } from '@/utils/alert';
+import { looksLikePhoneNumber } from '@/utils/phone';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ email?: string | string[] }>();
-  const paramEmail = Array.isArray(params.email) ? params.email[0] : params.email;
+  const params = useLocalSearchParams<{ email?: string | string[]; identifier?: string | string[] }>();
+  const rawEmailParam = Array.isArray(params.email) ? params.email[0] : params.email;
+  const rawIdentifierParam = Array.isArray(params.identifier) ? params.identifier[0] : params.identifier;
+  // One field accepts either a mobile number or an email when phone auth is on.
+  const paramEmail = rawIdentifierParam ?? rawEmailParam;
   const [email, setEmail] = useState(paramEmail ?? '');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -34,7 +39,10 @@ export default function LoginScreen() {
     if (loading) return;
 
     setLoading(true);
-    const result = await signInWithEmailPassword({ email, password });
+    const usePhone = PHONE_AUTH_ENABLED && looksLikePhoneNumber(email);
+    const result = usePhone
+      ? await signInWithPhonePassword({ password, phone: email })
+      : await signInWithEmailPassword({ email, password });
     setLoading(false);
 
     if (result.error) {
@@ -43,8 +51,17 @@ export default function LoginScreen() {
   };
 
   const onForgotPassword = () => {
-    const normalizedEmail = email.trim().toLowerCase();
+    // A mobile number is only carried over when phone recovery is available.
+    if (looksLikePhoneNumber(email)) {
+      router.push(
+        PHONE_AUTH_ENABLED
+          ? { pathname: '/(auth)/forgot-password', params: { identifier: email.trim() } }
+          : '/(auth)/forgot-password',
+      );
+      return;
+    }
 
+    const normalizedEmail = email.trim().toLowerCase();
     router.push(
       normalizedEmail
         ? { pathname: '/(auth)/forgot-password', params: { email: normalizedEmail } }
@@ -68,11 +85,11 @@ export default function LoginScreen() {
         <View style={styles.form}>
           <OnboardingTextInput
             autoCapitalize="none"
-            autoComplete="email"
+            autoComplete={PHONE_AUTH_ENABLED ? 'username' : 'email'}
             keyboardType="email-address"
             onChangeText={setEmail}
-            placeholder="Email"
-            textContentType="emailAddress"
+            placeholder={PHONE_AUTH_ENABLED ? 'Mobile number or email' : 'Email'}
+            textContentType={PHONE_AUTH_ENABLED ? 'username' : 'emailAddress'}
             value={email}
           />
           <View style={styles.passwordField}>

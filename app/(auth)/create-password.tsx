@@ -1,31 +1,21 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState, type ReactNode } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import {
-  FloatingOnboardingInput,
-  OnboardingBackButton,
-  OnboardingButton,
-  OnboardingLoadingOverlay,
-  PasswordRequirementRow,
-  ProgressBars,
-  onboardingColors,
-} from '@/components/onboarding/FigmaOnboarding';
+  AccountFlowButton,
+  AccountFlowFrame,
+  AccountFlowInput,
+  AccountFlowIntro,
+  accountFlowStyles,
+} from '@/components/onboarding/AccountFlowUI';
+import { PasswordRequirementRow } from '@/components/onboarding/FigmaOnboarding';
 import { getCurrentAuthUser, getCurrentSignupRole, setSignupPassword } from '@/services/auth.service';
-import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 import { showAlert } from '@/utils/alert';
+import { normalizePhilippineMobile } from '@/utils/phone';
+import { saveUserRole, type OnboardingIntent } from '@/utils/save-role';
 
 function normalizeRole(raw: unknown): OnboardingIntent | null {
   if (raw === 'client' || raw === 'provider') return raw;
@@ -44,13 +34,17 @@ function hasSpecialCharacter(value: string) {
   return /[^A-Za-z0-9]/.test(value);
 }
 
+/**
+ * Create a password after the email or SMS code. Not in the new Figma set, so
+ * it uses the same account-flow chrome as "Create your Account". A password
+ * lets residents log back in without waiting for another code.
+ */
 export default function CreatePasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const selectedRole = useMemo(() => normalizeRole(params.role), [params.role]);
-  const email = getParamValue(params.email) ?? null;
-  const { height } = useWindowDimensions();
-  const compactHeight = height < 760;
+  const email = getParamValue(params.email as string | string[] | undefined) ?? null;
+  const phone = normalizePhilippineMobile(getParamValue(params.phone as string | string[] | undefined));
 
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -92,7 +86,7 @@ export default function CreatePasswordScreen() {
 
     if (userResult.error || !userResult.data) {
       setLoading(false);
-      showAlert('Session expired', userResult.error ?? 'Please verify your email again to continue.');
+      showAlert('Session expired', userResult.error ?? 'Please verify your account again to continue.');
       router.replace('/(auth)/role');
       return;
     }
@@ -102,6 +96,7 @@ export default function CreatePasswordScreen() {
     if (roleForSignup) {
       const saveRoleError = await saveUserRole({
         email: currentUser.email ?? email,
+        phone,
         role: roleForSignup,
         userId: currentUser.id,
       });
@@ -120,129 +115,63 @@ export default function CreatePasswordScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      <AccountStepFrame
-        contentStyle={[styles.passwordContent, compactHeight ? styles.passwordContentCompact : undefined]}
-        footer={<OnboardingButton label="Next" loading={loading} onPress={savePassword} style={styles.primaryButton} />}
-        onBack={() => showAlert('Create password', 'Create a password before continuing to onboarding.')}
-      >
-        <View style={styles.formTitleBlock}>
-          <Text style={styles.title}>Create a Password</Text>
-          <ProgressBars current={3} total={4} />
-        </View>
-
-        <FloatingOnboardingInput
-          label="Password"
-          onChangeText={setPassword}
-          secureTextEntry={!passwordVisible}
-          textContentType="newPassword"
-          trailingIcon={passwordVisible ? 'visibility' : 'visibility-off'}
-          trailingIconLabel={passwordVisible ? 'Hide password' : 'Show password'}
-          onTrailingIconPress={() => setPasswordVisible((visible) => !visible)}
-          value={password}
+      <AccountFlowFrame
+        footer={<AccountFlowButton label="Continue" loading={loading} onPress={savePassword} />}
+        onBack={() => showAlert('Create password', 'Create a password before continuing.')}
+        step={1}>
+        <AccountFlowIntro
+          subtitle="You will use this with your mobile number or email to log in."
+          title="Create a password"
         />
 
-        <View style={styles.passwordChecklist}>
-          <Text style={styles.passwordChecklistTitle}>Your password must have at least:</Text>
-          <PasswordRequirementRow checked={passwordHasLength}>must be 8 characters (20 max)</PasswordRequirementRow>
-          <PasswordRequirementRow checked={passwordHasSpecial}>password must have special characters</PasswordRequirementRow>
+        <View>
+          <AccountFlowInput
+            accessibilityLabel="Password"
+            autoCapitalize="none"
+            onChangeText={setPassword}
+            placeholder="Password"
+            secureTextEntry={!passwordVisible}
+            style={styles.passwordInput}
+            textContentType="newPassword"
+            value={password}
+          />
+          <Pressable
+            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            style={styles.visibilityToggle}>
+            <MaterialIcons color="#46576C" name={passwordVisible ? 'visibility' : 'visibility-off'} size={22} />
+          </Pressable>
         </View>
-      </AccountStepFrame>
-      <OnboardingLoadingOverlay visible={loading} />
+
+        <View style={styles.checklist}>
+          <Text style={accountFlowStyles.body}>Your password must have:</Text>
+          <PasswordRequirementRow checked={passwordHasLength}>8 to 20 characters</PasswordRequirementRow>
+          <PasswordRequirementRow checked={passwordHasSpecial}>at least one special character</PasswordRequirementRow>
+        </View>
+      </AccountFlowFrame>
     </View>
-  );
-}
-
-function AccountStepFrame({
-  children,
-  contentStyle,
-  footer,
-  onBack,
-}: {
-  children: ReactNode;
-  contentStyle?: StyleProp<ViewStyle>;
-  footer?: ReactNode;
-  onBack: () => void;
-}) {
-  return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
-        <View style={styles.topHeader}>
-          <OnboardingBackButton onPress={onBack} />
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, contentStyle]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: onboardingColors.surface,
+    backgroundColor: '#FFFFFF',
     flex: 1,
   },
-  safeArea: {
-    backgroundColor: onboardingColors.surface,
-    flex: 1,
+  passwordInput: {
+    paddingRight: 40,
   },
-  keyboardView: {
-    flex: 1,
-  },
-  topHeader: {
+  visibilityToggle: {
     alignItems: 'center',
-    flexDirection: 'row',
-    height: 55,
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    bottom: 0,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 12,
+    top: 0,
   },
-  headerSpacer: {
-    height: 24,
-    width: 24,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 26,
-  },
-  formTitleBlock: {
-    gap: 10,
-  },
-  title: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Black',
-    fontSize: 24,
-    lineHeight: 39,
-  },
-  passwordContent: {
-    gap: 28,
-    paddingTop: 87,
-  },
-  passwordContentCompact: {
-    paddingTop: 48,
-  },
-  passwordChecklist: {
+  checklist: {
     gap: 7,
-  },
-  passwordChecklistTitle: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 20,
-  },
-  footer: {
-    paddingBottom: 22,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-  },
-  primaryButton: {
-    width: '100%',
   },
 });

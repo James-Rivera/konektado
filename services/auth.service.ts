@@ -1,3 +1,4 @@
+import { toE164PhilippineMobile } from "@/utils/phone";
 import type { OnboardingIntent } from "@/utils/save-role";
 import { supabase } from "@/utils/supabase";
 
@@ -275,6 +276,165 @@ export async function resendSignupEmailOtp({
   return { data: undefined, error: null };
 }
 
+export const ACCOUNT_EXISTS_PHONE_SIGNUP_MESSAGE =
+  "This mobile number already has a Konektado account. Please log in instead.";
+
+const PHONE_OTP_TYPE = "sms" as const;
+
+async function sendOnboardingPhoneOtp({
+  phone,
+  role,
+}: {
+  phone: string;
+  role: OnboardingIntent | null;
+}) {
+  return supabase.auth.signInWithOtp({
+    phone,
+    options: {
+      channel: "sms",
+      shouldCreateUser: true,
+      data: signupOtpMetadata(role),
+    },
+  });
+}
+
+/**
+ * Mobile-number signup. Same shape as the email path: OTP creates the session,
+ * then Create Password sets a password so the resident can log in later with
+ * mobile + password. Requires Supabase phone auth (see PHONE_AUTH_ENABLED).
+ *
+ * There is no pre-send "already registered" lookup for phones yet, so an
+ * existing account is detected after the code is verified, exactly like the
+ * email path's second check.
+ */
+export async function requestSignupPhoneOtp({
+  phone,
+  role,
+}: {
+  phone: string;
+  role: OnboardingIntent | null;
+}): Promise<ServiceResult<void>> {
+  const e164 = toE164PhilippineMobile(phone);
+  if (!e164) {
+    return { data: null, error: "Enter a valid Philippine mobile number, like 0917 123 4567." };
+  }
+
+  const { error } = await sendOnboardingPhoneOtp({ phone: e164, role });
+  if (error) {
+    return {
+      data: null,
+      error: toPhoneAuthMessage(error.message, "Could not send the SMS code. Please try again."),
+    };
+  }
+
+  return { data: undefined, error: null };
+}
+
+export async function verifySignupPhoneOtp({
+  phone,
+  token,
+}: {
+  phone: string;
+  token: string;
+}): Promise<ServiceResult<AuthUserSummary>> {
+  const e164 = toE164PhilippineMobile(phone);
+  const normalizedToken = normalizeOtpToken(token);
+
+  if (!e164) {
+    return { data: null, error: "Enter a valid Philippine mobile number before verifying the code." };
+  }
+
+  if (normalizedToken.length !== EMAIL_OTP_LENGTH) {
+    return { data: null, error: "Enter the 6-digit code from the SMS." };
+  }
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone: e164,
+    token: normalizedToken,
+    type: PHONE_OTP_TYPE,
+  });
+
+  if (error) {
+    return {
+      data: null,
+      error: toPhoneAuthMessage(error.message, "Could not verify the SMS code. Please try again."),
+    };
+  }
+
+  if (!data.user) {
+    return { data: null, error: "Could not verify this account. Please request a new code." };
+  }
+
+  if (await currentSessionLooksLikeExistingAccount(data.user.id)) {
+    await supabase.auth.signOut();
+    return { data: null, error: ACCOUNT_EXISTS_PHONE_SIGNUP_MESSAGE };
+  }
+
+  return {
+    data: { email: data.user.email ?? null, id: data.user.id },
+    error: null,
+  };
+}
+
+export async function resendSignupPhoneOtp({
+  phone,
+  role,
+}: {
+  phone: string;
+  role?: OnboardingIntent | null;
+}): Promise<ServiceResult<void>> {
+  return requestSignupPhoneOtp({ phone, role: role ?? null });
+}
+
+export async function signInWithPhonePassword({
+  password,
+  phone,
+}: {
+  password: string;
+  phone: string;
+}): Promise<ServiceResult<void>> {
+  const e164 = toE164PhilippineMobile(phone);
+  if (!e164) {
+    return { data: null, error: "Enter a valid Philippine mobile number." };
+  }
+
+  if (!password) {
+    return { data: null, error: "Enter your password." };
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({ password, phone: e164 });
+  if (error) {
+    return {
+      data: null,
+      error: toPhoneAuthMessage(error.message, "Sign in failed. Please try again."),
+    };
+  }
+
+  return { data: undefined, error: null };
+}
+
+function toPhoneAuthMessage(message: string, fallback: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("invalid login credentials")) {
+    return "Check your mobile number and password, then try again.";
+  }
+
+  // Raised when the project has no phone provider or SMS sender configured.
+  if (
+    normalized.includes("phone") &&
+    (normalized.includes("disabled") || normalized.includes("provider") || normalized.includes("not enabled"))
+  ) {
+    return "Mobile number sign-up is not available yet. Please use your email for now.";
+  }
+
+  if (normalized.includes("error sending") || normalized.includes("sms")) {
+    return "We could not send the SMS right now. Please try again in a moment.";
+  }
+
+  return toAuthMessage(message, fallback);
+}
+
 export async function requestPasswordResetEmailOtp({
   email,
 }: {
@@ -353,21 +513,9 @@ export async function verifyPasswordResetEmailOtp({
     };
   }
 
-  // verifyOtp({ type: "recovery" }) mints a full, persisted session. Without a
-  // marker, reloading or backing out of the reset screen drops the visitor
-  // into the app with complete account access and no password. Flag it on the
-  // user so route guards can pen the session to the reset screen, and fail
-  // closed if the flag cannot be written.
-  const { error: markError } = await supabase.auth.updateUser({
-    data: { password_recovery_pending: true },
-  });
-
+  const markError = await markPasswordRecoveryPending();
   if (markError) {
-    await supabase.auth.signOut();
-    return {
-      data: null,
-      error: "Could not start the password reset securely. Please request a new code.",
-    };
+    return { data: null, error: markError };
   }
 
   return {
@@ -375,6 +523,139 @@ export async function verifyPasswordResetEmailOtp({
       email: data.user.email ?? normalizedEmail,
       id: data.user.id,
     },
+    error: null,
+  };
+}
+
+/**
+ * A verified recovery code mints a full, persisted session. Without a marker,
+ * reloading or backing out of the reset screen drops the visitor into the app
+ * with complete account access and no password. Flag it on the user so route
+ * guards can pen the session to the reset screen, and fail closed (sign out)
+ * if the flag cannot be written. Returns an error message, or null.
+ */
+async function markPasswordRecoveryPending(): Promise<string | null> {
+  const { error } = await supabase.auth.updateUser({
+    data: { password_recovery_pending: true },
+  });
+
+  if (error) {
+    await supabase.auth.signOut();
+    return "Could not start the password reset securely. Please request a new code.";
+  }
+
+  return null;
+}
+
+/**
+ * Mobile password recovery. Supabase has no phone "recovery" OTP type, so this
+ * sends a login SMS code that may not create an account (shouldCreateUser:
+ * false), then pens the resulting session to the reset screen exactly like the
+ * email path. Requires Supabase phone auth (see PHONE_AUTH_ENABLED).
+ */
+export async function requestPasswordResetPhoneOtp({
+  phone,
+}: {
+  phone: string;
+}): Promise<ServiceResult<void>> {
+  const e164 = toE164PhilippineMobile(phone);
+  if (!e164) {
+    return { data: null, error: "Enter a valid Philippine mobile number, like 0917 123 4567." };
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: e164,
+    options: { channel: "sms", shouldCreateUser: false },
+  });
+
+  if (error) {
+    // An unknown number fails with "Signups not allowed for otp". Treat it as
+    // sent, like resetPasswordForEmail does for unknown emails, so this screen
+    // cannot be used to discover which numbers have accounts.
+    if (isUnknownPhoneRecoveryError(error)) {
+      return { data: undefined, error: null };
+    }
+
+    return {
+      data: null,
+      error: toPhoneAuthMessage(
+        error.message,
+        "Could not send the password reset code. Please try again.",
+      ),
+    };
+  }
+
+  return { data: undefined, error: null };
+}
+
+function isUnknownPhoneRecoveryError(error: { code?: string; message: string }) {
+  const normalized = error.message.toLowerCase();
+  return (
+    error.code === "otp_disabled" ||
+    normalized.includes("signups not allowed") ||
+    normalized.includes("user not found")
+  );
+}
+
+export async function resendPasswordResetPhoneOtp({
+  phone,
+}: {
+  phone: string;
+}): Promise<ServiceResult<void>> {
+  return requestPasswordResetPhoneOtp({ phone });
+}
+
+export async function verifyPasswordResetPhoneOtp({
+  phone,
+  token,
+}: {
+  phone: string;
+  token: string;
+}): Promise<ServiceResult<AuthUserSummary>> {
+  const e164 = toE164PhilippineMobile(phone);
+  const normalizedToken = normalizeOtpToken(token);
+
+  if (!e164) {
+    return {
+      data: null,
+      error: "Enter a valid Philippine mobile number before verifying the code.",
+    };
+  }
+
+  if (normalizedToken.length !== EMAIL_OTP_LENGTH) {
+    return { data: null, error: "Enter the 6-digit code from the SMS." };
+  }
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone: e164,
+    token: normalizedToken,
+    type: PHONE_OTP_TYPE,
+  });
+
+  if (error) {
+    return {
+      data: null,
+      error: toPhoneAuthMessage(
+        error.message,
+        "Could not verify the password reset code. Please try again.",
+      ),
+    };
+  }
+
+  if (!data.user) {
+    return {
+      data: null,
+      error: "Could not verify this reset code. Please request a new code.",
+    };
+  }
+
+  const markError = await markPasswordRecoveryPending();
+  if (markError) {
+    return { data: null, error: markError };
+  }
+
+  return {
+    data: { email: data.user.email ?? null, id: data.user.id },
     error: null,
   };
 }

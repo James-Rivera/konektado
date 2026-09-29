@@ -18,6 +18,8 @@ export type VerificationSummary = {
   id: string;
   idType: VerificationIdType | null;
   status: VerificationStatus;
+  /** Set for pending requests after checking uploaded files in storage. */
+  uploadComplete?: boolean;
   notes: string | null;
   reviewerNote: string | null;
   createdAt: string;
@@ -64,7 +66,10 @@ export type ContactOtpDeliveryStatus =
   | 'failed'
   | 'simulated'
   | 'already_sent'
-  | 'rate_limited_existing_challenge';
+  | 'rate_limited_existing_challenge'
+  // Mobile signups: Supabase Auth already confirmed this number, so no SMS is
+  // sent and the returned challenge is pre-verified (skip the code step).
+  | 'auth_phone_confirmed';
 
 export type ContactOtpStatusType = 'success' | 'info' | 'warning' | 'error';
 
@@ -77,6 +82,8 @@ export type ContactOtpSendResult = {
   retryAfterSeconds: number;
   simulated: boolean;
   deliveryStatus: ContactOtpDeliveryStatus;
+  /** Present and true when the challenge needs no code (`auth_phone_confirmed`). */
+  verified?: boolean;
   deliveryError?:
     | 'sms_provider_unauthenticated'
     | 'sms_sender_rejected'

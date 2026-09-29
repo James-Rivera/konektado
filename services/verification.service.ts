@@ -234,6 +234,26 @@ async function getCurrentUser() {
   return { user: data.user, error: null };
 }
 
+/**
+ * Status of the resident's most recent verification request, or null when they
+ * have never submitted one. Used by the shared profile context so every gated
+ * screen can tell "not started" apart from "waiting on barangay review".
+ */
+export async function getLatestVerificationStatus(
+  userId: string,
+): Promise<ServiceResult<VerificationStatus | null>> {
+  const { data, error } = await supabase
+    .from('verifications')
+    .select('status')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ status: VerificationStatus }>();
+
+  if (error) return { data: null, error: error.message };
+  return { data: data?.status ?? null, error: null };
+}
+
 export async function getMyVerificationPrefill(): Promise<ServiceResult<VerificationPrefill>> {
   const { user, error: userError } = await getCurrentUser();
 
@@ -275,6 +295,16 @@ export async function getMyVerificationPrefill(): Promise<ServiceResult<Verifica
     return { data: null, error: latestError.message };
   }
 
+  let uploadComplete: boolean | undefined;
+  if (latestRequest?.status === 'pending') {
+    const { data: ready, error: readyError } = await supabase.rpc(
+      'is_verification_request_ready',
+      { p_request_id: latestRequest.id },
+    );
+    if (readyError) return { data: null, error: readyError.message };
+    uploadComplete = ready === true;
+  }
+
   const fallbackNameParts = compactText(profile?.full_name).split(' ').filter(Boolean);
   const servicesOrPurpose = compactValues([
     ...(preferences?.offered_services ?? []),
@@ -300,10 +330,28 @@ export async function getMyVerificationPrefill(): Promise<ServiceResult<Verifica
         reviewerNote: latestRequest?.reviewer_note ?? null,
         status: latestRequest?.status ?? null,
       }),
-      latestRequest: latestRequest ? mapVerification(latestRequest) : null,
+      latestRequest: latestRequest
+        ? { ...mapVerification(latestRequest), uploadComplete }
+        : null,
     },
     error: null,
   };
+}
+
+/** A resident can restart a request whose document upload never finished. */
+export async function cancelIncompleteVerificationRequest(
+  requestId: string,
+): Promise<ServiceResult<void>> {
+  const { data, error } = await supabase.rpc(
+    'cancel_incomplete_verification_request',
+    { p_request_id: requestId },
+  );
+  if (error) return { data: null, error: error.message };
+  if (data === 'cancelled') return { data: undefined, error: null };
+  if (data === 'already_ready') {
+    return { data: null, error: 'Your documents finished uploading. Refresh to view the review status.' };
+  }
+  return { data: null, error: 'This request changed. Refresh verification and try again.' };
 }
 
 export async function sendContactVerificationCode(
@@ -507,16 +555,13 @@ export async function createVerificationRequest(
   const failedUpload = uploadedFiles.find((item) => item.uploaded.error || !item.uploaded.data);
 
   if (failedUpload) {
-    await supabase
-      .from('verifications')
-      .update({
-        status: 'cancelled',
-      })
-      .eq('id', verification.id);
+    const cancelled = await cancelIncompleteVerificationRequest(verification.id);
 
     return {
       data: null,
-      error: failedUpload.uploaded.error ?? `Could not upload ${failedUpload.file.name || failedUpload.file.fileType}.`,
+      error: cancelled.error
+        ? `The upload failed and the request could not be reset: ${cancelled.error}`
+        : failedUpload.uploaded.error ?? `Could not upload ${failedUpload.file.name || failedUpload.file.fileType}.`,
     };
   }
 
@@ -529,9 +574,13 @@ export async function createVerificationRequest(
   );
 
   if (fileError) {
-    // Leave review fields admin-owned and permit a fresh challenge/submission.
-    await supabase.from('verifications').update({ status: 'cancelled' }).eq('id', verification.id);
-    return { data: null, error: fileError.message };
+    const cancelled = await cancelIncompleteVerificationRequest(verification.id);
+    return {
+      data: null,
+      error: cancelled.error
+        ? `The files could not be saved and the request could not be reset: ${cancelled.error}`
+        : fileError.message,
+    };
   }
 
   void sendVerificationSubmittedEmail({

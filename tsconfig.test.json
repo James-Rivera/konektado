@@ -20,6 +20,8 @@
     "constants/service-taxonomy.ts",
     "services/service-classification.ts",
     "services/home-feed.service.ts",
+    "utils/verification-gate.ts",
+    "utils/phone.ts",
     "types/*.ts",
     "tests/**/*.ts"
   ],

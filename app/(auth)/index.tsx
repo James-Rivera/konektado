@@ -1,312 +1,145 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-import {
-  GradientImageScreen,
-  OnboardingButton,
-  onboardingColors,
-} from '@/components/onboarding/FigmaOnboarding';
+import { KonektadoWordmark } from '@/components/KonektadoWordmark';
+import { onboardingColors } from '@/components/onboarding/FigmaOnboarding';
+import { color } from '@/constants/theme';
 
-const SLIDE_DURATION_MS = 7000;
-const PAGE_TRANSITION_MS = 1100;
-const PROGRESS_WIDTH = 144;
-const PROGRESS_GAP = 8;
-const PROGRESS_SEGMENT_WIDTH = (PROGRESS_WIDTH - PROGRESS_GAP * 2) / 3;
+/**
+ * Welcome - Get Started (Figma 1501:4097).
+ *
+ * One photo, the wordmark, and two actions. This replaces the three-slide
+ * auto-advancing carousel: the unified onboarding explains verification in
+ * context, so the welcome screen only needs to say what Konektado is.
+ *
+ * The Figma frame crops a 3:2 photo to its centre-left. `contentPosition`
+ * reproduces that crop at any screen width instead of copying the frame's
+ * fixed 390px offsets: the visible window starts 390px into a 1266px-wide
+ * render, i.e. 390 / (1266 - 390) = 44.5% of the overflow.
+ */
+const WELCOME_IMAGE_POSITION = { left: '44.5%' as const, top: '0%' as const };
 
-const INTRO_SLIDES = [
-  {
-    title: 'Opportunities are closer than you think.',
-    subtitle: 'Find work within your community.',
-    source: require('../../assets/images/onboarding-intro-1-figma.jpg'),
-    darkness: 0.2,
-  },
-  {
-    title: 'Work with people you can trust.',
-    subtitle: 'Approved by your barangay.',
-    source: require('../../assets/images/onboarding-intro-2-figma.jpg'),
-    darkness: 0.2,
-  },
-  {
-    title: 'Find help or offer services.',
-    subtitle: 'Browse verified jobs and services, then verify to connect.',
-    source: require('../../assets/images/onboarding-intro-3-figma.jpg'),
-    darkness: 0.32,
-  },
-] as const;
+/** Figma: the logo block starts 160px below the status bar on an 844px frame. */
+const LOGO_TOP_RATIO = 160 / 844;
 
-const CAROUSEL_SLIDES = [...INTRO_SLIDES, INTRO_SLIDES[0]];
-
-export default function AuthIntroScreen() {
+export default function WelcomeScreen() {
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
-  const [progressAnim] = useState(() => new Animated.Value(0));
-  const pageRef = useRef(0);
-  const scrollTransitionRef = useRef<Animated.CompositeAnimation | null>(null);
-  const { width } = useWindowDimensions();
-  const [page, setPage] = useState(0);
-
-  const goToLogin = () => {
-    router.push('/(auth)/login');
-  };
-
-  const goToRole = () => {
-    router.push('/(auth)/role');
-  };
-
-  const setVisiblePage = useCallback((nextPage: number) => {
-    pageRef.current = nextPage;
-    setPage(nextPage);
-  }, []);
-
-  const showPage = useCallback(
-    (nextPage: number) => {
-      scrollTransitionRef.current?.stop();
-
-      const fromX = pageRef.current * width;
-      const toX = nextPage * width;
-      const scrollX = new Animated.Value(fromX);
-      const listenerId = scrollX.addListener(({ value }) => {
-        scrollRef.current?.scrollTo({ animated: false, x: value });
-      });
-
-      const transition = Animated.timing(scrollX, {
-        duration: PAGE_TRANSITION_MS,
-        easing: Easing.inOut(Easing.cubic),
-        toValue: toX,
-        useNativeDriver: false,
-      });
-
-      scrollTransitionRef.current = transition;
-
-      transition.start(({ finished }) => {
-        scrollX.removeListener(listenerId);
-        scrollTransitionRef.current = null;
-
-        if (!finished) return;
-
-        if (nextPage >= INTRO_SLIDES.length) {
-          scrollRef.current?.scrollTo({ animated: false, x: 0 });
-          setVisiblePage(0);
-          return;
-        }
-
-        setVisiblePage(nextPage);
-      });
-    },
-    [setVisiblePage, width]
-  );
-
-  useEffect(() => {
-    return () => {
-      scrollTransitionRef.current?.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (pageRef.current !== page) {
-      pageRef.current = page;
-    }
-  }, [page]);
-
-  useEffect(() => {
-    if (!width) return;
-    scrollRef.current?.scrollTo({ animated: false, x: pageRef.current * width });
-  }, [width]);
-
-  const snapToPage = useCallback(
-    (nextPage: number) => {
-      if (nextPage >= INTRO_SLIDES.length) {
-        scrollRef.current?.scrollTo({ animated: false, x: 0 });
-        setVisiblePage(0);
-        return;
-      }
-
-      setVisiblePage(nextPage);
-    },
-    [setVisiblePage]
-  );
-
-  useEffect(() => {
-    progressAnim.setValue(0);
-    const animation = Animated.timing(progressAnim, {
-      duration: SLIDE_DURATION_MS,
-      easing: Easing.linear,
-      toValue: 1,
-      useNativeDriver: false,
-    });
-
-    animation.start(({ finished }) => {
-      if (!finished) return;
-      showPage(page === INTRO_SLIDES.length - 1 ? INTRO_SLIDES.length : page + 1);
-    });
-
-    return () => {
-      animation.stop();
-    };
-  }, [page, progressAnim, showPage]);
-
-  const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextPage = Math.round(event.nativeEvent.contentOffset.x / width);
-    snapToPage(nextPage);
-  };
+  const { height } = useWindowDimensions();
 
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        pagingEnabled
-        scrollEventThrottle={16}
-        showsHorizontalScrollIndicator={false}
-        style={styles.carousel}>
-        {CAROUSEL_SLIDES.map((slide, index) => (
-          <View key={`${slide.title}-${index}`} style={[styles.slide, { width }]}>
-            <GradientImageScreen darkness={slide.darkness} source={slide.source}>
-              <View style={styles.slideContent}>
-                <View style={styles.copyBlock}>
-                  <Text style={styles.title}>{slide.title}</Text>
-                  <Text style={styles.subtitle}>{slide.subtitle}</Text>
-                  <IntroPagination currentPage={page} progress={progressAnim} />
-                </View>
-              </View>
-            </GradientImageScreen>
+      <Image
+        accessibilityIgnoresInvertColors
+        contentFit="cover"
+        contentPosition={WELCOME_IMAGE_POSITION}
+        source={require('../../assets/images/welcome-get-started-figma.jpg')}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* Figma overlay: 40% blue gradient, #69A4EC -> #4B8BDB -> #3C7FD2. */}
+      <Svg height="100%" pointerEvents="none" style={StyleSheet.absoluteFill} width="100%">
+        <Defs>
+          <LinearGradient id="welcomeOverlay" x1="0" x2="0" y1="0" y2="1">
+            <Stop offset="0.17" stopColor="#69A4EC" stopOpacity="0.4" />
+            <Stop offset="0.50125" stopColor="#4B8BDB" stopOpacity="0.4" />
+            <Stop offset="0.66687" stopColor="#3C7FD2" stopOpacity="0.4" />
+          </LinearGradient>
+        </Defs>
+        <Rect fill="url(#welcomeOverlay)" height="100%" width="100%" />
+      </Svg>
+
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+        {/* Percentage padding resolves against width in React Native, so the
+            Figma offset is derived from the window height instead. */}
+        <View style={[styles.logoArea, { paddingTop: Math.round(height * LOGO_TOP_RATIO) }]}>
+          <View style={styles.logoSection}>
+            <KonektadoWordmark color="light" size="hero" />
+            <Text style={styles.tagline}>Trabaho sa Komunidad. Isang App.</Text>
           </View>
-        ))}
-      </ScrollView>
-
-      <SafeAreaView edges={['bottom']} style={styles.fixedActionBlock}>
-        <OnboardingButton label="Get Started" onPress={goToRole} />
-        <Pressable accessibilityRole="link" onPress={goToLogin} style={styles.loginLink}>
-          <Text style={styles.loginText}>
-            Already have an account? <Text style={styles.loginTextBold}>Login</Text>
-          </Text>
-        </Pressable>
-      </SafeAreaView>
-    </View>
-  );
-}
-
-function IntroPagination({
-  currentPage,
-  progress,
-}: {
-  currentPage: number;
-  progress: Animated.Value;
-}) {
-  const animatedWidth = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, PROGRESS_SEGMENT_WIDTH],
-  });
-
-  return (
-    <View style={styles.progressRow}>
-      {INTRO_SLIDES.map((slide, index) => (
-        <View key={slide.title} style={styles.progressSegment}>
-          {index < currentPage ? <View style={styles.progressFillComplete} /> : null}
-          {index === currentPage ? <Animated.View style={[styles.progressFillAnimated, { width: animatedWidth }]} /> : null}
         </View>
-      ))}
+
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(auth)/role')}
+            style={({ pressed }) => [styles.button, styles.primaryButton, pressed && styles.pressed]}>
+            <Text style={styles.primaryText}>Get Started</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(auth)/login')}
+            style={({ pressed }) => [styles.button, styles.secondaryButton, pressed && styles.pressed]}>
+            <Text style={styles.secondaryText}>Log in</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#1D4F91',
+    // Solid fallback behind the photo so white text never sits on white.
+    backgroundColor: '#3C7FD2',
     flex: 1,
   },
-  carousel: {
+  safeArea: {
     flex: 1,
   },
-  slide: {
-    flex: 1,
-  },
-  slideContent: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingBottom: 132,
-    paddingHorizontal: 26,
-    paddingTop: 50,
-  },
-  copyBlock: {
-    alignItems: 'flex-start',
-    gap: 10,
-    maxWidth: 333,
-  },
-  title: {
-    color: onboardingColors.white,
-    fontFamily: 'Satoshi-Black',
-    fontSize: 40,
-    lineHeight: 39,
-  },
-  subtitle: {
-    color: onboardingColors.white,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 10,
-  },
-  fixedActionBlock: {
-    bottom: 0,
-    gap: 5,
-    left: 0,
-    paddingBottom: 16,
-    paddingHorizontal: 29,
-    position: 'absolute',
-    right: 0,
-  },
-  loginLink: {
+  logoArea: {
     alignItems: 'center',
-    minHeight: 26,
-    justifyContent: 'center',
+    flex: 1,
+    paddingHorizontal: 24,
   },
-  loginText: {
+  logoSection: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  tagline: {
     color: onboardingColors.white,
     fontFamily: 'Satoshi-Regular',
-    fontSize: 14,
+    fontSize: 18,
     lineHeight: 20,
     textAlign: 'center',
   },
-  loginTextBold: {
-    fontFamily: 'Satoshi-Bold',
-    textDecorationLine: 'underline',
+  actions: {
+    gap: 4,
+    paddingBottom: 8,
+    paddingHorizontal: 20,
   },
-  progressRow: {
-    flexDirection: 'row',
-    gap: PROGRESS_GAP,
-    height: 6,
-    width: PROGRESS_WIDTH,
-  },
-  progressSegment: {
-    backgroundColor: 'rgba(246, 246, 239, 0.6)',
-    borderRadius: 3,
-    height: 6,
-    overflow: 'hidden',
-    width: PROGRESS_SEGMENT_WIDTH,
-  },
-  progressFillComplete: {
-    backgroundColor: '#D7CA09',
-    height: '100%',
+  button: {
+    alignItems: 'center',
+    borderRadius: 24,
+    height: 46,
+    justifyContent: 'center',
+    paddingHorizontal: 32,
     width: '100%',
   },
-  progressFillAnimated: {
-    backgroundColor: '#D7CA09',
-    height: '100%',
+  primaryButton: {
+    backgroundColor: color.accentYellow,
+  },
+  secondaryButton: {
+    backgroundColor: onboardingColors.white,
+    borderColor: '#AFAFAF',
+    borderWidth: 1,
+  },
+  primaryText: {
+    color: '#000000',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  secondaryText: {
+    color: '#5C7495',
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  pressed: {
+    opacity: 0.82,
   },
 });

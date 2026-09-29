@@ -316,7 +316,7 @@ export default function JobStep() {
       <StatusBar style="dark" />
       <OnboardingFormScaffold
         contentStyle={styles.content}
-        currentStep={3}
+        currentStep={2}
         footer={footer}
         helper={
           role === 'client'

@@ -17,6 +17,7 @@ import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startJobConversation } from '@/services/conversation.service';
@@ -38,6 +39,7 @@ import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getDetailImageUrl } from '@/utils/image-processing';
 import { showAlert } from '@/utils/alert';
+import type { VerificationGateCopy } from '@/utils/verification-gate';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -46,9 +48,9 @@ function getParamValue(value: string | string[] | undefined) {
 
 export default function JobDetailScreen() {
   const router = useRouter();
-  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
+  const { showErrorToast, showSuccessToast } = useFeedback();
   const { profile } = useProfile();
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const { getCopy: getGateCopy, requireVerified } = useVerificationGate();
 
   const params = useLocalSearchParams<{ adminView?: string | string[]; jobId?: string | string[] }>();
   const rawJobId = getParamValue(params.jobId);
@@ -96,10 +98,6 @@ export default function JobDetailScreen() {
       active = false;
     };
   }, [rawJobId]);
-
-  const showVerificationPrompt = () => {
-    router.push('/verification');
-  };
 
   if (loading && !job) {
     return <JobDetailSkeleton showActionBar={!adminViewRequested} />;
@@ -163,8 +161,8 @@ export default function JobDetailScreen() {
   const saveTarget = { postType: 'job' as const, postId: job.id };
   const messageCta = getJobMessageCta({
     allowMessages: job.allowMessages,
+    gateCopy: getGateCopy('message'),
     isOwnJob,
-    isVerified,
     status: jobStatus,
   });
 
@@ -173,10 +171,7 @@ export default function JobDetailScreen() {
       return;
     }
 
-    if (!isVerified) {
-      showVerificationPrompt();
-      return;
-    }
+    if (!requireVerified('message')) return;
 
     setMessaging(true);
     startJobConversation({
@@ -216,11 +211,7 @@ export default function JobDetailScreen() {
   };
 
   const handleSave = async () => {
-    if (!isVerified) {
-      showInfoToast('Complete barangay verification before saving posts.');
-      router.push('/verification');
-      return;
-    }
+    if (!requireVerified('save')) return;
 
     const result = await toggleSaved(saveTarget);
     if (result.error || !result.data) {
@@ -683,13 +674,13 @@ function formatStatus(status: JobDetail['status']) {
 
 function getJobMessageCta({
   allowMessages,
+  gateCopy,
   isOwnJob,
-  isVerified,
   status,
 }: {
   allowMessages: boolean;
+  gateCopy: VerificationGateCopy | null;
   isOwnJob: boolean;
-  isVerified: boolean;
   status: JobDetail['status'];
 }) {
   if (isOwnJob) {
@@ -728,11 +719,11 @@ function getJobMessageCta({
     };
   }
 
-  if (!isVerified) {
+  if (gateCopy) {
     return {
       disabled: false,
-      helper: 'Complete barangay verification to message workers and clients.',
-      label: 'Verify to message',
+      helper: gateCopy.helper,
+      label: gateCopy.ctaLabel,
       reason: 'verification',
     };
   }

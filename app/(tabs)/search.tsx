@@ -37,6 +37,7 @@ import {
 } from '@/constants/service-taxonomy';
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
@@ -130,7 +131,7 @@ const SEARCH_RESULT_GROUP_LABELS: Record<DiscoveryGroupKey, string> = {
 
 export default function SearchScreen() {
   const router = useRouter();
-  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
+  const { showErrorToast, showSuccessToast } = useFeedback();
   const isFocused = useIsFocused();
   const listRef = useRef<FlatList<SearchListRow>>(null);
   const topInset = useSafeTopInset();
@@ -146,7 +147,7 @@ export default function SearchScreen() {
   const groupParam = getParamValue(params.group);
   const openFiltersParam = getParamValue(params.openFilters);
   const queryParam = getParamValue(params.q);
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const { isPending: isVerificationPending, isVerified, requireVerified } = useVerificationGate();
   const verificationKnown = !profileLoading;
   const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
   const [query, setQuery] = useState('');
@@ -621,11 +622,7 @@ export default function SearchScreen() {
 
   const toggleSearchSave = useCallback(
     async (target: { postType: 'job' | 'service'; postId: string }) => {
-      if (!isVerified) {
-        showInfoToast('Complete barangay verification before saving items.');
-        router.push('/verification' as never);
-        return;
-      }
+      if (!requireVerified('save')) return;
 
       const result = await toggleSaved(target);
       if (result.error || !result.data) {
@@ -635,7 +632,7 @@ export default function SearchScreen() {
 
       showSuccessToast(result.data.saved ? 'Saved' : 'Removed from saved');
     },
-    [isVerified, router, showErrorToast, showInfoToast, showSuccessToast, toggleSaved],
+    [requireVerified, showErrorToast, showSuccessToast, toggleSaved],
   );
 
   const submitReport = useCallback(
@@ -881,7 +878,9 @@ export default function SearchScreen() {
       return (
         <View style={rowStyle}>
           <Text style={styles.helperText}>
-            Messaging stays locked until your barangay verification is approved.
+            {isVerificationPending
+              ? 'Your verification is under review. Messaging unlocks once you are approved.'
+              : 'Messaging stays locked until your barangay verification is approved.'}
           </Text>
         </View>
       );
@@ -891,6 +890,7 @@ export default function SearchScreen() {
       activeFilterCount,
       handleOpenFilters,
       isPending,
+      isVerificationPending,
       isSaved,
       openJob,
       openService,
