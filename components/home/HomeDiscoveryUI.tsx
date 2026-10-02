@@ -1,11 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { ComponentProps } from 'react';
+import { Image, type ImageSource } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { color, radius } from '@/constants/theme';
-
-type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
 /**
  * Hero metrics measured off the Figma frame (390x844) by sampling pixels:
@@ -224,7 +222,8 @@ export function HomeSectionLink({
 
 export type HomeCategoryTile = {
   key: string;
-  icon: MaterialIconName;
+  /** Two-tone category illustration from `assets/images/categories/`. */
+  icon: ImageSource | number;
   label: string;
 };
 
@@ -249,7 +248,12 @@ export function HomeCategoryGrid({
           onPress={() => onSelect(tile.key)}
           style={({ pressed }) => [styles.categoryTile, pressed && styles.pressed]}>
           <View style={styles.categoryIcon}>
-            <MaterialIcons color={color.verificationBlue} name={tile.icon} size={28} />
+            <Image
+              accessibilityIgnoresInvertColors
+              contentFit="contain"
+              source={tile.icon}
+              style={styles.categoryIconImage}
+            />
           </View>
           <Text numberOfLines={2} style={styles.categoryLabel}>
             {tile.label}
@@ -456,6 +460,12 @@ const styles = StyleSheet.create({
     height: 52,
     justifyContent: 'center',
     width: 52,
+  },
+  // Illustrations carry their own padding, so they need more of the tile than
+  // the 28px glyphs did to read at the same weight.
+  categoryIconImage: {
+    height: 40,
+    width: 40,
   },
   categoryLabel: {
     color: color.textMuted,

@@ -167,14 +167,14 @@ function mapSearchModeToRouteFilter(mode: SearchMode) {
  * ninth primary tile — it is reached through "See all" and Search instead.
  */
 const DISCOVERY_GROUP_ICONS: Record<HomeDiscoveryGroupKey, HomeCategoryTile['icon']> = {
-  'Home & Errands': 'home-repair-service',
-  'Beauty & Personal Care': 'spa',
-  'Food & Baking': 'bakery-dining',
-  'Sewing & Tailoring': 'content-cut',
-  'Home Repair & Carpentry': 'handyman',
-  'Tutoring & Lessons': 'school',
-  'Documents & Design': 'design-services',
-  'Computer & Phone Help': 'devices',
+  'Home & Errands': require('@/assets/images/categories/home-errands.svg'),
+  'Beauty & Personal Care': require('@/assets/images/categories/beauty-personal-care.svg'),
+  'Food & Baking': require('@/assets/images/categories/food-baking.svg'),
+  'Sewing & Tailoring': require('@/assets/images/categories/sewing-tailoring.svg'),
+  'Home Repair & Carpentry': require('@/assets/images/categories/home-repair.svg'),
+  'Tutoring & Lessons': require('@/assets/images/categories/tutoring-lessons.svg'),
+  'Documents & Design': require('@/assets/images/categories/documents-design.svg'),
+  'Computer & Phone Help': require('@/assets/images/categories/computer-phone-help.svg'),
 };
 
 function getHomeGreeting(firstName: string | null | undefined, fullName: string | null | undefined) {

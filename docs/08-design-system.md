@@ -145,6 +145,13 @@ Rules:
 - The search bar and Find work / Hire help switch pin under the status bar once the band has scrolled off. A white backdrop and status-bar scrim fade in at the pin point.
 - Status bar icons are light over the band and dark once pinned.
 
+### Home Category Icons (DEC-135)
+
+- The eight Home category tiles use two-tone illustrations (blue with a yellow tool accent) from `assets/images/categories/`, one per `HOME_DISCOVERY_GROUPS` entry. They render at 40px inside the 52px `color.primarySoft` tile.
+- Files have transparent backgrounds and a square viewBox with equal padding. Light areas such as doors, book pages, and screens are cut-outs that show the tile colour, so always place them on a light tile.
+- Everything else in the app keeps MaterialIcons glyphs. Do not reuse these illustrations as small inline icons.
+- The source art was auto-traced, so it is tuned for tile size only. Redraw as clean vectors before showing any of them larger than about 64px.
+
 ### Public Worker and Client Profiles (DEC-129)
 
 - Hero: photo, name, approximate location, Verified badge, role label, then a stat strip (rating or "New", reviews, jobs done or hires, jobs posted for clients).
