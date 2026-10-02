@@ -1,43 +1,38 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BottomSheet } from '@/components/BottomSheet';
-import { useFeedback } from '@/components/FeedbackProvider';
-import { KonektadoWordmark } from '@/components/KonektadoWordmark';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import {
-  FloatingOnboardingInput,
-  OnboardingBackButton,
-  OnboardingButton,
-  onboardingColors,
-  OnboardingLoadingOverlay,
-  OtpCodeInput,
-  ProgressBars,
-} from '@/components/onboarding/FigmaOnboarding';
+  AccountFlowButton,
+  AccountFlowDivider,
+  AccountFlowError,
+  AccountFlowFrame,
+  AccountFlowInput,
+  AccountFlowIntro,
+  AccountFlowOutlineButton,
+  accountFlowStyles,
+} from '@/components/onboarding/AccountFlowUI';
+import { OtpCodeInput } from '@/components/onboarding/FigmaOnboarding';
+import { PHONE_AUTH_ENABLED } from '@/constants/auth-config';
 import {
+  ACCOUNT_EXISTS_PHONE_SIGNUP_MESSAGE,
   ACCOUNT_EXISTS_SIGNUP_MESSAGE,
   requestSignupEmailOtp,
+  requestSignupPhoneOtp,
   resendSignupEmailOtp,
+  resendSignupPhoneOtp,
   verifySignupEmailOtp,
+  verifySignupPhoneOtp,
 } from '@/services/auth.service';
+import { formatPhilippineMobile, normalizePhilippineMobile } from '@/utils/phone';
 import type { OnboardingIntent } from '@/utils/save-role';
 
-type AccountStep = 'email' | 'code';
-const EMAIL_OTP_LENGTH = 6;
+type AccountStep = 'identifier' | 'code';
+type AccountMethod = 'email' | 'phone';
+
+const OTP_LENGTH = 6;
+const RESEND_SECONDS = 60;
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -51,26 +46,37 @@ function normalizeRole(raw: unknown): OnboardingIntent | null {
   return null;
 }
 
+/**
+ * Create your Account (Figma 1493:2702) and Enter the code (1493:2784).
+ *
+ * Residents sign up with a mobile number or an email. Mobile is the Figma
+ * default and the more familiar path locally, but it depends on Supabase phone
+ * auth, so it is only offered when PHONE_AUTH_ENABLED is on. Otherwise the
+ * screen is email-only and behaves exactly as before (DEC-014/DEC-015).
+ *
+ * The Figma's Google/Apple buttons are intentionally omitted: neither provider
+ * is configured, and a button that cannot work is worse than no button.
+ */
 export default function RegisterScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const selectedRole = useMemo(() => normalizeRole(params.role), [params.role]);
-  const { height } = useWindowDimensions();
-  const { showErrorToast } = useFeedback();
 
-  const [step, setStep] = useState<AccountStep>('email');
+  const [method, setMethod] = useState<AccountMethod>(PHONE_AUTH_ENABLED ? 'phone' : 'email');
+  const [step, setStep] = useState<AccountStep>('identifier');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendingCode, setResendingCode] = useState(false);
-  const [resendSeconds, setResendSeconds] = useState(60);
-  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(RESEND_SECONDS);
   const [formError, setFormError] = useState<string | null>(null);
   const [accountExists, setAccountExists] = useState(false);
   const verifyingCodeRef = useRef(false);
 
-  const compactHeight = height < 760;
   const normalizedEmail = email.trim().toLowerCase();
+  const isPhone = method === 'phone';
+  const destinationLabel = isPhone ? formatPhilippineMobile(phone) : normalizedEmail;
 
   useEffect(() => {
     if (step !== 'code' || resendSeconds <= 0) return;
@@ -83,13 +89,15 @@ export default function RegisterScreen() {
   }, [resendSeconds, step]);
 
   /**
-   * Alert.alert is a no-op on react-native-web, so every failure has to land
-   * somewhere the user can actually see it on both platforms.
+   * One error surface: the inline block under the field. It works on web
+   * (where Alert is a no-op) and carries the Log In / Forgot password actions.
+   * A toast on top of it only repeated the same sentence.
    */
   const reportError = (message: string) => {
     setFormError(message);
-    setAccountExists(message === ACCOUNT_EXISTS_SIGNUP_MESSAGE);
-    showErrorToast(message);
+    setAccountExists(
+      message === ACCOUNT_EXISTS_SIGNUP_MESSAGE || message === ACCOUNT_EXISTS_PHONE_SIGNUP_MESSAGE,
+    );
   };
 
   const clearError = () => {
@@ -97,17 +105,29 @@ export default function RegisterScreen() {
     setAccountExists(false);
   };
 
+  const switchMethod = () => {
+    clearError();
+    setMethod((current) => (current === 'phone' ? 'email' : 'phone'));
+  };
+
   const requestCode = async () => {
     if (loading || resendingCode) return;
 
-    if (!isValidEmail(normalizedEmail)) {
+    if (isPhone && !normalizePhilippineMobile(phone)) {
+      reportError('Enter a valid Philippine mobile number, like 0917 123 4567.');
+      return;
+    }
+
+    if (!isPhone && !isValidEmail(normalizedEmail)) {
       reportError('Enter a valid email address.');
       return;
     }
 
     clearError();
     setLoading(true);
-    const result = await requestSignupEmailOtp({ email: normalizedEmail, role: selectedRole });
+    const result = isPhone
+      ? await requestSignupPhoneOtp({ phone, role: selectedRole })
+      : await requestSignupEmailOtp({ email: normalizedEmail, role: selectedRole });
     setLoading(false);
 
     if (result.error) {
@@ -116,7 +136,7 @@ export default function RegisterScreen() {
     }
 
     setOtp('');
-    setResendSeconds(60);
+    setResendSeconds(RESEND_SECONDS);
     setStep('code');
   };
 
@@ -125,7 +145,9 @@ export default function RegisterScreen() {
 
     clearError();
     setResendingCode(true);
-    const result = await resendSignupEmailOtp({ email: normalizedEmail, role: selectedRole });
+    const result = isPhone
+      ? await resendSignupPhoneOtp({ phone, role: selectedRole })
+      : await resendSignupEmailOtp({ email: normalizedEmail, role: selectedRole });
     setResendingCode(false);
 
     if (result.error) {
@@ -134,16 +156,18 @@ export default function RegisterScreen() {
     }
 
     setOtp('');
-    setResendSeconds(60);
+    setResendSeconds(RESEND_SECONDS);
   };
 
   const verifyCode = async (code: string) => {
-    if (code.length !== EMAIL_OTP_LENGTH || loading || verifyingCodeRef.current) return;
+    if (code.length !== OTP_LENGTH || loading || verifyingCodeRef.current) return;
 
     verifyingCodeRef.current = true;
     clearError();
     setLoading(true);
-    const result = await verifySignupEmailOtp({ email: normalizedEmail, token: code });
+    const result = isPhone
+      ? await verifySignupPhoneOtp({ phone, token: code })
+      : await verifySignupEmailOtp({ email: normalizedEmail, token: code });
     setLoading(false);
     verifyingCodeRef.current = false;
 
@@ -156,7 +180,7 @@ export default function RegisterScreen() {
     router.replace({
       pathname: '/(auth)/create-password',
       params: {
-        email: normalizedEmail,
+        ...(isPhone ? { phone: normalizePhilippineMobile(phone) ?? phone } : { email: normalizedEmail }),
         ...(selectedRole ? { role: selectedRole } : {}),
       },
     });
@@ -164,13 +188,16 @@ export default function RegisterScreen() {
 
   const handleOtpChange = (nextValue: string) => {
     setOtp(nextValue);
-    if (nextValue.length === EMAIL_OTP_LENGTH) {
+    if (nextValue.length === OTP_LENGTH) {
       void verifyCode(nextValue);
     }
   };
 
   const goToLogin = () =>
-    router.replace({ pathname: '/(auth)/login', params: { email: normalizedEmail } });
+    router.replace({
+      pathname: '/(auth)/login',
+      params: isPhone ? { identifier: phone.trim() } : { email: normalizedEmail },
+    });
 
   const goToForgotPassword = () =>
     router.replace({ pathname: '/(auth)/forgot-password', params: { email: normalizedEmail } });
@@ -181,438 +208,158 @@ export default function RegisterScreen() {
     if (step === 'code') {
       clearError();
       setOtp('');
-      setStep('email');
+      setStep('identifier');
       return;
     }
 
     router.replace('/(auth)/role');
   };
 
-  const renderEmailStep = () => (
-    <AccountStepFrame
-      contentStyle={[
-        styles.emailContent,
-        { paddingTop: compactHeight ? 74 : Math.min(118, height * 0.15) },
-      ]}
-      footer={<OnboardingButton label="Next" loading={loading} onPress={requestCode} style={styles.primaryButton} />}
-    >
-      <View style={styles.logoProgressBlock}>
-        <KonektadoWordmark color="dark" size="small" />
-        <ProgressBars current={1} total={4} />
-      </View>
-
-      <View style={styles.emailMain}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>{"Let's get started"}</Text>
-          <View style={styles.languageRow}>
-            <Text style={styles.languageText}>English</Text>
-            <Pressable accessibilityRole="button" onPress={() => setLanguageSheetVisible(true)}>
-              <Text style={styles.languageAction}>Change</Text>
+  const errorBlock = formError ? (
+    <AccountFlowError>
+      <Text style={accountFlowStyles.errorText}>{formError}</Text>
+      {accountExists ? (
+        <View style={styles.errorActions}>
+          <Pressable accessibilityRole="button" onPress={goToLogin}>
+            <Text style={accountFlowStyles.link}>Go to Log In</Text>
+          </Pressable>
+          {!isPhone ? (
+            <Pressable accessibilityRole="button" onPress={goToForgotPassword}>
+              <Text style={accountFlowStyles.link}>Forgot password?</Text>
             </Pressable>
-          </View>
+          ) : null}
         </View>
+      ) : null}
+    </AccountFlowError>
+  ) : null;
 
-        <View style={styles.inputGroup}>
-          <FloatingOnboardingInput
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            label="Email"
-            onChangeText={(value) => {
-              setEmail(value);
-              if (formError) clearError();
-            }}
-            textContentType="emailAddress"
-            value={email}
+  const identifierStep = (
+    <AccountFlowFrame onBack={goBack} step={1}>
+      <AccountFlowIntro
+        subtitle={
+          isPhone
+            ? "Enter your mobile number and we'll send you a verification code."
+            : "Enter your email and we'll send you a verification code."
+        }
+        title="Create your Account"
+      />
+
+      {isPhone ? (
+        <AccountFlowInput
+          accessibilityLabel="Mobile number"
+          autoComplete="tel"
+          inputMode="tel"
+          keyboardType="phone-pad"
+          maxLength={16}
+          onChangeText={(value) => {
+            setPhone(value);
+            if (formError) clearError();
+          }}
+          placeholder="Mobile Number"
+          prefix="+63"
+          textContentType="telephoneNumber"
+          value={phone}
+        />
+      ) : (
+        <AccountFlowInput
+          accessibilityLabel="Email"
+          autoCapitalize="none"
+          autoComplete="email"
+          inputMode="email"
+          keyboardType="email-address"
+          onChangeText={(value) => {
+            setEmail(value);
+            if (formError) clearError();
+          }}
+          placeholder="Email address"
+          textContentType="emailAddress"
+          value={email}
+        />
+      )}
+
+      <AccountFlowButton label="Continue" loading={loading} onPress={requestCode} />
+
+      {errorBlock}
+
+      {PHONE_AUTH_ENABLED ? (
+        <>
+          <AccountFlowDivider />
+          <AccountFlowOutlineButton
+            icon={isPhone ? 'mail-outline' : 'phone-iphone'}
+            label={isPhone ? 'Use email instead' : 'Use mobile number instead'}
+            onPress={switchMethod}
           />
-          <Text style={styles.instructionText}>{"We'll send you a code to verify your email."}</Text>
-          <InlineFormError
-            message={formError}
-            onForgotPassword={accountExists ? goToForgotPassword : undefined}
-            onLogin={accountExists ? goToLogin : undefined}
-          />
-        </View>
-      </View>
-    </AccountStepFrame>
+        </>
+      ) : null}
+
+      <Text style={accountFlowStyles.legal}>
+        By continuing, you agree to our{' '}
+        <Text style={accountFlowStyles.legalStrong}>Terms of Service</Text> and{' '}
+        <Text style={accountFlowStyles.legalStrong}>Privacy Policy</Text>.
+      </Text>
+    </AccountFlowFrame>
   );
 
-  const renderCodeStep = () => (
-    <AccountStepFrame
-      contentStyle={[styles.codeContent, compactHeight ? styles.codeContentCompact : undefined]}
-      onBack={goBack}
-    >
-      <View style={styles.formTitleBlock}>
-        <Text style={styles.title}>Enter the code</Text>
-        <ProgressBars current={2} total={4} />
-      </View>
-
-      <View style={styles.codeDetails}>
-        <Text style={styles.descriptionText}>Enter the 6-digit code sent to {normalizedEmail || 'your email'}.</Text>
-        <Pressable
-          accessibilityRole="button"
-          disabled={resendSeconds > 0 || loading || resendingCode}
-          onPress={resendCode}
-        >
-          <Text style={[styles.resendText, resendSeconds > 0 ? styles.resendTextDisabled : undefined]}>
-            {resendingCode ? 'Sending...' : resendSeconds > 0 ? `Resend in ${resendSeconds}s` : 'Resend code'}
-          </Text>
-        </Pressable>
-      </View>
-
-      <OtpCodeInput
-        autoFocus
-        disabled={loading}
-        onChangeText={handleOtpChange}
-        value={otp}
+  const codeStep = (
+    <AccountFlowFrame onBack={goBack} step={1}>
+      <AccountFlowIntro
+        subtitle={`We have sent a 6-digit code to ${destinationLabel || (isPhone ? 'your phone' : 'your email')}.`}
+        title="Enter the code"
       />
 
-      <InlineFormError
-        message={formError}
-        onForgotPassword={accountExists ? goToForgotPassword : undefined}
-        onLogin={accountExists ? goToLogin : undefined}
-      />
-
-      <View style={styles.infoNote}>
-        <View style={styles.infoIcon}>
-          <Text style={styles.infoIconText}>i</Text>
-        </View>
-        <Text style={styles.infoText}>
-          Enter the code from your <Text style={styles.infoTextStrong}>email</Text>. This helps keep your account secure.
+      <Pressable
+        accessibilityRole="button"
+        disabled={resendSeconds > 0 || loading || resendingCode}
+        onPress={resendCode}>
+        <Text style={[accountFlowStyles.link, resendSeconds > 0 && styles.resendDisabled]}>
+          {resendingCode ? 'Sending...' : resendSeconds > 0 ? `Resend in ${resendSeconds}s` : 'Resend code'}
         </Text>
-      </View>
-    </AccountStepFrame>
+      </Pressable>
+
+      <OtpCodeInput autoFocus disabled={loading} onChangeText={handleOtpChange} value={otp} />
+
+      {errorBlock}
+
+      {/* The code auto-submits on the sixth digit, so there is no button to
+          carry a spinner. Show progress inline, in place of the helper line. */}
+      {loading ? (
+        <View accessibilityLiveRegion="polite" style={styles.checkingRow}>
+          <ActivityIndicator color="#46576C" size="small" />
+          <Text style={accountFlowStyles.body}>Checking code...</Text>
+        </View>
+      ) : (
+        <Text style={accountFlowStyles.body}>
+          {isPhone
+            ? 'Enter the code from the SMS. This helps keep your account secure.'
+            : 'Enter the code from your email. This helps keep your account secure.'}
+        </Text>
+      )}
+    </AccountFlowFrame>
   );
 
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      {step === 'email' ? renderEmailStep() : renderCodeStep()}
-      <OnboardingLoadingOverlay visible={loading} />
-      <BottomSheet maxHeight="42%" onClose={() => setLanguageSheetVisible(false)} visible={languageSheetVisible}>
-        <View style={styles.languageSheetHeader}>
-          <Text style={styles.languageSheetTitle}>Language</Text>
-          <Pressable accessibilityLabel="Close language selector" accessibilityRole="button" onPress={() => setLanguageSheetVisible(false)}>
-            <Text style={styles.languageSheetClose}>Close</Text>
-          </Pressable>
-        </View>
-        <View style={styles.languageOptionSelected}>
-          <Text style={styles.languageOptionText}>English</Text>
-          <Text style={styles.languageOptionMeta}>Current</Text>
-        </View>
-        <View style={styles.languageOptionDisabled}>
-          <Text style={styles.languageOptionTextMuted}>Filipino</Text>
-          <Text style={styles.languageOptionMetaMuted}>Coming soon</Text>
-        </View>
-        <PrimaryButton label="Done" onPress={() => setLanguageSheetVisible(false)} />
-      </BottomSheet>
+      {step === 'identifier' ? identifierStep : codeStep}
     </View>
-  );
-}
-
-function InlineFormError({
-  message,
-  onForgotPassword,
-  onLogin,
-}: {
-  message: string | null;
-  onForgotPassword?: () => void;
-  onLogin?: () => void;
-}) {
-  if (!message) return null;
-
-  return (
-    <View accessibilityLiveRegion="polite" style={styles.errorBlock}>
-      <Text style={styles.errorText}>{message}</Text>
-      {onLogin || onForgotPassword ? (
-        <View style={styles.errorActions}>
-          {onLogin ? (
-            <Pressable accessibilityRole="button" onPress={onLogin}>
-              <Text style={styles.errorAction}>Go to Log In</Text>
-            </Pressable>
-          ) : null}
-          {onForgotPassword ? (
-            <Pressable accessibilityRole="button" onPress={onForgotPassword}>
-              <Text style={styles.errorAction}>Forgot password?</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function AccountStepFrame({
-  children,
-  contentStyle,
-  footer,
-  onBack,
-}: {
-  children: ReactNode;
-  contentStyle?: StyleProp<ViewStyle>;
-  footer?: ReactNode;
-  onBack?: () => void;
-}) {
-  return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
-        {onBack ? (
-          <View style={styles.topHeader}>
-            <OnboardingBackButton onPress={onBack} />
-            <View style={styles.headerSpacer} />
-          </View>
-        ) : null}
-
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, contentStyle]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: onboardingColors.surface,
+    backgroundColor: '#FFFFFF',
     flex: 1,
-  },
-  safeArea: {
-    backgroundColor: onboardingColors.surface,
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  topHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 55,
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-  },
-  headerSpacer: {
-    height: 24,
-    width: 24,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 26,
-  },
-  emailContent: {
-    paddingHorizontal: 24,
-  },
-  logoProgressBlock: {
-    gap: 25,
-  },
-  emailMain: {
-    gap: 28,
-    paddingTop: 26,
-  },
-  titleContainer: {
-    gap: 11,
-  },
-  title: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Black',
-    fontSize: 24,
-    lineHeight: 39,
-  },
-  languageRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 21,
-  },
-  languageText: {
-    color: 'rgba(0, 0, 0, 0.77)',
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  languageAction: {
-    color: '#69A4EC',
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  languageSheetHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  languageSheetTitle: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  languageSheetClose: {
-    color: '#69A4EC',
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  languageOptionSelected: {
-    backgroundColor: '#EDF5FF',
-    borderColor: '#69A4EC',
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 2,
-    padding: 14,
-  },
-  languageOptionDisabled: {
-    backgroundColor: '#F5F5EF',
-    borderRadius: 12,
-    gap: 2,
-    opacity: 0.78,
-    padding: 14,
-  },
-  languageOptionText: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  languageOptionTextMuted: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  languageOptionMeta: {
-    color: '#69A4EC',
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  languageOptionMetaMuted: {
-    color: onboardingColors.textMuted,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  inputGroup: {
-    gap: 24,
-  },
-  instructionText: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Light',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  codeContent: {
-    gap: 20,
-    paddingTop: 36,
-  },
-  codeContentCompact: {
-    paddingTop: 18,
-  },
-  formTitleBlock: {
-    gap: 10,
-  },
-  codeDetails: {
-    gap: 14,
-  },
-  descriptionText: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 20,
-  },
-  resendText: {
-    color: '#69A4EC',
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  resendTextDisabled: {
-    opacity: 1,
-  },
-  infoNote: {
-    alignItems: 'flex-start',
-    backgroundColor: '#F5F5EF',
-    borderRadius: 13,
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-    padding: 16,
-  },
-  infoIcon: {
-    alignItems: 'center',
-    borderColor: onboardingColors.actionBlue,
-    borderRadius: 13,
-    borderWidth: 2,
-    height: 22,
-    justifyContent: 'center',
-    marginTop: 1,
-    width: 22,
-  },
-  infoIconText: {
-    color: onboardingColors.actionBlue,
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 14,
-    lineHeight: 16,
-  },
-  infoText: {
-    color: onboardingColors.textMuted,
-    flex: 1,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  infoTextStrong: {
-    fontFamily: 'Satoshi-Bold',
-  },
-  passwordContent: {
-    gap: 28,
-    paddingTop: 87,
-  },
-  passwordContentCompact: {
-    paddingTop: 48,
-  },
-  passwordChecklist: {
-    gap: 7,
-  },
-  passwordChecklistTitle: {
-    color: onboardingColors.text,
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 12,
-    lineHeight: 20,
-  },
-  footer: {
-    paddingBottom: 22,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-  },
-  primaryButton: {
-    width: '100%',
-  },
-  errorBlock: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-    padding: 12,
-  },
-  errorText: {
-    color: '#B91C1C',
-    fontFamily: 'Satoshi-Medium',
-    fontSize: 12,
-    lineHeight: 18,
   },
   errorActions: {
     flexDirection: 'row',
     gap: 18,
   },
-  errorAction: {
-    color: '#69A4EC',
-    fontFamily: 'Satoshi-Bold',
-    fontSize: 13,
-    lineHeight: 20,
+  resendDisabled: {
+    color: '#46576C',
+  },
+  checkingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
 });

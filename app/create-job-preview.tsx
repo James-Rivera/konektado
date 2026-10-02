@@ -10,6 +10,7 @@ import { JobCard } from '@/components/JobCard';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
 import { createJob, updateJob } from '@/services/job.service';
 import { formatJobBudget, formatJobPostTitle } from '@/services/marketplace.helpers';
@@ -92,8 +93,8 @@ export default function CreateJobPreviewScreen() {
     jobId?: string | string[];
     returnTo?: string | string[];
   }>();
-  const { profile, loading, refresh } = useProfile();
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const { loading, refresh } = useProfile();
+  const { isPending: isVerificationPending, isVerified } = useVerificationGate();
   const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
   const [draftId, setDraftId] = useState(getParamValue(params.draftId));
   const jobId = getParamValue(params.jobId) ?? null;
@@ -288,7 +289,13 @@ export default function CreateJobPreviewScreen() {
             <Text style={styles.smallMuted}>Review how your post will appear before {jobId ? 'saving' : 'publishing'}.</Text>
           </View>
 
-          {!isVerified ? <Text style={styles.previewNotice}>Verification required to publish</Text> : null}
+          {!isVerified ? (
+            <Text style={styles.previewNotice}>
+              {isVerificationPending
+                ? 'Verification in review. You can publish once approved.'
+                : 'Verification required to publish'}
+            </Text>
+          ) : null}
 
           <View style={styles.previewFrame}>
             <JobCard
@@ -330,6 +337,7 @@ export default function CreateJobPreviewScreen() {
         <VerificationGateModal
           onClose={() => setGateVisible(false)}
           onStartVerification={startVerification}
+          pending={isVerificationPending}
           visible={gateVisible}
         />
       </View>
@@ -340,22 +348,32 @@ export default function CreateJobPreviewScreen() {
 function VerificationGateModal({
   onClose,
   onStartVerification,
+  pending,
   visible,
 }: {
   onClose: () => void;
   onStartVerification: () => void;
+  pending: boolean;
   visible: boolean;
 }) {
   return (
     <BottomSheet maxHeight="48%" onClose={onClose} visible={visible}>
       <View style={styles.gateContent}>
         <MaterialIcons color={color.verificationBlue} name="shield" size={46} />
-        <Text style={styles.gateTitle}>Barangay Verification Required</Text>
-        <Text style={styles.gateText}>
-          To keep jobs and workers trusted, posting requires <Text style={styles.gateStrong}>barangay verification.</Text>
+        <Text style={styles.gateTitle}>
+          {pending ? 'Your verification is under review' : 'Barangay Verification Required'}
         </Text>
+        {pending ? (
+          <Text style={styles.gateText}>
+            Your post is saved as a draft. You can publish it as soon as barangay staff approve you.
+          </Text>
+        ) : (
+          <Text style={styles.gateText}>
+            To keep jobs and workers trusted, posting requires <Text style={styles.gateStrong}>barangay verification.</Text>
+          </Text>
+        )}
         <Pressable accessibilityRole="button" onPress={onStartVerification} style={styles.gatePrimary}>
-          <Text style={styles.gatePrimaryText}>Start Verification</Text>
+          <Text style={styles.gatePrimaryText}>{pending ? 'View status' : 'Start Verification'}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onClose} style={styles.gateSecondary}>
           <Text style={styles.gateSecondaryText}>Keep Editing Draft</Text>

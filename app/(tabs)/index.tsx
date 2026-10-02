@@ -1,13 +1,24 @@
 import { useRouter } from 'expo-router';
 import { useIsFocused } from "expo-router/react-navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HomeSetupNudge } from '@/components/home/HomeDashboardUI';
 import {
+  HOME_HERO_SEARCH_OVERLAP,
   HomeCategoryGrid,
-  HomeHero,
+  HomeHeroBand,
+  HomeSearchBar,
   HomeSectionLink,
   type HomeCategoryTile,
 } from '@/components/home/HomeDiscoveryUI';
@@ -29,6 +40,7 @@ import {
 } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import {
@@ -130,6 +142,9 @@ const HOME_MODE_LABELS: Record<SearchMode, string> = {
   workers: 'Hire help',
 };
 
+/** Space between the status bar and the pinned search bar once the band is gone. */
+const HOME_PINNED_TOP_GAP = 8;
+
 function mapHomeFilterToSearchMode(filter: HomeFilter): SearchMode | null {
   if (filter === 'Jobs') return 'jobs';
   if (filter === 'Services') return 'workers';
@@ -152,14 +167,14 @@ function mapSearchModeToRouteFilter(mode: SearchMode) {
  * ninth primary tile — it is reached through "See all" and Search instead.
  */
 const DISCOVERY_GROUP_ICONS: Record<HomeDiscoveryGroupKey, HomeCategoryTile['icon']> = {
-  'Home & Errands': 'home-repair-service',
-  'Beauty & Personal Care': 'spa',
-  'Food & Baking': 'bakery-dining',
-  'Sewing & Tailoring': 'content-cut',
-  'Home Repair & Carpentry': 'handyman',
-  'Tutoring & Lessons': 'school',
-  'Documents & Design': 'design-services',
-  'Computer & Phone Help': 'devices',
+  'Home & Errands': require('@/assets/images/categories/home-errands.svg'),
+  'Beauty & Personal Care': require('@/assets/images/categories/beauty-personal-care.svg'),
+  'Food & Baking': require('@/assets/images/categories/food-baking.svg'),
+  'Sewing & Tailoring': require('@/assets/images/categories/sewing-tailoring.svg'),
+  'Home Repair & Carpentry': require('@/assets/images/categories/home-repair.svg'),
+  'Tutoring & Lessons': require('@/assets/images/categories/tutoring-lessons.svg'),
+  'Documents & Design': require('@/assets/images/categories/documents-design.svg'),
+  'Computer & Phone Help': require('@/assets/images/categories/computer-phone-help.svg'),
 };
 
 function getHomeGreeting(firstName: string | null | undefined, fullName: string | null | undefined) {
@@ -317,12 +332,12 @@ function loadHomeFeedSources(userId: string | null) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
+  const { showErrorToast, showSuccessToast } = useFeedback();
   const isFocused = useIsFocused();
   const { profile, loading: profileLoading, preferences, version } = useProfile();
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const topInset = useSafeTopInset();
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const { requireVerified } = useVerificationGate();
   const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
   const [feedSources, setFeedSources] = useState<{ jobs: HomeJobFeedItem[]; workers: HomeWorkerFeedItem[] }>({
     jobs: [],
@@ -345,12 +360,11 @@ export default function HomeScreen() {
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [feedFiltersVisible, setFeedFiltersVisible] = useState(false);
   const [serviceAreaVisible, setServiceAreaVisible] = useState(false);
-  const [headerHeight, setHeaderHeight] = useState(0);
-  const [headerTranslateY] = useState(() => new Animated.Value(0));
-  const headerHeightRef = useRef(0);
-  const headerVisibleRef = useRef(true);
+  const [bandHeight, setBandHeight] = useState(0);
+  const [pinnedHeight, setPinnedHeight] = useState(0);
+  const [headerPinned, setHeaderPinned] = useState(false);
+  const [scrollY] = useState(() => new Animated.Value(0));
   const initialHomeFilterAppliedRef = useRef(false);
-  const lastScrollOffset = useRef(0);
   const feedRequestRef = useRef(0);
 
   useEffect(() => {
@@ -584,42 +598,48 @@ export default function HomeScreen() {
   // so the prompt stays mounted instead of blinking on every app foreground.
   const shouldShowSetupPrompt = hasLoadedSetupStatus && needsProfileSetup;
 
-  const setHeaderVisible = (visible: boolean) => {
-    if (!headerHeightRef.current) return;
-    if (headerVisibleRef.current === visible) return;
-    headerVisibleRef.current = visible;
+  /*
+   * Header scroll model. The blue band is NOT sticky: it moves 1:1 with the
+   * content and leaves the screen. The search bar and Find work / Hire help
+   * switch are a separate layer that travels with the band until the search
+   * bar reaches the status bar, then stays pinned there. Both are driven by
+   * one native scroll value, so there is no JS-thread lag or snap animation.
+   */
+  const pinnedTop = Math.max(bandHeight - HOME_HERO_SEARCH_OVERLAP, 0);
+  const pinTravel = Math.max(pinnedTop - topInset - HOME_PINNED_TOP_GAP, 0);
+  const headerHeight = pinnedTop + pinnedHeight;
+  const bandTranslateY = scrollY.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [0, Math.max(bandHeight, 1)],
+    outputRange: [0, -Math.max(bandHeight, 1)],
+  });
+  const pinnedTranslateY = scrollY.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [0, Math.max(pinTravel, 1)],
+    outputRange: [0, -Math.max(pinTravel, 1)],
+  });
+  // White backdrop behind the pinned bar and the status bar. Transparent while
+  // the search bar still straddles the band, so the blue shows behind its top.
+  const pinnedBackdropOpacity = scrollY.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [pinTravel - 16, pinTravel],
+    outputRange: [0, 1],
+  });
 
-    Animated.timing(headerTranslateY, {
-      toValue: visible ? 0 : -headerHeightRef.current,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handleHeaderLayout = (event: { nativeEvent: { layout: { height: number } } }) => {
+  const handleBandLayout = (event: LayoutChangeEvent) => {
     const height = Math.round(event.nativeEvent.layout.height);
-    if (!height || height === headerHeightRef.current) return;
-    headerHeightRef.current = height;
-    setHeaderHeight(height);
+    if (height && height !== bandHeight) setBandHeight(height);
   };
 
-  const handleScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-    const offset = event.nativeEvent.contentOffset.y;
-    const delta = offset - lastScrollOffset.current;
+  const handlePinnedLayout = (event: LayoutChangeEvent) => {
+    const height = Math.round(event.nativeEvent.layout.height);
+    if (height && height !== pinnedHeight) setPinnedHeight(height);
+  };
 
-    if (offset <= 0 || offset < 24) {
-      setHeaderVisible(true);
-      lastScrollOffset.current = offset;
-      return;
-    }
-
-    if (Math.abs(delta) < 6) {
-      lastScrollOffset.current = offset;
-      return;
-    }
-
-    setHeaderVisible(delta < 0);
-    lastScrollOffset.current = offset;
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Only flips state at the pin threshold, so this does not re-render per frame.
+    const pinned = pinTravel > 0 && event.nativeEvent.contentOffset.y >= pinTravel - 8;
+    if (pinned !== headerPinned) setHeaderPinned(pinned);
   };
 
   const openSetupAction = useCallback((action: ProfileCompletionAction) => {
@@ -710,11 +730,7 @@ export default function HomeScreen() {
 
   const toggleFeedSave = useCallback(
     async (feedItem: HomeFeedItem) => {
-      if (!isVerified) {
-        showInfoToast('Complete barangay verification before saving items.');
-        router.push('/verification' as never);
-        return;
-      }
+      if (!requireVerified('save')) return;
 
       const target = getHomeSavedTarget(feedItem);
       const result = await toggleSaved(target);
@@ -725,7 +741,7 @@ export default function HomeScreen() {
 
       showSuccessToast(result.data.saved ? 'Saved' : 'Removed from saved');
     },
-    [isVerified, router, showErrorToast, showInfoToast, showSuccessToast, toggleSaved],
+    [requireVerified, showErrorToast, showSuccessToast, toggleSaved],
   );
 
   const openFeedFilters = useCallback(() => {
@@ -825,20 +841,49 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      {/* Light icons over the blue band, dark once the white pinned bar is up.
+          Mounted only while focused so other tabs keep the root dark style. */}
+      {isFocused ? <StatusBar style={headerPinned ? 'dark' : 'light'} /> : null}
       <SafeAreaView edges={[]} style={styles.safeArea}>
         <Animated.View
-          onLayout={handleHeaderLayout}
-          style={[styles.headerStack, { transform: [{ translateY: headerTranslateY }] }]}>
-          <HomeHero
-            activeFilterCount={activeFeedFilterCount}
+          onLayout={handleBandLayout}
+          style={[styles.bandLayer, { transform: [{ translateY: bandTranslateY }] }]}>
+          <HomeHeroBand
             greeting={greeting}
             locationLabel={locationLabel}
             onNotifications={() => router.push('/notifications' as never)}
-            onOpenFilters={openFeedFilters}
             onOpenLocation={() => setServiceAreaVisible(true)}
-            onOpenSearch={() => openSearch()}
             topInset={topInset}
             unreadCount={unreadNotificationCount}
+          />
+        </Animated.View>
+
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.statusBarScrim,
+            { height: topInset + HOME_PINNED_TOP_GAP, opacity: pinnedBackdropOpacity },
+          ]}
+        />
+
+        <Animated.View
+          onLayout={handlePinnedLayout}
+          style={[
+            styles.pinnedLayer,
+            {
+              opacity: bandHeight ? 1 : 0,
+              top: pinnedTop,
+              transform: [{ translateY: pinnedTranslateY }],
+            },
+          ]}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.pinnedBackdrop, { opacity: pinnedBackdropOpacity }]}
+          />
+          <HomeSearchBar
+            activeFilterCount={activeFeedFilterCount}
+            onOpenFilters={openFeedFilters}
+            onOpenSearch={() => openSearch()}
           />
           <View style={styles.modeRow}>
             <SearchSegmentedControl
@@ -850,7 +895,7 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        <FlatList
+        <Animated.FlatList
           contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}
           data={feed}
           initialNumToRender={6}
@@ -859,7 +904,10 @@ export default function HomeScreen() {
           ListFooterComponent={renderListFooter}
           ListHeaderComponent={renderListHeader}
           maxToRenderPerBatch={6}
-          onScroll={handleScroll}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            listener: handleScroll,
+            useNativeDriver: true,
+          })}
           removeClippedSubviews
           renderItem={renderFeedItem}
           scrollEventThrottle={16}
@@ -1146,13 +1194,38 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     flex: 1,
   },
-  headerStack: {
-    backgroundColor: color.background,
+  // Absolute layers over the list: band (scrolls away), status-bar scrim, then
+  // the pinned search + mode switch on top.
+  bandLayer: {
     left: 0,
     position: 'absolute',
     right: 0,
     top: 0,
     zIndex: 10,
+  },
+  statusBarScrim: {
+    backgroundColor: color.background,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 11,
+  },
+  pinnedLayer: {
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    zIndex: 12,
+  },
+  pinnedBackdrop: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    backgroundColor: color.background,
+    borderBottomColor: color.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   modeRow: {
     backgroundColor: color.background,

@@ -41,6 +41,8 @@ Use these as implementation placeholders until exact Figma tokens are finalized.
 | --- | --- | --- |
 | `color.primary` | `#69A4EC` | Primary actions, active tab, links, selected pills. |
 | `color.primarySoft` | `#EEF5FF` | Primary button/pill background. |
+| `color.primaryText` | `#2F6FBF` | Blue **text** such as rates, links, and meta. `color.primary` is about 2.6:1 on white and must not be used for text; this is about 5.1:1 (DEC-129). |
+| `color.accentYellow` | `#FCC03B` | Primary action buttons in the new Figma (dark text on yellow, about 11:1). |
 | `color.success` | `#7BBE7A` | Verification border/check state. |
 | `color.successSoft` | `#EEF8EE` | Verification badge background. |
 | `color.text` | `#111111` | Main text. |
@@ -134,6 +136,28 @@ Rules:
 
 - Use clear action labels like "Message", "View Job", "Post job", "Submit request", and "Mark Hired".
 - For icon buttons, include accessibility labels.
+- The new Figma primary button is `color.accentYellow` with black text. Never put `color.primary` text on `color.primarySoft` for a primary action; it fails contrast.
+- Onboarding and account screens use `components/onboarding/AccountFlowUI.tsx`: 55px header with back button and 4-step progress, Satoshi-Black 24 title, 46px bordered input, 43px yellow button.
+
+### Home Header (DEC-128)
+
+- The blue band (greeting, bell, location) is not sticky. It scrolls away with the content.
+- The search bar and Find work / Hire help switch pin under the status bar once the band has scrolled off. A white backdrop and status-bar scrim fade in at the pin point.
+- Status bar icons are light over the band and dark once pinned.
+
+### Home Category Icons (DEC-135)
+
+- The eight Home category tiles use two-tone illustrations (blue with a yellow tool accent) from `assets/images/categories/`, one per `HOME_DISCOVERY_GROUPS` entry. They render at 40px inside the 52px `color.primarySoft` tile.
+- Files have transparent backgrounds and a square viewBox with equal padding. Light areas such as doors, book pages, and screens are cut-outs that show the tile colour, so always place them on a light tile.
+- Everything else in the app keeps MaterialIcons glyphs. Do not reuse these illustrations as small inline icons.
+- The source art was auto-traced, so it is tuned for tile size only. Redraw as clean vectors before showing any of them larger than about 64px.
+
+### Public Worker and Client Profiles (DEC-129)
+
+- Hero: photo, name, approximate location, Verified badge, role label, then a stat strip (rating or "New", reviews, jobs done or hires, jobs posted for clients).
+- Then the listing the resident came from, other services or open jobs, about, skills, reviews, history, credentials, safety note.
+- Omit empty sections. Only Reviews keeps a one-line empty state.
+- Body copy is `color.text`; muted grey is for metadata only.
 
 ### Input
 

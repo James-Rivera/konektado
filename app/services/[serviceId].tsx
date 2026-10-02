@@ -20,6 +20,7 @@ import {
 import { color, typography } from '@/constants/theme';
 import { useAdminViewOnly } from '@/hooks/use-admin-view-only';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startServiceConversation } from '@/services/conversation.service';
@@ -43,6 +44,7 @@ import { getPublicWorkerProfile } from '@/services/worker-profile.service';
 import type { ProviderService, PublicWorkerProfile, ServiceDetail } from '@/types/marketplace.types';
 import { getDetailImageUrl } from '@/utils/image-processing';
 import { showAlert } from '@/utils/alert';
+import type { VerificationGateCopy } from '@/utils/verification-gate';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -98,7 +100,11 @@ export default function ServicePublicWorkerProfileScreen() {
       .then((workerResult) => {
         if (!active || !workerResult) return;
 
+        // The service loaded, so it always renders. The worker summary only
+        // enriches it (credentials, full location), and the detail view falls
+        // back to the service's own provider summary when it is missing.
         if (workerResult.error) {
+          if (__DEV__) console.warn('Worker summary failed for service detail', workerResult.error);
           setProfile(null);
         } else {
           setProfile(workerResult.data);
@@ -124,13 +130,13 @@ export default function ServicePublicWorkerProfileScreen() {
     void refreshSavedPosts();
   }, [currentProfile?.id, refreshSavedPosts, serviceId]);
 
-  const isVerified = Boolean(currentProfile?.barangay_verified_at || currentProfile?.verified_at);
+  const { getCopy: getGateCopy, requireVerified } = useVerificationGate();
   const isCurrentUsersService = Boolean(serviceDetail && currentProfile?.id === serviceDetail.providerId && !adminViewOnly);
   const isOwnerManageView = isCurrentUsersService && !previewPublic;
   const messageService = serviceDetail ?? getMessageService(profile);
   const cta = getServiceCta({
     isOwnService: isCurrentUsersService,
-    isVerified,
+    gateCopy: getGateCopy('message'),
     service: messageService,
   });
   const saveTarget = serviceId
@@ -140,10 +146,7 @@ export default function ServicePublicWorkerProfileScreen() {
   const handleSave = async () => {
     if (!saveTarget || isCurrentUsersService || adminViewOnly) return;
     if (isPending(saveTarget)) return;
-    if (!isVerified) {
-      router.push('/verification');
-      return;
-    }
+    if (!requireVerified('save')) return;
 
     const result = await toggleSaved(saveTarget);
     if (result.error || !result.data) {
@@ -158,10 +161,7 @@ export default function ServicePublicWorkerProfileScreen() {
     if (!serviceDetail) return;
     if (cta.disabled && cta.reason !== 'verification') return;
 
-    if (!isVerified) {
-      router.push('/verification');
-      return;
-    }
+    if (!requireVerified('message')) return;
 
     setMessaging(true);
     const result = await startServiceConversation({
@@ -270,13 +270,6 @@ export default function ServicePublicWorkerProfileScreen() {
         ) : null}
         {!loading && error ? (
           <EmptyState description={error} icon="search-off" title="Could not load service detail" />
-        ) : null}
-        {!loading && !error && !profile ? (
-          <EmptyState
-            description="This profile can’t be viewed right now. Profiles appear here once barangay verification is complete."
-            icon="person-search"
-            title="Profile not available"
-          />
         ) : null}
         {!loading && !currentProfileLoading && isOwnerManageView && serviceDetail ? (
           <OwnerServicePostView
@@ -695,11 +688,11 @@ function getCredentialSummary(profile: PublicWorkerProfile | null) {
 
 function getServiceCta({
   isOwnService,
-  isVerified,
+  gateCopy,
   service,
 }: {
   isOwnService: boolean;
-  isVerified: boolean;
+  gateCopy: VerificationGateCopy | null;
   service: ProviderService | null;
 }) {
   if (isOwnService) {
@@ -738,11 +731,11 @@ function getServiceCta({
     };
   }
 
-  if (!isVerified) {
+  if (gateCopy) {
     return {
       disabled: false,
-      helper: 'Complete barangay verification to message workers and clients.',
-      label: 'Verify to message',
+      helper: gateCopy.helper,
+      label: gateCopy.ctaLabel,
       reason: 'verification',
     };
   }

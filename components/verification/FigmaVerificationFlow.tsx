@@ -31,7 +31,6 @@ export type VerificationFlowStep =
   | 'idFront'
   | 'idBack'
   | 'certificate'
-  | 'facePrep'
   | 'facePhoto'
   | 'review'
   | 'submitted'
@@ -47,7 +46,15 @@ export type SelectedVerificationFiles = {
 
 type CapturedVerificationPhoto = Pick<CameraCapturedPicture, 'uri'>;
 
+export type VerificationFlowMode = 'standalone' | 'onboarding';
+
 type VerificationFlowProps = {
+  /**
+   * `onboarding` runs verification as the last part of joining: it opens on
+   * the requirements screen, offers "Do this later", and ends on the all-set
+   * screen. `standalone` is the existing /verification route.
+   */
+  mode?: VerificationFlowMode;
   contactCode: string;
   contactCanVerify: boolean;
   contactDeliveryStatus: ContactOtpDeliveryStatus | null;
@@ -71,6 +78,8 @@ type VerificationFlowProps = {
   onChooseIdType: (idType: VerificationIdType) => void;
   onContinue: () => void;
   onContinueBrowsing: () => void;
+  onDoLater?: () => void;
+  onUseDifferentIdType: () => void;
   onPickFile: (fileType: VerificationUpload['fileType']) => void;
   onProceedHome: () => void;
   onRemoveFile: (fileType: VerificationUpload['fileType']) => void;
@@ -120,6 +129,7 @@ const idTypeLabels: Record<VerificationIdType, string> = {
 };
 
 export function FigmaVerificationFlow({
+  mode = 'standalone',
   contactCode,
   contactCanVerify,
   contactDeliveryStatus,
@@ -143,14 +153,21 @@ export function FigmaVerificationFlow({
   onChooseIdType,
   onContinue,
   onContinueBrowsing,
+  onDoLater,
   onPickFile,
   onProceedHome,
   onRemoveFile,
   onResendContactCode,
   onResubmit,
+  onUseDifferentIdType,
   onViewProfile,
   retryAfterSeconds,
 }: VerificationFlowProps) {
+  const isOnboarding = mode === 'onboarding';
+  // Progress uses the four joining phases during onboarding (account, profile,
+  // identity, review); the standalone route keeps its own step numbering.
+  const phase = (standaloneStep: number) => (isOnboarding ? 3 : standaloneStep);
+
   if (step === 'intro') {
     return (
       <LightFrame
@@ -168,15 +185,21 @@ export function FigmaVerificationFlow({
   }
 
   if (step === 'preflight') {
+    // Figma 1493:2645 "Verify your identity". During onboarding there is no
+    // earlier step to return to (the profile was just saved), so the header
+    // back button is replaced by an explicit "Do this later".
     return (
       <LightFrame
         footer={
           <FooterStack helper="Takes about 2-3 minutes to submit">
             <PrimaryButton label="Start verification" onPress={onContinue} />
+            {isOnboarding && onDoLater ? (
+              <SecondaryButton label="Do this later" onPress={onDoLater} />
+            ) : null}
           </FooterStack>
         }
-        headerTitle="Get Verified"
-        onBack={onBack}>
+        onBack={isOnboarding ? undefined : onBack}
+        progress={3}>
         <PreflightScreen />
       </LightFrame>
     );
@@ -187,7 +210,7 @@ export function FigmaVerificationFlow({
       <LightFrame
         footer={<FooterStack><PrimaryButton disabled={loadingPrefill || contactSending || (!contactCanVerify && retryAfterSeconds > 0)} label={contactSending ? 'Sending code...' : !contactCanVerify && retryAfterSeconds > 0 ? `Try again in ${retryAfterSeconds}s` : 'Continue'} onPress={onContinue} /></FooterStack>}
         onBack={onBack}
-        progress={1}>
+        progress={phase(1)}>
         <DetailsScreen
           contactStatusMessage={!contactCanVerify ? contactStatusMessage : null}
           contactStatusType={contactStatusType}
@@ -205,7 +228,7 @@ export function FigmaVerificationFlow({
       <LightFrame
         footer={<FooterStack><PrimaryButton disabled={!contactCanVerify || contactCode.length !== 6 || contactVerifying} label={contactVerifying ? 'Checking code...' : 'Continue'} onPress={onContinue} /></FooterStack>}
         onBack={onBack}
-        progress={1}>
+        progress={phase(1)}>
         <CodeScreen
           canVerify={contactCanVerify}
           contactCode={contactCode}
@@ -226,7 +249,7 @@ export function FigmaVerificationFlow({
       <LightFrame
         footer={<FooterStack><PrimaryButton label="Continue" onPress={onContinue} /></FooterStack>}
         onBack={onBack}
-        progress={2}>
+        progress={phase(2)}>
         <IdTypeScreen
           selectedIdType={form.idType}
           onChooseIdType={onChooseIdType}
@@ -242,7 +265,8 @@ export function FigmaVerificationFlow({
       <CaptureScreen
         file={files.idFront}
         frame="landscape"
-        progress={2}
+        progress={phase(2)}
+        secondaryLink={{ label: 'Use a different ID type', onPress: onUseDifferentIdType }}
         reminder={copy.reminder}
         subtitle={copy.subtitle}
         title={copy.title}
@@ -262,7 +286,7 @@ export function FigmaVerificationFlow({
       <CaptureScreen
         file={files.idBack}
         frame="landscape"
-        progress={2}
+        progress={phase(2)}
         reminder={copy.reminder}
         subtitle={copy.subtitle}
         title={copy.title}
@@ -282,7 +306,8 @@ export function FigmaVerificationFlow({
       <CaptureScreen
         file={files.certificate}
         frame="portrait"
-        progress={2}
+        progress={phase(2)}
+        secondaryLink={{ label: 'Use a different ID type', onPress: onUseDifferentIdType }}
         reminder={copy.reminder}
         subtitle={copy.subtitle}
         title={copy.title}
@@ -295,26 +320,15 @@ export function FigmaVerificationFlow({
     );
   }
 
-  if (step === 'facePrep') {
-    return (
-      <LightFrame
-        footer={<FooterStack><PrimaryButton label="Continue" onPress={onContinue} /></FooterStack>}
-        onBack={onBack}
-        progress={3}>
-        <FacePrepScreen />
-      </LightFrame>
-    );
-  }
-
   if (step === 'facePhoto') {
     return (
       <CaptureScreen
         file={files.facePhoto}
         frame="face"
         progress={3}
-        reminder="Make sure your face is clear and readable."
-        subtitle="Remove masks, hats, or anything covering your face"
-        title="Take a face photo"
+        reminder="Look directly at the camera. Remove masks, hats, or sunglasses."
+        subtitle="Make sure your face is clear and well-lit"
+        title="Take a selfie"
         onBack={onBack}
         onCapture={(photo) => onCapturePhoto('other', photo)}
         onContinue={onContinue}
@@ -386,17 +400,64 @@ export function FigmaVerificationFlow({
   }
 
   return (
-    <ResultScreen
-      icon="celebration"
-      iconColor={color.verificationBlue}
-      note="You can still browse Konektado, but posting, showing interest in jobs, messaging, and reviews are locked until approval."
-      noteTitle="Pending Review"
-      primaryLabel="Continue"
-      subtitle="Barangay staff will review your request"
-      title="Verification Submitted"
-      onBack={onBack}
-      onPrimary={onProceedHome}
-    />
+    <LightFrame
+      footer={
+        <FooterStack>
+          <PrimaryButton label={isOnboarding ? 'Continue' : 'Back to Konektado'} onPress={onProceedHome} />
+        </FooterStack>
+      }
+      onBack={isOnboarding ? undefined : onBack}
+      progress={isOnboarding ? 4 : undefined}>
+      <SubmittedScreen />
+    </LightFrame>
+  );
+}
+
+/**
+ * Replaces the Figma "Verifying your information" and "You're verified!"
+ * frames (1493:3063, 1493:3123). Those implied automated ID reading,
+ * authenticity checks, and selfie matching, followed by instant approval.
+ * Konektado has none of that: barangay staff review every request by hand. So
+ * this screen reuses the Figma checklist layout to show the real status
+ * instead, and says plainly what the resident can do while they wait.
+ */
+function SubmittedScreen() {
+  return (
+    <>
+      <View style={styles.resultIntro}>
+        <MaterialIcons color={color.accentYellow} name="hourglass-top" size={72} />
+        <View style={styles.resultCopy}>
+          <Text style={styles.resultTitle}>Submitted for review</Text>
+          <Text style={styles.resultSubtitle}>
+            Barangay staff check every request by hand. We will notify you once it is reviewed.
+          </Text>
+        </View>
+      </View>
+      <View style={styles.timeline}>
+        <TimelineRow state="done" text="Details and contact number confirmed" />
+        <TimelineRow state="done" text="Document and selfie submitted" />
+        <TimelineRow state="active" text="Barangay review" />
+        <TimelineRow state="todo" text="Approved: messaging, posting, and saving unlock" />
+      </View>
+      <View style={styles.resultBody}>
+        <InfoNote text="You can browse jobs and services now. We will notify you when your verification is approved." />
+      </View>
+    </>
+  );
+}
+
+function TimelineRow({ state, text }: { state: 'active' | 'done' | 'todo'; text: string }) {
+  return (
+    <View style={styles.timelineRow}>
+      {state === 'done' ? (
+        <MaterialIcons color="#2F9E44" name="check" size={20} />
+      ) : state === 'active' ? (
+        <ActivityIndicator color={color.accentYellow} size="small" />
+      ) : (
+        <View style={styles.timelineTodo} />
+      )}
+      <Text style={[styles.timelineText, state === 'todo' && styles.timelineTextMuted]}>{text}</Text>
+    </View>
   );
 }
 
@@ -411,7 +472,8 @@ function LightFrame({
   footer?: React.ReactNode;
   headerTitle?: string;
   progress?: number;
-  onBack: () => void;
+  /** Omit to hide the back button (a step with nothing to return to). */
+  onBack?: () => void;
 }) {
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -438,18 +500,22 @@ function TopHeader({
   dark?: boolean;
   progress?: number;
   title?: string;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   return (
     <View style={[styles.header, dark && styles.darkHeader]}>
-      <Pressable
-        accessibilityLabel="Go back"
-        accessibilityRole="button"
-        hitSlop={10}
-        onPress={onBack}
-        style={styles.backButton}>
-        <MaterialIcons color={dark ? color.white : color.text} name="chevron-left" size={28} />
-      </Pressable>
+      {onBack ? (
+        <Pressable
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          hitSlop={10}
+          onPress={onBack}
+          style={styles.backButton}>
+          <MaterialIcons color={dark ? color.white : color.text} name="chevron-left" size={28} />
+        </Pressable>
+      ) : (
+        <View style={styles.backButton} />
+      )}
       {title ? <Text style={[styles.headerTitle, dark && styles.darkText]}>{title}</Text> : null}
       {progress ? <StepDots current={progress} /> : null}
     </View>
@@ -525,28 +591,33 @@ function PreflightScreen() {
   return (
     <>
       <CenteredTitle
-        subtitle="Make sure you're ready before you start."
-        title="Before you continue"
+        subtitle="We verify your identity to keep Konektado safe and trustworthy for everyone."
+        title="Verify your identity"
       />
       <View style={styles.contentBlock}>
-        <Text style={styles.centerSectionTitle}>What you will need</Text>
+        <Text style={styles.centerSectionTitle}>{"What you'll need"}</Text>
         <View style={styles.cardStack}>
           <RequirementCard
             icon="workspace-premium"
-            title="Barangay certificate or valid ID"
-            description="Barangay Certificate is recommended. If you do not have one, you may submit another valid ID for barangay staff to review."
+            title="Barangay Certificate"
+            description="Recommended. No certificate? You can use a National ID, Driver's License, or Passport instead."
           />
           <RequirementCard
             icon="photo-camera"
-            title="A clear photo of your face"
+            title="Selfie verification"
             description="Make sure your face is fully visible and uncovered."
           />
           <RequirementCard
             icon="lightbulb"
             title="Good lighting"
-            description="Use a well-lit area so your ID and face are clearly visible."
+            description="Use a well-lit area so your document and face are clearly visible."
           />
         </View>
+        {/* Data Privacy Act notice: shown before any ID photo is collected. */}
+        <InfoNote
+          icon="lock-outline"
+          text="Your documents are private. Only authorized barangay staff see them, and only to verify you. They never appear on your public profile."
+        />
       </View>
     </>
   );
@@ -836,37 +907,6 @@ function IdTypeScreen({
   );
 }
 
-function FacePrepScreen() {
-  return (
-    <>
-      <CenteredTitle
-        subtitle="Barangay staff will compare this photo with your submitted document."
-        title="Get ready for your face photo"
-      />
-      <View style={styles.contentBlock}>
-        <Text style={styles.centerSectionTitle}>Before taking your photo</Text>
-        <View style={styles.cardStack}>
-          <RequirementCard
-            icon="photo-camera"
-            title="Use your own photo"
-            description="Do not upload another person's photo."
-          />
-          <RequirementCard
-            icon="center-focus-strong"
-            title="Show your full face"
-            description="Remove masks, hats, sunglasses, or anything covering your face."
-          />
-          <RequirementCard
-            icon="lightbulb"
-            title="Use good lighting"
-            description="Take the photo in a bright area so your face is clear."
-          />
-        </View>
-      </View>
-    </>
-  );
-}
-
 function ReviewScreen({
   files,
   form,
@@ -941,6 +981,7 @@ function CaptureScreen({
   frame,
   progress,
   reminder,
+  secondaryLink,
   subtitle,
   title,
   onBack,
@@ -953,6 +994,8 @@ function CaptureScreen({
   frame: 'face' | 'landscape' | 'portrait';
   progress: number;
   reminder: string;
+  /** Figma "Use a different ID type" link under the scan frame. */
+  secondaryLink?: { label: string; onPress: () => void };
   subtitle: string;
   title: string;
   onBack: () => void;
@@ -1057,6 +1100,15 @@ function CaptureScreen({
             <Text style={styles.reminderTitle}>Reminder</Text>
             <Text style={styles.reminderText}>{reminder}</Text>
             {file ? <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text> : null}
+            {secondaryLink && !file ? (
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={secondaryLink.onPress}
+                style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}>
+                <Text style={styles.secondaryLinkText}>{secondaryLink.label}</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
         <View style={styles.darkFooter}>
@@ -1364,6 +1416,15 @@ function ReviewLine({
 }
 
 function getFailureCopy(status: VerificationStatus | null | undefined, reviewerNote: string | null | undefined) {
+  if (status === 'pending') {
+    return {
+      note: reviewerNote || 'Your documents did not finish uploading. Please start again.',
+      noteTitle: 'Upload incomplete',
+      primaryLabel: 'Start again',
+      subtitle: 'Your request has not reached barangay review',
+      title: 'Upload incomplete',
+    };
+  }
   if (status === 'rejected') {
     return {
       note: reviewerNote || 'Barangay staff rejected this verification request. Review the reason before submitting again.',
@@ -1892,6 +1953,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     textAlign: 'center',
+  },
+  secondaryLink: {
+    alignItems: 'center',
+    marginTop: 12,
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  // Figma uses a blue link on white; the scan stage is dark, so the link is
+  // the brand yellow for contrast against the camera scrim.
+  secondaryLinkText: {
+    color: color.brandYellow,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    textDecorationLine: 'underline',
+  },
+  timeline: {
+    gap: 0,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  timelineRow: {
+    alignItems: 'center',
+    borderBottomColor: color.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 48,
+  },
+  timelineTodo: {
+    borderColor: color.textSubtle,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    height: 18,
+    marginHorizontal: 1,
+    width: 18,
+  },
+  timelineText: {
+    color: color.text,
+    flex: 1,
+    fontFamily: 'Satoshi-Medium',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  timelineTextMuted: {
+    color: color.textMuted,
   },
   fileName: {
     color: color.white,

@@ -4,13 +4,13 @@
 
 1. User opens Konektado.
 2. App checks Supabase session.
-3. If no session exists, show login/register screens.
-4. User registers by entering an email, verifying the email OTP code, and creating a password, or logs in with email/password.
+3. If no session exists, show the Welcome screen (one photo, Get Started, Log in).
+4. Get Started asks for role intent (Find work or Hire help), then "Create your Account": an email, or a mobile number when phone auth is enabled (DEC-127). The user enters the 6-digit code and creates a password. Log in takes email (or mobile) and password.
 5. App creates or loads the user's `profiles` row.
 6. If no role exists, route to role selection (2 options: Provider or Client).
-7. App collects only the minimum onboarding details needed to orient the user.
-8. User reviews the lightweight onboarding details and completes onboarding.
-9. User enters Home as an unverified viewer if barangay verification is not complete.
+7. App collects the profile basics (see the unified onboarding flow below), then offers identity verification as the last phase.
+8. User submits verification or chooses "Do this later", then sees "You're all set".
+9. User enters Home in browse-only mode: pending review if they submitted, unverified if they deferred.
 10. Verified users must complete the relevant public role profile before posting or messaging.
 
 Forgot password flow:
@@ -22,6 +22,8 @@ Forgot password flow:
 5. User creates and confirms a new password.
 6. App saves the new password, signs out the temporary session, and returns the user to Log In with their email prefilled.
 
+When mobile auth is enabled (DEC-127, DEC-131), step 2 also accepts a mobile number. The code then arrives by SMS through the Send SMS hook, and Log In is prefilled with that number.
+
 Failure states:
 
 - Invalid login shows a simple error.
@@ -29,7 +31,25 @@ Failure states:
 - Missing profile row triggers profile creation or onboarding.
 - Invalid or expired recovery code clears the code and lets the user request a new one.
 
+## Unified Onboarding and Verification Flow (DEC-124, 2026-09-29)
+
+Joining and barangay verification are one continuous flow with a four-phase progress bar: account, profile, identity, review.
+
+1. Account: Welcome, role, Create your Account, code, Create a password.
+2. Profile: Your details (legal name and birthday, which must match the document), location, services, and Review your profile with explicit, un-ticked consent. Continue saves the profile and completes onboarding.
+3. Identity: Verify your identity (requirements plus a private-documents notice), Confirm details and contact number, SMS code (skipped when the number is the one already confirmed at mobile signup), scan the Barangay Certificate (default; "Use a different ID type" opens National ID, Driver's License, or Passport), selfie, then Review and submit. "Do this later" on the first identity screen skips to step 5.
+4. Submitted for review: shows the real status (details confirmed, documents submitted, barangay review in progress, approval pending). It does not simulate automated ID reading, authenticity checks, selfie matching, or instant approval, because barangay staff review every request by hand (DEC-125).
+5. You're all set, then Home in browse-only mode.
+
+Rules:
+
+- The profile is saved before verification starts, so deferring verification never loses onboarding data, and the legal-name lock (DEC-077) never blocks the onboarding save.
+- Residents whose request is pending can browse everything. Every locked action says "Your verification is under review" instead of asking them to verify again (DEC-126).
+- The same verification screens serve `/verification` for residents who deferred, were returned for correction, or were rejected.
+
 ## Lightweight Onboarding / Viewer Entry Flow
+
+The profile phase of the unified flow above. Steps 1 and 2 below happen in the account phase.
 
 1. User registers with email OTP plus password, or logs in with email/password.
 2. User selects intended role: find work or hire someone (2 options only).
@@ -79,18 +99,18 @@ Rules:
 ## Barangay Verification Flow
 
 1. Unverified user starts verification from a locked action, profile prompt, or verification page.
-2. App shows the Figma verification intro explaining what verification unlocks.
-3. App shows the Figma "Before you continue" requirements: Barangay Certificate recommended, another valid ID allowed as fallback, clear face photo, and good lighting.
+2. From `/verification`, the app shows the intro explaining what verification unlocks. During onboarding it skips the intro.
+3. App shows "Verify your identity" requirements: Barangay Certificate recommended, another valid ID allowed as fallback, a selfie, good lighting, and a notice that documents are only seen by authorized barangay staff.
 4. App shows account details with onboarding/profile data prefilled.
 5. User confirms or edits first name, last name, date of birth, and contact number so they match the document.
 6. App sends a six-digit contact OTP to the normalized Philippine mobile number through the server-side contact OTP function. The user must verify the current code before continuing.
-7. User selects document to submit: Barangay Certificate is recommended; National ID, Driver's License, or Passport remain allowed fallback valid IDs for barangay staff review.
+7. App opens the Barangay Certificate scan directly, since it is the default document. "Use a different ID type" opens the chooser for National ID, Driver's License, or Passport.
 8. If Barangay Certificate is selected, user scans or uploads the certificate. Otherwise, user scans or uploads ID front and ID back. The scan screen uses the device camera when permission and hardware are available, with Upload from Gallery as a fallback.
-9. App shows face-photo guidance, then user captures or uploads a clear face photo for manual barangay comparison.
+9. User takes a selfie (or uploads a clear face photo) for manual barangay comparison. The guidance sits on the capture screen; there is no separate face-tips screen.
 10. App shows the Figma review and submit screen so the user can check personal details, document type, uploaded files, face photo, and barangay before submission.
-11. App uploads selected files to Supabase Storage, creates a pending row in the current live `verifications` table, and links metadata in `verification_files`.
+11. App creates a pending `verifications` row, uploads selected files to private Supabase Storage, and links metadata in `verification_files`. The request cannot enter the admin review queue or receive a review decision until every required file exists. If an upload is interrupted, the resident can cancel that incomplete request and start again.
 12. Face photo currently uses `file_type = other` because the live table only accepts the initial file-type values.
-13. User sees a pending verification state and remains in viewer mode.
+13. User sees "Submitted for review" with the real review status and remains in browse-only mode. Locked actions explain that the request is under review.
 14. Barangay admin reviews the request in the verification dashboard, including profile snapshot, notes, and attached files.
 15. If approved, app sets verification status to `approved`, records reviewer metadata, and sets `barangay_verified_at` and `verified_at` on the profile.
 16. If rejected, app stores the admin reason and lets the user resubmit a corrected request.
@@ -114,7 +134,7 @@ Contact details rules:
 - Email should not be displayed on public profiles, job cards, service cards, or worker cards.
 - Contact OTP is required for barangay verification submission, but it is not an authentication method. PhilSMS credentials remain server-only. Restricted simulation may be enabled only for explicitly allowlisted local test users or numbers.
 - Contact OTP SMS sends use a 60-second cooldown plus server-side send windows to protect provider credits. If a send is throttled while the same authenticated user and normalized phone still have an unexpired, unconsumed, unverified challenge with attempts remaining, the app reuses that challenge and opens the code-entry step instead of blocking the verification flow.
-- Each contact OTP challenge permits five incorrect attempts and expires after thirty minutes during active development and defense testing. Reaching five attempts locks only that challenge; a new challenge is required, and the server-only development backup code cannot bypass expiry or the lock.
+- Each contact OTP challenge permits five incorrect attempts and expires after thirty minutes during active development and defense testing. The database serializes verification attempts for the challenge, so parallel guesses share the same five-attempt limit. Reaching five attempts locks that challenge; a new challenge is required.
 - Routine contact OTP outcomes appear inline on the code screen rather than in blocking alerts. Sent, reused, delayed-delivery, cooldown, incorrect-code, and expired-code states keep the input visible and explain the next action. Alerts are reserved for session loss or a server failure that leaves no usable challenge.
 
 ## Public Profile Completion Flow

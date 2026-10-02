@@ -18,7 +18,8 @@ import { showAlert } from '@/utils/alert';
 export default function ReviewStep() {
   const router = useRouter();
   const { draft, role, saveProfile, saving } = useOnboarding();
-  const [acceptedTerms, setAcceptedTerms] = useState(true);
+  // Consent must be an explicit action, never pre-ticked (Data Privacy Act).
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [confirmedInfo, setConfirmedInfo] = useState(false);
   const [confirmationError, setConfirmationError] = useState<string | null>(null);
   const offeredServices = [...draft.offeredServices, ...draft.customOfferedServices].join(', ');
@@ -55,7 +56,10 @@ export default function ReviewStep() {
     setConfirmationError(null);
     const saved = await saveProfile();
     if (saved) {
-      router.replace('/(onboarding)/complete');
+      // Identity verification is the last phase of joining (DEC-124). The
+      // profile is saved first, so "Do this later" still leaves a complete
+      // browse-only account and the legal-name lock never blocks this save.
+      router.replace('/(onboarding)/verify' as never);
     }
   };
 
@@ -72,11 +76,11 @@ export default function ReviewStep() {
     <>
       <StatusBar style="dark" />
       <OnboardingFormScaffold
-        currentStep={4}
-        footer={<OnboardingButton label={saving ? 'Saving...' : 'Next'} loading={saving} onPress={submit} />}
-        helper="Review your information before entering Konektado"
+        currentStep={2}
+        footer={<OnboardingButton label={saving ? 'Saving...' : 'Continue'} loading={saving} onPress={submit} />}
+        helper="Check your details. Next, you will verify your identity with your barangay."
         onBack={() => router.back()}
-        title="Almost there.">
+        title="Review your profile">
         <View style={styles.reviewCard}>
           <ReviewField label="Full Name" value={fullName} />
           <ReviewField label="Address" multiline value={address || 'Not provided'} />

@@ -8,6 +8,7 @@ import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
 import { listMyJobDrafts } from '@/services/job-draft.service';
 import { listMyJobs } from '@/services/job.service';
@@ -31,7 +32,7 @@ export default function PostScreen() {
   const topInset = useSafeTopInset();
   const { profile, loading: profileLoading } = useProfile();
   const profileId = profile?.id ?? null;
-  const isVerified = Boolean(profile?.barangay_verified_at || profile?.verified_at);
+  const { isPending: isVerificationPending, isVerified } = useVerificationGate();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [drafts, setDrafts] = useState<JobDraftSummary[]>([]);
   const [serviceDrafts, setServiceDrafts] = useState<ServiceDraftSummary[]>([]);
@@ -212,9 +213,15 @@ export default function PostScreen() {
           <View style={styles.verificationNotice}>
             <MaterialIcons color={color.verificationBlue} name="shield" size={24} />
             <View style={styles.verificationCopy}>
-              <Text style={styles.verificationTitle}>Draft now, verify before publishing</Text>
+              <Text style={styles.verificationTitle}>
+                {isVerificationPending
+                  ? 'Your verification is under review'
+                  : 'Draft now, verify before publishing'}
+              </Text>
               <Text style={styles.verificationText}>
-                You can write job or service posts and keep them as drafts. Barangay verification is required before a post becomes visible.
+                {isVerificationPending
+                  ? 'You can write posts and keep them as drafts. They can be published as soon as barangay staff approve you.'
+                  : 'You can write job or service posts and keep them as drafts. Barangay verification is required before a post becomes visible.'}
               </Text>
             </View>
           </View>

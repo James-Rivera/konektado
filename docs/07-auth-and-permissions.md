@@ -40,6 +40,7 @@ Active MVP password recovery flow:
 - User enters the 6-digit code and the app verifies it with `verifyOtp({ type: 'recovery' })`.
 - Supabase creates a temporary recovery session after the code is verified.
 - App keeps the user on the Forgot Password route, lets them create a new password with `supabase.auth.updateUser({ password })`, then signs out and returns them to Log In.
+- With mobile auth enabled, the same screen also runs the phone recovery path described below.
 
 Current OTP troubleshooting note:
 
@@ -59,8 +60,13 @@ Required behavior:
 - The Supabase Auth email templates used by the signup OTP path must include `{{ .Token }}` so users receive a 6-digit code. Supabase Auth OTP length must be configured to 6 digits. For MVP signup, the app uses `signInWithOtp`; keep both **Magic Link** and **Confirm sign up** templates aligned.
 - The Supabase Auth **Password Recovery** template must also include `{{ .Token }}` and should avoid link-only copy, because the app verifies recovery through a six-box code entry flow.
 - In app code, verify signup email codes only through the auth service. Keep the request/resend/verify methods on Supabase email OTP/passwordless auth.
-- Do not use SMS/mobile OTP for signup or login. Barangay verification separately requires a server-verified contact OTP for the profile phone number.
-- Phone-first authentication can be revisited later when provider access and Android/device testing are available.
+- Mobile-number signup and login are built but **off by default** behind `EXPO_PUBLIC_PHONE_AUTH_ENABLED` (DEC-127). With the flag off, signup and login are email-only exactly as above. With it on, "Create your Account" defaults to mobile number with a "Use email instead" switch, signup uses `signInWithOtp({ phone })` then `verifyOtp({ type: 'sms' })` then Create Password, and Log In accepts a mobile number or an email in one field.
+- Do not turn the flag on until the Supabase project has the **Phone** provider enabled and the Send SMS hook below deployed and attached. The project had `phone: false` on 2026-09-29.
+- SMS sender (DEC-131): `supabase/functions/send-sms-hook` is a Supabase Auth **Send SMS** HTTPS hook. It verifies the Standard Webhooks signature with `SEND_SMS_HOOK_SECRET` (5-minute timestamp window), accepts only PH mobiles stored as `639XXXXXXXXX` (optionally `+`-prefixed), and sends the code through PhilSMS using the transport shared with `contact-otp` (`supabase/functions/_shared/philsms.ts`, `PHILSMS_API_TOKEN`, `PHILSMS_SENDER_ID`). It never logs the OTP, the hook secret, or the PhilSMS token. It is deployed with `--no-verify-jwt` because Auth authenticates with the webhook signature, not a user JWT. Non-PH numbers are refused with a 400 before any SMS is sent.
+- Mobile password recovery: with the flag on, Forgot Password accepts a mobile number or an email in one field, like Log In. Supabase has no phone "recovery" OTP type, so the phone path sends a login SMS code with `shouldCreateUser: false`, verifies it with `verifyOtp({ type: 'sms' })`, sets `password_recovery_pending` exactly like the email path (so the session stays pinned to the reset screen), then saves the new password and signs out. An unknown number is treated as "code sent" so the screen cannot be used to discover which numbers have accounts, matching `resetPasswordForEmail`.
+- Known gap before enabling mobile auth: there is no pre-send duplicate-number check (duplicates are caught after the code, like the email path's fallback).
+- Enabling checklist (the user runs these; agents must not): set `SEND_SMS_HOOK_SECRET` and the PhilSMS secrets on the project, deploy `send-sms-hook` with `--no-verify-jwt` and redeploy `contact-otp`, enable **Auth > Sign In / Providers > Phone** (SMS provider left unconfigured, since the hook replaces it), attach **Auth > Hooks > Send SMS** as HTTPS to the function URL, confirm `/auth/v1/settings` reports `phone: true`, test signup, login, and recovery with a real PH number, and only then set `EXPO_PUBLIC_PHONE_AUTH_ENABLED=true`.
+- Barangay verification separately requires a server-verified contact OTP for the profile phone number, whatever method was used to sign up.
 - Email is used for login, verification updates, support, and account recovery.
 
 Current duplicate-email protection:
@@ -88,16 +94,15 @@ First onboarding supports:
 
 These preferences personalize browsing and do not replace barangay verification.
 
-First onboarding path:
+First onboarding path (unified with verification, DEC-124):
 
-1. Role intent.
-2. Basic profile identity and location.
-3. Offered and/or needed service preferences.
-4. Review.
-5. Complete.
-6. Home in viewer mode.
+1. Welcome, then role intent.
+2. Account: email (or mobile, when enabled), code, password.
+3. Profile: legal name and birthday, location, offered or needed services, review with explicit consent. Saving here completes the account.
+4. Identity: "Verify your identity" requirements, then contact number and SMS code, document scan (Barangay Certificate by default), selfie, review, and submit. "Do this later" skips this phase.
+5. Submitted for review (or deferred), then "You're all set", then Home in browse-only mode.
 
-Completion requires `user_preferences.onboarding_completed_at` plus basic profile identity: first name, last name or full name, city, and barangay. First onboarding does not collect certificates, ID documents, selfie/photo uploads, or verification files.
+Completion requires `user_preferences.onboarding_completed_at` plus basic profile identity: first name, last name or full name, city, and barangay. The identity phase is optional and runs after that save, so a resident who defers verification still has a complete account. Verification files collected in the identity phase stay in the private `verification-files` bucket and are never reused as profile content.
 
 Home default filter rules:
 
@@ -232,11 +237,14 @@ These role permissions apply after the user's barangay verification is approved 
 - Email is private and used for login, verification updates, support, and account recovery.
 - Verification document and face-photo scan screens may request camera access to capture still images for the private barangay review package. If camera permission is denied or the device/emulator camera is unavailable, the app must keep Upload from Gallery available and must not trap the user on a blank scan screen.
 - Contact OTP challenges are short-lived, rate-limited, attempt-limited, bound to the authenticated user and normalized profile phone, and consumed once by verification submission.
+- Contact OTP verification uses a service-role-only database function that locks the challenge row before checking or updating it. Concurrent guesses cannot overwrite each other's attempt counts or verify a challenge after its fifth failed attempt.
+- Pending verification requests are reviewable only when the required file metadata and private Storage objects exist: a face photo plus a Barangay Certificate, or a face photo plus both sides of the selected alternate ID. The database enforces this on every pending-to-reviewed status change, including direct admin updates. The admin queue hides incomplete requests; residents can cancel and retry an interrupted upload.
+- Auth-confirmed phones (DEC-131): when the signed-in user's Supabase Auth phone is confirmed (`phone_confirmed_at` set) and equals both the requested number and the normalized `profiles.phone`, `contact-otp` `send` sends no SMS. It creates (or reuses, while unexpired and unconsumed) a challenge that is already verified, marked `provider_message_id = 'auth_phone_confirmed'`, and returns `deliveryStatus: 'auth_phone_confirmed'` with `verified: true`. The app skips the code step. The `require_consumed_contact_otp` trigger still requires and consumes that challenge id at submission, so ownership, expiry, and one-time use are unchanged. These challenges do not count toward SMS send throttles. Any other number, including a changed one, gets the normal SMS code.
 - PhilSMS tokens, OTP HMAC secrets, and simulation allowlists are server-only. Simulated codes must never be enabled globally or returned for non-allowlisted users/numbers.
-- During active development, `CONTACT_OTP_BACKUP_CODE` provides a temporary server-only backup for existing active contact OTP challenges. It does not create challenges or verification requests, and it still requires challenge ownership, unexpired state, remaining attempts, and normal one-time consumption. Rotate or remove it before live deployment.
+- Contact OTP verification accepts the code issued for that challenge or, when the server-only `CONTACT_OTP_BACKUP_CODE` secret is set to exactly six digits, that backup code (DEC-134). The backup works for any signed-in user, but only on an active challenge they requested; it goes through the same locked ownership, expiry, consumption, and five-attempt checks, and every use is logged as `method: 'backup_code'`. There is no default value: unset or malformed disables it. Anyone who learns the code can verify a number they do not own, so keep it out of client code and chat, rotate it after demos or suspected exposure, and unset it once PhilSMS delivery is reliable.
 - If PhilSMS delivery fails after a challenge is created, the challenge remains active and the app may continue to code entry with a delivery warning. This development fallback does not weaken ownership, expiry, cooldown, attempt, rate-limit, or barangay-submission checks.
 - SMS send throttles and OTP verification attempts are separate controls. Sends use a 60-second cooldown, a maximum of five challenge creations per user or phone per hour, and a maximum of four challenge creations for the same user and phone within ten minutes. A throttled send returns an existing usable challenge for that authenticated user and phone when one exists; it does not send another SMS.
-- Each challenge has a thirty-minute development/testing expiry and five incorrect attempts. Reaching the attempt limit locks only that challenge. Expiry and attempt checks run before both normal and backup code comparison, so neither code can verify an expired or exhausted challenge.
+- Each challenge has a thirty-minute development/testing expiry and five incorrect attempts. Reaching the attempt limit locks only that challenge. Expiry and attempt checks run under a row lock before comparing the issued code, so an expired or exhausted challenge cannot be verified.
 
 ## Reciprocal Review Rules
 

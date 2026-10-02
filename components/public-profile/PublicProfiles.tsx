@@ -94,6 +94,13 @@ export function PublicWorkerProfileView({
 }) {
   const visibleServices = profile.services;
 
+  /*
+   * Reading order follows what a resident decides on: who this is and whether
+   * others trust them (hero), what they can hire them for (services), then
+   * supporting context. Sections with nothing to show are omitted instead of
+   * rendering a wall of "No X yet" cards; only Reviews keeps a one-line empty
+   * state because "no reviews" is itself a trust signal.
+   */
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -106,7 +113,12 @@ export function PublicWorkerProfileView({
           avatarUrl={profile.avatarUrl}
           location={profile.publicLocation}
           name={profile.fullName}
-          roleLabel="Worker profile"
+          roleLabel="Worker"
+          stats={[
+            ratingStat(profile.averageRating, profile.reviewCount),
+            { label: profile.reviewCount === 1 ? 'Review' : 'Reviews', value: String(profile.reviewCount) },
+            { label: 'Jobs done', value: String(profile.completedJobsCount) },
+          ]}
           verified={Boolean(profile.barangayVerifiedAt || profile.verifiedAt)}
         />
         {adminViewOnly ? <AdminContextBanner /> : null}
@@ -117,58 +129,39 @@ export function PublicWorkerProfileView({
           </Section>
         ) : null}
 
+        {visibleServices.length ? (
+          <Section title={profile.selectedService ? 'Other services' : 'Services offered'}>
+            <View style={styles.cardList}>
+              {visibleServices.map((service) => (
+                <ServiceSummaryCard key={service.id} service={service} onPress={onOpenService} />
+              ))}
+            </View>
+          </Section>
+        ) : !profile.selectedService ? (
+          <Section title="Services offered">
+            <InlineEmpty icon="handyman" text="No active services right now." />
+          </Section>
+        ) : null}
+
         {profile.about ? (
           <Section title="About">
             <Text style={styles.bodyText}>{profile.about}</Text>
           </Section>
         ) : null}
 
-        <Section title="Skills">
-          {profile.skills.length ? (
-            <>
-              <LimitedTagRow primary={displayService(profile.skills[0])} tags={profile.skills.slice(1)} />
-              {/*
-                Skills are self-declared. Barangay verification covers identity
-                and residency, never competence, so the two must not read as
-                one trust signal.
-              */}
-              <Text style={styles.skillsNote}>Skills are provided by the resident.</Text>
-            </>
-          ) : (
-            <EmptyPublicCard
-              icon="handyman"
-              message="This worker has not added skills yet."
-              title="No skills listed"
-            />
-          )}
-        </Section>
+        {profile.skills.length ? (
+          <Section title="Skills">
+            <LimitedTagRow primary={displayService(profile.skills[0])} tags={profile.skills.slice(1)} />
+            {/*
+              Skills are self-declared. Barangay verification covers identity
+              and residency, never competence, so the two must not read as
+              one trust signal.
+            */}
+            <Text style={styles.skillsNote}>Skills are provided by the resident.</Text>
+          </Section>
+        ) : null}
 
-        <Section title="Credentials">
-          {profile.credentials.length ? (
-            <View style={styles.cardList}>
-              {profile.credentials.slice(0, 3).map((credential) => (
-                <CredentialCard credential={credential} key={credential.id} />
-              ))}
-            </View>
-          ) : (
-            <EmptyPublicCard
-              icon="workspace-premium"
-              message="Approved credentials and trust boosters will appear here."
-              title="No public credentials yet"
-            />
-          )}
-        </Section>
-
-        <Section title="Trust and activity">
-          <TrustMetrics
-            averageRating={profile.averageRating}
-            completedLabel="Jobs done"
-            completedValue={profile.completedJobsCount}
-            reviewCount={profile.reviewCount}
-          />
-        </Section>
-
-        <Section title="Worker reviews">
+        <Section title="Reviews">
           {profile.reviews.length ? (
             <View style={styles.cardList}>
               {profile.reviews.slice(0, 3).map((review) => (
@@ -176,49 +169,31 @@ export function PublicWorkerProfileView({
               ))}
             </View>
           ) : (
-            <EmptyPublicCard
-              icon="rate-review"
-              message="No reviews yet. Reviews will appear after completed jobs."
-              title="No reviews yet"
-            />
+            <InlineEmpty icon="rate-review" text="No reviews yet. Reviews appear after completed jobs." />
           )}
         </Section>
 
-        <Section title="Work History">
-          {profile.workHistory.length ? (
+        {profile.workHistory.length ? (
+          <Section title="Work history">
             <View style={styles.cardList}>
               {profile.workHistory.map((item) => (
                 <HistorySummaryCard item={item} key={item.id} fallbackTitle="Completed work" />
               ))}
             </View>
-          ) : (
-            <EmptyPublicCard
-              icon="work-history"
-              message="Completed work will appear here after safe marketplace history is available."
-              title="No work history yet"
-            />
-          )}
-        </Section>
+          </Section>
+        ) : null}
 
-        <Section title="Services Offered">
-          {visibleServices.length ? (
+        {profile.credentials.length ? (
+          <Section title="Credentials">
             <View style={styles.cardList}>
-              {visibleServices.map((service) => (
-                <ServiceSummaryCard key={service.id} service={service} onPress={onOpenService} />
+              {profile.credentials.slice(0, 3).map((credential) => (
+                <CredentialCard credential={credential} key={credential.id} />
               ))}
             </View>
-          ) : (
-            <EmptyPublicCard
-              icon="handyman"
-              message="This worker has no other active services right now."
-              title={profile.selectedService ? 'No other services' : 'No active services'}
-            />
-          )}
-        </Section>
+          </Section>
+        ) : null}
 
-        <Section title="Safety note">
-          <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm schedule, exact location, and rate in Messages before starting." />
-        </Section>
+        <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm schedule, exact location, and rate in Messages before starting." />
       </ScrollView>
       {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={withMessageHelper(cta)} />}
     </View>
@@ -250,7 +225,13 @@ export function PublicClientProfileView({
           avatarUrl={profile.avatarUrl}
           location={profile.publicLocation}
           name={profile.fullName}
-          roleLabel="Hiring profile"
+          roleLabel="Hiring"
+          stats={[
+            ratingStat(profile.averageRating, profile.reviewCount),
+            { label: profile.reviewCount === 1 ? 'Review' : 'Reviews', value: String(profile.reviewCount) },
+            { label: 'Hires', value: String(profile.completedHiresCount) },
+            { label: 'Jobs posted', value: String(profile.jobsPostedCount) },
+          ]}
           verified={Boolean(profile.barangayVerifiedAt || profile.verifiedAt)}
         />
         {adminViewOnly ? <AdminContextBanner /> : null}
@@ -261,17 +242,25 @@ export function PublicClientProfileView({
           </Section>
         ) : null}
 
-        <Section title="Hiring Preferences">
+        {profile.activeJobs.length ? (
+          <Section title={profile.selectedJob ? 'Other open jobs' : 'Open jobs'}>
+            <View style={styles.cardList}>
+              {profile.activeJobs.map((job) => (
+                <JobSummaryCard key={job.id} job={job} onPress={onOpenJob} />
+              ))}
+            </View>
+          </Section>
+        ) : !profile.selectedJob ? (
+          <Section title="Open jobs">
+            <InlineEmpty icon="assignment" text="No open jobs right now." />
+          </Section>
+        ) : null}
+
+        <Section title="How they hire">
           {profile.about ? <Text style={styles.bodyText}>{profile.about}</Text> : null}
           {profile.commonNeeds.length ? (
             <LimitedTagRow primary={displayService(profile.commonNeeds[0])} tags={profile.commonNeeds.slice(1)} />
-          ) : (
-            <EmptyPublicCard
-              icon="assignment"
-              message="This client has not added common hiring needs yet."
-              title="No common needs listed"
-            />
-          )}
+          ) : null}
           <DetailRows
             rows={[
               { icon: 'chat-bubble-outline', text: profile.coordinationStyle || 'Coordination style to discuss' },
@@ -280,17 +269,7 @@ export function PublicClientProfileView({
           />
         </Section>
 
-        <Section title="Trust and activity">
-          <TrustMetrics
-            averageRating={profile.averageRating}
-            completedLabel="Completed hires"
-            completedValue={profile.completedHiresCount}
-            jobsPosted={profile.jobsPostedCount}
-            reviewCount={profile.reviewCount}
-          />
-        </Section>
-
-        <Section title="Client reviews">
+        <Section title="Reviews">
           {profile.reviews.length ? (
             <View style={styles.cardList}>
               {profile.reviews.slice(0, 3).map((review) => (
@@ -298,49 +277,21 @@ export function PublicClientProfileView({
               ))}
             </View>
           ) : (
-            <EmptyPublicCard
-              icon="rate-review"
-              message="No reviews yet. Reviews will appear after completed jobs."
-              title="No reviews yet"
-            />
+            <InlineEmpty icon="rate-review" text="No reviews yet. Reviews appear after completed jobs." />
           )}
         </Section>
 
-        <Section title="Hiring History">
-          {profile.hiringHistory.length ? (
+        {profile.hiringHistory.length ? (
+          <Section title="Hiring history">
             <View style={styles.cardList}>
               {profile.hiringHistory.map((item) => (
                 <HistorySummaryCard item={item} key={item.id} fallbackTitle="Completed hire" />
               ))}
             </View>
-          ) : (
-            <EmptyPublicCard
-              icon="history"
-              message="Completed hires will appear here after safe marketplace history is available."
-              title="No hiring history yet"
-            />
-          )}
-        </Section>
+          </Section>
+        ) : null}
 
-        <Section title="Job Posts">
-          {profile.activeJobs.length ? (
-            <View style={styles.cardList}>
-              {profile.activeJobs.map((job) => (
-                <JobSummaryCard key={job.id} job={job} onPress={onOpenJob} />
-              ))}
-            </View>
-          ) : (
-            <EmptyPublicCard
-              icon="assignment"
-              message="This client has no other active job posts right now."
-              title={profile.selectedJob ? 'No other active jobs' : 'No active jobs'}
-            />
-          )}
-        </Section>
-
-        <Section title="Safety note">
-          <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm scope, schedule, and budget in Messages before starting." />
-        </Section>
+        <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm scope, schedule, and budget in Messages before starting." />
       </ScrollView>
       {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={withMessageHelper(cta)} />}
     </View>
@@ -390,36 +341,19 @@ function PublicReviewCard({ review }: { review: Review }) {
   );
 }
 
-function TrustMetrics({
-  averageRating,
-  completedLabel,
-  completedValue,
-  jobsPosted,
-  reviewCount,
-}: {
-  averageRating: number | null;
-  completedLabel: string;
-  completedValue: number;
-  jobsPosted?: number;
-  reviewCount: number;
-}) {
-  const metrics = [
-    ...(averageRating !== null && reviewCount > 0
-      ? [{ label: 'Average rating', value: averageRating.toFixed(1) }]
-      : []),
-    { label: 'Reviews', value: String(reviewCount) },
-    { label: completedLabel, value: String(completedValue) },
-    ...(jobsPosted === undefined ? [] : [{ label: 'Jobs posted', value: String(jobsPosted) }]),
-  ];
+type SummaryStat = { label: string; value: string; star?: boolean };
 
+/** "New" instead of a 0.0 rating, so an unreviewed resident is not read as badly rated. */
+function ratingStat(averageRating: number | null, reviewCount: number): SummaryStat {
+  if (averageRating === null || reviewCount === 0) return { label: 'Rating', value: 'New' };
+  return { label: 'Rating', star: true, value: averageRating.toFixed(1) };
+}
+
+function InlineEmpty({ icon, text }: { icon: keyof typeof MaterialIcons.glyphMap; text: string }) {
   return (
-    <View style={styles.metricGrid}>
-      {metrics.map((metric) => (
-        <View key={metric.label} style={styles.metricCard}>
-          <Text style={styles.metricLabel}>{metric.label}</Text>
-          <Text style={styles.metricValue}>{metric.value}</Text>
-        </View>
-      ))}
+    <View style={styles.inlineEmpty}>
+      <MaterialIcons color={color.textMuted} name={icon} size={18} />
+      <Text style={styles.inlineEmptyText}>{text}</Text>
     </View>
   );
 }
@@ -462,11 +396,21 @@ export function PublicProfileSkeleton({ bottomInset, showCta = true }: { bottomI
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <SkeletonAvatar size={64} showPresence={false} />
-          <View style={styles.summaryCopy}>
-            <Skeleton height={20} width="62%" />
-            <Skeleton height={14} width="70%" />
-            <SkeletonChip height={26} width={132} />
+          <View style={styles.summaryTop}>
+            <SkeletonAvatar size={72} showPresence={false} />
+            <View style={styles.summaryCopy}>
+              <Skeleton height={20} width="62%" />
+              <Skeleton height={14} width="70%" />
+              <SkeletonChip height={26} width={132} />
+            </View>
+          </View>
+          <View style={styles.statRow}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <View key={index} style={styles.statCell}>
+                <Skeleton height={18} width={36} />
+                <Skeleton height={12} width={52} />
+              </View>
+            ))}
           </View>
         </View>
         <View style={styles.section}>
@@ -475,14 +419,6 @@ export function PublicProfileSkeleton({ bottomInset, showCta = true }: { bottomI
             <Skeleton height={16} width="70%" />
             <Skeleton height={14} width="44%" />
             <SkeletonText lastLineWidth="64%" lines={2} />
-          </View>
-        </View>
-        <View style={styles.section}>
-          <Skeleton height={18} width={132} />
-          <View style={styles.metricGrid}>
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} borderRadius={radius.md} height={72} width="48%" />
-            ))}
           </View>
         </View>
       </ScrollView>
@@ -501,46 +437,69 @@ function PublicSummaryCard({
   location,
   name,
   roleLabel,
+  stats,
   verified,
 }: {
   avatarUrl: string | null;
   location: string;
   name: string;
   roleLabel: string;
+  stats: SummaryStat[];
   verified: boolean;
 }) {
   const displayAvatarUrl = getAvatarDisplayUrl({ avatarUrl });
 
   return (
     <View style={styles.summaryCard}>
-      <View style={styles.avatar}>
-        {displayAvatarUrl ? (
-          <CachedRemoteImage uri={displayAvatarUrl} style={styles.avatarImage} />
-        ) : (
-          <Text style={styles.avatarText}>{getInitials(name)}</Text>
-        )}
-      </View>
-      <View style={styles.summaryCopy}>
-        <Text numberOfLines={2} style={styles.name}>
-          {name}
-        </Text>
-        <View style={styles.metaRow}>
-          <MaterialIcons color={color.textSubtle} name="location-on" size={15} />
-          <Text numberOfLines={1} style={styles.metaText}>
-            {location}
-          </Text>
+      <View style={styles.summaryTop}>
+        <View style={styles.avatar}>
+          {displayAvatarUrl ? (
+            <CachedRemoteImage uri={displayAvatarUrl} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{getInitials(name)}</Text>
+          )}
         </View>
-        <View style={styles.badgeRow}>
-          {verified ? (
-            <View style={styles.verifiedBadge}>
-              <MaterialIcons color="#2F7D32" name="verified" size={14} />
-              <Text style={styles.verifiedText}>Verified</Text>
+        <View style={styles.summaryCopy}>
+          <Text numberOfLines={2} style={styles.name}>
+            {name}
+          </Text>
+          <View style={styles.metaRow}>
+            <MaterialIcons color={color.textMuted} name="location-on" size={15} />
+            <Text numberOfLines={1} style={styles.metaText}>
+              {location}
+            </Text>
+          </View>
+          <View style={styles.badgeRow}>
+            {verified ? (
+              <View style={styles.verifiedBadge}>
+                <MaterialIcons color="#2F7D32" name="verified" size={14} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            ) : null}
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>{roleLabel}</Text>
             </View>
-          ) : null}
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>{roleLabel}</Text>
           </View>
         </View>
+      </View>
+
+      {/* Trust at a glance: the numbers a resident checks before messaging. */}
+      <View style={styles.statRow}>
+        {stats.map((stat, index) => (
+          <View
+            key={stat.label}
+            style={[styles.statCell, index > 0 && styles.statCellDivider]}>
+            <View style={styles.statValueRow}>
+              {stat.star ? <MaterialIcons color={color.accentYellow} name="star" size={16} /> : null}
+              <Text numberOfLines={1} style={styles.statValue}>
+                {stat.value}
+              </Text>
+            </View>
+            <Text numberOfLines={1} style={styles.statLabel}>
+              {stat.label}
+            </Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -755,26 +714,6 @@ function SafetyNote({ text }: { text: string }) {
   );
 }
 
-function EmptyPublicCard({
-  icon,
-  message,
-  title,
-}: {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  message: string;
-  title: string;
-}) {
-  return (
-    <View style={styles.emptyCard}>
-      <MaterialIcons color={color.textSubtle} name={icon} size={22} />
-      <View style={styles.cardCopy}>
-        <Text style={styles.emptyTitle}>{title}</Text>
-        <Text style={styles.emptyMessage}>{message}</Text>
-      </View>
-    </View>
-  );
-}
-
 function PublicProfileCta({ bottomInset, cta }: { bottomInset: number; cta: ProfileCta }) {
   return (
     <View style={[styles.ctaBar, { paddingBottom: 12 + Math.max(bottomInset, 12) }]}>
@@ -791,7 +730,7 @@ function PublicProfileCta({ bottomInset, cta }: { bottomInset: number; cta: Prof
           (cta.disabled || cta.loading) && styles.ctaDisabled,
           pressed && !cta.disabled && !cta.loading && styles.pressed,
         ]}>
-        <MaterialIcons color={cta.disabled ? color.textSubtle : color.primary} name="chat-bubble" size={17} />
+        <MaterialIcons color={cta.disabled ? color.textMuted : color.text} name="chat-bubble" size={17} />
         <Text
           numberOfLines={1}
           adjustsFontSizeToFit
@@ -866,26 +805,29 @@ const styles = StyleSheet.create({
   },
   content: {
     backgroundColor: color.background,
-    gap: space.xl,
+    gap: space['2xl'],
     padding: space.xl,
   },
   summaryCard: {
-    alignItems: 'center',
     borderColor: color.border,
     borderRadius: radius.lg,
     borderWidth: 1,
+    gap: space.lg,
+    padding: space.lg,
+  },
+  summaryTop: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: space.md,
-    padding: space.lg,
   },
   avatar: {
     alignItems: 'center',
     backgroundColor: color.surfaceAlt,
     borderRadius: radius.pill,
-    height: 64,
+    height: 72,
     justifyContent: 'center',
     overflow: 'hidden',
-    width: 64,
+    width: 72,
   },
   avatarImage: {
     height: '100%',
@@ -956,38 +898,58 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.sectionTitle,
     color: color.text,
+    fontSize: 17,
   },
+  // Body copy is full-strength text; muted grey is reserved for metadata.
   bodyText: {
     ...typography.body,
-    color: color.textMuted,
+    color: color.text,
   },
   skillsNote: {
-    ...typography.captionMedium,
-    color: color.textSubtle,
-    marginTop: space.sm,
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.md,
-  },
-  metricCard: {
-    borderColor: color.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexBasis: '47%',
-    flexGrow: 1,
-    gap: space.xs,
-    minHeight: 84,
-    padding: space.md,
-  },
-  metricLabel: {
     ...typography.caption,
     color: color.textMuted,
   },
-  metricValue: {
-    ...typography.bodyMedium,
+  statRow: {
+    borderTopColor: color.border,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    paddingTop: space.md,
+  },
+  statCell: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+    paddingHorizontal: space['2xs'],
+  },
+  statCellDivider: {
+    borderLeftColor: color.border,
+    borderLeftWidth: 1,
+  },
+  statValueRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 2,
+  },
+  statValue: {
     color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  statLabel: {
+    ...typography.caption,
+    color: color.textMuted,
+  },
+  inlineEmpty: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  inlineEmptyText: {
+    ...typography.body,
+    color: color.textMuted,
+    flex: 1,
   },
   cardList: {
     gap: space.sm,
@@ -1014,8 +976,8 @@ const styles = StyleSheet.create({
     color: color.text,
   },
   cardMeta: {
-    ...typography.captionMedium,
-    color: color.primary,
+    ...typography.bodyMedium,
+    color: color.primaryText,
   },
   detailRows: {
     gap: space.xs,
@@ -1072,24 +1034,6 @@ const styles = StyleSheet.create({
     color: color.textMuted,
     flex: 1,
   },
-  emptyCard: {
-    alignItems: 'flex-start',
-    backgroundColor: color.surfaceAlt,
-    borderColor: color.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: space.md,
-    padding: space.lg,
-  },
-  emptyTitle: {
-    ...typography.bodyMedium,
-    color: color.text,
-  },
-  emptyMessage: {
-    ...typography.caption,
-    color: color.textMuted,
-  },
   ctaBar: {
     backgroundColor: color.background,
     borderTopColor: color.border,
@@ -1102,24 +1046,28 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: color.textMuted,
   },
+  // Primary action uses the Figma's yellow button with dark text (about 11:1).
+  // The previous blue-on-pale-blue treatment was about 2.4:1.
   ctaButton: {
     alignItems: 'center',
-    backgroundColor: color.primarySoft,
+    backgroundColor: color.accentYellow,
     borderRadius: radius.pill,
     flexDirection: 'row',
     gap: space.sm,
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 48,
   },
   ctaDisabled: {
     backgroundColor: color.surfaceAlt,
   },
   ctaButtonText: {
-    ...typography.bodyMedium,
-    color: color.primary,
+    color: color.text,
+    fontFamily: 'Satoshi-Bold',
+    fontSize: 15,
+    lineHeight: 20,
   },
   ctaButtonTextDisabled: {
-    color: color.textSubtle,
+    color: color.textMuted,
   },
   pressed: {
     opacity: 0.72,

@@ -119,8 +119,11 @@ function RootNavigator() {
             ? "/admin/verifications"
           : "/(tabs)";
 
+    // Identity verification and the all-set screen follow the profile save, so
+    // they stay reachable once the resident no longer needs onboarding.
     const isOnboardingComplete =
-      activeGroup === "(onboarding)" && routeSegments[1] === "complete";
+      activeGroup === "(onboarding)" &&
+      (routeSegments[1] === "complete" || routeSegments[1] === "verify");
     const isCompletingAuthRegistration =
       authenticated &&
       activeGroup === "(auth)" &&

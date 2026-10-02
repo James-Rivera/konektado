@@ -3,7 +3,7 @@ import { SvgXml } from 'react-native-svg';
 
 type KonektadoWordmarkProps = {
   color?: 'dark' | 'light';
-  size?: 'small' | 'medium' | 'large';
+  size?: 'small' | 'medium' | 'large' | 'hero';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -28,6 +28,8 @@ export function KonektadoWordmark({ color = 'dark', size = 'small', style }: Kon
     small: { width: 152, height: 24 },
     medium: { width: 170, height: 27 },
     large: { width: 212, height: 34 },
+    // Welcome hero, measured off Figma node 1501:4101 (236.9 x 35.6).
+    hero: { width: 237, height: 36 },
   }[size];
   const xml = color === 'light' ? KONEKTADO_LOGO_SVG_LIGHT : KONEKTADO_LOGO_SVG_DARK;
 

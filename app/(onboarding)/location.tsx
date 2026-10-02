@@ -127,7 +127,7 @@ export default function LocationStep() {
       <StatusBar style="dark" />
       <OnboardingFormScaffold
         contentStyle={styles.content}
-        currentStep={3}
+        currentStep={2}
         footer={footer}
         helper={
           step === 'area'

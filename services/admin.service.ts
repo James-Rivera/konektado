@@ -161,17 +161,10 @@ export async function listVerificationRequests({
   const admin = await requireAdmin();
   if (admin.error) return admin;
 
-  let query = supabase
-    .from('verifications')
-    .select('id, user_id, status, notes, reviewer_id, reviewer_note, reviewed_at, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (statuses?.length) {
-    query = query.in('status', statuses);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc(
+    'list_reviewable_verification_requests',
+    { p_limit: limit, p_statuses: statuses?.length ? statuses : null },
+  );
 
   if (error) return { data: null, error: error.message };
 
@@ -226,6 +219,15 @@ export async function reviewVerificationRequest({
 
   if (decision !== 'approved' && !reviewerNote) {
     return { data: null, error: 'Enter a reviewer note before saving this review.' };
+  }
+
+  const { data: ready, error: readyError } = await supabase.rpc(
+    'is_verification_request_ready',
+    { p_request_id: requestId },
+  );
+  if (readyError) return { data: null, error: readyError.message };
+  if (!ready) {
+    return { data: null, error: 'Verification files are still uploading or missing. Refresh the request and try again.' };
   }
 
   const { data, error } = await supabase

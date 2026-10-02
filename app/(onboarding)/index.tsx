@@ -54,11 +54,11 @@ export default function BasicsStep() {
     <>
       <StatusBar style="dark" />
       <OnboardingFormScaffold
-        currentStep={3}
+        currentStep={2}
         footer={<OnboardingButton label="Next" onPress={next} />}
-        helper="Make sure each detail matches official documents"
+        helper="Use your name exactly as it appears on your barangay certificate or ID. It is used for verification and cannot be changed freely after you submit."
         onBack={() => router.back()}
-        title="Enter your details">
+        title="Your details">
         <FloatingOnboardingInput
           autoCapitalize="words"
           label="First Name"

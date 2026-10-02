@@ -6,11 +6,14 @@ export type { AppRole, OnboardingIntent };
 export async function saveUserRole({
   activeRole,
   email,
+  phone,
   role,
   userId,
 }: {
   activeRole?: AppRole;
   email?: string | null;
+  /** Confirmed signup mobile (639XXXXXXXXX). Only written when provided. */
+  phone?: string | null;
   role: OnboardingIntent;
   userId: string;
 }) {
@@ -22,6 +25,7 @@ export async function saveUserRole({
     .upsert({
       id: userId,
       email,
+      ...(phone ? { phone } : {}),
       role: selectedActiveRole,
       active_role: selectedActiveRole,
     });

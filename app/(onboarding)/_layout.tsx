@@ -8,7 +8,11 @@ export default function OnboardingLayout() {
   const status = useProfileStatus();
   const segments = useSegments();
   const routeSegments = [...segments] as string[];
-  const isCompleteRoute = routeSegments[0] === '(onboarding)' && routeSegments[1] === 'complete';
+  // `verify` and `complete` run after the profile is saved (needsProfile is
+  // false by then), so they must not be redirected to Home.
+  const isPostProfileRoute =
+    routeSegments[0] === '(onboarding)' &&
+    (routeSegments[1] === 'verify' || routeSegments[1] === 'complete');
 
   if (status.loading) {
     return <AppSplashScreen />;
@@ -38,7 +42,7 @@ export default function OnboardingLayout() {
     );
   }
 
-  if (!status.needsRole && !status.needsProfile && !isCompleteRoute) {
+  if (!status.needsRole && !status.needsProfile && !isPostProfileRoute) {
     return <Redirect href="/(tabs)" />;
   }
 
@@ -48,9 +52,8 @@ export default function OnboardingLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="location" />
         <Stack.Screen name="job" />
-        <Stack.Screen name="certifications" />
-        <Stack.Screen name="verification" />
         <Stack.Screen name="review" />
+        <Stack.Screen name="verify" options={{ gestureEnabled: false }} />
         <Stack.Screen name="complete" />
       </Stack>
     </OnboardingProvider>

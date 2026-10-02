@@ -4,7 +4,9 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { AppState } from 'react-native';
 
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { getLatestVerificationStatus } from '@/services/verification.service';
 import type { UserPreferences } from '@/types/onboarding.types';
+import type { VerificationStatus } from '@/types/verification.types';
 import { supabase } from '@/utils/supabase';
 
 type ProfileRealtimeChannel = ReturnType<typeof supabase.channel>;
@@ -89,6 +91,8 @@ type ProviderProfileRecord = {
 type ProfileContextValue = {
   authenticated: boolean;
   error: string | null;
+  /** Latest verification request status; null when none was ever submitted. */
+  latestVerificationStatus: VerificationStatus | null;
   loading: boolean;
   preferences: UserPreferences | null;
   profile: ProfileRecord | null;
@@ -107,6 +111,7 @@ type LoadOptions = {
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [latestVerificationStatus, setLatestVerificationStatus] = useState<VerificationStatus | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -145,6 +150,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             setUser(null);
             setProfile(null);
             setPreferences(null);
+            setLatestVerificationStatus(null);
             setError(userError?.message ?? null);
             return;
           }
@@ -175,7 +181,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             .eq('user_id', userResult.user.id)
             .maybeSingle();
 
-          const preferencesResult = await getMyUserPreferences();
+          const [preferencesResult, verificationResult] = await Promise.all([
+            getMyUserPreferences(),
+            getLatestVerificationStatus(userResult.user.id),
+          ]);
 
           if (!activeRef.current) return;
 
@@ -196,6 +205,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
               : null,
           );
           setPreferences(preferencesResult.error ? null : preferencesResult.data);
+          // Keep the last known status on a failed read rather than flashing a
+          // pending resident back to "unverified".
+          if (!verificationResult.error) setLatestVerificationStatus(verificationResult.data);
         } while (pendingLoadRef.current && activeRef.current);
       } catch (loadError) {
         if (!activeRef.current) return;
@@ -313,6 +325,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             () => {
               void refresh();
             },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'verifications',
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              void refresh();
+            },
           );
 
         channel.subscribe((status, error) => {
@@ -350,6 +374,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     () => ({
       authenticated,
       error,
+      latestVerificationStatus,
       loading,
       preferences,
       profile,
@@ -357,7 +382,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       user,
       version,
     }),
-    [authenticated, error, loading, preferences, profile, refresh, user, version],
+    [authenticated, error, latestVerificationStatus, loading, preferences, profile, refresh, user, version],
   );
 
   // `value` carries `refresh`, a useCallback that reads activeRef/inFlightRef/

@@ -1,11 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { ComponentProps } from 'react';
+import { Image, type ImageSource } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { color, radius } from '@/constants/theme';
-
-type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
 /**
  * Hero metrics measured off the Figma frame (390x844) by sampling pixels:
@@ -81,103 +79,116 @@ function HeroBackground() {
   );
 }
 
-export function HomeHero({
-  activeFilterCount = 0,
+/**
+ * How far the search bar overlaps the band's bottom edge. Home positions the
+ * search bar at `bandHeight - HOME_HERO_SEARCH_OVERLAP`, which is what makes it
+ * read as straddling the blue/white boundary in the Figma.
+ */
+export const HOME_HERO_SEARCH_OVERLAP = HERO_SEARCH_OVERLAP;
+
+/**
+ * The blue band: greeting, notifications, and location. Home scrolls it away
+ * with the content; it is intentionally not sticky. The search bar and mode
+ * switch are a separate layer (`HomeSearchBar`) so they can stay pinned.
+ *
+ * The band is sized by its content, not a fixed height, so it stays correct
+ * when the greeting or address wraps.
+ */
+export function HomeHeroBand({
   greeting,
   locationLabel,
   onNotifications,
-  onOpenFilters,
   onOpenLocation,
-  onOpenSearch,
   topInset,
   unreadCount = 0,
 }: {
-  activeFilterCount?: number;
   greeting: string;
   locationLabel: string;
   onNotifications: () => void;
-  onOpenFilters: () => void;
   onOpenLocation?: () => void;
-  onOpenSearch: () => void;
   topInset: number;
   unreadCount?: number;
 }) {
   return (
-    <View style={styles.hero}>
-      {/*
-        The blue band wraps only the greeting and location. The search bar sits
-        below it and overlaps its bottom edge by SEARCH_OVERLAP, which is what
-        makes it read as straddling the blue/white boundary in the Figma.
-        The band is sized by its content, not a fixed height, so it stays
-        correct when the greeting or address wraps.
-      */}
-      <View style={[styles.heroBand, { paddingTop: Math.max(topInset, 8) + HERO_TOP_GAP }]}>
-        <HeroBackground />
+    <View style={[styles.heroBand, { paddingTop: Math.max(topInset, 8) + HERO_TOP_GAP }]}>
+      <HeroBackground />
 
-        <View style={styles.heroTopRow}>
-          <Text numberOfLines={1} style={styles.greeting}>
-            {greeting}
-          </Text>
-          <Pressable
-            accessibilityLabel="Notifications"
-            accessibilityRole="button"
-            onPress={onNotifications}
-            style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}>
-            <MaterialIcons color={color.white} name="notifications" size={24} />
-            {unreadCount > 0 ? (
-              <View style={styles.bellBadge}>
-                <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        </View>
-
+      <View style={styles.heroTopRow}>
+        <Text numberOfLines={1} style={styles.greeting}>
+          {greeting}
+        </Text>
         <Pressable
-          accessibilityHint={onOpenLocation ? 'Opens your service area' : undefined}
-          accessibilityLabel={`Your location: ${locationLabel}`}
-          accessibilityRole={onOpenLocation ? 'button' : 'text'}
-          disabled={!onOpenLocation}
-          onPress={onOpenLocation}
-          style={({ pressed }) => [styles.locationRow, pressed && styles.pressed]}>
-          <MaterialIcons color={color.accentYellow} name="location-on" size={19} />
-          <Text numberOfLines={1} style={styles.locationText}>
-            {locationLabel}
-          </Text>
-          {onOpenLocation ? (
-            <MaterialIcons color={color.white} name="keyboard-arrow-down" size={18} />
+          accessibilityLabel="Notifications"
+          accessibilityRole="button"
+          onPress={onNotifications}
+          style={({ pressed }) => [styles.bellButton, pressed && styles.pressed]}>
+          <MaterialIcons color={color.white} name="notifications" size={24} />
+          {unreadCount > 0 ? (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
           ) : null}
         </Pressable>
       </View>
 
-      <View style={styles.searchRow}>
+      <Pressable
+        accessibilityHint={onOpenLocation ? 'Opens your service area' : undefined}
+        accessibilityLabel={`Your location: ${locationLabel}`}
+        accessibilityRole={onOpenLocation ? 'button' : 'text'}
+        disabled={!onOpenLocation}
+        onPress={onOpenLocation}
+        style={({ pressed }) => [styles.locationRow, pressed && styles.pressed]}>
+        <MaterialIcons color={color.accentYellow} name="location-on" size={19} />
+        <Text numberOfLines={1} style={styles.locationText}>
+          {locationLabel}
+        </Text>
+        {onOpenLocation ? (
+          <MaterialIcons color={color.white} name="keyboard-arrow-down" size={18} />
+        ) : null}
+      </Pressable>
+    </View>
+  );
+}
+
+/** Search entry with the feed-filter action. Home keeps this pinned. */
+export function HomeSearchBar({
+  activeFilterCount = 0,
+  onOpenFilters,
+  onOpenSearch,
+}: {
+  activeFilterCount?: number;
+  onOpenFilters: () => void;
+  onOpenSearch: () => void;
+}) {
+  return (
+    <View style={styles.searchRow}>
+      <Pressable
+        accessibilityHint="Opens search with filters, categories, and rate range"
+        accessibilityLabel="Search for a job or service"
+        accessibilityRole="search"
+        onPress={onOpenSearch}
+        style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}>
+        <MaterialIcons color={color.accentYellow} name="search" size={22} />
+        <Text numberOfLines={1} style={styles.searchPlaceholder}>
+          Kailangan ko ng ...
+        </Text>
+        <View style={styles.searchDivider} />
         <Pressable
-          accessibilityHint="Opens search with filters, categories, and rate range"
-          accessibilityLabel="Search for a job or service"
-          accessibilityRole="search"
-          onPress={onOpenSearch}
-          style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}>
-          <MaterialIcons color={color.accentYellow} name="search" size={22} />
-          <Text numberOfLines={1} style={styles.searchPlaceholder}>
-            Kailangan ko ng ...
-          </Text>
-          <View style={styles.searchDivider} />
-          <Pressable
-            accessibilityLabel="Feed filters"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onOpenFilters}
-            style={({ pressed }) => [styles.searchTune, pressed && styles.pressed]}>
-            <MaterialIcons color={color.textMuted} name="tune" size={20} />
-            {activeFilterCount > 0 ? (
-              <View style={styles.tuneBadge}>
-                <Text style={styles.tuneBadgeText}>
-                  {activeFilterCount > 9 ? '9+' : activeFilterCount}
-                </Text>
-              </View>
-            ) : null}
-          </Pressable>
+          accessibilityLabel="Feed filters"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onOpenFilters}
+          style={({ pressed }) => [styles.searchTune, pressed && styles.pressed]}>
+          <MaterialIcons color={color.textMuted} name="tune" size={20} />
+          {activeFilterCount > 0 ? (
+            <View style={styles.tuneBadge}>
+              <Text style={styles.tuneBadgeText}>
+                {activeFilterCount > 9 ? '9+' : activeFilterCount}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -211,7 +222,8 @@ export function HomeSectionLink({
 
 export type HomeCategoryTile = {
   key: string;
-  icon: MaterialIconName;
+  /** Two-tone category illustration from `assets/images/categories/`. */
+  icon: ImageSource | number;
   label: string;
 };
 
@@ -236,7 +248,12 @@ export function HomeCategoryGrid({
           onPress={() => onSelect(tile.key)}
           style={({ pressed }) => [styles.categoryTile, pressed && styles.pressed]}>
           <View style={styles.categoryIcon}>
-            <MaterialIcons color={color.verificationBlue} name={tile.icon} size={28} />
+            <Image
+              accessibilityIgnoresInvertColors
+              contentFit="contain"
+              source={tile.icon}
+              style={styles.categoryIconImage}
+            />
           </View>
           <Text numberOfLines={2} style={styles.categoryLabel}>
             {tile.label}
@@ -249,9 +266,6 @@ export function HomeCategoryGrid({
 
 
 const styles = StyleSheet.create({
-  hero: {
-    paddingBottom: HERO_SEARCH_BOTTOM_GAP,
-  },
   heroBand: {
     // Solid fill is the fallback, not decoration: the band's text is white, so
     // if the SVG ever fails to paint it must still be blue, never white.
@@ -340,9 +354,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   searchRow: {
-    // Negative margin pulls the bar up over the band's bottom edge so it
-    // straddles the blue/white boundary, as measured in the Figma.
-    marginTop: -HERO_SEARCH_OVERLAP,
+    // No negative margin here: Home places this layer HERO_SEARCH_OVERLAP above
+    // the band's bottom edge, so it straddles the blue/white boundary.
+    paddingBottom: HERO_SEARCH_BOTTOM_GAP,
     paddingHorizontal: HERO_SIDE_PADDING,
   },
   searchBar: {
@@ -446,6 +460,12 @@ const styles = StyleSheet.create({
     height: 52,
     justifyContent: 'center',
     width: 52,
+  },
+  // Illustrations carry their own padding, so they need more of the tile than
+  // the 28px glyphs did to read at the same weight.
+  categoryIconImage: {
+    height: 40,
+    width: 40,
   },
   categoryLabel: {
     color: color.textMuted,

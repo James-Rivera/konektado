@@ -1,5 +1,13 @@
 // @ts-nocheck
 import { createClient } from 'npm:@supabase/supabase-js@2.100.1';
+import {
+  getPhilSmsHeaders,
+  normalizePhilippineMobile,
+  normalizePhilSmsToken,
+  PHILSMS_API_BASE_URL,
+  sendPhilSms as sendPhilSmsMessage,
+  SmsDeliveryError,
+} from '../_shared/philsms.ts';
 
 type RequestBody = {
   action?: 'send' | 'verify';
@@ -8,31 +16,23 @@ type RequestBody = {
   phone?: string | null;
 };
 
-type PhilSmsFailureCode =
-  | 'sms_provider_unauthenticated'
-  | 'sms_sender_rejected'
-  | 'sms_balance_error'
-  | 'sms_request_rejected'
-  | 'sms_delivery_failed';
-
 type ContactOtpDeliveryStatus =
   | 'sent'
   | 'failed'
   | 'simulated'
   | 'already_sent'
-  | 'rate_limited_existing_challenge';
+  | 'rate_limited_existing_challenge'
+  | 'auth_phone_confirmed';
 
-class SmsDeliveryError extends Error {
-  code: PhilSmsFailureCode;
+type AuthUser = {
+  id: string;
+  phone?: string | null;
+  phone_confirmed_at?: string | null;
+};
 
-  constructor(code: PhilSmsFailureCode) {
-    super('SMS delivery failed.');
-    this.name = 'SmsDeliveryError';
-    this.code = code;
-  }
-}
-
-const philSmsApiBaseUrl = 'https://dashboard.philsms.com/api/v3';
+// Marks challenges created from an Auth-confirmed phone (no SMS was sent).
+// They are pre-verified and are excluded from the SMS rate-limit counts.
+const authPhoneConfirmedProviderId = 'auth_phone_confirmed';
 const contactOtpExpirySeconds = 30 * 60;
 const contactOtpResendCooldownSeconds = 60;
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? Deno.env.get('PROJECT_URL') ?? '';
@@ -43,8 +43,10 @@ const philSmsToken = normalizePhilSmsToken(
   Deno.env.get('PHILSMS_API_TOKEN') ?? Deno.env.get('PHILSMS_BEARER_TOKEN') ?? '',
 );
 const philSmsSenderId = Deno.env.get('PHILSMS_SENDER_ID') ?? 'Konektado';
-// Temporary development fallback. Rotate or remove this backup code before live deployment.
-const backupCode = Deno.env.get('CONTACT_OTP_BACKUP_CODE')?.trim() || '676767';
+// Fallback for PhilSMS outages (DEC-134). Accepted for any active challenge the
+// signed-in user owns. No default: unset or not exactly 6 digits disables it.
+const configuredBackupCode = (Deno.env.get('CONTACT_OTP_BACKUP_CODE') ?? '').trim();
+const backupCode = /^\d{6}$/.test(configuredBackupCode) ? configuredBackupCode : '';
 const simulationEnabled = Deno.env.get('CONTACT_OTP_SIMULATE') === 'true';
 const simulationUserIds = new Set(
   (Deno.env.get('CONTACT_OTP_SIMULATION_USER_IDS') ?? '')
@@ -85,25 +87,6 @@ function errorJson(error: string, status: number, message?: string, extra?: Reco
     },
     status,
   );
-}
-
-function normalizePhilippineMobile(value: string | null | undefined) {
-  const digits = value?.replace(/\D/g, '') ?? '';
-  if (/^09\d{9}$/.test(digits)) return `63${digits.slice(1)}`;
-  if (/^639\d{9}$/.test(digits)) return digits;
-  return null;
-}
-
-function normalizePhilSmsToken(value: string) {
-  return value.trim().replace(/^Bearer\s+/i, '').trim();
-}
-
-function getPhilSmsHeaders() {
-  return {
-    Accept: 'application/json',
-    Authorization: `Bearer ${philSmsToken}`,
-    'Content-Type': 'application/json',
-  };
 }
 
 async function getAuthenticatedUser(request: Request) {
@@ -155,9 +138,9 @@ function canSimulate(userId: string, phone: string) {
 // Temporary diagnostic: remove after PHILSMS delivery is stable in the deployed function.
 async function runPhilSmsBalanceDiagnostic() {
   try {
-    const response = await fetch(`${philSmsApiBaseUrl}/balance`, {
+    const response = await fetch(`${PHILSMS_API_BASE_URL}/balance`, {
       method: 'GET',
-      headers: getPhilSmsHeaders(),
+      headers: getPhilSmsHeaders(philSmsToken),
     });
     const result = await response.json().catch(() => null);
     const succeeded = response.ok && result?.status === 'success';
@@ -171,76 +154,11 @@ async function runPhilSmsBalanceDiagnostic() {
 
 async function sendPhilSms(phone: string, code: string) {
   await runPhilSmsBalanceDiagnostic();
-
-  let response: Response;
-  try {
-    response = await fetch(`${philSmsApiBaseUrl}/sms/send`, {
-      method: 'POST',
-      headers: getPhilSmsHeaders(),
-      body: JSON.stringify({
-        recipient: phone,
-        sender_id: philSmsSenderId,
-        type: 'plain',
-        message: `Your Konektado verification code is ${code}.`,
-      }),
-    });
-  } catch {
-    console.error('PHILSMS delivery failed', {
-      response: null,
-      status: null,
-    });
-    throw new SmsDeliveryError('sms_delivery_failed');
-  }
-
-  const result = await response.json().catch(() => null);
-
-  if (!response.ok || result?.status === 'error') {
-    const safeResponse = {
-      message: typeof result?.message === 'string' ? result.message.slice(0, 240) : null,
-      status: typeof result?.status === 'string' ? result.status : null,
-    };
-    console.error('PHILSMS delivery failed', {
-      response: safeResponse,
-      status: response.status,
-    });
-    throw new SmsDeliveryError(classifyPhilSmsFailure(response.status, safeResponse.message));
-  }
-
-  return String(
-    result?.data?.uid ??
-      result?.data?.id ??
-      result?.data?.data?.uid ??
-      result?.data?.data?.id ??
-      '',
+  return sendPhilSmsMessage(
+    { senderId: philSmsSenderId, token: philSmsToken },
+    phone,
+    `Your Konektado verification code is ${code}.`,
   );
-}
-
-function classifyPhilSmsFailure(
-  status: number,
-  message: string | null,
-): PhilSmsFailureCode {
-  const normalized = message?.toLowerCase() ?? '';
-
-  if (
-    status === 401 ||
-    status === 403 ||
-    normalized.includes('unauthenticated') ||
-    normalized.includes('unauthorized') ||
-    normalized.includes('invalid token') ||
-    normalized.includes('authentication')
-  ) {
-    return 'sms_provider_unauthenticated';
-  }
-  if (normalized.includes('sender')) return 'sms_sender_rejected';
-  if (
-    normalized.includes('balance') ||
-    normalized.includes('credit') ||
-    normalized.includes('fund')
-  ) {
-    return 'sms_balance_error';
-  }
-  if (status === 400 || status === 422) return 'sms_request_rejected';
-  return 'sms_delivery_failed';
 }
 
 function getWindowRetryAfterSeconds(
@@ -290,10 +208,118 @@ function existingChallengeResponse({
   });
 }
 
-async function handleSend(userId: string, body: RequestBody) {
+function isSmsChallenge(row: { provider_message_id?: string | null }) {
+  return row.provider_message_id !== authPhoneConfirmedProviderId;
+}
+
+/**
+ * True when Supabase Auth already proved ownership of `phone` (a mobile signup
+ * confirmed it with an SMS OTP) and it is also the phone on the profile, which
+ * is what `require_consumed_contact_otp` compares the challenge against.
+ */
+async function isAuthConfirmedProfilePhone(user: AuthUser, phone: string) {
+  if (!user.phone_confirmed_at) return false;
+  if (normalizePhilippineMobile(user.phone) !== phone) return false;
+
+  const { data: profile, error } = await admin
+    .from('profiles')
+    .select('phone')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) {
+    // Fall back to the normal SMS path rather than failing the request.
+    console.error('Contact OTP profile phone lookup failed', {
+      code: error.code ?? null,
+      message: error.message,
+    });
+    return false;
+  }
+
+  return normalizePhilippineMobile(profile?.phone) === phone;
+}
+
+/**
+ * Issues an already-verified challenge for an Auth-confirmed phone so mobile
+ * signups are not sent a second SMS during barangay verification. The
+ * verifications insert trigger still needs a verified, unconsumed challenge id.
+ */
+async function handleAuthConfirmedPhone(userId: string, phone: string) {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  const { data: existing, error: lookupError } = await admin
+    .from('contact_otp_challenges')
+    .select('id, expires_at')
+    .eq('user_id', userId)
+    .eq('phone_e164', phone)
+    .eq('provider_message_id', authPhoneConfirmedProviderId)
+    .not('verified_at', 'is', null)
+    .is('consumed_at', null)
+    .gt('expires_at', nowIso)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) {
+    console.error('Contact OTP confirmed-phone lookup failed', {
+      code: lookupError.code ?? null,
+      message: lookupError.message,
+    });
+    throw new Error('Contact OTP challenge lookup failed.');
+  }
+
+  let challengeId = existing?.id ?? null;
+  let expiresAt = existing ? new Date(existing.expires_at).getTime() : 0;
+
+  if (!challengeId) {
+    challengeId = crypto.randomUUID();
+    expiresAt = now + contactOtpExpirySeconds * 1000;
+    // No code is ever sent for this challenge; store an unguessable hash so the
+    // row still satisfies the schema.
+    const codeHash = await hashCode(challengeId, crypto.randomUUID());
+    const { error: insertError } = await admin.from('contact_otp_challenges').insert({
+      code_hash: codeHash,
+      expires_at: new Date(expiresAt).toISOString(),
+      id: challengeId,
+      max_attempts: 5,
+      phone_e164: phone,
+      provider_message_id: authPhoneConfirmedProviderId,
+      user_id: userId,
+      verified_at: nowIso,
+    });
+    if (insertError) {
+      console.error('Contact OTP confirmed-phone challenge creation failed', {
+        code: insertError.code ?? null,
+        message: insertError.message,
+      });
+      throw new Error('Contact OTP challenge creation failed.');
+    }
+  }
+
+  console.info('Contact OTP verified', { challengeId, method: 'auth_phone', userId });
+
+  return json({
+    success: true,
+    canVerify: true,
+    challengeId,
+    expiresIn: Math.max(0, Math.ceil((expiresAt - now) / 1000)),
+    resendAfter: 0,
+    retryAfterSeconds: 0,
+    simulated: false,
+    deliveryStatus: 'auth_phone_confirmed',
+    verified: true,
+    message: 'Your mobile number is already confirmed.',
+  });
+}
+
+async function handleSend(user: AuthUser, body: RequestBody) {
+  const userId = user.id;
   const phone = normalizePhilippineMobile(body.phone);
   if (!phone) {
     return errorJson('invalid_phone', 400, 'Enter a valid Philippine mobile number.');
+  }
+
+  if (await isAuthConfirmedProfilePhone(user, phone)) {
+    return await handleAuthConfirmedPhone(userId, phone);
   }
 
   const now = Date.now();
@@ -320,18 +346,18 @@ async function handleSend(userId: string, body: RequestBody) {
         .maybeSingle(),
       admin
         .from('contact_otp_challenges')
-        .select('id, sent_at, created_at')
+        .select('id, sent_at, created_at, provider_message_id')
         .eq('user_id', userId)
         .gte('created_at', hourAgo)
         .order('sent_at', { ascending: false }),
       admin
         .from('contact_otp_challenges')
-        .select('id, created_at')
+        .select('id, created_at, provider_message_id')
         .eq('phone_e164', phone)
         .gte('created_at', hourAgo),
       admin
         .from('contact_otp_challenges')
-        .select('id, created_at')
+        .select('id, created_at, provider_message_id')
         .eq('user_id', userId)
         .eq('phone_e164', phone)
         .gte('created_at', tenMinutesAgo),
@@ -348,9 +374,10 @@ async function handleSend(userId: string, body: RequestBody) {
     });
     throw new Error('Contact OTP challenge lookup failed.');
   }
-  const recentUser = recentUserResult.data;
-  const recentPhone = recentPhoneResult.data;
-  const recentResends = recentResendsResult.data;
+  // Auth-confirmed challenges sent no SMS, so they do not count toward limits.
+  const recentUser = recentUserResult.data?.filter(isSmsChallenge);
+  const recentPhone = recentPhoneResult.data?.filter(isSmsChallenge);
+  const recentResends = recentResendsResult.data?.filter(isSmsChallenge);
   const activeChallenge = activeChallengeResult.data;
   const reusableChallenge =
     activeChallenge && activeChallenge.attempts < activeChallenge.max_attempts
@@ -509,73 +536,61 @@ async function handleSend(userId: string, body: RequestBody) {
 async function handleVerify(userId: string, body: RequestBody) {
   const challengeId = body.challengeId?.trim() ?? '';
   const code = body.code?.replace(/\D/g, '') ?? '';
-  if (!challengeId || !/^\d{6}$/.test(code)) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(challengeId)) {
+    return errorJson('challenge_not_found', 404, 'Request a new verification code.');
+  }
+  if (!/^\d{6}$/.test(code)) {
     return errorJson('invalid_code', 400, 'Enter the complete 6-digit code.');
   }
 
-  const { data: challenge, error } = await admin
-    .from('contact_otp_challenges')
-    .select('id, user_id, code_hash, expires_at, attempts, max_attempts, verified_at, consumed_at')
-    .eq('id', challengeId)
-    .maybeSingle();
+  let candidateHash = await hashCode(challengeId, code);
+  const usedBackupCode = Boolean(backupCode) && constantTimeEqual(code, backupCode);
+  if (usedBackupCode) {
+    // Submit the challenge's own hash so the atomic function still applies
+    // ownership, expiry, consumption, and attempt-lock checks under its row lock.
+    const { data: challenge, error: lookupError } = await admin
+      .from('contact_otp_challenges')
+      .select('code_hash')
+      .eq('id', challengeId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+    if (challenge?.code_hash) candidateHash = challenge.code_hash;
+  }
+
+  const { data, error } = await admin.rpc('verify_contact_otp_atomic', {
+    p_candidate_hash: candidateHash,
+    p_challenge_id: challengeId,
+    p_user_id: userId,
+  });
   if (error) throw new Error(error.message);
-  if (!challenge || challenge.user_id !== userId) {
-    return errorJson('challenge_not_found', 404, 'Request a new verification code.');
-  }
-  if (new Date(challenge.expires_at).getTime() < Date.now()) {
-    return errorJson('code_expired', 400, 'This code has expired. Request a new one.');
-  }
-  if (challenge.consumed_at) {
-    return errorJson('challenge_consumed', 400, 'Request a new verification code.');
-  }
-  if (challenge.attempts >= challenge.max_attempts) {
-    return errorJson(
-      'attempt_limit_reached',
-      429,
-      'Too many incorrect attempts. Request a new code.',
-    );
-  }
-  if (challenge.verified_at) {
+  const result = data as { status?: string; attemptsRemaining?: number } | null;
+  if (result?.status === 'verified') {
+    if (usedBackupCode) {
+      console.info('Contact OTP verified', { challengeId, method: 'backup_code', userId });
+    }
     return json({ challengeId, verified: true });
   }
-
-  const candidateHash = await hashCode(challengeId, code);
-  const matchesNormalCode = constantTimeEqual(candidateHash, challenge.code_hash);
-  // This server-only backup accepts an active challenge; remove or rotate it before live deployment.
-  const matchesBackupCode = constantTimeEqual(code, backupCode);
-
-  if (!matchesNormalCode && !matchesBackupCode) {
-    const attempts = challenge.attempts + 1;
-    await admin
-      .from('contact_otp_challenges')
-      .update({ attempts })
-      .eq('id', challengeId);
-    return errorJson(
-      attempts >= challenge.max_attempts ? 'attempt_limit_reached' : 'invalid_code',
-      attempts >= challenge.max_attempts ? 429 : 400,
-      attempts >= challenge.max_attempts
-        ? 'Too many incorrect attempts. Request a new code.'
-        : 'That code is incorrect. Try again.',
-      { attemptsRemaining: Math.max(challenge.max_attempts - attempts, 0) },
-    );
+  if (result?.status === 'challenge_not_found') {
+    return errorJson('challenge_not_found', 404, 'Request a new verification code.');
   }
-
-  if (matchesBackupCode) {
-    console.info('Contact OTP verified', {
-      challengeId,
-      method: 'backup_code',
-      userId,
+  if (result?.status === 'code_expired') {
+    return errorJson('code_expired', 400, 'This code has expired. Request a new one.');
+  }
+  if (result?.status === 'challenge_consumed') {
+    return errorJson('challenge_consumed', 400, 'Request a new verification code.');
+  }
+  if (result?.status === 'attempt_limit_reached') {
+    return errorJson('attempt_limit_reached', 429, 'Too many incorrect attempts. Request a new code.', {
+      attemptsRemaining: 0,
     });
   }
-
-  const { error: updateError } = await admin
-    .from('contact_otp_challenges')
-    .update({ verified_at: new Date().toISOString() })
-    .eq('id', challengeId)
-    .is('verified_at', null);
-  if (updateError) throw new Error(updateError.message);
-
-  return json({ challengeId, verified: true });
+  if (result?.status === 'invalid_code') {
+    return errorJson('invalid_code', 400, 'That code is incorrect. Try again.', {
+      attemptsRemaining: result.attemptsRemaining ?? 0,
+    });
+  }
+  throw new Error('Unexpected contact OTP verification result.');
 }
 
 Deno.serve(async (request) => {
@@ -596,7 +611,7 @@ Deno.serve(async (request) => {
     if (!user) return errorJson('unauthorized', 401);
 
     const body = (await request.json()) as RequestBody;
-    if (body.action === 'send') return await handleSend(user.id, body);
+    if (body.action === 'send') return await handleSend(user, body);
     if (body.action === 'verify') return await handleVerify(user.id, body);
     return errorJson('invalid_action', 400, 'Choose a supported contact verification action.');
   } catch (error) {
