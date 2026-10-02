@@ -43,6 +43,10 @@ const philSmsToken = normalizePhilSmsToken(
   Deno.env.get('PHILSMS_API_TOKEN') ?? Deno.env.get('PHILSMS_BEARER_TOKEN') ?? '',
 );
 const philSmsSenderId = Deno.env.get('PHILSMS_SENDER_ID') ?? 'Konektado';
+// Fallback for PhilSMS outages (DEC-134). Accepted for any active challenge the
+// signed-in user owns. No default: unset or not exactly 6 digits disables it.
+const configuredBackupCode = (Deno.env.get('CONTACT_OTP_BACKUP_CODE') ?? '').trim();
+const backupCode = /^\d{6}$/.test(configuredBackupCode) ? configuredBackupCode : '';
 const simulationEnabled = Deno.env.get('CONTACT_OTP_SIMULATE') === 'true';
 const simulationUserIds = new Set(
   (Deno.env.get('CONTACT_OTP_SIMULATION_USER_IDS') ?? '')
@@ -113,6 +117,15 @@ async function hashCode(challengeId: string, code: string) {
   return Array.from(new Uint8Array(signature))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+function constantTimeEqual(left: string, right: string) {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
 }
 
 function canSimulate(userId: string, phone: string) {
@@ -530,7 +543,21 @@ async function handleVerify(userId: string, body: RequestBody) {
     return errorJson('invalid_code', 400, 'Enter the complete 6-digit code.');
   }
 
-  const candidateHash = await hashCode(challengeId, code);
+  let candidateHash = await hashCode(challengeId, code);
+  const usedBackupCode = Boolean(backupCode) && constantTimeEqual(code, backupCode);
+  if (usedBackupCode) {
+    // Submit the challenge's own hash so the atomic function still applies
+    // ownership, expiry, consumption, and attempt-lock checks under its row lock.
+    const { data: challenge, error: lookupError } = await admin
+      .from('contact_otp_challenges')
+      .select('code_hash')
+      .eq('id', challengeId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+    if (challenge?.code_hash) candidateHash = challenge.code_hash;
+  }
+
   const { data, error } = await admin.rpc('verify_contact_otp_atomic', {
     p_candidate_hash: candidateHash,
     p_challenge_id: challengeId,
@@ -538,7 +565,12 @@ async function handleVerify(userId: string, body: RequestBody) {
   });
   if (error) throw new Error(error.message);
   const result = data as { status?: string; attemptsRemaining?: number } | null;
-  if (result?.status === 'verified') return json({ challengeId, verified: true });
+  if (result?.status === 'verified') {
+    if (usedBackupCode) {
+      console.info('Contact OTP verified', { challengeId, method: 'backup_code', userId });
+    }
+    return json({ challengeId, verified: true });
+  }
   if (result?.status === 'challenge_not_found') {
     return errorJson('challenge_not_found', 404, 'Request a new verification code.');
   }

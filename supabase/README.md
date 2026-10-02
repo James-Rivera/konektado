@@ -76,32 +76,38 @@ See [docs/13-verification-email-setup.md](../docs/13-verification-email-setup.md
 ## Contact OTP Backup Code
 
 The `functions/contact-otp/` Edge Function keeps PHILSMS delivery, random OTP generation,
-hashed challenge storage, expiry, cooldowns, attempt limits, and rate limits. During active
-development, it also accepts a server-only backup code for an existing challenge owned by
-the authenticated user.
+hashed challenge storage, expiry, cooldowns, attempt limits, and rate limits. As a fallback
+for PhilSMS outages (DEC-134), it also accepts a server-only backup code on an active
+challenge requested by the authenticated user. This works for every user, so anyone who
+learns the code can verify a number they do not own.
 
-Set the backup code as a Supabase Edge Function secret:
+Set the backup code as a Supabase Edge Function secret from your own terminal, using a
+random six-digit value. Do not paste it into chat, source files, or `EXPO_PUBLIC_*` variables:
 
-```bash
-npx supabase secrets set CONTACT_OTP_BACKUP_CODE=676767
+```powershell
+$c = Read-Host -Prompt "Six-digit backup code" -AsSecureString
+$v = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($c))
+npx supabase@2.118.0 secrets set "CONTACT_OTP_BACKUP_CODE=$v" --project-ref dudlohdeydcbsvgccexd
+Remove-Variable c, v
 ```
 
-The function defaults to `676767` when the secret is missing. This fallback is temporary and
-must be removed or rotated before live deployment. Never expose this value through an
-`EXPO_PUBLIC_*` variable or return it from the Edge Function.
+There is no default. If the secret is unset or is not exactly six digits, the backup code is
+disabled. Rotate it after demos or suspected exposure, and unset it once SMS delivery is
+reliable. Successful uses are logged as `method: 'backup_code'`.
 
-Successful backup verification follows the normal challenge lifecycle: the Edge Function
-sets `verified_at`, and the database trigger sets `consumed_at` when the resident submits the
+Backup verification goes through `verify_contact_otp_atomic` like a normal code: the
+challenge must belong to the user, be unexpired and unconsumed, and have fewer than five
+failed attempts. The database trigger sets `consumed_at` when the resident submits the
 barangay verification request.
 
 Manual test checklist:
 
-- Request a contact OTP, enter `676767`, and confirm the active challenge verifies.
-- Enter `676767` without requesting an OTP first and confirm verification fails.
-- Request an OTP, wait until the challenge expires, enter `676767`, and confirm verification fails.
+- Request a contact OTP, enter the backup code, and confirm the active challenge verifies.
+- Enter the backup code without requesting an OTP first and confirm verification fails.
+- Request an OTP, wait until the challenge expires, enter the backup code, and confirm verification fails.
 - Confirm an expired challenge shows inline recovery, then request a fresh challenge and verify that the new challenge replaces the expired ID.
 - Request an OTP, enter an incorrect code, and confirm verification fails and records an attempt.
-- Enter five incorrect codes for one challenge, then enter `676767`, and confirm that challenge remains blocked.
+- Enter five incorrect codes for one challenge, then enter the backup code, and confirm that challenge remains blocked.
 - Request an OTP, immediately request another, and confirm the existing challenge returns with `deliveryStatus = already_sent`, HTTP `200`, and no second provider send.
 - Reach the hourly or ten-minute send window with a usable challenge and confirm it returns with `deliveryStatus = rate_limited_existing_challenge`, HTTP `200`, and code entry remains available.
 - Reach a send window without a usable challenge and confirm the function returns HTTP `429` until a new SMS send is allowed.
