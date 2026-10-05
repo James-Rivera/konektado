@@ -12,6 +12,7 @@ import {
 } from '@/services/verification-email.service';
 import type { PublicProfileSummary } from '@/types/marketplace.types';
 import type { VerificationStatus } from '@/types/verification.types';
+import { getSessionUser } from '@/services/session.service';
 import { supabase } from '@/utils/supabase';
 import {
   formatReviewerNoteWithReason,
@@ -268,8 +269,8 @@ export async function getAdminProfile(): Promise<ServiceResult<PublicProfileSumm
   const admin = await requireAdmin();
   if (admin.error) return admin;
 
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
+  const { user: sessionUser } = await getSessionUser();
+  const userId = sessionUser?.id;
 
   if (!userId) return { data: null, error: 'Please sign in again to continue.' };
 

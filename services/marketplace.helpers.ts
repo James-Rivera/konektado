@@ -11,6 +11,7 @@ import type {
     ServiceSearchResult,
 } from '@/types/marketplace.types';
 import { applyPublicPhotoVisibilityToProfiles } from '@/services/content-visibility.service';
+import { getSessionUser } from '@/services/session.service';
 import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
@@ -538,13 +539,13 @@ export function isPresenceActive(value: string | boolean | null | undefined) {
 }
 
 export async function getCurrentUserId(): Promise<ServiceResult<string>> {
-  const { data, error } = await supabase.auth.getUser();
+  const { error, user } = await getSessionUser();
 
-  if (error || !data.user) {
+  if (error || !user) {
     return { data: null, error: 'Please sign in again to continue.' };
   }
 
-  return { data: data.user.id, error: null };
+  return { data: user.id, error: null };
 }
 
 export async function requireVerifiedUser(): Promise<ServiceResult<string>> {

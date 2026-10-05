@@ -8,6 +8,7 @@ import type {
   CredentialSummary,
   CredentialType,
 } from '@/types/marketplace.types';
+import { getSessionUser } from '@/services/session.service';
 import { supabase } from '@/utils/supabase';
 
 const CREDENTIAL_BUCKET = 'credential-files';
@@ -72,13 +73,13 @@ function safeFileName(name: string | null | undefined) {
 }
 
 async function getCurrentUserId(): Promise<ServiceResult<string>> {
-  const { data, error } = await supabase.auth.getUser();
+  const { error, user } = await getSessionUser();
 
-  if (error || !data.user) {
+  if (error || !user) {
     return { data: null, error: 'Please sign in again to continue.' };
   }
 
-  return { data: data.user.id, error: null };
+  return { data: user.id, error: null };
 }
 
 async function uploadCredentialFile({

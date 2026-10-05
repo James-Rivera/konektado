@@ -6,6 +6,7 @@ import type {
   PublicProfileTrustSummary,
   Review,
 } from '@/types/marketplace.types';
+import { getSessionUser } from '@/services/session.service';
 import { supabase } from '@/utils/supabase';
 
 type ReviewRow = {
@@ -85,11 +86,11 @@ export async function getMyJobReviewState(
   const payload = (data ?? {}) as ReviewStatePayload;
   let review: Review | null = null;
   if (payload.review?.id && payload.revieweeId) {
-    const { data: user } = await supabase.auth.getUser();
+    const { user } = await getSessionUser();
     review = {
       id: payload.review.id,
       jobId,
-      reviewerId: user.user?.id ?? '',
+      reviewerId: user?.id ?? '',
       revieweeId: payload.revieweeId,
       rating: Number(payload.review.rating ?? 0),
       comment: payload.review.comment ?? null,

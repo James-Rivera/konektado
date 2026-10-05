@@ -729,3 +729,28 @@ Also document which skeletons should remain separate if the real component canno
 - Run end-to-end manual QA for the completed performance, Product UX, auth, and post-flow stabilization work before starting more optimization.
 - Use `docs/stabilization-audit.md` as the current cross-area status source.
 - Do not start database index, RPC, or view work unless real row counts, EXPLAIN output, or profiling show a need.
+
+## 2026-10-05 Mobile Data Round-Trip Cuts (DEC-137)
+
+Goal: fewer sequential network round trips before Home and Profile render, since each one costs roughly 150 to 500 ms on mobile data. No schema, RLS, or migration changes.
+
+Implemented changes:
+
+- `services/session.service.ts` adds `getSessionUser()`, which reads the stored session instead of calling `supabase.auth.getUser()` (an Auth server round trip on every call). `getCurrentUserId()` in `services/marketplace.helpers.ts` (33 callers) and the credential, admin-profile, review, profile-completion, and user-preference lookups now use it. The signup/OTP helpers in `services/auth.service.ts`, the onboarding loader that reads signup metadata, verification submission and prefill, and the internal editor access check still call `getUser()`.
+- `ProfileProvider` reads the session locally, then loads `profiles`, `provider_profiles`, preferences, and the latest verification status in one parallel round trip instead of four sequential ones.
+- `ProfileProvider` no longer reloads on `INITIAL_SESSION`, which made the mount load run the full chain twice, or on `TOKEN_REFRESHED`, which changes no profile data.
+- The 30-second profile poll is skipped while the profile realtime channel is subscribed. It still runs when realtime errors, times out, or never connects.
+- `searchJobs`, `listMyJobs`, and `getJobDetail` load public profiles, client stats, and photo visibility in parallel instead of one after another.
+
+Expected effect: about four fewer sequential round trips on a cold start before the Home feed request goes out, one fewer on every service call that used `getCurrentUserId()`, one to two fewer on the Home jobs feed and job detail, and no background profile reads every 30 seconds while realtime is healthy. Not yet measured on a device.
+
+Validation results:
+
+- `npm run lint`, `npx tsc --noEmit`, and the 183 unit tests passed.
+- No Expo/manual device test was run.
+
+Manual testing checklist:
+
+- Cold start signed in, signed out, and mid-onboarding routes correctly.
+- Login, logout, password recovery pin, and signup password step still route correctly.
+- Profile edits, verification decisions, and preference changes still appear without a manual refresh (realtime), and still appear within 30 seconds with realtime blocked (fallback poll).

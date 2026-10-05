@@ -20,6 +20,7 @@ import type {
   WorkProfileInput,
 } from '@/types/profile.types';
 import type { VerificationStatus } from '@/types/verification.types';
+import { getSessionUser } from '@/services/session.service';
 import { supabase } from '@/utils/supabase';
 import {
   getLegalNameEditPolicy,
@@ -458,16 +459,16 @@ export async function requireVerifiedCompleteProfile(
 }
 
 async function getCurrentUser(): Promise<ServiceResult<{ id: string; email: string | null }>> {
-  const { data, error } = await supabase.auth.getUser();
+  const { error, user } = await getSessionUser();
 
-  if (error || !data.user) {
+  if (error || !user) {
     return { data: null, error: 'Please sign in again to continue.' };
   }
 
   return {
     data: {
-      id: data.user.id,
-      email: data.user.email ?? null,
+      id: user.id,
+      email: user.email ?? null,
     },
     error: null,
   };

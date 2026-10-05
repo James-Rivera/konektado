@@ -246,9 +246,14 @@ export async function listMyJobs(): Promise<ServiceResult<JobSummary[]>> {
   }
 
   const rows = (data as JobRow[] | null) ?? [];
-  const profiles = await loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id));
+  // Both lookups only need the client ids (`mapJob` uses the same
+  // `client_id ?? owner_id`), so they share one round trip.
+  const clientIds = rows.map((row) => row.client_id ?? row.owner_id);
+  const [profiles, stats] = await Promise.all([
+    loadPublicProfiles(clientIds),
+    loadClientStats(clientIds),
+  ]);
   const jobs = rows.map((row) => mapJob(row, profiles));
-  const stats = await loadClientStats(jobs.map((job) => job.clientId));
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
 }
 
@@ -338,18 +343,21 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
   });
-  // Photo moderation and the public-safe profile lookup are independent: photo
-  // moderation maps rows rather than filtering them, so the client ids are
-  // already known from `rows`. `loadClientStats` cannot join them - it needs
-  // `jobs`, which is derived from `profiles` via the verified-client filter.
-  const [visibleRows, profiles] = await Promise.all([
+  // Photo moderation, the public-safe profile lookup, and client stats are
+  // independent: photo moderation maps rows rather than filtering them, and
+  // every client id is already known from `rows` (`mapJob` uses the same
+  // `client_id ?? owner_id`). Stats are loaded for all of them in the same
+  // round trip and the unverified clients are dropped afterwards, as
+  // `searchServices` already does for providers.
+  const clientIds = rows.map((row) => row.client_id ?? row.owner_id);
+  const [visibleRows, profiles, stats] = await Promise.all([
     applyPublicPhotoVisibilityToRows(rows, 'job_photo'),
-    loadPublicProfiles(rows.map((row) => row.client_id ?? row.owner_id)),
+    loadPublicProfiles(clientIds),
+    loadClientStats(clientIds),
   ]);
   const jobs = visibleRows
     .map((row) => mapJob(row, profiles))
     .filter((job) => isPublicProfileVerified(job.client));
-  const stats = await loadClientStats(jobs.map((job) => job.clientId));
 
   return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
 }
@@ -508,10 +516,14 @@ export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDeta
     return { data: null, error: 'Job not found.' };
   }
 
-  const [visibleData] = await applyPublicPhotoVisibilityToRows([data], 'job_photo');
-  const profiles = await loadPublicProfiles([visibleData.client_id ?? visibleData.owner_id]);
+  // All three only need the job row, so they share one round trip.
+  const clientId = data.client_id ?? data.owner_id;
+  const [[visibleData], profiles, stats] = await Promise.all([
+    applyPublicPhotoVisibilityToRows([data], 'job_photo'),
+    loadPublicProfiles([clientId]),
+    loadClientStats([clientId]),
+  ]);
   const job = mapJob(visibleData, profiles);
-  const stats = await loadClientStats([job.clientId]);
 
   return {
     data: {
