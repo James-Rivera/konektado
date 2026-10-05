@@ -463,7 +463,12 @@ export default function HomeScreen() {
     const cacheIsFresh =
       cachedFeed ? Date.now() - cachedFeed.loadedAt < HOME_FEED_CACHE_TTL_MS : false;
 
+    // Stale-while-revalidate against the module-level `homeFeedCache`: show the
+    // cached feed for this user at once, then refresh it when stale. The cache
+    // is an external store that outlives this component, so syncing from it
+    // here is the effect's job rather than derived state.
     if (cachedFeed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFeedSources(cachedFeed.sources);
       setFeedLoading(false);
       setFeedError(null);

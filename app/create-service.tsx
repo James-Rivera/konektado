@@ -169,7 +169,14 @@ export default function CreateServiceScreen() {
   const [loadingService, setLoadingService] = useState(Boolean(serviceId));
   const [savingService, setSavingService] = useState(false);
   const [photoFolderId] = useState(() => `service-draft-${Date.now()}`);
-  const [locationBarangay, setLocationBarangay] = useState('Barangay San Pedro');
+  const [locationBarangay, setLocationBarangay] = useState(profile?.barangay || 'Barangay San Pedro');
+  // Follow the profile barangay when it loads or changes, adjusting while
+  // rendering rather than in an effect one commit late.
+  const [syncedProfileBarangay, setSyncedProfileBarangay] = useState(profile?.barangay);
+  if (profile?.barangay !== syncedProfileBarangay) {
+    setSyncedProfileBarangay(profile?.barangay);
+    if (profile?.barangay) setLocationBarangay(profile.barangay);
+  }
   const locationText = locationBarangay;
   const tagOptions = useMemo(() => getServiceTagsForCategory(category), [category]);
   const selectedTagsText = useMemo(() => tags.join(', '), [tags]);
@@ -233,12 +240,6 @@ export default function CreateServiceScreen() {
     scrollToRateRange();
   }, [scrollToRateRange]);
 
-  useEffect(() => {
-    if (profile?.barangay) {
-      setLocationBarangay(profile.barangay);
-    }
-  }, [profile?.barangay]);
-
   /**
    * Seeds a NEW listing from the resident's Work Profile.
    *
@@ -289,12 +290,18 @@ export default function CreateServiceScreen() {
     };
   }, [initialDraftId, loading, originSkill, profile?.barangay, serviceId]);
 
+  // Loading a different listing starts over. Raised while rendering, so the
+  // effect below only fetches; initial state already covers the first load.
+  const [loadingServiceId, setLoadingServiceId] = useState(serviceId);
+  if (serviceId !== loadingServiceId) {
+    setLoadingServiceId(serviceId);
+    if (serviceId) setLoadingService(true);
+  }
 
   useEffect(() => {
     if (!serviceId) return;
     let active = true;
 
-    setLoadingService(true);
     getMyService(serviceId).then((result) => {
       if (!active) return;
 

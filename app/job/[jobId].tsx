@@ -62,12 +62,9 @@ export default function JobDetailScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [updatingPost, setUpdatingPost] = useState(false);
-  const [avatarFailed, setAvatarFailed] = useState(false);
+  // Remembers which URL failed, so a new avatar URL gets a fresh attempt.
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
-
-  useEffect(() => {
-    setAvatarFailed(false);
-  }, [job?.client?.avatarUrl]);
 
   useEffect(() => {
     if (!profile?.id || !rawJobId) return;
@@ -77,10 +74,8 @@ export default function JobDetailScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!rawJobId) {
-      setLoading(false);
-      return;
-    }
+    // Without a job id there is nothing to load; `isLoading` below reports that.
+    if (!rawJobId) return;
 
     getJobDetail(rawJobId).then((result) => {
       if (!active) return;
@@ -99,7 +94,9 @@ export default function JobDetailScreen() {
     };
   }, [rawJobId]);
 
-  if (loading && !job) {
+  const isLoading = Boolean(rawJobId) && loading;
+
+  if (isLoading && !job) {
     return <JobDetailSkeleton showActionBar={!adminViewRequested} />;
   }
 
@@ -463,9 +460,9 @@ export default function JobDetailScreen() {
               <View style={styles.posterRow}>
                 <View style={styles.posterInfo}>
                   <View style={styles.avatar}>
-                    {clientAvatarUrl && !avatarFailed ? (
+                    {clientAvatarUrl && failedAvatarUrl !== clientAvatarUrl ? (
                       <CachedRemoteImage
-                        onError={() => setAvatarFailed(true)}
+                        onError={() => setFailedAvatarUrl(clientAvatarUrl)}
                         uri={clientAvatarUrl}
                         style={styles.avatarImage}
                       />

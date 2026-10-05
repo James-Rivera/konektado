@@ -79,11 +79,13 @@ export default function ProfileScreen() {
     if (profileLoading || !isFocused) return undefined;
 
     let active = true;
+    // Only the first load blocks the screen. `dataLoading` starts out true and
+    // only turns false once that load succeeds, so it never needs raising here.
     const showBlockingLoader = !hasLoadedProfileDataRef.current;
 
-    if (showBlockingLoader) {
-      setDataLoading(true);
-    }
+    // A focus refresh clears the previous error as it starts. Deriving that
+    // instead would need a per-focus request key on top of the ref above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadError(null);
 
     Promise.all([

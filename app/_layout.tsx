@@ -78,11 +78,11 @@ function RootNavigator() {
   } = useProfileStatus();
   const [hasResolvedInitialStatus, setHasResolvedInitialStatus] = useState(false);
 
-  useEffect(() => {
-    if (!loading) {
-      setHasResolvedInitialStatus(true);
-    }
-  }, [loading]);
+  // Latches once the first status load finishes. Set while rendering, so the
+  // initial gate lifts in the same commit instead of one effect later.
+  if (!loading && !hasResolvedInitialStatus) {
+    setHasResolvedInitialStatus(true);
+  }
 
   useEffect(() => {
     if (!rootNavigationState?.key) return;

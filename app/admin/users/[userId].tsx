@@ -36,18 +36,40 @@ import type { VerificationStatus } from '@/types/verification.types';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
+const MISSING_USER_MESSAGE = 'Choose a user to review.';
+
 export default function AdminUserReviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ userId?: string }>();
   const userId = Array.isArray(params.userId) ? params.userId[0] : params.userId;
   const [user, setUser] = useState<AdminUserDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(userId));
   const [refreshing, setRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(userId ? null : MISSING_USER_MESSAGE);
+
+  // A different user starts loading again. Reset while rendering, so the
+  // mount/param effect below only has to fetch.
+  const [loadingForId, setLoadingForId] = useState(userId);
+  if (userId !== loadingForId) {
+    setLoadingForId(userId);
+    setErrorMessage(userId ? null : MISSING_USER_MESSAGE);
+    setLoading(Boolean(userId));
+  }
+
+  const applyUserResult = useCallback((result: Awaited<ReturnType<typeof getAdminUserDetail>>) => {
+    if (result.error || !result.data) {
+      setErrorMessage(result.error ?? 'Could not load this user.');
+    } else {
+      setUser(result.data);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
 
   const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!userId) {
-      setErrorMessage('Choose a user to review.');
+      setErrorMessage(MISSING_USER_MESSAGE);
       setLoading(false);
       return;
     }
@@ -59,21 +81,13 @@ export default function AdminUserReviewScreen() {
       setLoading(true);
     }
 
-    const result = await getAdminUserDetail(userId);
-
-    if (result.error || !result.data) {
-      setErrorMessage(result.error ?? 'Could not load this user.');
-    } else {
-      setUser(result.data);
-    }
-
-    setLoading(false);
-    setRefreshing(false);
-  }, [userId]);
+    applyUserResult(await getAdminUserDetail(userId));
+  }, [applyUserResult, userId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!userId) return;
+    void getAdminUserDetail(userId).then(applyUserResult);
+  }, [applyUserResult, userId]);
 
   return (
     <AdminScreenShell

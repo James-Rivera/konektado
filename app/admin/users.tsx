@@ -62,6 +62,13 @@ export default function AdminUsersScreen() {
       setLoading(true);
     }
 
+    await fetchUsers();
+  };
+
+  // Fetches and stores the result without resetting the flags first, so the
+  // first load can run from the mount effect: initial state is already
+  // "loading" with no error.
+  const fetchUsers = async () => {
     const result = await listAdminUsers({ limit: 150 });
 
     if (result.error || !result.data) {
@@ -75,7 +82,7 @@ export default function AdminUsersScreen() {
   };
 
   useEffect(() => {
-    load();
+    void fetchUsers();
   }, []);
 
   const counts = useMemo(

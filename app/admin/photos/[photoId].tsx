@@ -49,6 +49,8 @@ const REASONS = [
   'Other',
 ];
 
+const MISSING_PHOTO_MESSAGE = 'Choose a photo to review.';
+
 export default function AdminPhotoReviewScreen() {
   const router = useRouter();
   const { showSuccessToast } = useFeedback();
@@ -56,17 +58,37 @@ export default function AdminPhotoReviewScreen() {
   const photoId = Array.isArray(params.photoId) ? params.photoId[0] : params.photoId;
   const fromUserId = Array.isArray(params.fromUserId) ? params.fromUserId[0] : params.fromUserId;
   const [photo, setPhoto] = useState<AdminPhotoDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(photoId));
   const [refreshing, setRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(photoId ? null : MISSING_PHOTO_MESSAGE);
   const [modalMode, setModalMode] = useState<ReviewMode | null>(null);
   const [selectedReason, setSelectedReason] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // A different photo starts loading again. Reset while rendering, so the
+  // mount/param effect below only has to fetch.
+  const [loadingForId, setLoadingForId] = useState(photoId);
+  if (photoId !== loadingForId) {
+    setLoadingForId(photoId);
+    setErrorMessage(photoId ? null : MISSING_PHOTO_MESSAGE);
+    setLoading(Boolean(photoId));
+  }
+
+  const applyPhotoResult = useCallback((result: Awaited<ReturnType<typeof getPublicPhotoDetail>>) => {
+    if (result.error || !result.data) {
+      setErrorMessage(result.error ?? 'Could not load this photo.');
+    } else {
+      setPhoto(result.data);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
   const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!photoId) {
-      setErrorMessage('Choose a photo to review.');
+      setErrorMessage(MISSING_PHOTO_MESSAGE);
       setLoading(false);
       return;
     }
@@ -78,20 +100,13 @@ export default function AdminPhotoReviewScreen() {
       setLoading(true);
     }
 
-    const result = await getPublicPhotoDetail(photoId);
-    if (result.error || !result.data) {
-      setErrorMessage(result.error ?? 'Could not load this photo.');
-    } else {
-      setPhoto(result.data);
-    }
-
-    setLoading(false);
-    setRefreshing(false);
-  }, [photoId]);
+    applyPhotoResult(await getPublicPhotoDetail(photoId));
+  }, [applyPhotoResult, photoId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!photoId) return;
+    void getPublicPhotoDetail(photoId).then(applyPhotoResult);
+  }, [applyPhotoResult, photoId]);
 
   const sourceAction = useMemo(() => (photo ? actionForPhoto(photo) : null), [photo]);
 

@@ -155,15 +155,14 @@ export default function SearchScreen() {
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [workers, setWorkers] = useState<ServiceSearchResult[]>([]);
-  const [searchError, setSearchError] = useState<string | null>(null);
   const [loadedModes, setLoadedModes] = useState<Record<SearchMode, boolean>>({
     jobs: false,
     workers: false,
   });
-  const [refreshingModes, setRefreshingModes] = useState<Record<SearchMode, boolean>>({
-    jobs: false,
-    workers: false,
-  });
+  // The last search request that finished, and the error it ended with. The
+  // in-flight flag and the visible error are derived from these below, so the
+  // search effect never has to set state before its request resolves.
+  const [settledSearch, setSettledSearch] = useState<{ error: string | null; request: object } | null>(null);
   const [appliedFilters, setAppliedFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
   const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
   const [actionsTarget, setActionsTarget] = useState<SearchActionTarget | null>(null);
@@ -210,17 +209,40 @@ export default function SearchScreen() {
     setAppliedFilters(nextDefaultFilters);
     setDraftFilters(nextDefaultFilters);
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
+  } else {
+    // Keep the browse group inside the groups the work type allows. The
+    // inequality guard stops a fallback that is itself outside the list from
+    // re-rendering forever.
+    const fallbackBrowseGroup = browseGroupsForWorkType[0] ?? orderedGroups[0] ?? 'Home & Local Help';
+    if (!browseGroupsForWorkType.includes(browseGroup) && browseGroup !== fallbackBrowseGroup) {
+      setBrowseGroup(fallbackBrowseGroup);
+    }
   }
 
-  useEffect(() => {
-    if (browseGroupsForWorkType.includes(browseGroup)) return;
-    setBrowseGroup(browseGroupsForWorkType[0] ?? orderedGroups[0] ?? 'Home & Local Help');
-  }, [browseGroup, browseGroupsForWorkType, orderedGroups]);
+  // Each time the screen regains focus the search runs again, so a focus gain
+  // has to produce a new request key. Losing focus does not: while hidden, the
+  // screen keeps showing the state of the last request it made.
+  const [focusGeneration, setFocusGeneration] = useState(0);
+  const [lastFocused, setLastFocused] = useState(isFocused);
+  if (isFocused !== lastFocused) {
+    setLastFocused(isFocused);
+    if (isFocused) setFocusGeneration((current) => current + 1);
+  }
+
+  // Identity changes exactly when the search has to run again, so it doubles
+  // as the key that `settledSearch` is matched against.
+  const searchRequest = useMemo(
+    () => ({ appliedFilters, barangay: profile?.barangay, focusGeneration, mode, normalizedQuery }),
+    [appliedFilters, focusGeneration, mode, normalizedQuery, profile?.barangay],
+  );
+  const searchSettled = settledSearch?.request === searchRequest;
+  const searchError = searchSettled ? settledSearch.error : null;
 
   useEffect(() => {
     let active = true;
     const requestId = searchRequestRef.current + 1;
     searchRequestRef.current = requestId;
+    const { appliedFilters, barangay, mode, normalizedQuery } = searchRequest;
 
     if (!isFocused) {
       return () => {
@@ -230,10 +252,8 @@ export default function SearchScreen() {
 
     const structuredServices = getStructuredServiceFilterValues(appliedFilters);
     const barangayFilter =
-      appliedFilters.locationScope === 'same_barangay' ? profile?.barangay ?? undefined : undefined;
-
-    setRefreshingModes((current) => ({ ...current, [mode]: true }));
-    setSearchError(null);
+      appliedFilters.locationScope === 'same_barangay' ? barangay ?? undefined : undefined;
+    let error: string | null = null;
 
     const searchPromise =
       mode === 'jobs'
@@ -256,7 +276,7 @@ export default function SearchScreen() {
           }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
             if (result.error) {
-              setSearchError(result.error);
+              error = result.error;
               return;
             }
             if (result.data) setJobs(result.data);
@@ -280,7 +300,7 @@ export default function SearchScreen() {
           }).then((result) => {
             if (!active || requestId !== searchRequestRef.current) return;
             if (result.error) {
-              setSearchError(result.error);
+              error = result.error;
               return;
             }
             if (result.data) setWorkers(result.data);
@@ -289,18 +309,18 @@ export default function SearchScreen() {
     searchPromise
       .catch(() => {
         if (!active || requestId !== searchRequestRef.current) return;
-        setSearchError('Could not load search results right now.');
+        error = 'Could not load search results right now.';
       })
       .finally(() => {
         if (!active || requestId !== searchRequestRef.current) return;
         setLoadedModes((current) => ({ ...current, [mode]: true }));
-        setRefreshingModes((current) => ({ ...current, [mode]: false }));
+        setSettledSearch({ error, request: searchRequest });
       });
 
     return () => {
       active = false;
     };
-  }, [appliedFilters, isFocused, mode, normalizedQuery, profile?.barangay]);
+  }, [isFocused, searchRequest]);
 
   const selectedService = appliedFilters.service === 'all' ? null : appliedFilters.service;
 
@@ -340,7 +360,7 @@ export default function SearchScreen() {
   const activeFilterCount = getSearchFilterCount(appliedFilters);
   const activeResultCount = mode === 'jobs' ? visibleJobs.length : visibleWorkers.length;
   const activeModeLoaded = loadedModes[mode];
-  const activeModeRefreshing = refreshingModes[mode];
+  const activeModeRefreshing = !searchSettled;
   const showInitialSkeleton = activeModeRefreshing && !activeModeLoaded && activeResultCount === 0;
   const showRefreshIndicator = activeModeRefreshing && activeModeLoaded && activeResultCount > 0;
 
@@ -440,9 +460,16 @@ export default function SearchScreen() {
     listRef.current?.scrollToOffset({ animated: false, offset: 0 });
   }, [setControlsVisible]);
 
+  // A new `filter` param from the route picks the mode while rendering; the
+  // scroll reset below is a side effect, so it stays in an effect.
+  const [modeFromFilterParam, setModeFromFilterParam] = useState(filterParam);
+  if (filterParam !== modeFromFilterParam) {
+    setModeFromFilterParam(filterParam);
+    setMode(getInitialMode(filterParam));
+  }
+
   useEffect(() => {
     revealControlsAtTop();
-    setMode(getInitialMode(filterParam));
   }, [filterParam, revealControlsAtTop]);
 
   const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -527,13 +554,26 @@ export default function SearchScreen() {
     router.push('/profile/discovery-preferences' as never);
   }, [router]);
 
+  // One-shot route params are consumed in two halves: the state they carry is
+  // applied while rendering, and the scroll reset plus clearing the param from
+  // the route (both side effects) happen in an effect. Clearing the param
+  // resets the "consumed" marker, so the same hand-over can arrive again.
+  const pendingOpenFilters = isFocused && openFiltersParam ? openFiltersParam : null;
+  const [consumedOpenFilters, setConsumedOpenFilters] = useState<string | null>(null);
+  if (pendingOpenFilters !== consumedOpenFilters) {
+    setConsumedOpenFilters(pendingOpenFilters);
+    if (pendingOpenFilters) {
+      setDraftFilters(appliedFilters);
+      setIsFilterSheetVisible(true);
+    }
+  }
+
   useEffect(() => {
     if (!isFocused || !openFiltersParam) return;
 
     revealControlsAtTop();
-    handleOpenFilters();
     router.setParams({ openFilters: undefined });
-  }, [handleOpenFilters, isFocused, openFiltersParam, revealControlsAtTop, router]);
+  }, [isFocused, openFiltersParam, revealControlsAtTop, router]);
 
   /**
    * Home can hand over a taxonomy discovery group and/or a starting query.
@@ -546,8 +586,13 @@ export default function SearchScreen() {
 
     revealControlsAtTop();
 
+    // Consuming a one-shot route param: the state it carries is applied in the
+    // same effect that clears it from the route. Doing the state half during
+    // render instead (as `openFilters` above does) makes the React Compiler
+    // give up on this whole component.
     if (isDiscoveryGroupKey(groupParam)) {
       const nextGroup = groupParam;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBrowseGroup(nextGroup);
       setAppliedFilters((current) => ({ ...current, serviceGroup: nextGroup, service: 'all' }));
       setDraftFilters((current) => ({ ...current, serviceGroup: nextGroup, service: 'all' }));

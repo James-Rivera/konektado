@@ -61,6 +61,13 @@ export default function AdminReportsScreen() {
       setLoading(true);
     }
 
+    await fetchReports();
+  };
+
+  // Fetches and stores the result without resetting the flags first, so the
+  // first load can run from the mount effect: initial state is already
+  // "loading" with no error.
+  const fetchReports = async () => {
     const result = await getAdminReports({ limit: 120 });
 
     if (result.error || !result.data) {
@@ -74,7 +81,7 @@ export default function AdminReportsScreen() {
   };
 
   useEffect(() => {
-    load();
+    void fetchReports();
   }, []);
 
   const counts = useMemo(

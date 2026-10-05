@@ -51,10 +51,12 @@ export default function ConversationDetailsScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
-  const [avatarFailed, setAvatarFailed] = useState(false);
+  // Remembers which URL failed, so a new avatar URL gets a fresh attempt.
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [reviewVisible, setReviewVisible] = useState(false);
-  const [reviewLoading, setReviewLoading] = useState(false);
+  // The review key whose state has finished loading; loading is derived from it.
+  const [loadedReviewKey, setLoadedReviewKey] = useState<string | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState(0);
@@ -88,33 +90,29 @@ export default function ConversationDetailsScreen() {
   const context = conversation ? getContextSummary(conversation) : null;
   const other = conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
   const otherAvatarUrl = other?.avatarUrl ?? null;
+  // Only participants of a job conversation have a review state to load.
+  const reviewJobId =
+    conversation?.jobId &&
+    profile?.id &&
+    [conversation.clientId, conversation.providerId].includes(profile.id)
+      ? conversation.jobId
+      : null;
+  const reviewKey = reviewJobId ? `${reviewJobId}:${profile?.id}` : null;
+  const reviewLoading = reviewKey !== null && loadedReviewKey !== reviewKey;
+  const currentJobReviewState = reviewKey ? jobReviewState : null;
   const reviewState = getReviewState({
     conversation,
-    jobReviewState,
+    jobReviewState: currentJobReviewState,
     loading: reviewLoading,
-    submittedReview,
+    submittedReview: reviewKey ? submittedReview : null,
   });
 
   useEffect(() => {
-    setAvatarFailed(false);
-  }, [otherAvatarUrl]);
+    if (!reviewJobId || !reviewKey) return;
 
-  useEffect(() => {
     let active = true;
 
-    if (
-      !conversation?.jobId ||
-      !profile?.id ||
-      ![conversation.clientId, conversation.providerId].includes(profile.id)
-    ) {
-      setSubmittedReview(null);
-      setJobReviewState(null);
-      setReviewLoading(false);
-      return;
-    }
-
-    setReviewLoading(true);
-    getMyJobReviewState(conversation.jobId).then((result) => {
+    getMyJobReviewState(reviewJobId).then((result) => {
       if (!active) return;
       if (result.error) {
         setSubmittedReview(null);
@@ -123,18 +121,13 @@ export default function ConversationDetailsScreen() {
         setJobReviewState(result.data);
         setSubmittedReview(result.data?.review ?? null);
       }
-      setReviewLoading(false);
+      setLoadedReviewKey(reviewKey);
     });
 
     return () => {
       active = false;
     };
-  }, [
-    conversation?.clientId,
-    conversation?.jobId,
-    conversation?.providerId,
-    profile?.id,
-  ]);
+  }, [reviewJobId, reviewKey]);
 
   const openPost = () => {
     if (conversation?.jobId) {
@@ -293,9 +286,9 @@ export default function ConversationDetailsScreen() {
           {context ? (
             <View style={styles.hero}>
               <View style={styles.avatar}>
-                {otherAvatarUrl && !avatarFailed ? (
+                {otherAvatarUrl && failedAvatarUrl !== otherAvatarUrl ? (
                   <CachedRemoteImage
-                    onError={() => setAvatarFailed(true)}
+                    onError={() => setFailedAvatarUrl(otherAvatarUrl)}
                     style={styles.avatarImage}
                     uri={otherAvatarUrl}
                   />
@@ -367,7 +360,7 @@ export default function ConversationDetailsScreen() {
                     description={reviewState.description}
                     disabled={!reviewState.enabled}
                     icon="rate-review"
-                    label={jobReviewState?.revieweeRole === 'client' ? 'Review client' : 'Review worker'}
+                    label={currentJobReviewState?.revieweeRole === 'client' ? 'Review client' : 'Review worker'}
                     onPress={() => {
                       setReviewError(null);
                       setReviewVisible(true);
@@ -429,7 +422,7 @@ export default function ConversationDetailsScreen() {
         onChangeRating={setReviewRating}
         onSubmit={onSubmitReview}
         rating={reviewRating}
-        revieweeRole={jobReviewState?.revieweeRole ?? null}
+        revieweeRole={currentJobReviewState?.revieweeRole ?? null}
         submitting={reviewSubmitting}
         visible={reviewVisible}
       />
