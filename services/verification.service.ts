@@ -1,4 +1,3 @@
-import { File } from 'expo-file-system';
 import {
   FunctionsFetchError,
   FunctionsHttpError,
@@ -17,6 +16,7 @@ import type {
   VerificationSummary,
 } from '@/types/verification.types';
 import { sendVerificationSubmittedEmail } from '@/services/verification-email.service';
+import { readDocumentUploadBody } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 import {
   getLegalNameEditPolicy,
@@ -113,14 +113,18 @@ async function uploadVerificationFile({
   verificationId: string;
 }): Promise<ServiceResult<string>> {
   try {
-    const localFile = new File(file.uri);
-    const fileBuffer = await localFile.arrayBuffer();
-    const path = `${userId}/${verificationId}/${Date.now()}-${index}-${getFileName(file, index)}`;
+    // ID and face photos are resized to 2000px before upload (DEC-138).
+    const upload = await readDocumentUploadBody({
+      mimeType: file.mimeType,
+      name: getFileName(file, index),
+      uri: file.uri,
+    });
+    const path = `${userId}/${verificationId}/${Date.now()}-${index}-${upload.name}`;
 
     const { error: uploadError } = await supabase.storage
       .from(VERIFICATION_BUCKET)
-      .upload(path, fileBuffer, {
-        contentType: file.mimeType ?? 'application/octet-stream',
+      .upload(path, upload.body, {
+        contentType: upload.contentType,
         upsert: false,
       });
 

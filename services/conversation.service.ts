@@ -1,5 +1,3 @@
-import { File } from 'expo-file-system';
-
 import type { ServiceResult } from '@/services/auth.service';
 import { getJobDetail } from '@/services/job.service';
 import {
@@ -24,6 +22,7 @@ import type {
   JobSummary,
   ProviderService,
 } from '@/types/marketplace.types';
+import { optimizePublicImageForUpload, readPublicImageUploadBody } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
 const CONVERSATION_COLUMNS =
@@ -741,6 +740,8 @@ export async function sendMessage({
 
   let attachmentPath: string | null = null;
   let attachmentMimeType: string | null = null;
+  let attachmentWidth = attachment?.width ?? null;
+  let attachmentHeight = attachment?.height ?? null;
   if (attachment) {
     const mimeType = compactText(attachment.mimeType) || 'image/jpeg';
     if (!mimeType.startsWith('image/')) {
@@ -748,20 +749,34 @@ export async function sendMessage({
     }
 
     try {
-      const file = new File(attachment.uri);
-      const bytes = await file.arrayBuffer();
+      // Resize like marketplace photos before uploading: both people in the
+      // chat would otherwise move the camera original (often 3-5 MB) over
+      // mobile data (DEC-138). Formats the optimizer cannot handle, such as
+      // GIF, are uploaded as they are.
+      const optimized = await optimizePublicImageForUpload(
+        { uri: attachment.uri, name: attachment.name, mimeType },
+        'marketplace-photo',
+      ).catch(() => null);
+      const upload = optimized?.optimized ? optimized : null;
+      const { body: bytes, contentType } = await readPublicImageUploadBody(
+        upload ?? { uri: attachment.uri, name: attachment.name, mimeType },
+      );
       if (bytes.byteLength > 10 * 1024 * 1024) {
         return { data: null, error: 'Choose an image smaller than 10 MB.' };
       }
 
-      const safeName = (attachment.name || 'message-image')
+      const safeName = (upload?.name || attachment.name || 'message-image')
         .replace(/[^a-zA-Z0-9._-]/g, '-')
         .slice(0, 80);
       attachmentPath = `${user.data}/${conversationId}/${Date.now()}-${safeName}`;
-      attachmentMimeType = mimeType;
+      attachmentMimeType = contentType;
+      if (upload?.width && upload.height) {
+        attachmentWidth = upload.width;
+        attachmentHeight = upload.height;
+      }
       const { error: uploadError } = await supabase.storage
         .from(MESSAGE_ATTACHMENTS_BUCKET)
-        .upload(attachmentPath, bytes, { contentType: mimeType, upsert: false });
+        .upload(attachmentPath, bytes, { contentType, upsert: false });
       if (uploadError) return { data: null, error: uploadError.message };
     } catch {
       return { data: null, error: 'Could not upload this image.' };
@@ -776,8 +791,8 @@ export async function sendMessage({
       body: text,
       attachment_path: attachmentPath,
       attachment_mime_type: attachmentMimeType,
-      attachment_width: attachment?.width ?? null,
-      attachment_height: attachment?.height ?? null,
+      attachment_width: attachmentWidth,
+      attachment_height: attachmentHeight,
     })
     .select(MESSAGE_COLUMNS)
     .single<MessageRow>();

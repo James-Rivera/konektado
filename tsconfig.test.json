@@ -22,6 +22,7 @@
     "services/home-feed.service.ts",
     "utils/verification-gate.ts",
     "utils/phone.ts",
+    "utils/photo-card-copy.ts",
     "types/*.ts",
     "tests/**/*.ts"
   ],

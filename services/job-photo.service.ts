@@ -1,11 +1,7 @@
 import type { ServiceResult } from '@/services/auth.service';
+import { uploadMarketplacePhoto } from '@/services/marketplace-photo-upload.service';
 import { getCurrentUserId } from '@/services/marketplace.helpers';
-import {
-  normalizePublicImageFileName,
-  optimizePublicImageForUpload,
-  readPublicImageUploadBody,
-} from '@/utils/image-processing';
-import { supabase } from '@/utils/supabase';
+import { normalizePublicImageFileName, optimizePublicImageForUpload } from '@/utils/image-processing';
 
 const JOB_PHOTO_BUCKET = 'job-photos';
 
@@ -44,23 +40,20 @@ export async function uploadJobPhotos({
       if (!optimizedAsset.optimized) {
         return { data: null, error: 'Image optimization failed. Try a smaller JPG, PNG, or WebP photo.' };
       }
-      const uploadBody = await readPublicImageUploadBody(optimizedAsset);
-      const path = `${user.data}/${safeFolderId}/${Date.now()}-${index}-${normalizeFileName(
-        optimizedAsset.name,
-        `photo-${index + 1}`,
-      )}`;
-
-      const { error: uploadError } = await supabase.storage.from(JOB_PHOTO_BUCKET).upload(path, uploadBody.body, {
-        contentType: uploadBody.contentType,
-        upsert: false,
+      const upload = await uploadMarketplacePhoto({
+        bucket: JOB_PHOTO_BUCKET,
+        folderPath: `${user.data}/${safeFolderId}`,
+        photo: {
+          ...optimizedAsset,
+          name: `${Date.now()}-${index}-${normalizeFileName(optimizedAsset.name, `photo-${index + 1}`)}`,
+        },
       });
 
-      if (uploadError) {
-        return { data: null, error: `Storage upload failed. ${uploadError.message}` };
+      if (upload.error || !upload.data) {
+        return { data: null, error: upload.error ?? 'Storage upload failed.' };
       }
 
-      const { data } = supabase.storage.from(JOB_PHOTO_BUCKET).getPublicUrl(path);
-      uploads.push(data.publicUrl);
+      uploads.push(upload.data);
     } catch (error) {
       const message = error instanceof Error ? error.message : null;
       return { data: null, error: message || `Could not upload ${asset.name || 'photo'}.` };
