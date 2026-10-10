@@ -1,5 +1,3 @@
-import { File } from 'expo-file-system';
-
 import type { ServiceResult } from '@/services/auth.service';
 import { compactText } from '@/services/marketplace.helpers';
 import type {
@@ -8,6 +6,8 @@ import type {
   CredentialSummary,
   CredentialType,
 } from '@/types/marketplace.types';
+import { getSessionUser } from '@/services/session.service';
+import { readDocumentUploadBody } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
 
 const CREDENTIAL_BUCKET = 'credential-files';
@@ -72,13 +72,13 @@ function safeFileName(name: string | null | undefined) {
 }
 
 async function getCurrentUserId(): Promise<ServiceResult<string>> {
-  const { data, error } = await supabase.auth.getUser();
+  const { error, user } = await getSessionUser();
 
-  if (error || !data.user) {
+  if (error || !user) {
     return { data: null, error: 'Please sign in again to continue.' };
   }
 
-  return { data: data.user.id, error: null };
+  return { data: user.id, error: null };
 }
 
 async function uploadCredentialFile({
@@ -89,14 +89,18 @@ async function uploadCredentialFile({
   providerId: string;
 }) {
   try {
-    const localFile = new File(input.uri);
-    const fileBuffer = await localFile.arrayBuffer();
-    const path = `${providerId}/${Date.now()}-${safeFileName(input.name)}`;
+    // Credential photos are resized to 2000px; PDFs upload unchanged (DEC-138).
+    const upload = await readDocumentUploadBody({
+      mimeType: input.mimeType,
+      name: safeFileName(input.name),
+      uri: input.uri,
+    });
+    const path = `${providerId}/${Date.now()}-${upload.name}`;
 
     const { error } = await supabase.storage
       .from(CREDENTIAL_BUCKET)
-      .upload(path, fileBuffer, {
-        contentType: input.mimeType ?? 'application/octet-stream',
+      .upload(path, upload.body, {
+        contentType: upload.contentType,
         upsert: false,
       });
 

@@ -76,22 +76,24 @@ const TAB_META: Record<
 export function BottomNav({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { profile } = useProfile();
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  // Stored with the user it was counted for, so a signed-out or different user
+  // never sees another account's badge.
+  const [unreadCount, setUnreadCount] = useState<{ count: number; userId: string } | null>(null);
+  const unreadMessages = profile?.id && unreadCount?.userId === profile.id ? unreadCount.count : 0;
   const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshUnread = useCallback(() => {
-    if (!profile?.id) {
-      setUnreadMessages(0);
-      return;
-    }
+    const userId = profile?.id;
+    if (!userId) return;
 
     void listMyConversations().then((result) => {
       if (!result.data) return;
-      setUnreadMessages(
-        result.data.reduce((total, conversation) => total + conversation.unreadCount, 0),
-      );
+      setUnreadCount({
+        count: result.data.reduce((total, conversation) => total + conversation.unreadCount, 0),
+        userId,
+      });
     });
   }, [profile?.id]);
 

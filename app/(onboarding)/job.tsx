@@ -565,10 +565,13 @@ function WorkSetupSheet({
   visible: boolean;
 }) {
   const [draftMode, setDraftMode] = useState<OfferedDeliveryMode | null>(selectedMode);
-
-  useEffect(() => {
+  // Re-seed the draft while rendering whenever the sheet opens or its source
+  // value changes while open, instead of in an effect one commit late.
+  const [seededFrom, setSeededFrom] = useState({ selectedMode, visible });
+  if (seededFrom.selectedMode !== selectedMode || seededFrom.visible !== visible) {
+    setSeededFrom({ selectedMode, visible });
     if (visible) setDraftMode(selectedMode);
-  }, [selectedMode, visible]);
+  }
 
   return (
     <BottomSheet maxHeight="58%" onClose={onClose} visible={visible}>
@@ -623,12 +626,19 @@ function CategoriesSheet({
     () => (deliveryMode ? getMvpCategoriesForOfferedDeliveryMode(deliveryMode) : []),
     [deliveryMode],
   );
-
-  useEffect(() => {
+  // Re-seed the draft while rendering whenever the sheet opens or its source
+  // values change while open, instead of in an effect one commit late.
+  const [seededFrom, setSeededFrom] = useState({ categories, selectedCategories, visible: false });
+  if (
+    seededFrom.categories !== categories ||
+    seededFrom.selectedCategories !== selectedCategories ||
+    seededFrom.visible !== visible
+  ) {
+    setSeededFrom({ categories, selectedCategories, visible });
     if (visible) {
       setDraftCategories(selectedCategories.filter((category) => categories.includes(category as MvpServiceCategory)));
     }
-  }, [categories, selectedCategories, visible]);
+  }
 
   const toggleCategory = (category: string) => {
     setDraftCategories((prev) =>
@@ -704,13 +714,27 @@ function ServicesSheet({
   const [draftServices, setDraftServices] = useState<string[]>(selectedServices);
   const [draftCustom, setDraftCustom] = useState(customValue);
   const [showCustom, setShowCustom] = useState(initialShowCustom);
-
-  useEffect(() => {
-    if (!visible) return;
-    setDraftServices(selectedServices);
-    setDraftCustom(customValue);
-    setShowCustom(initialShowCustom || Boolean(customValue.trim()));
-  }, [customValue, initialShowCustom, selectedServices, visible]);
+  // Re-seed the drafts while rendering whenever the sheet opens or its source
+  // values change while open, instead of in an effect one commit late.
+  const [seededFrom, setSeededFrom] = useState({
+    customValue,
+    initialShowCustom,
+    selectedServices,
+    visible: false,
+  });
+  if (
+    seededFrom.customValue !== customValue ||
+    seededFrom.initialShowCustom !== initialShowCustom ||
+    seededFrom.selectedServices !== selectedServices ||
+    seededFrom.visible !== visible
+  ) {
+    setSeededFrom({ customValue, initialShowCustom, selectedServices, visible });
+    if (visible) {
+      setDraftServices(selectedServices);
+      setDraftCustom(customValue);
+      setShowCustom(initialShowCustom || Boolean(customValue.trim()));
+    }
+  }
 
   const toggleService = (service: string) => {
     setDraftServices((prev) =>

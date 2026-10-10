@@ -399,11 +399,8 @@ const MessageRow = memo(function MessageRow({
 }) {
   const other = conversation ? getOtherParticipant(conversation, currentUserId) : null;
   const avatarUrl = other?.avatarUrl ?? null;
-  const [avatarFailed, setAvatarFailed] = useState(false);
-
-  useEffect(() => {
-    setAvatarFailed(false);
-  }, [avatarUrl]);
+  // Remembers which URL failed, so a new avatar URL gets a fresh attempt.
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -439,9 +436,9 @@ const MessageRow = memo(function MessageRow({
       onPress={onPress}
       style={({ pressed }) => [styles.messageRow, pressed && styles.pressed]}>
       <View style={styles.avatar}>
-        {avatarUrl && !avatarFailed ? (
+        {avatarUrl && failedAvatarUrl !== avatarUrl ? (
           <CachedRemoteImage
-            onError={() => setAvatarFailed(true)}
+            onError={() => setFailedAvatarUrl(avatarUrl)}
             uri={avatarUrl}
             style={styles.avatarImage}
           />

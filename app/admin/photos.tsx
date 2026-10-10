@@ -49,6 +49,13 @@ export default function AdminPhotosScreen() {
       setLoading(true);
     }
 
+    await fetchPhotos();
+  };
+
+  // Fetches and stores the result without resetting the flags first, so the
+  // first load can run from the mount effect: initial state is already
+  // "loading" with no error.
+  const fetchPhotos = async () => {
     const result = await listAdminPublicPhotos({ limit: 150 });
 
     if (result.error || !result.data) {
@@ -62,7 +69,7 @@ export default function AdminPhotosScreen() {
   };
 
   useEffect(() => {
-    load();
+    void fetchPhotos();
   }, []);
 
   const counts = useMemo(

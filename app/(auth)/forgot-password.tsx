@@ -66,8 +66,16 @@ export default function ForgotPasswordScreen() {
   const compactHeight = height < 760;
 
   const [step, setStep] = useState<RecoveryStep>('email');
+  const paramEmail = getParamValue(params.identifier) ?? getParamValue(params.email);
   // Holds a mobile number instead when phone auth is on, like the login field.
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(paramEmail ?? '');
+  // Adopt a new prefill from the route while rendering, without overwriting
+  // what the user typed when the route has nothing new to offer.
+  const [prefilledFrom, setPrefilledFrom] = useState(paramEmail);
+  if (paramEmail !== prefilledFrom) {
+    setPrefilledFrom(paramEmail);
+    if (paramEmail) setEmail(paramEmail);
+  }
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -111,13 +119,6 @@ export default function ForgotPasswordScreen() {
 
     router.replace('/(auth)/login');
   };
-
-  useEffect(() => {
-    const nextEmail = getParamValue(params.identifier) ?? getParamValue(params.email);
-    if (nextEmail) {
-      setEmail(nextEmail);
-    }
-  }, [params.email, params.identifier]);
 
   useEffect(() => {
     if (step !== 'code' || resendSeconds <= 0) return;

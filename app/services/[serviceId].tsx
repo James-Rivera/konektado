@@ -51,6 +51,8 @@ function getParamValue(value: string | string[] | undefined) {
   return value;
 }
 
+const SERVICE_NOT_FOUND_MESSAGE = 'Service profile not found.';
+
 export default function ServicePublicWorkerProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -66,28 +68,31 @@ export default function ServicePublicWorkerProfileScreen() {
   const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
   const [profile, setProfile] = useState<PublicWorkerProfile | null>(null);
   const [serviceDetail, setServiceDetail] = useState<ServiceDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(serviceId));
+  const [error, setError] = useState<string | null>(serviceId ? null : SERVICE_NOT_FOUND_MESSAGE);
   const [messaging, setMessaging] = useState(false);
   const [updatingService, setUpdatingService] = useState(false);
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
 
+  // A different service starts loading again. Reset while rendering, so the
+  // effect below only has to fetch.
+  const [loadingForId, setLoadingForId] = useState(serviceId);
+  if (serviceId !== loadingForId) {
+    setLoadingForId(serviceId);
+    setLoading(Boolean(serviceId));
+    setError(serviceId ? null : SERVICE_NOT_FOUND_MESSAGE);
+  }
+
   useEffect(() => {
+    if (!serviceId) return;
+
     let active = true;
 
-    if (!serviceId) {
-      setLoading(false);
-      setError('Service profile not found.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
     getServiceDetail(serviceId)
       .then((detailResult) => {
         if (!active) return null;
         if (detailResult.error || !detailResult.data) {
-          setError(detailResult.error ?? 'Service profile not found.');
+          setError(detailResult.error ?? SERVICE_NOT_FOUND_MESSAGE);
           setServiceDetail(null);
           setProfile(null);
           setLoading(false);

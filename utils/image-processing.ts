@@ -2,11 +2,15 @@ import { File } from 'expo-file-system';
 import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator';
 import { Image, Platform } from 'react-native';
 
+import { getCardCopyLocation } from '@/utils/photo-card-copy';
+
+export { getCardCopyLocation, getMarketplacePhotoFileNames } from '@/utils/photo-card-copy';
+
 const MB = 1024 * 1024;
 const MAX_PUBLIC_SOURCE_IMAGE_BYTES = 25 * MB;
 const PUBLIC_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
 
-type PublicImagePurpose = 'avatar' | 'marketplace-photo';
+type PublicImagePurpose = 'avatar' | 'document-photo' | 'marketplace-photo';
 
 type PublicImageAsset = {
   uri: string;
@@ -43,12 +47,24 @@ const PUBLIC_IMAGE_CONFIG: Record<
     fileNameFallback: 'profile-photo',
     maxDimension: 640,
   },
+  // ID and credential photos for barangay review: large enough that small
+  // print stays readable, without uploading a 12 MP camera original.
+  'document-photo': {
+    compression: 0.85,
+    fileNameFallback: 'document',
+    maxDimension: 2000,
+  },
   'marketplace-photo': {
     compression: 0.82,
     fileNameFallback: 'photo',
     maxDimension: 1400,
   },
 };
+
+// Feed cards are full-width and 222pt tall, so 800px wide is sharp at 3x
+// density while costing a fraction of the 1400px detail photo.
+const CARD_IMAGE_WIDTH = 800;
+const CARD_IMAGE_COMPRESSION = 0.75;
 
 function compactText(value: string | null | undefined) {
   return value?.trim() ?? '';
@@ -206,6 +222,53 @@ export function getAvatarDisplayUrl({
   return compactText(thumbnailUrl) || compactText(avatarUrl) || null;
 }
 
+/**
+ * Upload body for a verification or credential file. Photos are resized to the
+ * `document-photo` preset and re-encoded as JPEG; PDFs and anything the
+ * optimizer cannot handle are uploaded unchanged, so a failed resize never
+ * blocks a submission. `name` gets a `.jpg` extension when the file was
+ * re-encoded.
+ */
+export async function readDocumentUploadBody(asset: {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+}): Promise<PublicImageUploadBody & { name: string }> {
+  if (isSupportedPublicImageMime(asset.mimeType) && asset.mimeType) {
+    const optimized = await optimizePublicImageForUpload(asset, 'document-photo').catch(() => null);
+    if (optimized?.optimized) {
+      const body = await readPublicImageUploadBody(optimized);
+      return { ...body, name: normalizePublicImageFileName(asset.name, 'document') };
+    }
+  }
+
+  const body = await readPublicImageUploadBody({
+    ...asset,
+    mimeType: asset.mimeType ?? 'application/octet-stream',
+  });
+  return { ...body, name: asset.name };
+}
+
+/**
+ * A smaller copy of an already optimized marketplace photo for feed cards.
+ * Returns null when it cannot be made, so callers can skip the card copy.
+ */
+export async function createCardImageForUpload(
+  image: Pick<OptimizedPublicImage, 'uri' | 'width'>,
+): Promise<PublicImageUploadBody | null> {
+  try {
+    const actions: Action[] =
+      image.width && image.width > CARD_IMAGE_WIDTH ? [{ resize: { width: CARD_IMAGE_WIDTH } }] : [];
+    const result = await manipulateAsync(image.uri, actions, {
+      compress: CARD_IMAGE_COMPRESSION,
+      format: SaveFormat.JPEG,
+    });
+    return await readPublicImageUploadBody({ uri: result.uri, mimeType: 'image/jpeg' });
+  } catch {
+    return null;
+  }
+}
+
 export function getCardImageUrl({
   cardUrl,
   imageUrl,
@@ -215,7 +278,13 @@ export function getCardImageUrl({
   imageUrl?: string | null;
   thumbnailUrl?: string | null;
 }) {
-  return compactText(thumbnailUrl) || compactText(cardUrl) || compactText(imageUrl) || undefined;
+  const fullImageUrl = compactText(imageUrl);
+  return (
+    compactText(thumbnailUrl) ||
+    compactText(cardUrl) ||
+    (fullImageUrl ? getCardCopyLocation(fullImageUrl) ?? fullImageUrl : '') ||
+    undefined
+  );
 }
 
 export function getDetailImageUrl({

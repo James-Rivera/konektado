@@ -533,12 +533,20 @@ export default function CreateJobScreen() {
     autoCloseEnabled: false,
   });
 
+  // Loading a different draft or job starts over. Raised while rendering, so
+  // the effects below only fetch; initial state already covers the first load.
+  const loadSourceKey = `${initialDraftId ?? ''}|${jobId ?? ''}`;
+  const [loadingSourceKey, setLoadingSourceKey] = useState(loadSourceKey);
+  if (loadSourceKey !== loadingSourceKey) {
+    setLoadingSourceKey(loadSourceKey);
+    if (initialDraftId || jobId) setLoadingDraft(true);
+  }
+
   useEffect(() => {
     if (!initialDraftId) return;
     let active = true;
 
     void (async () => {
-      setLoadingDraft(true);
       try {
         const result = await getJobDraft(initialDraftId);
         if (!active) return;
@@ -569,7 +577,6 @@ export default function CreateJobScreen() {
   useEffect(() => {
     if (!jobId) return;
     let active = true;
-    setLoadingDraft(true);
 
     void getOwnedJobForEdit(jobId).then((result) => {
       if (!active) return;
@@ -589,16 +596,21 @@ export default function CreateJobScreen() {
     };
   }, [jobId, router]);
 
-  useEffect(() => {
-    if (!profileId) return;
-
-    const barangay = profileBarangay || 'Barangay San Pedro';
-    setDraft((current) => ({
-      ...current,
-      barangay: current.barangay || barangay,
-      locationText: current.locationText || barangay,
-    }));
-  }, [profileId, profileBarangay]);
+  // Fill a blank location from the profile once it loads or changes. Done
+  // while rendering rather than in an effect one commit late.
+  const profileLocationKey = profileId ? `${profileId}|${profileBarangay ?? ''}` : null;
+  const [filledLocationKey, setFilledLocationKey] = useState<string | null>(null);
+  if (profileLocationKey !== filledLocationKey) {
+    setFilledLocationKey(profileLocationKey);
+    if (profileLocationKey) {
+      const barangay = profileBarangay || 'Barangay San Pedro';
+      setDraft((current) => ({
+        ...current,
+        barangay: current.barangay || barangay,
+        locationText: current.locationText || barangay,
+      }));
+    }
+  }
 
   useEffect(() => {
     if (initialDraftId || jobId || defaultsAppliedRef.current || loading) return;

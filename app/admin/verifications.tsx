@@ -79,6 +79,13 @@ export default function AdminVerificationQueueScreen() {
       setLoading(true);
     }
 
+    await fetchRequests();
+  };
+
+  // Fetches and stores the result without resetting the flags first, so the
+  // first load can run from the mount effect: initial state is already
+  // "loading" with no error.
+  const fetchRequests = async () => {
     const result = await listVerificationRequests({ limit: 75 });
 
     if (result.error || !result.data) {
@@ -92,7 +99,7 @@ export default function AdminVerificationQueueScreen() {
   };
 
   useEffect(() => {
-    load();
+    void fetchRequests();
   }, []);
 
   const stats = useMemo(() => {

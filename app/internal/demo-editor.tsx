@@ -165,9 +165,7 @@ export default function InternalDemoContentEditorScreen() {
     }
   }, []);
 
-  const loadSelectedUser = useCallback(async (userId: string) => {
-    setLoadingDetail(true);
-    const result = await getEditableUser(userId);
+  const applySelectedUserResult = useCallback((result: Awaited<ReturnType<typeof getEditableUser>>) => {
     if (result.error || !result.data) {
       setErrorMessage(result.error ?? 'Could not load this user.');
     } else {
@@ -175,6 +173,19 @@ export default function InternalDemoContentEditorScreen() {
     }
     setLoadingDetail(false);
   }, []);
+
+  const loadSelectedUser = useCallback(async (userId: string) => {
+    setLoadingDetail(true);
+    applySelectedUserResult(await getEditableUser(userId));
+  }, [applySelectedUserResult]);
+
+  // Picking a different user raises the detail loader while rendering, so the
+  // effect below only has to fetch.
+  const [detailLoadingFor, setDetailLoadingFor] = useState(selectedUserId);
+  if (selectedUserId !== detailLoadingFor) {
+    setDetailLoadingFor(selectedUserId);
+    if (selectedUserId) setLoadingDetail(true);
+  }
 
   useEffect(() => {
     let active = true;
@@ -206,8 +217,8 @@ export default function InternalDemoContentEditorScreen() {
 
   useEffect(() => {
     if (!selectedUserId) return;
-    void loadSelectedUser(selectedUserId);
-  }, [loadSelectedUser, selectedUserId]);
+    void getEditableUser(selectedUserId).then(applySelectedUserResult);
+  }, [applySelectedUserResult, selectedUserId]);
 
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -829,10 +840,17 @@ function ProfileEditor({
   const { showErrorToast, showInfoToast, showSuccessToast } = useFeedback();
   const saving = Boolean(savingStage);
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedProfile, setSyncedProfile] = useState({ id: user.id, profile: user.profile });
+  if (
+    syncedProfile.id !== user.id ||
+    syncedProfile.profile !== user.profile
+  ) {
+    setSyncedProfile({ id: user.id, profile: user.profile });
     setForm(user.profile);
     setPendingImage(null);
-  }, [user.id, user.profile]);
+  }
 
   const chooseImage = async () => {
     if (saveActiveRef.current) return;
@@ -1082,10 +1100,14 @@ function NewJobForm({
   const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('job_photo', 'Job photo');
   const serviceOptions = getServicesForMvpCategory(form.category);
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedUser, setSyncedUser] = useState(user);
+  if (user !== syncedUser) {
+    setSyncedUser(user);
     setForm(makeInitialJobPayload(user));
     setUploadedPhotoUrls([]);
-  }, [user]);
+  }
 
   const addPhoto = async () => {
     const uploaded = await chooseAndUpload();
@@ -1218,10 +1240,14 @@ function JobForm({
   const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('job_photo', 'Job photo');
   const serviceOptions = getServicesForMvpCategory(form.category);
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedJob, setSyncedJob] = useState(job);
+  if (job !== syncedJob) {
+    setSyncedJob(job);
     setForm(job);
     setUploadedPhotoUrls([]);
-  }, [job]);
+  }
 
   const addPhoto = async () => {
     const uploaded = await chooseAndUpload();
@@ -1385,10 +1411,14 @@ function NewServiceForm({
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([]);
   const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('service_photo', 'Service photo');
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedUser, setSyncedUser] = useState(user);
+  if (user !== syncedUser) {
+    setSyncedUser(user);
     setForm(makeInitialServicePayload(user));
     setUploadedPhotoUrls([]);
-  }, [user]);
+  }
 
   const addPhoto = async () => {
     const uploaded = await chooseAndUpload();
@@ -1504,10 +1534,14 @@ function ServiceForm({
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([]);
   const { chooseAndUpload, showErrorToast, uploadingPhoto } = usePublicImageUpload('service_photo', 'Service photo');
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedService, setSyncedService] = useState(service);
+  if (service !== syncedService) {
+    setSyncedService(service);
     setForm(service);
     setUploadedPhotoUrls([]);
-  }, [service]);
+  }
 
   const addPhoto = async () => {
     const uploaded = await chooseAndUpload();
@@ -1626,10 +1660,17 @@ function VerificationEditor({ user }: { user: EditableUserDetail }) {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState('Verification document');
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedVerifications, setSyncedVerifications] = useState({ id: user.id, verifications: user.verifications });
+  if (
+    syncedVerifications.id !== user.id ||
+    syncedVerifications.verifications !== user.verifications
+  ) {
+    setSyncedVerifications({ id: user.id, verifications: user.verifications });
     setSelectedRequestId(user.verifications[0]?.id ?? null);
     setViewerUrl(null);
-  }, [user.id, user.verifications]);
+  }
 
   const request = user.verifications.find((item) => item.id === selectedRequestId) ?? null;
 
@@ -1697,14 +1738,18 @@ function VerificationRequestEditor({
   const [saving, setSaving] = useState(false);
   const [uploadingFileId, setUploadingFileId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedRequest, setSyncedRequest] = useState(request);
+  if (request !== syncedRequest) {
+    setSyncedRequest(request);
     setResidentNote(request.residentNote);
     setAdminNote(request.adminNote);
     setDocumentType(request.documentType);
     setFiles(request.files);
     setFileType('other');
     setUploadingFileId(null);
-  }, [request]);
+  }
 
   const save = async () => {
     setSaving(true);
@@ -1864,10 +1909,14 @@ function PublicPhotosPreview({ user }: { user: EditableUserDetail }) {
     ),
   ];
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedUserId, setSyncedUserId] = useState(user.id);
+  if (user.id !== syncedUserId) {
+    setSyncedUserId(user.id);
     setModeratingId(null);
     setPhotoStatuses({});
-  }, [user.id]);
+  }
 
   const moderate = async (photo: PublicPhotoModerationItem, action: EditablePublicPhotoAction) => {
     setModeratingId(`${photo.id}-${action}`);
@@ -1942,11 +1991,19 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
   const [reports, setReports] = useState<EditableReportSummary[]>(user.reports);
   const [savingActivityId, setSavingActivityId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Reset the local edits while rendering when the source record changes,
+  // instead of in an effect one commit late.
+  const [syncedActivity, setSyncedActivity] = useState({ id: user.id, conversations: user.conversations, reports: user.reports });
+  if (
+    syncedActivity.id !== user.id ||
+    syncedActivity.conversations !== user.conversations ||
+    syncedActivity.reports !== user.reports
+  ) {
+    setSyncedActivity({ id: user.id, conversations: user.conversations, reports: user.reports });
     setConversations(user.conversations);
     setReports(user.reports);
     setSavingActivityId(null);
-  }, [user.id, user.conversations, user.reports]);
+  }
 
   const saveConversationStatus = async (conversation: EditableConversationSummary, status: string) => {
     if (conversation.status === status) return;

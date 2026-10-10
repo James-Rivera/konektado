@@ -51,21 +51,18 @@ export default function ProfileCredentialsScreen() {
   const [issuedAt, setIssuedAt] = useState('');
   const [file, setFile] = useState<PickedFile | null>(null);
 
-  const refresh = async () => {
-    setLoading(true);
-    const result = await listMyCredentials();
-    setLoading(false);
-
-    if (result.error || !result.data) {
-      showAlert('Credentials', result.error ?? 'Could not load credentials.');
-      return;
-    }
-
-    setCredentials(result.data);
-  };
-
+  // Loads once on mount, where `loading` already starts out true.
   useEffect(() => {
-    void refresh();
+    void listMyCredentials().then((result) => {
+      setLoading(false);
+
+      if (result.error || !result.data) {
+        showAlert('Credentials', result.error ?? 'Could not load credentials.');
+        return;
+      }
+
+      setCredentials(result.data);
+    });
   }, []);
 
   const pickFile = async () => {

@@ -31,6 +31,8 @@ function getParamValue(value: string | string[] | undefined) {
   return value;
 }
 
+const WORKER_NOT_FOUND_MESSAGE = 'Worker profile not found.';
+
 export default function PublicWorkerProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -44,21 +46,24 @@ export default function PublicWorkerProfileScreen() {
   const sourceServiceId = getParamValue(params.sourceServiceId);
   const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
   const [profile, setProfile] = useState<PublicWorkerProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(workerId));
+  const [error, setError] = useState<string | null>(workerId ? null : WORKER_NOT_FOUND_MESSAGE);
   const [messaging, setMessaging] = useState(false);
 
+  // A different profile starts loading again. Reset while rendering, so the
+  // effect below only has to fetch.
+  const [loadingFor, setLoadingFor] = useState({ workerId, sourceServiceId });
+  if (loadingFor.workerId !== workerId || loadingFor.sourceServiceId !== sourceServiceId) {
+    setLoadingFor({ workerId, sourceServiceId });
+    setLoading(Boolean(workerId));
+    setError(workerId ? null : WORKER_NOT_FOUND_MESSAGE);
+  }
+
   useEffect(() => {
+    if (!workerId) return;
+
     let active = true;
 
-    if (!workerId) {
-      setLoading(false);
-      setError('Worker profile not found.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
     getPublicWorkerProfile(workerId, { sourceServiceId }).then((result) => {
       if (!active) return;
 

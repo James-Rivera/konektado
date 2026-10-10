@@ -201,6 +201,16 @@ Avoid seeded values that read like internal placeholders:
 
 ## Priority Backlog
 
+### Status as of 2026-10-05
+
+The three P0 items below are implemented in code. All three still need device QA.
+
+- Messaging loop: real inbox, job and service conversations, quick prompts, context cards, report, archive, and Mark Hired are connected (see `docs/03-feature-map.md`, Basic messaging and Job interest messaging).
+- Card metadata: `Posted in Konektado`, `Jobs done pending`, and `New worker` no longer appear in the app. Cards show real ratings, review counts, and activity where they exist, and omit them otherwise instead of faking them.
+- `For you`: Home ranks jobs and services with preference scoring and mixes the two types instead of grouping them. Since DEC-122, Home switches modes with the Find work / Hire help control rather than For you / Jobs / Services pills, and the mixed `For you` feed is the default variant until the resident picks a mode or a feed type.
+
+The P1 and P2 items are still open. Match reasons (P1) are not built yet.
+
 ### P0
 
 - Complete the user-facing in-app messaging loop.

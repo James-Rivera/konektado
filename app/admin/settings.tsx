@@ -27,6 +27,13 @@ export default function AdminSettingsScreen() {
       setLoading(true);
     }
 
+    await fetchProfile();
+  };
+
+  // Fetches and stores the result without resetting the flags first, so the
+  // first load can run from the mount effect: initial state is already
+  // "loading" with no error.
+  const fetchProfile = async () => {
     const result = await getAdminProfile();
 
     if (result.error || !result.data) {
@@ -40,7 +47,7 @@ export default function AdminSettingsScreen() {
   };
 
   useEffect(() => {
-    load();
+    void fetchProfile();
   }, []);
 
   return (

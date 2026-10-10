@@ -4,6 +4,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { AppState } from 'react-native';
 
 import { getMyUserPreferences } from '@/services/onboarding.service';
+import { getSessionUser } from '@/services/session.service';
 import { getLatestVerificationStatus } from '@/services/verification.service';
 import type { UserPreferences } from '@/types/onboarding.types';
 import type { VerificationStatus } from '@/types/verification.types';
@@ -122,6 +123,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const inFlightRef = useRef(false);
   const pendingLoadRef = useRef(false);
   const loadPromiseRef = useRef<Promise<void> | null>(null);
+  // True while the profile realtime channel is subscribed; the poll skips then.
+  const realtimeSubscribedRef = useRef(false);
 
   const loadInternal = useCallback(async ({ showLoading = false }: LoadOptions = {}) => {
     if (inFlightRef.current) {
@@ -141,30 +144,47 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         do {
           pendingLoadRef.current = false;
 
-          const { data: userResult, error: userError } = await supabase.auth.getUser();
+          // The local session, not `getUser()`: no Auth round trip before the
+          // reads below can start (DEC-137). RLS still checks every query.
+          const { error: sessionError, user: sessionUser } = await getSessionUser();
 
           if (!activeRef.current) return;
 
-          if (userError || !userResult.user) {
+          if (sessionError || !sessionUser) {
             setAuthenticated(false);
             setUser(null);
             setProfile(null);
             setPreferences(null);
             setLatestVerificationStatus(null);
-            setError(userError?.message ?? null);
+            setError(sessionError);
             return;
           }
 
           setAuthenticated(true);
-          setUser(userResult.user);
+          setUser(sessionUser);
 
-          const { data, error: profileError } = await supabase
-            .from('profiles')
-            .select(
-              'id, email, role, active_role, full_name, first_name, last_name, birthdate, province, barangay, purok_sitio, street, subdivision_area, block_lot, house_number, landmark_note, street_address, city, preferred_contact_method, phone, about, avatar_url, availability, verified_at, barangay_verified_at',
-            )
-            .eq('id', userResult.user.id)
-            .maybeSingle();
+          // Independent reads, so they share one round trip instead of three.
+          const [
+            { data, error: profileError },
+            { data: providerData },
+            preferencesResult,
+            verificationResult,
+          ] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select(
+                'id, email, role, active_role, full_name, first_name, last_name, birthdate, province, barangay, purok_sitio, street, subdivision_area, block_lot, house_number, landmark_note, street_address, city, preferred_contact_method, phone, about, avatar_url, availability, verified_at, barangay_verified_at',
+              )
+              .eq('id', sessionUser.id)
+              .maybeSingle(),
+            supabase
+              .from('provider_profiles')
+              .select('service_type, has_certifications, certification_status')
+              .eq('user_id', sessionUser.id)
+              .maybeSingle(),
+            getMyUserPreferences(),
+            getLatestVerificationStatus(sessionUser.id),
+          ]);
 
           if (!activeRef.current) return;
 
@@ -174,19 +194,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             setError(profileError.message);
             return;
           }
-
-          const { data: providerData } = await supabase
-            .from('provider_profiles')
-            .select('service_type, has_certifications, certification_status')
-            .eq('user_id', userResult.user.id)
-            .maybeSingle();
-
-          const [preferencesResult, verificationResult] = await Promise.all([
-            getMyUserPreferences(),
-            getLatestVerificationStatus(userResult.user.id),
-          ]);
-
-          if (!activeRef.current) return;
 
           const base = data as Omit<
             ProfileRecord,
@@ -236,8 +243,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     void loadInternal({ showLoading: true });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+      // The mount load above already reads the initial session, so reloading
+      // on INITIAL_SESSION ran the whole startup chain a second time. A token
+      // refresh changes no profile data, so it does not reload either.
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+
       const shouldShowLoading =
-        event === 'INITIAL_SESSION' ||
         event === 'SIGNED_IN' ||
         event === 'SIGNED_OUT' ||
         event === 'USER_UPDATED';
@@ -251,7 +262,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Fallback only: while the realtime channel below is subscribed, it
+    // already refreshes on every relevant change, so polling would just spend
+    // mobile data re-reading the same rows every 30 seconds.
     const pollTimer = setInterval(() => {
+      if (realtimeSubscribedRef.current) return;
       void refresh();
     }, PROFILE_FALLBACK_POLL_MS);
 
@@ -342,6 +357,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         channel.subscribe((status, error) => {
           if (cancelled) return;
 
+          realtimeSubscribedRef.current = status === 'SUBSCRIBED';
+
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             noteProfileRealtime(channelName, status, error);
             void refresh();
@@ -350,6 +367,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (cancelled) return;
 
+        realtimeSubscribedRef.current = false;
         warnProfileRealtime(`Could not subscribe to ${channelName}.`, error);
         void refresh();
       }
@@ -359,6 +377,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      realtimeSubscribedRef.current = false;
 
       if (!channel) return;
 

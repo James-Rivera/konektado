@@ -90,17 +90,24 @@ export default function ConversationDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const loadRequestRef = useRef(0);
 
-  const load = useCallback((options: { showSkeleton?: boolean } = {}) => {
+  // The thread to show changed: go back to the skeleton while rendering, so the
+  // effect below only has to fetch. Initial state is already the skeleton.
+  const loadKey = `${conversationId ?? ''}|${profile?.id ?? ''}`;
+  const [skeletonFor, setSkeletonFor] = useState(loadKey);
+  if (loadKey !== skeletonFor) {
+    setSkeletonFor(loadKey);
+    if (conversationId) {
+      setConversationReady(false);
+      setLoading(true);
+      setConversationError(null);
+    }
+  }
+
+  const fetchConversation = useCallback(() => {
     if (!conversationId) return;
 
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
-    const showSkeleton = options.showSkeleton ?? true;
-    if (showSkeleton) {
-      setConversationReady(false);
-      setLoading(true);
-    }
-    setConversationError(null);
 
     getConversation(conversationId).then((result) => {
       if (requestId !== loadRequestRef.current) return;
@@ -126,8 +133,8 @@ export default function ConversationDetailScreen() {
   }, [conversationId, profile?.id]);
 
   useEffect(() => {
-    load({ showSkeleton: true });
-  }, [load]);
+    fetchConversation();
+  }, [fetchConversation]);
 
   useEffect(() => {
     if (!conversationId) return undefined;

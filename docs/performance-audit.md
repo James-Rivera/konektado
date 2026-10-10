@@ -729,3 +729,57 @@ Also document which skeletons should remain separate if the real component canno
 - Run end-to-end manual QA for the completed performance, Product UX, auth, and post-flow stabilization work before starting more optimization.
 - Use `docs/stabilization-audit.md` as the current cross-area status source.
 - Do not start database index, RPC, or view work unless real row counts, EXPLAIN output, or profiling show a need.
+
+## 2026-10-05 Mobile Data Round-Trip Cuts (DEC-137)
+
+Goal: fewer sequential network round trips before Home and Profile render, since each one costs roughly 150 to 500 ms on mobile data. No schema, RLS, or migration changes.
+
+Implemented changes:
+
+- `services/session.service.ts` adds `getSessionUser()`, which reads the stored session instead of calling `supabase.auth.getUser()` (an Auth server round trip on every call). `getCurrentUserId()` in `services/marketplace.helpers.ts` (33 callers) and the credential, admin-profile, review, profile-completion, and user-preference lookups now use it. The signup/OTP helpers in `services/auth.service.ts`, the onboarding loader that reads signup metadata, verification submission and prefill, and the internal editor access check still call `getUser()`.
+- `ProfileProvider` reads the session locally, then loads `profiles`, `provider_profiles`, preferences, and the latest verification status in one parallel round trip instead of four sequential ones.
+- `ProfileProvider` no longer reloads on `INITIAL_SESSION`, which made the mount load run the full chain twice, or on `TOKEN_REFRESHED`, which changes no profile data.
+- The 30-second profile poll is skipped while the profile realtime channel is subscribed. It still runs when realtime errors, times out, or never connects.
+- `searchJobs`, `listMyJobs`, and `getJobDetail` load public profiles, client stats, and photo visibility in parallel instead of one after another.
+
+Expected effect: about four fewer sequential round trips on a cold start before the Home feed request goes out, one fewer on every service call that used `getCurrentUserId()`, one to two fewer on the Home jobs feed and job detail, and no background profile reads every 30 seconds while realtime is healthy. Not yet measured on a device.
+
+Validation results:
+
+- `npm run lint`, `npx tsc --noEmit`, and the 183 unit tests passed.
+- No Expo/manual device test was run.
+
+Manual testing checklist:
+
+- Cold start signed in, signed out, and mid-onboarding routes correctly.
+- Login, logout, password recovery pin, and signup password step still route correctly.
+- Profile edits, verification decisions, and preference changes still appear without a manual refresh (realtime), and still appear within 30 seconds with realtime blocked (fallback poll).
+
+## 2026-10-10 Mobile Data Quick Wins (DEC-138)
+
+Goal: fewer bytes per session on mobile data, and no screen stuck loading forever on a weak signal. No schema, RLS, or migration changes.
+
+Implemented changes:
+
+- `assets/images/verification-hero-figma.jpg` resized from 4096x2731 (8.5 MB) to 1400x933 (255 KB). The hero renders full width at 135pt, so 1400px still covers a 3x phone.
+- `app/_layout.tsx` stops loading the unused BlackItalic, BoldItalic, LightItalic, and MediumItalic faces (about 200 KB that had to load before the splash screen hid). The files stay in `assets/` but are no longer bundled.
+- Chat image attachments (`sendMessage` in `services/conversation.service.ts`) go through the `marketplace-photo` preset (1400px JPEG) before upload, and the stored width and height come from the resized image. GIFs and other formats the optimizer cannot read upload unchanged, under the existing 10 MB limit.
+- Verification and credential photos go through a new `document-photo` preset (2000px, JPEG 0.85) via `readDocumentUploadBody` in `utils/image-processing.ts`. PDFs and files that fail to resize upload unchanged.
+- New job and service photos also get an 800px card copy (`services/marketplace-photo-upload.service.ts`). The full photo is stored as `<name>.full.jpg` and the copy as `<name>.card.jpg`; `getCardImageUrl` uses the copy only when the URL carries the `.full.jpg` marker, so photos uploaded before this change keep loading in full. If either file fails to upload, the other is removed. The internal demo editor deletes both files.
+- `utils/supabase.ts` passes a `fetch` wrapper that aborts requests with no response after 20 s (45 s for edge functions, 120 s for storage writes) and reports a `TimeoutError`. It also starts and stops token auto-refresh with `AppState` on native.
+- `vercel.json` sends `Cache-Control: public, max-age=31536000, immutable` for `/_expo/static/*` and `/assets/*`, which are content-hashed by `expo export`.
+
+Validation results:
+
+- `npm run lint`, `npx tsc --noEmit`, and the 190 unit tests passed (7 new in `tests/photo-card-copy.test.ts`).
+- `expo export -p web` succeeded; the output ships six font files and the 255 KB hero.
+- No Expo/manual device test was run.
+
+Manual testing checklist:
+
+- Post a job and a service with photos: the Home card shows the photo, the detail screen shows the full photo, and storage holds a `.full.jpg` and `.card.jpg` pair.
+- Older jobs and services still show their photos on Home.
+- Send a camera photo and a gallery photo in chat: both arrive, display at the right aspect ratio, and the stored file is a JPEG under about 500 KB.
+- Submit verification with camera photos, and add a PDF and a photo credential: all upload, and the admin review screens still show readable ID text.
+- With the network throttled or cut mid-request, a screen shows an error within about 20 seconds instead of loading indefinitely.
+- Leave the app in the background for over an hour, return, and confirm requests still succeed without signing in again.

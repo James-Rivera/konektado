@@ -31,6 +31,8 @@ function getParamValue(value: string | string[] | undefined) {
   return value;
 }
 
+const CLIENT_NOT_FOUND_MESSAGE = 'Client profile not found.';
+
 export default function PublicClientProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -44,21 +46,24 @@ export default function PublicClientProfileScreen() {
   const sourceJobId = getParamValue(params.sourceJobId);
   const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
   const [profile, setProfile] = useState<PublicClientProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(clientId));
+  const [error, setError] = useState<string | null>(clientId ? null : CLIENT_NOT_FOUND_MESSAGE);
   const [messaging, setMessaging] = useState(false);
 
+  // A different profile starts loading again. Reset while rendering, so the
+  // effect below only has to fetch.
+  const [loadingFor, setLoadingFor] = useState({ clientId, sourceJobId });
+  if (loadingFor.clientId !== clientId || loadingFor.sourceJobId !== sourceJobId) {
+    setLoadingFor({ clientId, sourceJobId });
+    setLoading(Boolean(clientId));
+    setError(clientId ? null : CLIENT_NOT_FOUND_MESSAGE);
+  }
+
   useEffect(() => {
+    if (!clientId) return;
+
     let active = true;
 
-    if (!clientId) {
-      setLoading(false);
-      setError('Client profile not found.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
     getPublicClientProfile(clientId, { sourceJobId }).then((result) => {
       if (!active) return;
 

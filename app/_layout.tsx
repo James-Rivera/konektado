@@ -24,16 +24,15 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // Only the faces the UI uses: every font here is bundled and loaded before
+  // the splash screen hides. The italic Black/Bold/Light/Medium files stay in
+  // assets/ but are not referenced, so they no longer ship (DEC-138).
   const [fontsLoaded] = useFonts({
     "Satoshi-Black": require("../assets/images/fonts/Satoshi-Black.otf"),
-    "Satoshi-BlackItalic": require("../assets/images/fonts/Satoshi-BlackItalic.otf"),
     "Satoshi-Bold": require("../assets/images/fonts/Satoshi-Bold.otf"),
-    "Satoshi-BoldItalic": require("../assets/images/fonts/Satoshi-BoldItalic.otf"),
     "Satoshi-Italic": require("../assets/images/fonts/Satoshi-Italic.otf"),
     "Satoshi-Light": require("../assets/images/fonts/Satoshi-Light.otf"),
-    "Satoshi-LightItalic": require("../assets/images/fonts/Satoshi-LightItalic.otf"),
     "Satoshi-Medium": require("../assets/images/fonts/Satoshi-Medium.otf"),
-    "Satoshi-MediumItalic": require("../assets/images/fonts/Satoshi-MediumItalic.otf"),
     "Satoshi-Regular": require("../assets/images/fonts/Satoshi-Regular.otf"),
   });
 
@@ -78,11 +77,11 @@ function RootNavigator() {
   } = useProfileStatus();
   const [hasResolvedInitialStatus, setHasResolvedInitialStatus] = useState(false);
 
-  useEffect(() => {
-    if (!loading) {
-      setHasResolvedInitialStatus(true);
-    }
-  }, [loading]);
+  // Latches once the first status load finishes. Set while rendering, so the
+  // initial gate lifts in the same commit instead of one effect later.
+  if (!loading && !hasResolvedInitialStatus) {
+    setHasResolvedInitialStatus(true);
+  }
 
   useEffect(() => {
     if (!rootNavigationState?.key) return;

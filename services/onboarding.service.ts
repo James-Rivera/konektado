@@ -9,6 +9,7 @@ import type {
     OnboardingIntent,
     UserPreferences,
 } from "@/types/onboarding.types";
+import { getSessionUser } from "@/services/session.service";
 import { saveUserRole } from "@/utils/save-role";
 import { supabase } from "@/utils/supabase";
 
@@ -350,23 +351,23 @@ export async function saveOnboardingProfile({
 export async function getMyUserPreferences(): Promise<
   ServiceResult<UserPreferences | null>
 > {
-  const { data: userResult, error: userError } = await supabase.auth.getUser();
+  const { error: userError, user } = await getSessionUser();
 
-  if (userError || !userResult.user) {
+  if (userError || !user) {
     return { data: null, error: "Please sign in again to continue." };
   }
 
   let { data, error } = await supabase
     .from("user_preferences")
     .select(PREFERENCES_SELECT)
-    .eq("user_id", userResult.user.id)
+    .eq("user_id", user.id)
     .maybeSingle<UserPreferencesRow>();
 
   if (isMissingOfferedDeliveryModeColumn(error)) {
     const legacyResult = await supabase
       .from("user_preferences")
       .select(LEGACY_PREFERENCES_SELECT)
-      .eq("user_id", userResult.user.id)
+      .eq("user_id", user.id)
       .maybeSingle<UserPreferencesRow>();
 
     data = legacyResult.data ? { ...legacyResult.data, offered_delivery_mode: null } : null;
@@ -391,9 +392,9 @@ export async function saveMyDiscoveryPreferences({
   neededServices: string[];
   offeredServices: string[];
 }): Promise<ServiceResult<UserPreferences>> {
-  const { data: userResult, error: userError } = await supabase.auth.getUser();
+  const { error: userError, user } = await getSessionUser();
 
-  if (userError || !userResult.user) {
+  if (userError || !user) {
     return { data: null, error: "Please sign in again to continue." };
   }
 
@@ -402,7 +403,7 @@ export async function saveMyDiscoveryPreferences({
     return { data: null, error: current.error };
   }
 
-  const fallbackIntent = await getFallbackPreferenceIntent(userResult.user.id);
+  const fallbackIntent = await getFallbackPreferenceIntent(user.id);
   const intent = current.data?.intent ?? fallbackIntent;
   const offeredSplit = splitOfficialAndCustomServices([
     ...offeredServices,
@@ -418,7 +419,7 @@ export async function saveMyDiscoveryPreferences({
   const normalizedCustomNeededServices = compactServices(neededSplit.custom);
   const updatedAt = new Date().toISOString();
   const preferencesPayload = {
-    user_id: userResult.user.id,
+    user_id: user.id,
     intent,
     offered_delivery_mode: current.data?.offeredDeliveryMode ?? null,
     offered_services: normalizedOfferedServices,

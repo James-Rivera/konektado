@@ -16,31 +16,32 @@ export function CompletedJobReviewCard({
   status: JobStatus;
   onSubmitted?: () => void;
 }) {
-  const [state, setState] = useState<JobReviewState | null>(null);
-  const [loading, setLoading] = useState(status === 'completed');
+  const [loadedState, setState] = useState<JobReviewState | null>(null);
+  // Which job `loadedState` belongs to; loading is derived from it.
+  const [loadedJobId, setLoadedJobId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Only completed jobs have a review state.
+  const reviewJobId = status === 'completed' ? jobId : null;
+  const loading = reviewJobId !== null && loadedJobId !== reviewJobId;
+  const state = reviewJobId ? loadedState : null;
+
   useEffect(() => {
+    if (!reviewJobId) return;
     let active = true;
-    if (status !== 'completed') {
-      setLoading(false);
-      setState(null);
-      return;
-    }
-    setLoading(true);
-    void getMyJobReviewState(jobId).then((result) => {
+    void getMyJobReviewState(reviewJobId).then((result) => {
       if (!active) return;
       setState(result.data ?? null);
-      setLoading(false);
+      setLoadedJobId(reviewJobId);
     });
     return () => {
       active = false;
     };
-  }, [jobId, status]);
+  }, [reviewJobId]);
 
   if (status !== 'completed' || (!loading && !state)) return null;
   if (state && !state.eligible && state.reason !== 'already_reviewed') return null;

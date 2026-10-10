@@ -55,31 +55,32 @@ type SubmissionDetails = {
   submittedNote: string | null;
 };
 
+const MISSING_REQUEST_MESSAGE = 'Choose a verification request to review.';
+
 export default function AdminVerificationReviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ requestId?: string }>();
   const requestId = Array.isArray(params.requestId) ? params.requestId[0] : params.requestId;
   const [request, setRequest] = useState<VerificationRequestDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(requestId));
+  const [errorMessage, setErrorMessage] = useState<string | null>(requestId ? null : MISSING_REQUEST_MESSAGE);
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionModal, setDecisionModal] = useState<'needs_more_info' | 'rejected' | null>(null);
   const [decisionNote, setDecisionNote] = useState('');
   const [correctionReason, setCorrectionReason] = useState<NeedsCorrectionReason>(NAME_MISMATCH_REASON);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    if (!requestId) {
-      setErrorMessage('Choose a verification request to review.');
-      setLoading(false);
-      return;
-    }
+  // A different request starts loading again. Reset while rendering, so the
+  // mount/param effect below only has to fetch.
+  const [loadingForId, setLoadingForId] = useState(requestId);
+  if (requestId !== loadingForId) {
+    setLoadingForId(requestId);
+    setErrorMessage(requestId ? null : MISSING_REQUEST_MESSAGE);
+    setLoading(Boolean(requestId));
+  }
 
-    setErrorMessage(null);
-    setLoading(true);
-    const result = await getVerificationRequest(requestId);
-
+  const applyRequestResult = useCallback((result: Awaited<ReturnType<typeof getVerificationRequest>>) => {
     if (result.error || !result.data) {
       setErrorMessage(result.error ?? 'Could not load this verification request.');
     } else {
@@ -87,11 +88,24 @@ export default function AdminVerificationReviewScreen() {
     }
 
     setLoading(false);
-  }, [requestId]);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!requestId) {
+      setErrorMessage(MISSING_REQUEST_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
+    setErrorMessage(null);
+    setLoading(true);
+    applyRequestResult(await getVerificationRequest(requestId));
+  }, [applyRequestResult, requestId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!requestId) return;
+    void getVerificationRequest(requestId).then(applyRequestResult);
+  }, [applyRequestResult, requestId]);
 
   const details = useMemo(() => parseSubmissionDetails(request?.notes ?? null), [request?.notes]);
   const residentName = request ? fullNameFromDetails(details, request) || 'Konektado resident' : 'Review resident request';

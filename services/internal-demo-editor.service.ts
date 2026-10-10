@@ -21,6 +21,7 @@ import {
 import { compactText, formatPublicLocation, isCurrentUserAdmin, normalizeRateType } from '@/services/marketplace.helpers';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
 import {
+  getCardCopyLocation,
   optimizePublicImageForUpload,
   readPublicImageUploadBody,
 } from '@/utils/image-processing';
@@ -2040,7 +2041,10 @@ export async function removePublicDemoImage(publicUrl: string): Promise<ServiceR
   const location = getPublicStorageObjectFromUrl(publicUrl);
   if (!location) return { data: undefined, error: null };
 
-  const { error } = await supabase.storage.from(location.bucket).remove([location.path]);
+  // Marketplace photos may have a feed-card copy beside them (DEC-138).
+  const cardPath = getCardCopyLocation(location.path);
+  const paths = cardPath ? [location.path, cardPath] : [location.path];
+  const { error } = await supabase.storage.from(location.bucket).remove(paths);
   if (error) return { data: null, error: error.message };
   return { data: undefined, error: null };
 }
