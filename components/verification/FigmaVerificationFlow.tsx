@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@/components/DateTimePicker';
+import { formatLocalDate, parseLocalDate } from '@/utils/date-time';
 import { CameraView, useCameraPermissions, type CameraCapturedPicture } from 'expo-camera';
 import type React from 'react';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
@@ -639,16 +640,12 @@ function DetailsScreen({
   onChangeField: (field: keyof CreateVerificationRequestInput, value: string | null) => void;
 }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const selectedDate = form.birthdate ? new Date(form.birthdate) : new Date('2000-01-01');
+  const selectedDate = parseLocalDate(form.birthdate ?? '') ?? new Date(2000, 0, 1);
   const canEditName = legalNameEdit.canEdit;
 
-  const onDateChange = (_event: DateTimePickerEvent, date?: Date) => {
+  const onDateChange = (date: Date) => {
     setShowDatePicker(false);
-    if (!date) return;
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    onChangeField('birthdate', `${year}-${month}-${day}`);
+    onChangeField('birthdate', formatLocalDate(date));
   };
 
   return (
@@ -687,10 +684,11 @@ function DetailsScreen({
             />
             {showDatePicker ? (
               <DateTimePicker
-                display="default"
+                label="Date of Birth"
                 maximumDate={new Date()}
                 mode="date"
-                onChange={onDateChange}
+                onSelect={onDateChange}
+                onDismiss={() => setShowDatePicker(false)}
                 value={selectedDate}
               />
             ) : null}

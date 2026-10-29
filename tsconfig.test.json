@@ -23,6 +23,7 @@
     "utils/verification-gate.ts",
     "utils/phone.ts",
     "utils/photo-card-copy.ts",
+    "utils/date-time.ts",
     "types/*.ts",
     "tests/**/*.ts"
   ],
