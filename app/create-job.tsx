@@ -1,4 +1,4 @@
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@/components/DateTimePicker';
 import * as DocumentPicker from 'expo-document-picker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ReactNode } from 'react';
@@ -733,9 +733,8 @@ export default function CreateJobScreen() {
     });
   };
 
-  const onJobDateChange = (_event: DateTimePickerEvent, date?: Date) => {
+  const onJobDateChange = (date: Date) => {
     setDatePickerVisible(false);
-    if (!date) return;
 
     const nextDate = new Date(date);
     nextDate.setHours(0, 0, 0, 0);
@@ -745,9 +744,8 @@ export default function CreateJobScreen() {
     });
   };
 
-  const onExactTimeChange = (_event: DateTimePickerEvent, date?: Date) => {
+  const onExactTimeChange = (date: Date) => {
     setTimePickerVisible(false);
-    if (!date) return;
 
     const exactTime = formatTimeValue(date);
     updateScheduleDraft({
@@ -1147,10 +1145,11 @@ export default function CreateJobScreen() {
               </Pressable>
               {datePickerVisible ? (
                 <DateTimePicker
-                  display="default"
+                  label="Job date"
                   minimumDate={getTodayAtStart()}
                   mode="date"
-                  onChange={onJobDateChange}
+                  onSelect={onJobDateChange}
+                  onDismiss={() => setDatePickerVisible(false)}
                   value={selectedDate}
                 />
               ) : null}
@@ -1181,9 +1180,10 @@ export default function CreateJobScreen() {
                 </Pressable>
                 {timePickerVisible ? (
                   <DateTimePicker
-                    display="default"
+                    label="Exact time"
                     mode="time"
-                    onChange={onExactTimeChange}
+                    onSelect={onExactTimeChange}
+                    onDismiss={() => setTimePickerVisible(false)}
                     value={selectedTime}
                   />
                 ) : null}

@@ -1,0 +1,35 @@
+# Build source only. Keep in sync with .gitignore; this replaces it for EAS uploads.
+node_modules/
+.expo/
+dist/
+web-build/
+.test-build/
+.git/
+.kotlin/
+/android/
+/ios/
+*.tsbuildinfo
+*.orig.*
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+credentials.json
+.env
+.env.*
+!.env.example
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+app-example/
+# Backend code/secrets and local maintenance files are not Android build inputs.
+supabase/
+sql/
+docs/
+tests/
+.agents/
+.codex/
+.aws/

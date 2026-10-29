@@ -1,4 +1,5 @@
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@/components/DateTimePicker';
+import { formatLocalDate, parseLocalDate } from '@/utils/date-time';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -23,15 +24,11 @@ export default function BasicsStep() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedDate = localBirthdate ? new Date(localBirthdate) : new Date('2000-01-01');
+  const selectedDate = parseLocalDate(localBirthdate) ?? new Date(2000, 0, 1);
 
-  const onDateChange = (_event: DateTimePickerEvent, date?: Date) => {
+  const onDateChange = (date: Date) => {
     setShowDatePicker(false);
-    if (!date) return;
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    setLocalBirthdate(`${year}-${month}-${day}`);
+    setLocalBirthdate(formatLocalDate(date));
     if (error) setError(null);
   };
 
@@ -92,10 +89,11 @@ export default function BasicsStep() {
 
         {showDatePicker ? (
           <DateTimePicker
-            display="default"
+            label="Date of Birth"
             maximumDate={new Date()}
             mode="date"
-            onChange={onDateChange}
+            onSelect={onDateChange}
+            onDismiss={() => setShowDatePicker(false)}
             value={selectedDate}
           />
         ) : null}
