@@ -1,0 +1,124 @@
+name: Approved staging release
+
+# A push never runs these operations. Each dispatch approves one action only.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Action to review or perform
+        type: choice
+        required: true
+        default: plan-database
+        options: [plan-database, apply-database, deploy-web, build-android]
+      confirmation:
+        description: 'For writes/builds: action: followed by the full selected commit SHA'
+        type: string
+        default: ''
+      expected_migrations:
+        description: 'For apply: all-local (empty staging), none, or reviewed comma-separated versions'
+        type: string
+        default: all-local
+      backup_reference:
+        description: 'For apply: verified backup ID, or verified empty-staging baseline reference; no secrets'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: staging
+    env:
+      RELEASE_ENVIRONMENT: staging
+      RELEASE_ACTION: ${{ inputs.action }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+      RELEASE_BACKUP_REFERENCE: ${{ inputs.backup_reference }}
+      EXPECTED_MIGRATIONS: ${{ inputs.expected_migrations }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_TELEMETRY_DISABLED: 'true'
+      DO_NOT_TRACK: 'true'
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_KEY }}
+      EXPO_PUBLIC_PHONE_AUTH_ENABLED: 'false'
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      EAS_PREVIEW_SUPABASE_PROJECT_REF: ${{ vars.EAS_PREVIEW_SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate the target and explicit approval before installing tools
+        # The guard checks presence only; actual credentials are scoped to auth steps.
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' && 'configured' || '' }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD != '' && 'configured' || '' }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' && 'configured' || '' }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' && 'configured' || '' }}
+        run: node scripts/release-preflight.cjs intent
+      - run: npm ci
+      - name: Verify source without building the app
+        run: |
+          npx --no-install eslint . --no-cache
+          npx --no-install tsc --noEmit
+          node --test tests/release-preflight.test.cjs
+          npm run test:service-classification
+      - name: Inspect the selected staging database
+        if: inputs.action != 'build-android'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          npx --no-install supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          npx --no-install supabase migration list --linked
+          npx --no-install supabase db push --linked --dry-run 2>&1 | tee "$RUNNER_TEMP/staging-migrations.plan"
+      - name: Validate the approved migration set
+        if: inputs.action == 'apply-database'
+        run: node scripts/release-preflight.cjs pending "$RUNNER_TEMP/staging-migrations.plan" "$EXPECTED_MIGRATIONS"
+      - name: Apply only the reviewed migrations to staging
+        if: inputs.action == 'apply-database'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: npx --no-install supabase db push --linked --yes
+      - name: Require a migrated database before publishing the client
+        if: inputs.action == 'deploy-web'
+        run: node scripts/release-preflight.cjs pending "$RUNNER_TEMP/staging-migrations.plan" none
+      - name: Install the reviewed Vercel CLI
+        if: inputs.action == 'deploy-web'
+        run: npm install --global vercel@58.4.4
+      - name: Pull the Vercel preview configuration
+        if: inputs.action == 'deploy-web'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel pull --yes --environment=preview --git-branch="$GITHUB_REF_NAME"
+          node scripts/release-preflight.cjs vercel-client .vercel/.env.preview.local
+      - name: Build the approved preview
+        if: inputs.action == 'deploy-web'
+        run: vercel build
+      - name: Deploy a Vercel preview only
+        if: inputs.action == 'deploy-web'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt
+      - name: Install the reviewed EAS CLI
+        if: inputs.action == 'build-android'
+        run: npm install --global eas-cli@27.10.0
+      - name: Build an internal Android APK only
+        if: inputs.action == 'build-android'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas whoami
+          eas build --platform android --profile preview --non-interactive --wait

@@ -4,6 +4,7 @@ node_modules/
 dist/
 web-build/
 .test-build/
+.vercel/
 .git/
 .kotlin/
 /android/

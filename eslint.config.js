@@ -9,6 +9,8 @@ module.exports = defineConfig([
       // Build output. The previous `dist/*` only matched direct children, so
       // anything nested was still being linted.
       'dist/**',
+      '.test-build/**',
+      '.vercel/**',
       // Expo's generated types (.expo/types/router.d.ts carries its own
       // eslint-disable directives, which this config then reports as unused).
       '.expo/**',
@@ -20,5 +22,16 @@ module.exports = defineConfig([
       // need a Deno-aware config, not this one.
       'supabase/functions/**',
     ],
+  },
+  {
+    files: [
+      'scripts/check-taxonomy-exhaustiveness.cjs',
+      'scripts/preview-posting-components.cjs',
+      'scripts/serve-posting-preview.cjs',
+      'scripts/test-alias-hook.cjs',
+    ],
+    languageOptions: {
+      globals: { __dirname: 'readonly', __filename: 'readonly' },
+    },
   },
 ]);

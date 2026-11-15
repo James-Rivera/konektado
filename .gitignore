@@ -49,3 +49,7 @@ app-example
 
 # Focused feature-test build output
 .test-build/
+.vercel/
+
+# Raw audit evidence stays private; publish only separately reviewed/sanitized assets.
+/docs/audit-assets/
