@@ -10,6 +10,16 @@ The pending database sequence is `20261113090000_posting_profile_repairs.sql`, t
 
 Release status must be recorded from observed results. Approval and a successful dry-run do not mean a backup, migration, push, or deployment has completed. CLI and MCP login sessions are separate; a fresh CLI login may require the user to complete provider authentication without sharing credentials in chat.
 
+### Completed preflight before the main push
+
+The release tooling is preserved separately in commit `8c549b4`. On 2026-11-15, lint, application TypeScript, all 241 application tests, all 16 release-guard tests, and a fresh static web export passed. All 111 export files were checked against the local server-only credentials, with no matches. The served app at `https://konektado-nu.vercel.app` was verified to use the expected demo project and a publishable key. `konektado.app` currently serves the separate landing page; do not change its deployment or domains as part of this app release.
+
+Private recovery files are under `%USERPROFILE%/.konektado-private/releases/main-20261115/`, with access limited to the owner and SYSTEM. They include a full logical database archive, an application recovery archive covering `public`, `app_private`, `auth`, `storage`, and migration history, a roles export without role passwords, manifests and SHA-256 hashes, and all 69 Storage objects across seven buckets. The first app/Auth/Storage archive omitted the private function schema; retain it as evidence, but use `database-app-recovery-complete.dump` for application recovery. The full archive already includes that schema.
+
+The complete application recovery archive was restored successfully into a new private, password-protected localhost PostgreSQL 18 cluster. Both November migrations passed on that restored copy with the checked user/profile/listing/draft/Storage row counts unchanged. The local rehearsal retained the existing `public` schema, assigned object ownership to local `postgres`, and normalized role membership grantors to the restore administrator. It does not certify a full managed Supabase platform restore, Auth service operation, or extension parity. The original archives and roles export remain unmodified; the scratch cluster is stopped and retained. Local backups are not encrypted off-device backups.
+
+The reviewed hosted dry-run contained exactly `20261113090000,20261115090000`. Both were then applied through `supabase db push --linked --yes`, preserving their canonical versions. Hosted history now matches all 41 committed migrations. Checked row counts match the baseline, the new edit/publication RPCs deny `anon` and allow `authenticated`, and every public table retains RLS. Existing security-advisor findings were recorded before the release, including the visibility view, mutable function search paths and executable SECURITY DEFINER functions; this release does not claim to resolve that separate security backlog. Browser/native end-to-end acceptance remains distinct from these database and automated checks.
+
 ## Preserved baseline
 
 The user approved the local 70-file source/test/docs/migration checkpoint on 2026-11-15. Commit `e3ee4794832a7b3f2921c94a19d15b852dacf887`, on `codex/checkpoint-posting-2026-11-15`, preserves that exact reviewed snapshot. Release-tooling changes are separate from this commit.
@@ -19,7 +29,7 @@ All 52 original screenshots remain in `docs/audit-assets/`, explicitly ignored a
 ## Current connections and provisioning
 
 - GitHub MCP is authenticated as `James-Rivera` and has repository push access. Local `gh` authentication is expired; this does not invalidate the MCP connection.
-- Supabase MCP is connected. The existing Konektado demo project is `dudlohdeydcbsvgccexd` in `ap-southeast-1`. Its migration history contains the 39 local migrations through September 29; neither November migration is applied.
+- Supabase MCP is connected and CLI login was refreshed. The existing Konektado demo project is `dudlohdeydcbsvgccexd` in `ap-southeast-1`. Its migration history now matches all 41 local migrations, including November 13 and November 15, after the approved backup and restore checks above.
 - Vercel MCP is connected. Existing app project: `prj_D6ULsLK7sHN55AKJydvVOxEKcOJo`; team: `team_jNjTicXGGTGrjk1DePtFJYCy`. Vercel is already Git-linked to `James-Rivera/konektado`. Do not change the separate landing-page project.
 - The user selected staging first. Supabase quoted $0/month for a separate Singapore staging project, and the user approved empty-project creation. Creation failed because the account has reached its two-active-free-project limit. No project was created, and no existing project was paused, deleted, upgraded, migrated, or seeded. The user subsequently chose to keep staging pending.
 - EAS CLI identity is verified as `avera_tech`. An initial sandboxed request could not resolve `api.expo.dev`; the read-only check succeeded with normal network access. Existing signing/project configuration is retained; no build was started. CI still requires its own `EXPO_TOKEN`.
