@@ -77,6 +77,7 @@ select pg_temp.expect_denied('direct completion', $q$update jobs set status='com
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
 select pg_temp.expect_true('public job is still readable', exists(select id from jobs where id='30000000-0000-4000-8000-000000000001'));
+select pg_temp.expect_true('public job content version is readable', (select content_version from jobs where id='30000000-0000-4000-8000-000000000001') = 1);
 select pg_temp.expect_denied('unrelated private notes RPC', $q$select get_job_private_location_notes('30000000-0000-4000-8000-000000000001')$q$);
 select pg_temp.expect_denied('unrelated direct private notes', $q$select private_location_notes from jobs where id='30000000-0000-4000-8000-000000000001'$q$);
 insert into services(id,provider_id,title,description,barangay,category,allow_messages,rate_min,rate_max,rate_type)
