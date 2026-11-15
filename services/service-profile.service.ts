@@ -1,4 +1,6 @@
+import { validateServicePayload } from '@/services/listing-validation';
 import {
+  getStoredMvpServiceOption,
   getServiceSearchValues,
   getServiceSearchValuesForOptions,
 } from '@/constants/service-taxonomy';
@@ -119,7 +121,10 @@ export async function createService(
   const user = await requireVerifiedCompleteProfile('provider');
   if (user.error) return user;
 
-  const category = compactText(input.category);
+  const payloadError = validateServicePayload(input);
+  if (payloadError) return { data: null, error: payloadError };
+
+  const category = getStoredMvpServiceOption(input.category) ?? compactText(input.category);
   const title = compactText(input.title);
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
   const rateMin = input.rateMin ?? null;
@@ -157,12 +162,12 @@ export async function createService(
       certification_available: input.certificationAvailable ?? false,
       certification_note: compactText(input.certificationNote) || null,
       custom_category: customCategory,
-      custom_category_review_status: customCategory ? 'pending' : 'none',
+      custom_category_review_status: category === 'Other service' ? 'pending' : 'none',
       barangay: compactText(input.barangay) || null,
       location_text: compactText(input.locationText) || compactText(input.barangay) || null,
       allow_messages: input.allowMessages ?? true,
-      auto_reply_enabled: input.autoReplyEnabled ?? false,
-      auto_pause_enabled: input.autoPauseEnabled ?? false,
+      auto_reply_enabled: false,
+      auto_pause_enabled: false,
       is_active: true,
     })
     .select(SERVICE_COLUMNS)
@@ -209,7 +214,10 @@ export async function updateService({
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
 
-  const category = compactText(input.category);
+  const payloadError = validateServicePayload(input);
+  if (payloadError) return { data: null, error: payloadError };
+
+  const category = getStoredMvpServiceOption(input.category) ?? compactText(input.category);
   const title = compactText(input.title);
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
   const rateType = normalizeRateType(input.rateType);
@@ -247,12 +255,12 @@ export async function updateService({
       certification_available: input.certificationAvailable ?? false,
       certification_note: compactText(input.certificationNote) || null,
       custom_category: customCategory,
-      custom_category_review_status: customCategory ? 'pending' : 'none',
+      custom_category_review_status: category === 'Other service' ? 'pending' : 'none',
       barangay: compactText(input.barangay) || null,
       location_text: compactText(input.locationText) || compactText(input.barangay) || null,
       allow_messages: input.allowMessages ?? true,
-      auto_reply_enabled: input.autoReplyEnabled ?? false,
-      auto_pause_enabled: input.autoPauseEnabled ?? false,
+      auto_reply_enabled: false,
+      auto_pause_enabled: false,
     })
     .eq('id', serviceId)
     .eq('provider_id', user.data)
@@ -397,6 +405,8 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
     query = query.or(clauses.join(','));
   }
 
+  if (filters.rateMin !== null && filters.rateMin !== undefined) query = query.gte('rate_max', filters.rateMin);
+  if (filters.rateMax !== null && filters.rateMax !== undefined) query = query.lte('rate_min', filters.rateMax);
   query = query.limit(limit);
 
   const { data, error } = await query;

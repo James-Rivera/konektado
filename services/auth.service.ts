@@ -1,3 +1,4 @@
+import { clearReviewSnapshots } from '@/services/posting-review';
 import { toE164PhilippineMobile } from "@/utils/phone";
 import type { OnboardingIntent } from "@/utils/save-role";
 import { supabase } from "@/utils/supabase";
@@ -208,6 +209,7 @@ export async function verifySignupEmailOtp({
     return { data: null, error: "Enter the 6-digit code from your email." };
   }
 
+  clearReviewSnapshots();
   const { data, error } = await supabase.auth.verifyOtp({
     email: normalizedEmail,
     token: normalizedToken,
@@ -402,6 +404,7 @@ export async function signInWithPhonePassword({
     return { data: null, error: "Enter your password." };
   }
 
+  clearReviewSnapshots();
   const { error } = await supabase.auth.signInWithPassword({ password, phone: e164 });
   if (error) {
     return {
@@ -737,6 +740,7 @@ export async function abandonPasswordRecovery(): Promise<void> {
 }
 
 export async function signOutCurrentUser(): Promise<ServiceResult<void>> {
+  clearReviewSnapshots();
   const { error } = await supabase.auth.signOut();
 
   if (error) {
@@ -808,6 +812,7 @@ export async function signInWithEmailPassword({
     return { data: null, error: "Enter your password." };
   }
 
+  clearReviewSnapshots();
   const { data, error } = await supabase.auth.signInWithPassword({
     email: normalizedEmail,
     password,

@@ -9,6 +9,7 @@ interface BottomSheetProps {
   maxHeight?: string;
   onClose: () => void;
   visible: boolean;
+  onShow?: () => void;
 }
 
 /**
@@ -32,7 +33,7 @@ interface BottomSheetProps {
  * );
  * ```
  */
-export function BottomSheet({ children, maxHeight = '82%', onClose, visible }: BottomSheetProps) {
+export function BottomSheet({ children, maxHeight = '82%', onClose, visible, onShow }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const [backdropOpacity] = useState(() => new Animated.Value(0));
   const [sheetTranslateY] = useState(() => new Animated.Value(500));
@@ -70,10 +71,11 @@ export function BottomSheet({ children, maxHeight = '82%', onClose, visible }: B
   }, [visible, backdropOpacity, sheetTranslateY]);
 
   return (
-    <Modal animationType="none" onRequestClose={onClose} statusBarTranslucent transparent visible={visible}>
+    <Modal onShow={onShow} animationType="none" onRequestClose={onClose} statusBarTranslucent transparent visible={visible}>
       <Animated.View style={[styles.overlay, { opacity: backdropOpacity }]}>
-        <Pressable accessibilityRole="button" onPress={onClose} style={styles.backdrop} />
+        <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={onClose} style={styles.backdrop} />
         <Animated.View
+          accessibilityViewIsModal
           style={[
             styles.sheet,
             {

@@ -21,6 +21,7 @@ import type {
 } from '@/types/profile.types';
 import type { VerificationStatus } from '@/types/verification.types';
 import { getSessionUser } from '@/services/session.service';
+import { isHiringProfileInputComplete, isWorkProfileInputComplete, resolveProfileSelections } from '@/services/profile-readiness';
 import { supabase } from '@/utils/supabase';
 import {
   getLegalNameEditPolicy,
@@ -65,6 +66,7 @@ type ProfileNameGuardRow = Pick<
 >;
 
 type ProviderProfileRow = {
+  services_confirmed: boolean;
   service_type: string | null;
   headline: string | null;
   bio: string | null;
@@ -76,6 +78,7 @@ type ProviderProfileRow = {
 };
 
 type ClientProfileRow = {
+  services_confirmed: boolean;
   headline: string | null;
   bio: string | null;
   needed_services: string[] | null;
@@ -115,9 +118,9 @@ type RequiredItem = {
 const PROFILE_SELECT =
   'id, email, full_name, first_name, last_name, phone, preferred_contact_method, province, barangay, purok_sitio, street, subdivision_area, block_lot, house_number, landmark_note, city, about, avatar_url, verified_at, barangay_verified_at';
 const PROVIDER_PROFILE_SELECT =
-  'service_type, headline, bio, service_area, availability, custom_offered_services, custom_service_review_status, profile_completed_at';
+  'service_type, headline, bio, service_area, availability, custom_offered_services, custom_service_review_status, profile_completed_at, services_confirmed';
 const CLIENT_PROFILE_SELECT =
-  'headline, bio, needed_services, custom_needed_services, coordination_style, preferred_schedule, profile_completed_at';
+  'headline, bio, needed_services, custom_needed_services, coordination_style, preferred_schedule, profile_completed_at, services_confirmed';
 const PREFERENCES_SELECT =
   'offered_services, needed_services, custom_offered_services, custom_needed_services';
 const VERIFICATION_SELECT =
@@ -149,11 +152,11 @@ export async function getMyProfileCompletion(): Promise<ServiceResult<ProfileCom
   const userId = user.data.id;
   const [
     { data: profile, error: profileError },
-    { data: provider },
-    { data: client },
-    { data: prefs },
-    { data: credentials },
-    { data: latestVerification },
+    { data: provider, error: providerError },
+    { data: client, error: clientError },
+    { data: prefs, error: preferencesError },
+    { data: credentials, error: credentialsError },
+    { data: latestVerification, error: verificationError },
   ] = await Promise.all([
     supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle<ProfileRow>(),
     supabase
@@ -185,8 +188,8 @@ export async function getMyProfileCompletion(): Promise<ServiceResult<ProfileCom
       .maybeSingle<VerificationRow>(),
   ]);
 
-  if (profileError) {
-    return { data: null, error: profileError.message };
+  if (profileError || providerError || clientError || preferencesError || credentialsError || verificationError) {
+    return { data: null, error: 'We could not load all your profile details. Please retry before making changes.' };
   }
 
   if (!profile) {
@@ -368,7 +371,8 @@ export async function saveWorkProfile(input: WorkProfileInput): Promise<ServiceR
     // UI state is structured; provider_profiles.service_type is still legacy comma text.
     // Keep this boundary conversion until the database has a normalized profile service table.
     service_type: offeredServices.join(', '),
-    headline: compactText(input.headline) || null,
+    services_confirmed: true,
+    headline: compactText(input.bio).slice(0, 80) || compactText(input.headline) || null,
     bio: compactText(input.bio) || null,
     service_area: compactText(input.serviceArea) || null,
     availability: compactText(input.availability) || null,
@@ -411,9 +415,10 @@ export async function saveHiringProfile(input: HiringProfileInput): Promise<Serv
   const payload = {
     user_id: user.data.id,
     // UI state is structured; client profile arrays remain the current persistence boundary.
-    headline: compactText(input.headline) || null,
+    headline: compactText(input.bio).slice(0, 80) || compactText(input.headline) || null,
     bio: compactText(input.bio) || null,
     needed_services: neededServices,
+    services_confirmed: true,
     custom_needed_services: customNeededServices,
     coordination_style: compactText(input.coordinationStyle) || null,
     preferred_schedule: compactText(input.preferredSchedule) || null,
@@ -510,20 +515,18 @@ function buildCompletionStatus({
   const firstName = compactText(profile.first_name);
   const lastName = compactText(profile.last_name);
   const name = compactText(profile.full_name) || `${firstName} ${lastName}`.trim();
-  const offeredServiceSplit = splitOfficialAndCustomServices([
-    ...splitServices(provider?.service_type),
-    ...(prefs?.offered_services ?? []),
-    ...(provider?.custom_offered_services ?? []),
-    ...(prefs?.custom_offered_services ?? []),
-  ]);
+  const offeredServiceSplit = splitOfficialAndCustomServices(resolveProfileSelections(
+    provider?.services_confirmed === true,
+    [...splitServices(provider?.service_type), ...(provider?.custom_offered_services ?? [])],
+    [...(prefs?.offered_services ?? []), ...(prefs?.custom_offered_services ?? [])],
+  ));
   const offeredServices = uniqueList(offeredServiceSplit.official);
   const customOfferedServices = uniqueList(offeredServiceSplit.custom);
-  const neededServiceSplit = splitOfficialAndCustomServices([
-    ...(client?.needed_services ?? []),
-    ...(prefs?.needed_services ?? []),
-    ...(client?.custom_needed_services ?? []),
-    ...(prefs?.custom_needed_services ?? []),
-  ]);
+  const neededServiceSplit = splitOfficialAndCustomServices(resolveProfileSelections(
+    client?.services_confirmed === true,
+    [...(client?.needed_services ?? []), ...(client?.custom_needed_services ?? [])],
+    [...(prefs?.needed_services ?? []), ...(prefs?.custom_needed_services ?? [])],
+  ));
   const neededServices = uniqueList(neededServiceSplit.official);
   const customNeededServices = uniqueList(neededServiceSplit.custom);
 
@@ -544,8 +547,8 @@ function buildCompletionStatus({
     avatarUrl: compactText(profile.avatar_url) || null,
   };
   const work: ProfileCompletionStatus['work'] = {
-    headline: compactText(provider?.headline) || compactText(provider?.service_type),
-    bio: compactText(provider?.bio) || compactText(profile.about),
+    headline: compactText(provider?.headline) || (provider?.services_confirmed ? '' : compactText(provider?.service_type)),
+    bio: compactText(provider?.bio) || compactText(provider?.headline) || (provider?.services_confirmed ? '' : compactText(profile.about)),
     offeredServices,
     serviceArea: compactText(provider?.service_area) ||
       [compactText(profile.barangay), compactText(profile.city)].filter(Boolean).join(', '),
@@ -555,7 +558,7 @@ function buildCompletionStatus({
   };
   const hiring: ProfileCompletionStatus['hiring'] = {
     headline: compactText(client?.headline),
-    bio: compactText(client?.bio) || compactText(profile.about),
+    bio: compactText(client?.bio) || compactText(client?.headline) || (client?.services_confirmed ? '' : compactText(profile.about)),
     neededServices,
     customNeededServices,
     coordinationStyle: compactText(client?.coordination_style),
@@ -686,7 +689,7 @@ function buildCoreCompletion({
         id: 'barangay-location',
         kind: 'edit_shared_profile',
         label: 'Add barangay/location',
-        description: 'Add your public location so neighbors know who they are connecting with.',
+        description: 'Add your barangay and private area details for coordination.',
         mode: 'core',
       }),
     },
@@ -724,7 +727,7 @@ function buildWorkCompletion({
   credentials: CredentialReadinessRow[];
   isVerified: boolean;
 }): ProfileModeCompletion {
-  const hasSummary = Boolean(compactText(work.headline) && compactText(work.bio));
+  const hasSummary = Boolean(compactText(work.bio) || compactText(work.headline));
   const hasSkills = Boolean(work.offeredServices.length || work.customOfferedServices.length);
   const hasAvailability = Boolean(compactText(work.availability));
   const hasServiceArea = Boolean(compactText(work.serviceArea));
@@ -749,12 +752,12 @@ function buildWorkCompletion({
     },
     {
       id: 'capabilities',
-      label: 'Add skills',
+      label: 'Add services',
       complete: hasSkills,
       action: completionAction({
         id: 'capabilities',
         kind: 'edit_work_profile',
-        label: 'Add skills',
+        label: 'Add services',
         description: 'Choose the things you know how to do.',
         mode: 'work',
       }),
@@ -1072,26 +1075,6 @@ function getSharedOptionalActions(core: ProfileCompletionStatus['core']) {
       optional: true,
     },
   ];
-}
-
-function isWorkProfileInputComplete(input: WorkProfileInput) {
-  return Boolean(
-    compactText(input.headline) &&
-      compactText(input.bio) &&
-      (uniqueList(input.offeredServices).length || uniqueList(input.customOfferedServices).length) &&
-      compactText(input.serviceArea) &&
-      compactText(input.availability),
-  );
-}
-
-function isHiringProfileInputComplete(input: HiringProfileInput) {
-  return Boolean(
-      compactText(input.headline) &&
-      compactText(input.bio) &&
-      (uniqueList(input.neededServices).length || uniqueList(input.customNeededServices).length) &&
-      compactText(input.coordinationStyle) &&
-      compactText(input.preferredSchedule),
-  );
 }
 
 function splitServices(value: string | null | undefined) {

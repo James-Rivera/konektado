@@ -1,3 +1,4 @@
+import { getMyListingRepairs } from '@/services/listing-edit.service';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -40,6 +41,9 @@ export default function PostScreen() {
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [repairs, setRepairs] = useState<Record<string,string[]>>({});
+  const [postKind, setPostKind] = useState<'all' | 'job' | 'service'>('all');
+  const [showAllDrafts, setShowAllDrafts] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,14 +61,16 @@ export default function PostScreen() {
 
       void (async () => {
         try {
-          const [jobResult, draftResult, serviceDraftResult, serviceResult] = await Promise.all([
+          const [jobResult, draftResult, serviceDraftResult, serviceResult, repairResult] = await Promise.all([
             listMyJobs(),
             listMyJobDrafts(),
             listMyServiceDrafts(),
             listMyServices(),
+            getMyListingRepairs(),
           ]);
 
           if (!active) return;
+          if (repairResult.data) setRepairs(Object.fromEntries(repairResult.data.map(item => [item.kind+'-'+item.listing_id,item.issues])));
 
           if (jobResult.error || !jobResult.data) {
             showAlert('Posts', jobResult.error ?? 'Could not load jobs.');
@@ -107,7 +113,6 @@ export default function PostScreen() {
     }, [hasLoadedOnce, profileId, profileLoading]),
   );
 
-  const activeServices = services.filter((service) => service.isActive);
   const postingDrafts: PostingDraft[] = [
     ...drafts.map((record): PostingDraft => ({ kind: 'job', record })),
     ...serviceDrafts.map((record): PostingDraft => ({ kind: 'service', record })),
@@ -120,12 +125,13 @@ export default function PostScreen() {
     services.filter((service) => !service.isActive).length;
   const recentPosts = [
     ...jobs.map((job) => ({
+      kind: 'job' as const,
       actionLabel: 'View',
       createdAt: job.createdAt,
       id: `job-${job.id}`,
       label: formatDate(job.createdAt),
       onPress: () => router.push({ pathname: '/job/[jobId]', params: { jobId: job.id } }),
-      status: ['open', 'reviewing'].includes(job.status) ? 'Visible' : 'Active',
+      status: ['open', 'reviewing'].includes(job.status) ? 'Visible' : job.status.replace(/_/g, ' '),
       subtitle: job.status === 'open' ? 'Open job post' : `Job status: ${job.status.replace(/_/g, ' ')}`,
       title: formatJobPostTitle({
         title: job.title,
@@ -134,6 +140,7 @@ export default function PostScreen() {
       }),
     })),
     ...services.map((service) => ({
+      kind: 'service' as const,
       actionLabel: 'Manage',
       createdAt: service.createdAt,
       id: `service-${service.id}`,
@@ -254,7 +261,7 @@ export default function PostScreen() {
             {postingDrafts.length ? (
               <>
                 <Text style={styles.sectionTitle}>Drafts</Text>
-                {postingDrafts.map((draft) => (
+                {(showAllDrafts ? postingDrafts : postingDrafts.slice(0, 3)).map((draft) => (
                   <DraftCard
                     draft={draft}
                     key={`${draft.kind}-${draft.record.id}`}
@@ -269,39 +276,19 @@ export default function PostScreen() {
               </>
             ) : null}
 
-            {isVerified ? (
-              <>
-                <Text style={styles.sectionTitle}>Service posts</Text>
-                <View style={styles.serviceStats}>
-                  <InlineStat icon="business-center" label="Total" value={String(services.length)} />
-                  <InlineStat icon="pause" label="Inactive" value={String(services.length - activeServices.length)} />
-                </View>
+            {postingDrafts.length > 3 ? <Pressable accessibilityRole="button" onPress={() => setShowAllDrafts(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.activeServicesText}>{showAllDrafts ? 'Show fewer drafts' : 'View all drafts (' + postingDrafts.length + ')'}</Text></Pressable> : null}
+            <Text style={styles.sectionTitle}>Your posts</Text>
+            <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+              {(['all', 'job', 'service'] as const).map(kind => <Pressable key={kind} accessibilityRole="button" accessibilityState={{ selected: postKind === kind }} onPress={() => setPostKind(kind)} style={[styles.editButton, { minHeight: 44, backgroundColor: postKind === kind ? color.primarySoft : color.background }]}><Text style={styles.editButtonText}>{kind === 'all' ? 'All' : kind === 'job' ? 'Jobs' : 'Services'}</Text></Pressable>)}
+            </View>
 
-                <View style={styles.activeServicesRow}>
-                  <Text style={styles.activeServicesText}>Active services: {activeServices.length}</Text>
-                  <MaterialIcons color={color.verificationBlue} name="keyboard-arrow-down" size={22} />
-                </View>
-              </>
-            ) : null}
-
-            {recentPosts.slice(0, 2).map((post) => (
-              <RecentPostCard
-                key={post.id}
-                actionLabel={post.actionLabel}
-                label={post.label}
-                onPress={post.onPress}
-                title={post.title}
-              />
-            ))}
-
-            <Text style={styles.sectionTitle}>Recent posts</Text>
-            {recentPosts.slice(0, 3).map((post) => (
+            {recentPosts.filter(post => postKind === 'all' || post.kind === postKind).map((post) => (
               <MiniPostCard
                 key={post.id}
-                actionLabel={post.actionLabel}
-                onPress={post.onPress}
-                status={post.status}
-                subtitle={post.subtitle}
+                actionLabel={repairs[post.id] ? 'Update details' : post.actionLabel}
+                onPress={repairs[post.id] ? () => router.push({pathname:post.kind === 'job' ? '/create-job' : '/create-service',params:post.kind === 'job' ? {jobId:post.id.slice(4)} : {serviceId:post.id.slice(8)}}) : post.onPress}
+                status={repairs[post.id] ? 'Needs update' : post.status}
+                subtitle={repairs[post.id] ? repairs[post.id][0] : post.subtitle}
                 title={post.title}
               />
             ))}
@@ -412,51 +399,6 @@ function StatBox({
   }
 
   return <View style={styles.statBox}>{Content}</View>;
-}
-
-function InlineStat({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentProps<typeof MaterialIcons>['name'];
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.inlineStat}>
-      <MaterialIcons color={color.verificationBlue} name={icon} size={16} />
-      <Text style={styles.inlineStatText}>
-        <Text style={styles.inlineStatStrong}>{label}</Text>: {value}
-      </Text>
-    </View>
-  );
-}
-
-function RecentPostCard({
-  actionLabel,
-  label,
-  onPress,
-  title,
-}: {
-  actionLabel: string;
-  label: string;
-  onPress: () => void;
-  title: string;
-}) {
-  return (
-    <View style={styles.recentCard}>
-      <View style={styles.recentCopy}>
-        <Text numberOfLines={1} style={styles.recentTitle}>
-          {title}
-        </Text>
-        <Text style={styles.recentLabel}>{label}</Text>
-      </View>
-      <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
-        <Text style={styles.editButtonText}>{actionLabel}</Text>
-      </Pressable>
-    </View>
-  );
 }
 
 function DraftCard({ draft, onPress }: { draft: PostingDraft; onPress: () => void }) {

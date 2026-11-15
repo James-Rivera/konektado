@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { searchSkillOptions } from '@/services/service-classification';
+import { getStoredMvpServiceOption } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
 
 type PostOptionPickerSheetProps = {
@@ -42,7 +44,8 @@ export function PostOptionPickerSheet({
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return allOptions;
-    return allOptions.filter((option) => option.toLowerCase().includes(normalizedQuery));
+    const matches = new Set(searchSkillOptions(query, 100).map(result => result.service));
+    return allOptions.filter(option => option.toLowerCase().includes(normalizedQuery) || matches.has(getStoredMvpServiceOption(option)!));
   }, [allOptions, query]);
 
   const shownPopularOptions = useMemo(
@@ -64,6 +67,7 @@ export function PostOptionPickerSheet({
 
       <View style={styles.searchBox}>
         <TextInput
+          accessibilityLabel={searchPlaceholder}
           onChangeText={setQuery}
           placeholder={searchPlaceholder}
           placeholderTextColor={color.textSubtle}
@@ -73,7 +77,7 @@ export function PostOptionPickerSheet({
         <MaterialIcons color={color.primary} name="search" size={24} />
       </View>
 
-      {shownPopularOptions.length ? (
+      {!query.trim() && shownPopularOptions.length ? (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{popularLabel}</Text>
           <View style={styles.pillRow}>
@@ -95,7 +99,7 @@ export function PostOptionPickerSheet({
       ) : null}
 
       <View style={styles.listHeader}>
-        <Text style={styles.sectionTitle}>All categories</Text>
+        <Text style={styles.sectionTitle}>All options</Text>
       </View>
       <Text style={styles.listHint}>Scroll to see more services.</Text>
 

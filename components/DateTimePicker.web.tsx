@@ -34,6 +34,7 @@ export default function DateTimePicker({ label, mode, value, minimumDate, maximu
                   min={mode === 'date' && minimumDate ? formatLocalDate(minimumDate) : undefined}
                   max={mode === 'date' && maximumDate ? formatLocalDate(maximumDate) : undefined}
                   step={mode === 'time' ? 60 : undefined}
+                  onInput={(event) => setDraft(event.currentTarget.value)}
                   onChange={(event) => setDraft(event.currentTarget.value)}
                   style={{ boxSizing: 'border-box', width: '100%', minWidth: 0, minHeight: 46, padding: '10px 12px', border: '1px solid #AFAFAF', borderRadius: 12, fontFamily: 'Satoshi-Regular, sans-serif', fontSize: 16, color: color.text, backgroundColor: color.surface, colorScheme: 'light' }}
                 />

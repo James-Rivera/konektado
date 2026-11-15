@@ -1,3 +1,4 @@
+import { scheduleFromColumns, formatJobSchedule, type ScheduleColumns } from '@/services/job-schedule';
 import type { ServiceResult } from '@/services/auth.service';
 import type { JobCardProps } from '@/components/JobCard';
 import type { WorkerCardProps } from '@/components/WorkerCard';
@@ -14,6 +15,7 @@ import { applyPublicPhotoVisibilityToProfiles } from '@/services/content-visibil
 import { getSessionUser } from '@/services/session.service';
 import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
 import { supabase } from '@/utils/supabase';
+import { getRangeError } from '@/services/pricing';
 
 export type ProfileRow = {
   id: string;
@@ -34,7 +36,7 @@ export type ProfileRow = {
   barangay_verified_at: string | null;
 };
 
-export type JobRow = {
+export type JobRow = ScheduleColumns & {
   id: string;
   owner_id: string;
   client_id: string | null;
@@ -272,7 +274,7 @@ function getRateTypeSuffix(rateType: RateType) {
 }
 
 function formatCurrency(value: number) {
-  return `₱${value.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`;
+  return `₱${value.toLocaleString('en-PH', { maximumFractionDigits: 2 })}`;
 }
 
 function getDisplayRateType({
@@ -317,8 +319,9 @@ export function formatRateRange({
   const negotiableSuffix = negotiable ? ' · Negotiable' : '';
 
   if (normalizedMin && normalizedMax) {
-    const orderedMin = Math.min(normalizedMin, normalizedMax);
-    const orderedMax = Math.max(normalizedMin, normalizedMax);
+    if (normalizedMax < normalizedMin) return 'Check your minimum and maximum amounts';
+    const orderedMin = normalizedMin;
+    const orderedMax = normalizedMax;
 
     if (orderedMin === orderedMax) {
       return `${formatCurrency(orderedMin)}${getRateTypeSuffix(normalizedRateType)}${negotiableSuffix}`;
@@ -437,10 +440,11 @@ export function validateRateRange({
   const normalizedMax = normalizeAmount(max);
   const normalizedRateType = normalizeRateType(rateType);
 
+  const rangeError = getRangeError(min, max);
   if (!normalizedMin || !normalizedMax) {
     return {
       valid: false,
-      error: 'Enter both minimum and maximum amounts.',
+      error: rangeError ?? 'Enter both minimum and maximum amounts.',
       min: normalizedMin,
       max: normalizedMax,
       rateType: normalizedRateType,
@@ -689,7 +693,8 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     rateType: normalizeRateType(row.rate_type),
     budgetNegotiable: row.budget_negotiable ?? false,
     workersNeeded: row.workers_needed ?? null,
-    scheduleText: row.schedule_text,
+    schedule: scheduleFromColumns(row),
+    scheduleText: formatJobSchedule(scheduleFromColumns(row)) || row.schedule_text,
     experienceLevel: normalizeExperienceLevel(row.experience_level),
     certificationRequired: row.certification_required ?? false,
     certificationNote: row.certification_note ?? null,

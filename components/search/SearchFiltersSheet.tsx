@@ -4,13 +4,15 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { PostOptionPickerSheet } from '@/components/PostOptionPickerSheet';
+import { MARKETPLACE_RATE_TYPE_OPTIONS } from '@/services/marketplace.helpers';
 import { SearchRateRangeSlider } from '@/components/search/SearchRateRangeSlider';
 import type {
   DiscoveryGroupKey,
   MvpServiceOption,
   SearchWorkType,
 } from '@/constants/service-taxonomy';
-import type { ExperienceLevel } from '@/types/marketplace.types';
+import type { RateType, ExperienceLevel } from '@/types/marketplace.types';
 import { color, radius, space, typography } from '@/constants/theme';
 
 export type SearchDiscoveryFilters = {
@@ -18,6 +20,7 @@ export type SearchDiscoveryFilters = {
   serviceGroup: 'all' | DiscoveryGroupKey;
   service: 'all' | MvpServiceOption;
   locationScope: 'same_barangay' | 'nearby';
+  rateType?: RateType | 'any';
   rateMin: number | null;
   rateMax: number | null;
   experienceLevel: 'all' | ExperienceLevel;
@@ -93,6 +96,7 @@ export function SearchFiltersSheet({
   onReset,
 }: SearchFiltersSheetProps) {
   const scrollViewRef = useRef<ScrollView>(null);
+  const [unitPickerVisible, setUnitPickerVisible] = useState(false);
   const [serviceSectionY, setServiceSectionY] = useState(0);
 
   const scrollToSpecificService = () => {
@@ -105,6 +109,7 @@ export function SearchFiltersSheet({
   };
 
   return (
+    <>
     <BottomSheet maxHeight="88%" onClose={onClose} visible={visible}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Filters</Text>
@@ -198,6 +203,12 @@ export function SearchFiltersSheet({
           </View>
         </FilterSection>
 
+        <FilterSection title="Price unit">
+          <Pressable accessibilityRole="button" accessibilityLabel="Choose search price unit" onPress={() => setUnitPickerVisible(true)} style={styles.rateAnyRow}>
+            <Text style={styles.selectedRangeValue}>{MARKETPLACE_RATE_TYPE_OPTIONS.find(option => option.value === filters.rateType)?.label ?? 'Any price unit'} ⌄</Text>
+          </Pressable>
+          <Text style={styles.sectionHelper}>Amounts are not converted between hours, visits, or jobs.</Text>
+        </FilterSection>
         <FilterSection title="Rate range">
           <Text style={styles.sectionHelper}>Adjust the rate you want to see.</Text>
           <View style={styles.rateAnyRow}>
@@ -310,6 +321,8 @@ export function SearchFiltersSheet({
         </Pressable>
       </View>
     </BottomSheet>
+    <PostOptionPickerSheet visible={unitPickerVisible} onClose={() => setUnitPickerVisible(false)} title="Price unit" description="Compare amounts with the same basis." allOptions={['Any price unit', ...MARKETPLACE_RATE_TYPE_OPTIONS.map(option => option.label)]} searchPlaceholder="Search price units" onSelect={label => onChange('rateType', MARKETPLACE_RATE_TYPE_OPTIONS.find(option => option.label === label)?.value ?? 'any')} />
+    </>
   );
 }
 

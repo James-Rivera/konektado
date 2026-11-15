@@ -404,6 +404,7 @@ function PublicServiceDetailView({
         <View style={styles.publicSection}>
           <Text style={styles.publicSectionTitle}>About this service</Text>
           <Text style={styles.publicBody}>{service.description || 'No description provided yet.'}</Text>
+          {service.rateText ? <View><Text style={styles.publicSectionTitle}>What is included / price note</Text><Text style={styles.publicBody}>{service.rateText}</Text></View> : null}
         </View>
 
         <View style={styles.publicSection}>
@@ -586,6 +587,7 @@ function OwnerServicePostView({
 
         <OwnerSection title="Description">
           <Text style={styles.ownerBody}>{service.description || 'No description provided.'}</Text>
+          {service.rateText ? <Text style={styles.ownerBody}>Price note: {service.rateText}</Text> : null}
         </OwnerSection>
 
         <OwnerSection title="Helpful tags">

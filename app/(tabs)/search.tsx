@@ -266,6 +266,7 @@ export default function SearchScreen() {
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
+            rateType: appliedFilters.rateType,
             budgetMin: appliedFilters.rateMin,
             budgetMax: appliedFilters.rateMax,
             experienceLevel: appliedFilters.experienceLevel,
@@ -290,6 +291,7 @@ export default function SearchScreen() {
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
+            rateType: appliedFilters.rateType,
             rateMin: appliedFilters.rateMin,
             rateMax: appliedFilters.rateMax,
             experienceLevel: appliedFilters.experienceLevel,
@@ -1009,6 +1011,7 @@ function buildDefaultFilters(): SearchDiscoveryFilters {
     serviceGroup: 'all',
     service: 'all',
     locationScope: 'nearby',
+    rateType: 'any',
     rateMin: null,
     rateMax: null,
     experienceLevel: 'all',
@@ -1053,6 +1056,7 @@ function getSearchFilterCount(filters: SearchDiscoveryFilters) {
   if (filters.service !== 'all' || filters.serviceGroup !== 'all') count += 1;
   if (filters.locationScope !== 'nearby') count += 1;
   if (filters.rateMin !== null || filters.rateMax !== null) count += 1;
+  if (filters.rateType && filters.rateType !== 'any') count += 1;
   if (filters.experienceLevel !== 'all') count += 1;
   if (filters.certification !== 'any') count += 1;
   if (filters.verifiedOnly) count += 1;

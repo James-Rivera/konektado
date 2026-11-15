@@ -1,3 +1,4 @@
+import { moveRateThumb } from '@/services/pricing';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PanResponder,
@@ -47,18 +48,9 @@ export function SearchRateRangeSlider({
   const updateThumb = useCallback(
     (thumb: ThumbKind, nextValue: number) => {
       const current = valueRef.current;
-      const nextMinimum =
-        thumb === 'minimum'
-          ? clamp(roundToStep(nextValue, step), minimumValue, current.maximum)
-          : current.minimum;
-      const nextMaximum =
-        thumb === 'maximum'
-          ? clamp(
-              roundToStep(nextValue, step),
-              Math.max(current.minimum, minimumValue + step),
-              maximumValue,
-            )
-          : current.maximum;
+      const next=moveRateThumb(current,thumb,nextValue,minimumValue,maximumValue,step);
+      const nextMinimum=next.minimum;
+      const nextMaximum=next.maximum;
 
       valueRef.current = {
         maximum: nextMaximum,
@@ -172,14 +164,6 @@ export function SearchRateRangeSlider({
       </View>
     </View>
   );
-}
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(Math.max(value, minimum), maximum);
-}
-
-function roundToStep(value: number, step: number) {
-  return Math.round(value / step) * step;
 }
 
 function valueToPercent(value: number, minimum: number, maximum: number) {

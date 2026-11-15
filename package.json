@@ -15,7 +15,9 @@
     "test:date-time": "tsc -p tsconfig.test.json && node --require ./scripts/test-alias-hook.cjs --test .test-build/tests/date-time.test.js",
     "test:verification-email": "node ./scripts/test-verification-email.js",
     "refresh:cloud-demo-taxonomy": "node ./scripts/refresh-cloud-demo-taxonomy.js",
-    "test:service-classification": "node -e \"require('node:fs').rmSync('.test-build',{recursive:true,force:true})\" && node scripts/check-taxonomy-exhaustiveness.cjs && tsc -p tsconfig.test.json && node --require ./scripts/test-alias-hook.cjs --test \".test-build/tests/*.test.js\""
+    "test:service-classification": "node scripts/check-taxonomy-exhaustiveness.cjs && tsc -p tsconfig.test.json && node --require ./scripts/test-alias-hook.cjs --test \".test-build/tests/*.test.js\"",
+    "test:posting": "tsc -p tsconfig.test.json && node --require ./scripts/test-alias-hook.cjs --test .test-build/tests/posting-repairs.test.js .test-build/tests/posting-followup.test.js",
+    "test:posting:database": "node scripts/test-posting-database.cjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

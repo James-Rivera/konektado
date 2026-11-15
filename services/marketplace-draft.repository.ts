@@ -14,6 +14,7 @@ type SaveOwnDraftArgs = {
   columns: string;
   draftId?: string | null;
   payload: Record<string, unknown>;
+  expectedRevision?: number;
 };
 
 export async function listOwnDraftRows<Row extends DraftRow>(
@@ -58,6 +59,7 @@ export async function saveOwnDraftRow<Row extends DraftRow>({
   columns,
   draftId,
   payload,
+  expectedRevision,
 }: SaveOwnDraftArgs): Promise<ServiceResult<Row>> {
   const user = await getCurrentUserId();
   if (user.error || !user.data) return { data: null, error: user.error ?? 'Please sign in again.' };
@@ -65,16 +67,18 @@ export async function saveOwnDraftRow<Row extends DraftRow>({
   const updatedAt = new Date().toISOString();
 
   if (draftId) {
+    if (expectedRevision === undefined) return { data: null, error: 'Reopen this draft before saving so we can check its latest version.' };
     const { data, error } = await supabase
       .from(table)
       .update({ ...payload, updated_at: updatedAt })
       .eq('id', draftId)
+      .eq('revision', expectedRevision)
       .eq('user_id', user.data)
       .select(columns)
       .maybeSingle();
 
     if (error) return { data: null, error: getFriendlyDraftSaveError(error.message) };
-    if (!data) return { data: null, error: 'We could not save your draft. Please try again.' };
+    if (!data) return { data: null, error: 'This draft changed in another session. Reopen it to review the latest changes.' };
     return { data: data as unknown as Row, error: null };
   }
 

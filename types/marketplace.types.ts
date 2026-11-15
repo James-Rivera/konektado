@@ -95,7 +95,18 @@ export type PublicWorkerProfile = {
   services: ProviderService[];
 };
 
+export type JobSchedule = {
+  date: string;
+  timePreference: 'morning' | 'afternoon' | 'evening' | 'anytime' | 'exact';
+  exactTime?: string | null;
+  flexibility: 'fixed' | 'flexible';
+  timeZone: 'Asia/Manila';
+};
+
+export type DraftProvenance = { revision?: number; sourceListingId?: string | null; sourceVersion?: number | null };
+
 export type JobSummary = {
+  schedule?: JobSchedule | null;
   id: string;
   clientId: string;
   title: string;
@@ -133,6 +144,7 @@ export type JobDetail = JobSummary & {
 };
 
 export type CreateJobInput = {
+  schedule?: JobSchedule | null;
   title: string;
   description: string;
   category?: string | null;
@@ -156,7 +168,9 @@ export type CreateJobInput = {
   autoCloseEnabled?: boolean;
 };
 
-export type JobDraftSummary = {
+export type JobDraftSummary = DraftProvenance & {
+  schedule?: JobSchedule | null;
+  priceInput?: { minimum: string; maximum: string };
   id: string;
   userId: string;
   title: string | null;
@@ -185,6 +199,8 @@ export type JobDraftSummary = {
 };
 
 export type UpsertJobDraftInput = {
+  schedule?: JobSchedule | null;
+  priceInput?: { minimum: string; maximum: string };
   title?: string | null;
   description?: string | null;
   category?: string | null;
@@ -306,7 +322,8 @@ export type CreateServiceInput = {
   autoPauseEnabled?: boolean;
 };
 
-export type ServiceDraftSummary = {
+export type ServiceDraftSummary = DraftProvenance & {
+  priceInput?: { minimum: string; maximum: string };
   id: string;
   userId: string;
   category: string | null;
@@ -335,6 +352,7 @@ export type ServiceDraftSummary = {
 };
 
 export type UpsertServiceDraftInput = {
+  priceInput?: { minimum: string; maximum: string };
   category?: string | null;
   customCategory?: string | null;
   title?: string | null;

@@ -68,8 +68,8 @@ select pg_temp.expect_denied('incomplete job publish', $q$insert into jobs(owner
 select pg_temp.expect_denied('incomplete service publish', $q$insert into services(provider_id,title,category) values(auth.uid(),'Denied','Cleaning')$q$);
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
-insert into jobs(id,owner_id,client_id,title,status,private_location_notes,allow_messages,budget_min,budget_max,rate_type)
-values ('30000000-0000-4000-8000-000000000001',auth.uid(),auth.uid(),'Security test job','open','Private gate code',true,100,200,'per_job');
+insert into jobs(id,owner_id,client_id,title,description,category,service_needed,barangay,scheduled_date,time_preference,schedule_flexibility,schedule_text,status,private_location_notes,allow_messages,budget_min,budget_max,rate_type)
+values ('30000000-0000-4000-8000-000000000001',auth.uid(),auth.uid(),'Security test job','A local cleaning task','Home & Local Help','Cleaning','San Pedro',current_date+1,'morning','flexible',to_char(current_date+1,'Mon FMDD, YYYY') || ' · Morning · Can coordinate','open','Private gate code',true,100,200,'per_job');
 select pg_temp.expect_true('owner private notes RPC', get_job_private_location_notes('30000000-0000-4000-8000-000000000001')='Private gate code');
 select pg_temp.expect_denied('direct private column even owner', $q$select private_location_notes from jobs$q$);
 select pg_temp.expect_denied('fabricate completed job insert', $q$insert into jobs(owner_id,title,status) values(auth.uid(),'Denied','completed')$q$);
@@ -79,8 +79,8 @@ select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003
 select pg_temp.expect_true('public job is still readable', exists(select id from jobs where id='30000000-0000-4000-8000-000000000001'));
 select pg_temp.expect_denied('unrelated private notes RPC', $q$select get_job_private_location_notes('30000000-0000-4000-8000-000000000001')$q$);
 select pg_temp.expect_denied('unrelated direct private notes', $q$select private_location_notes from jobs where id='30000000-0000-4000-8000-000000000001'$q$);
-insert into services(id,provider_id,title,category,allow_messages,rate_min,rate_max,rate_type)
-values ('40000000-0000-4000-8000-000000000001',auth.uid(),'Cleaning','Cleaning',true,100,200,'per_service');
+insert into services(id,provider_id,title,description,barangay,category,allow_messages,rate_min,rate_max,rate_type)
+values ('40000000-0000-4000-8000-000000000001',auth.uid(),'Cleaning','Careful local cleaning','San Pedro','Cleaning',true,100,200,'per_service');
 insert into conversations(id,job_id,client_id,provider_id,started_by)
 values('50000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',
  '10000000-0000-4000-8000-000000000002',auth.uid(),auth.uid());
@@ -152,6 +152,12 @@ insert into storage.objects(bucket_id,name) values ('verification-files',auth.ui
 insert into verification_files(verification_id,file_type,file_path)
 values('60000000-0000-4000-8000-000000000001','id_front',auth.uid()::text || '/60000000-0000-4000-8000-000000000001/proof.jpg');
 update credentials set file_path=auth.uid()::text || '/credential.jpg' where provider_id=auth.uid();
+insert into storage.objects(bucket_id,name) values
+ ('verification-files',auth.uid()::text || '/60000000-0000-4000-8000-000000000001/back.jpg'),
+ ('verification-files',auth.uid()::text || '/60000000-0000-4000-8000-000000000001/face.jpg');
+insert into verification_files(verification_id,file_type,file_path) values
+ ('60000000-0000-4000-8000-000000000001','id_back',auth.uid()::text || '/60000000-0000-4000-8000-000000000001/back.jpg'),
+ ('60000000-0000-4000-8000-000000000001','other',auth.uid()::text || '/60000000-0000-4000-8000-000000000001/face.jpg');
 select pg_temp.expect_denied('cannot attach somebody else file', $q$insert into verification_files(verification_id,file_type,file_path)
  values('60000000-0000-4000-8000-000000000001','id_back','someone-else/proof.jpg')$q$);
 select pg_temp.expect_denied('owner cannot edit reviewer fields', $q$update verifications set reviewer_note='Forged' where user_id=auth.uid()$q$);
@@ -164,7 +170,7 @@ update credentials set status='approved', reviewer_id=auth.uid(), reviewer_note=
 select review_verification_request_atomic('60000000-0000-4000-8000-000000000001','approved',null);
 select pg_temp.expect_true('admin issues verified state', is_verified_profile('10000000-0000-4000-8000-000000000005'));
 select pg_temp.expect_true('admin reads verification files', exists(select id from verification_files));
-select pg_temp.expect_true('admin reads private storage objects', (select count(*) from storage.objects)=2);
+select pg_temp.expect_true('admin reads private storage objects', (select count(*) from storage.objects)=4);
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
 with changed as (update storage.objects set metadata='{"forged":true}' where bucket_id='credential-files' returning id)
 select pg_temp.expect_true('approved credential file cannot be replaced', not exists(select from changed));

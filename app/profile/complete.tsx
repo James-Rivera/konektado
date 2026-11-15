@@ -1,3 +1,4 @@
+import { getProfileEditorProgress } from '@/services/profile-readiness';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,8 +20,12 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
+import { FormErrorSummary } from '@/components/FormErrorSummary';
+import { useFormErrorNavigation } from '@/hooks/use-form-error-navigation';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { PreferenceField } from '@/components/profile/PreferenceField';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { ProfilePhotoGuidelinesSheet } from '@/components/profile/ProfilePhotoGuidelinesSheet';
 import { Skeleton } from '@/components/Skeleton';
 import {
@@ -152,15 +157,25 @@ export default function CompleteProfileScreen() {
   const handledFocusTargetRef = useRef<ProfileFocusTarget | null>(null);
   const [mode, setMode] = useState<FormMode>(initialMode);
   const [loading, setLoading] = useState(true);
+  const [retryTick, setRetryTick] = useState(0);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [photoGuidelinesVisible, setPhotoGuidelinesVisible] = useState(false);
   const [status, setStatus] = useState<ProfileCompletionStatus | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [coreErrors, setCoreErrors] = useState<Record<string,string | undefined>>({});
   const [core, setCore] = useState<CoreProfileInput>(emptyCore);
   const [work, setWork] = useState<WorkProfileInput>(emptyWork);
   const [hiring, setHiring] = useState<HiringProfileInput>(emptyHiring);
+  const [savedForms, setSavedForms] = useState({ core: JSON.stringify(emptyCore), work: JSON.stringify(emptyWork), hiring: JSON.stringify(emptyHiring) });
+  const serializeForm = (value: object) => JSON.stringify(value, Object.keys(value).sort());
+  const dirty = Boolean(status) && (['core', 'work', 'hiring'] as const).some(key => {
+    const current = key === 'core' ? core : key === 'work' ? work : hiring;
+    return serializeForm(JSON.parse(savedForms[key])) !== serializeForm(current);
+  });
+  const leaveDialog = useUnsavedChanges(dirty);
+  const [saveNotice, setSaveNotice] = useState<{mode:FormMode;text:string} | null>(null);
 
   // `mode` is seeded from initialMode above, so this only has to follow later
   // changes to the route param. Done during render rather than in an effect.
@@ -220,6 +235,10 @@ export default function CompleteProfileScreen() {
         setError(result.error ?? 'Could not load profile details.');
       } else {
         hydrateForms(result.data);
+        const { avatarUrl: _avatar, ...coreValues } = result.data.core;
+        const { completedAt: _workDate, ...workValues } = result.data.work;
+        const { completedAt: _hiringDate, ...hiringValues } = result.data.hiring;
+        setSavedForms({ core: JSON.stringify(coreValues), work: JSON.stringify(workValues), hiring: JSON.stringify(hiringValues) });
       }
 
       setLoading(false);
@@ -228,7 +247,7 @@ export default function CompleteProfileScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [retryTick]);
 
   const scrollToFocusTarget = useCallback(() => {
     if (loading || !focusTarget || handledFocusTargetRef.current === focusTarget) return;
@@ -257,9 +276,17 @@ export default function CompleteProfileScreen() {
     scrollToFocusTarget();
   }, [mode, scrollToFocusTarget]);
 
+  const errorNavigation = useFormErrorNavigation(scrollRef);
   const save = async () => {
     if (saving) return;
-
+    if (mode === 'core') {
+      const errors:Record<string,string | undefined> = {};
+      if (!core.firstName.trim()) errors.firstName = 'Enter your first name.';
+      if (!core.lastName.trim()) errors.lastName = 'Enter your last name.';
+      if (!core.street.trim()) errors.street = 'Enter your area, street, or purok.';
+      setCoreErrors(errors);
+      if (Object.keys(errors).length) { errorNavigation.focusFirstError(errors); return; }
+    }
     setSaving(true);
     setError(null);
 
@@ -277,11 +304,14 @@ export default function CompleteProfileScreen() {
       return;
     }
 
-    hydrateForms(result.data);
+    setStatus(result.data);
+    setSavedForms(current => ({ ...current, [mode]: JSON.stringify(mode === 'core' ? core : mode === 'work' ? work : hiring) }));
     await refresh();
-
-    showSuccessToast(getSuccessMessage(mode));
-    router.back();
+    const completion = mode === 'core' ? result.data.coreCompletion : mode === 'work' ? result.data.workCompletion : result.data.hiringCompletion;
+    const ready = mode === 'core' ? result.data.coreComplete : mode === 'work' ? result.data.workComplete : result.data.hiringComplete;
+    const notice = ready ? 'Saved. This section is ready.' : completion.state === 'ready' ? 'Saved. Barangay verification is still required before posting or messaging.' : `Progress saved. ${completion.missingItems.map(item => item.label).join(', ')}.`;
+    setSaveNotice({mode,text:notice});
+    showSuccessToast('Profile changes saved');
   };
 
   const pickAvatar = async () => {
@@ -335,10 +365,12 @@ export default function CompleteProfileScreen() {
 
   const currentMeta = getModeMeta(mode);
   const roleLockedByCore = mode !== 'core' && status && !status.coreComplete;
-  const saveDisabled = mode === 'core' && !core.street.trim();
+  const saveDisabled = !status;
+  const currentCompletion = getProfileEditorProgress(mode, core, work, hiring);
+  const currentSectionDirty = serializeForm(JSON.parse(savedForms[mode])) !== serializeForm(mode === 'core' ? core : mode === 'work' ? work : hiring);
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>{leaveDialog}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.screen}>
@@ -363,11 +395,13 @@ export default function CompleteProfileScreen() {
           showsVerticalScrollIndicator={false}>
           {loading ? (
             <CompleteProfileSkeleton />
+          ) : !status ? (
+            <SetupSection><NoticeBanner title="Profile unavailable" message={error || 'Please retry loading your profile.'} variant="warning" /><PrimaryButton label="Retry" onPress={() => { setLoading(true); setError(null); setRetryTick(tick => tick + 1); }} /></SetupSection>
           ) : (
             <>
               <SetupSection compact>
                 <View style={styles.modeTabs}>
-                  <ModeButton label="Core" mode="core" selected={mode === 'core'} onPress={setMode} />
+                  <ModeButton label="Personal" mode="core" selected={mode === 'core'} onPress={setMode} />
                   <ModeButton label="Work" mode="work" selected={mode === 'work'} onPress={setMode} />
                   <ModeButton label="Hiring" mode="hiring" selected={mode === 'hiring'} onPress={setMode} />
                 </View>
@@ -379,23 +413,14 @@ export default function CompleteProfileScreen() {
                 </SetupSection>
               ) : null}
 
-              {status?.photoRecommended ? (
-                <SetupSection compact>
-                  <NoticeBanner
-                    actionLabel="See photo guidelines"
-                    message="A clear public photo helps neighbors recognize you. Private verification files are never reused here."
-                    onActionPress={() => setPhotoGuidelinesVisible(true)}
-                    title="Add a profile photo"
-                    variant="info"
-                  />
-                </SetupSection>
-              ) : null}
+              {saveNotice?.mode === mode && !currentSectionDirty ? <SetupSection compact><NoticeBanner message={saveNotice.text} title="Changes saved" variant="info" /></SetupSection> : null}
+              {currentCompletion ? <SetupSection compact><Text style={styles.fieldLabel}>{currentCompletion.completedSteps}/{currentCompletion.totalSteps} required steps complete</Text><Text style={styles.fieldHelper}>{currentCompletion.missingItems.map(item => item.label).join(' · ') || 'Required details are complete. Photo and credentials are optional.'}</Text></SetupSection> : null}
 
               {roleLockedByCore ? (
                 <SetupSection compact>
                   <NoticeBanner
-                    message="Finish your Core Profile first so neighbors can see who they are talking to."
-                    title="Core Profile comes first"
+                    message="Finish your Personal details first so neighbors can see who they are talking to."
+                    title="Personal details come first"
                     variant="warning"
                   />
                 </SetupSection>
@@ -403,12 +428,18 @@ export default function CompleteProfileScreen() {
 
               {mode === 'core' ? (
                 <CoreForm
+                  errors={coreErrors}
+                  registerField={errorNavigation.register}
+                  focusField={errorNavigation.focusField}
                   avatarUrl={avatarUrl}
                   legalNameEdit={status?.legalNameEdit ?? null}
                   onTargetLayout={registerTargetLayout}
                   uploadingAvatar={uploadingAvatar}
                   value={core}
-                  onChange={setCore}
+                  onChange={value => {
+                    setCore(value);
+                    setCoreErrors(current => Object.fromEntries(Object.entries(current).filter(([key]) => !value[key as keyof CoreProfileInput]?.trim())));
+                  }}
                   onShowPhotoGuidelines={() => setPhotoGuidelinesVisible(true)}
                   onRequestNameCorrection={() => {
                     showAlert('Request name correction', NAME_CORRECTION_REQUEST_EXPLANATION);
@@ -462,6 +493,7 @@ export default function CompleteProfileScreen() {
 }
 
 function CoreForm({
+  errors, registerField, focusField,
   avatarUrl,
   legalNameEdit,
   onTargetLayout,
@@ -471,6 +503,9 @@ function CoreForm({
   onShowPhotoGuidelines,
   onRequestNameCorrection,
 }: {
+  errors:Record<string,string | undefined>;
+  registerField:(field:string)=>(node:unknown)=>void;
+  focusField:(field:string)=>void;
   avatarUrl: string | null;
   legalNameEdit: LegalNameEditPolicy | null;
   onTargetLayout: (target: ProfileFocusTarget, y: number) => void;
@@ -485,14 +520,8 @@ function CoreForm({
 
   return (
     <>
-      <SetupSection targetId="profile-photo" onTargetLayout={onTargetLayout}>
-        <ProfilePhotoSection
-          avatarUrl={avatarUrl}
-          name={`${value.firstName} ${value.lastName}`.trim()}
-          uploading={uploadingAvatar}
-          onShowGuidelines={onShowPhotoGuidelines}
-        />
-      </SetupSection>
+      <FormErrorSummary errors={errors} onSelect={focusField} />
+
 
       <SetupSection targetId="shared-profile" onTargetLayout={onTargetLayout}>
         <AddressSection
@@ -501,6 +530,9 @@ function CoreForm({
           <Field
             editable={canEditName}
             label="First name"
+            inputRef={registerField('firstName')}
+            error={errors.firstName}
+            errorId="profile-firstName-error"
             placeholder="Juan"
             value={value.firstName}
             onChangeText={(firstName) => onChange({ ...value, firstName })}
@@ -508,6 +540,9 @@ function CoreForm({
           <Field
             editable={canEditName}
             label="Last name"
+            inputRef={registerField('lastName')}
+            error={errors.lastName}
+            errorId="profile-lastName-error"
             placeholder="Dela Cruz"
             value={value.lastName}
             onChangeText={(lastName) => onChange({ ...value, lastName })}
@@ -532,16 +567,19 @@ function CoreForm({
         <AddressSection
           badge="Required"
           helper="Purok, sitio, street, or subdivision"
-          title="Public area">
+          title="Your area details">
           <Field
-            label="Public area"
+            label="Area / street / purok"
+            inputRef={registerField('street')}
+            error={errors.street}
+            errorId="profile-street-error"
             placeholder="e.g. Purok 3 or Gov. Carpio Ave"
             value={value.street}
             onChangeText={(street) => onChange({ ...value, street })}
           />
           <View style={styles.publicHintRow}>
             <MaterialIcons color={color.textSubtle} name="public" size={16} />
-            <Text style={styles.publicHintText}>Shown publicly</Text>
+            <Text style={styles.publicHintText}>Private: your public profile shows barangay and city</Text>
           </View>
         </AddressSection>
       </SetupSection>
@@ -554,16 +592,17 @@ function CoreForm({
             value={value.preferredContactMethod}
             onChange={(preferredContactMethod) => onChange({ ...value, preferredContactMethod })}
           />
-          <Field
-            label="Public intro"
-            multiline
-            placeholder="A short, friendly intro that helps neighbors feel safe starting a conversation."
-            value={value.about}
-            onChangeText={(about) => onChange({ ...value, about })}
-          />
         </AddressSection>
       </SetupSection>
 
+      <SetupSection targetId="profile-photo" onTargetLayout={onTargetLayout}>
+        <ProfilePhotoSection
+          avatarUrl={avatarUrl}
+          name={`${value.firstName} ${value.lastName}`.trim()}
+          uploading={uploadingAvatar}
+          onShowGuidelines={onShowPhotoGuidelines}
+        />
+      </SetupSection>
       <ServiceAreaSheet
         onClose={() => setAreaSheetVisible(false)}
         visible={areaSheetVisible}
@@ -704,19 +743,14 @@ function ContactPreferencePicker({
   );
 }
 
-function CurrentAreaCard({ onChange }: { onChange: () => void }) {
+function CurrentAreaCard({ onChange: _onChange }: { onChange: () => void }) {
   return (
     <View style={styles.areaCard}>
       <View style={styles.areaCopy}>
         <Text style={styles.areaLabel}>Current area</Text>
         <Text style={styles.areaValue}>Brgy. San Pedro, Santo Tomas, Batangas</Text>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onChange}
-        style={({ pressed }) => [styles.areaAction, pressed && styles.pressed]}>
-        <Text style={styles.areaActionText}>Change</Text>
-      </Pressable>
+      <Text style={styles.fieldHelper}>Supported area</Text>
     </View>
   );
 }
@@ -817,12 +851,12 @@ function CoreFirstPanel({ onPress }: { onPress: () => void }) {
           <MaterialIcons color={color.primary} name="lock" size={20} />
         </View>
         <View style={styles.lockedCopy}>
-          <Text style={styles.lockedTitle}>Finish your Core Profile first</Text>
+          <Text style={styles.lockedTitle}>Finish your Personal details first</Text>
           <Text style={styles.lockedText}>
             Your name, location, and preferred coordination help neighbors know who they are connecting with.
           </Text>
         </View>
-        <PrimaryButton icon="person" label="Complete Core Profile" onPress={onPress} />
+        <PrimaryButton icon="person" label="Complete Personal details" onPress={onPress} />
       </View>
     </SetupSection>
   );
@@ -841,17 +875,11 @@ function WorkForm({
     <>
       <SetupSection targetId="work-summary" onTargetLayout={onTargetLayout}>
         <Field
-          label="About my work"
-          placeholder="I can help with tutoring, document formatting, and printer setup"
-          value={value.headline}
-          onChangeText={(headline) => onChange({ ...value, headline })}
-        />
-        <Field
-          label="Work summary"
+          label="About your work (required)"
           multiline
           placeholder="Tell clients what you can help with, how you work, and what they should prepare."
           value={value.bio}
-          onChangeText={(bio) => onChange({ ...value, bio })}
+          onChangeText={(bio) => onChange({ ...value, bio, headline: '' })}
         />
       </SetupSection>
 
@@ -859,14 +887,14 @@ function WorkForm({
         <ServiceSelectionField
           customServices={value.customOfferedServices}
           emptyText="Choose the skills you want neighbors to know you can generally do."
-          label="Skills"
+          label="Services you can offer"
           selectedServices={value.offeredServices}
-          addLabel="Add skill"
+          addLabel="Add service"
           focusReminderThreshold={SKILL_FOCUS_REMINDER_THRESHOLD}
           maxSelections={MAX_WORK_PROFILE_SKILLS}
-          quickPicksLabel="Common skills"
+          quickPicksLabel="Common services"
           reviewNote="Skills you add yourself appear on your profile as you wrote them."
-          searchPlaceholder="Search or type a skill..."
+          searchPlaceholder="Search or type a service..."
           sheetDescription="Type what you can do, for example karpintero or birthday cake."
           sheetTitle="What can you do?"
           onChange={(offeredServices, customOfferedServices) =>
@@ -876,22 +904,11 @@ function WorkForm({
       </SetupSection>
 
       <SetupSection targetId="service-area" onTargetLayout={onTargetLayout}>
-        <Field
-          label="Service area"
-          placeholder="San Pedro, nearby barangays"
-          value={value.serviceArea}
-          onChangeText={(serviceArea) => onChange({ ...value, serviceArea })}
-        />
+        <PreferenceField label="Service area (required)" options={["Barangay San Pedro"]} value={value.serviceArea} onChange={(serviceArea) => onChange({ ...value, serviceArea })} />
       </SetupSection>
 
       <SetupSection targetId="availability" onTargetLayout={onTargetLayout}>
-        <Field
-          label="Default availability"
-          multiline
-          placeholder="Example: Saturday mornings and weekday afternoons"
-          value={value.availability}
-          onChangeText={(availability) => onChange({ ...value, availability })}
-        />
+        <PreferenceField label="Default availability (required)" options={["Weekdays","Weekends","Evenings","By arrangement"]} value={value.availability} onChange={(availability) => onChange({ ...value, availability })} />
       </SetupSection>
     </>
   );
@@ -910,17 +927,11 @@ function HiringForm({
     <>
       <SetupSection targetId="hiring-intro" onTargetLayout={onTargetLayout}>
         <Field
-          label="Hiring introduction title"
-          placeholder="Hiring trusted help around the barangay"
-          value={value.headline}
-          onChangeText={(headline) => onChange({ ...value, headline })}
-        />
-        <Field
-          label="Hiring intro"
+          label="About the help you need (required)"
           multiline
           placeholder="Tell workers what kind of help you usually need and how you coordinate work."
           value={value.bio}
-          onChangeText={(bio) => onChange({ ...value, bio })}
+          onChangeText={(bio) => onChange({ ...value, bio, headline: '' })}
         />
       </SetupSection>
 
@@ -941,23 +952,11 @@ function HiringForm({
       </SetupSection>
 
       <SetupSection targetId="coordination-style" onTargetLayout={onTargetLayout}>
-        <Field
-          label="Coordination style"
-          multiline
-          placeholder="Example: I reply in app messages and prefer confirming details before the visit."
-          value={value.coordinationStyle}
-          onChangeText={(coordinationStyle) => onChange({ ...value, coordinationStyle })}
-        />
+        <PreferenceField label="Coordination style (required)" options={["App messages","Confirm details before the visit","By arrangement"]} value={value.coordinationStyle} onChange={(coordinationStyle) => onChange({ ...value, coordinationStyle })} />
       </SetupSection>
 
       <SetupSection targetId="preferred-schedule" onTargetLayout={onTargetLayout}>
-        <Field
-          label="General scheduling preference"
-          multiline
-          placeholder="Example: Mornings before work, weekends for bigger jobs"
-          value={value.preferredSchedule}
-          onChangeText={(preferredSchedule) => onChange({ ...value, preferredSchedule })}
-        />
+        <PreferenceField label="General scheduling preference (required)" options={["Weekday mornings","Weekday afternoons","Weekends","By arrangement"]} value={value.preferredSchedule} onChange={(preferredSchedule) => onChange({ ...value, preferredSchedule })} />
       </SetupSection>
     </>
   );
@@ -1106,6 +1105,7 @@ function SetupSection({
 }
 
 function Field({
+  inputRef,error,errorId,
   badge,
   editable = true,
   label,
@@ -1114,6 +1114,9 @@ function Field({
   placeholder,
   value,
 }: {
+  inputRef?:(node:TextInput|null)=>void;
+  error?:string;
+  errorId?:string;
   badge?: 'Optional';
   editable?: boolean;
   label: string;
@@ -1135,6 +1138,10 @@ function Field({
         ) : null}
       </View>
       <TextInput
+        ref={inputRef}
+        accessibilityLabel={label}
+        accessibilityHint={error}
+        {...(Platform.OS === 'web' ? { 'aria-invalid':Boolean(error), 'aria-describedby':error ? errorId : undefined } : {})}
         editable={editable}
         multiline={multiline}
         onBlur={() => setFocused(false)}
@@ -1151,6 +1158,7 @@ function Field({
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />
+      {error ? <Text nativeID={errorId} accessibilityLiveRegion="polite" style={{color:color.danger}}>{error}</Text> : null}
     </View>
   );
 }
@@ -1221,17 +1229,12 @@ function getModeMeta(mode: FormMode) {
   }
 
   return {
-    title: 'Core Profile',
+    title: 'Personal details',
     subtitle: 'The shared trust basics for your account.',
-    buttonLabel: 'Save Core Profile',
+    buttonLabel: 'Save Personal details',
   };
 }
 
-function getSuccessMessage(mode: FormMode) {
-  if (mode === 'work') return 'Your Work Profile is ready for service posts and client messages.';
-  if (mode === 'hiring') return 'Your Hiring Profile is ready for job posts and worker messages.';
-  return 'Your Core Profile is updated.';
-}
 
 function getInitials(name: string) {
   return name

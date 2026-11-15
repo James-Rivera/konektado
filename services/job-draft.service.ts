@@ -1,3 +1,5 @@
+import { scheduleFromColumns, scheduleToColumns, type ScheduleColumns } from '@/services/job-schedule';
+import { draftPriceValues } from '@/services/pricing';
 import type { ServiceResult } from '@/services/auth.service';
 import {
   deleteOwnDraftRow,
@@ -13,9 +15,9 @@ import {
 import type { JobDraftSummary, UpsertJobDraftInput } from '@/types/marketplace.types';
 
 const JOB_DRAFT_COLUMNS =
-  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, private_location_notes, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at';
+  'id, user_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, private_location_notes, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, revision, source_listing_id, source_version, editor_state, created_at, updated_at';
 
-type JobDraftRow = {
+type JobDraftRow = ScheduleColumns & {
   id: string;
   user_id: string;
   title: string | null;
@@ -39,13 +41,18 @@ type JobDraftRow = {
   allow_messages: boolean | null;
   auto_reply_enabled: boolean | null;
   auto_close_enabled: boolean | null;
+  editor_state?: { minimum?: string; maximum?: string } | null;
+  revision: number;
+  source_listing_id: string | null;
+  source_version: number | null;
   created_at: string;
   updated_at: string;
 };
 
 function mapDraft(row: JobDraftRow): JobDraftSummary {
   return {
-    id: row.id,
+    id: row.id, revision: row.revision, sourceListingId: row.source_listing_id, sourceVersion: row.source_version,
+    priceInput: typeof row.editor_state?.minimum === 'string' && typeof row.editor_state?.maximum === 'string' ? { minimum: row.editor_state.minimum, maximum: row.editor_state.maximum } : undefined,
     userId: row.user_id,
     title: row.title,
     description: row.description,
@@ -62,6 +69,7 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
     privateLocationNotes: row.private_location_notes,
     workersNeeded: row.workers_needed,
     scheduleText: row.schedule_text,
+    schedule: scheduleFromColumns(row),
     experienceLevel: normalizeExperienceLevel(row.experience_level),
     certificationRequired: row.certification_required ?? false,
     certificationNote: row.certification_note,
@@ -76,10 +84,10 @@ function mapDraft(row: JobDraftRow): JobDraftSummary {
 function normalizeDraftPayload(input: UpsertJobDraftInput) {
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
   const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
-  const budgetMin = input.budgetMin ?? null;
-  const budgetMax = input.budgetMax ?? null;
+  const { minimum: budgetMin, maximum: budgetMax } = draftPriceValues(input.budgetMin, input.budgetMax);
 
   return {
+    editor_state: input.priceInput ?? {},
     title: compactText(input.title) || null,
     description: compactText(input.description) || null,
     category: compactText(input.category) || null,
@@ -96,6 +104,7 @@ function normalizeDraftPayload(input: UpsertJobDraftInput) {
     rate_type: normalizeRateType(input.rateType),
     budget_negotiable: input.budgetNegotiable ?? false,
     workers_needed: input.workersNeeded ?? null,
+    ...scheduleToColumns(input.schedule),
     schedule_text: compactText(input.scheduleText) || null,
     experience_level: normalizeExperienceLevel(input.experienceLevel),
     certification_required: input.certificationRequired ?? false,
@@ -121,7 +130,9 @@ export async function getJobDraft(draftId: string): Promise<ServiceResult<JobDra
 export async function saveJobDraft({
   draftId,
   input,
+  expectedRevision,
 }: {
+  expectedRevision?: number;
   draftId?: string | null;
   input: UpsertJobDraftInput;
 }): Promise<ServiceResult<JobDraftSummary>> {
@@ -129,6 +140,7 @@ export async function saveJobDraft({
     table: 'job_drafts',
     columns: JOB_DRAFT_COLUMNS,
     draftId,
+    expectedRevision,
     payload: normalizeDraftPayload(input),
   });
   if (result.error || !result.data) return { data: null, error: result.error };

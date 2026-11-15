@@ -1,11 +1,17 @@
+import { ConfirmationDialog } from '@/components/ConfirmationDialog';
+import { NoticeBanner } from '@/components/NoticeBanner';
+import { restartListingEdit } from '@/services/listing-edit.service';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { PostingReviewDetails } from '@/components/PostingReviewDetails';
+import { serviceDraftToReview } from '@/services/posting-review';
+import { publishServiceDraft } from '@/services/posting-publish.service';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { Skeleton } from '@/components/Skeleton';
 import { useFeedback } from '@/components/FeedbackProvider';
@@ -27,13 +33,14 @@ import {
   isProfileCompletionRequiredError,
 } from '@/services/profile-completion.service';
 import { shouldSuggestAddingToWorkProfile } from '@/services/service-classification';
-import { deleteServiceDraft, saveServiceDraft } from '@/services/service-draft.service';
-import { createService } from '@/services/service-profile.service';
+import { getServiceDraft } from '@/services/service-draft.service';
 import type { ExperienceLevel, RateType } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getCardImageUrl } from '@/utils/image-processing';
 import { showAlert } from '@/utils/alert';
 
 type ServiceDraft = {
+  revision?: number;
+  sourceListingId?: string | null;
   allowMessages: boolean;
   autoPauseEnabled: boolean;
   autoReplyEnabled: boolean;
@@ -61,45 +68,11 @@ function getParamValue(value: string | string[] | undefined) {
   return value;
 }
 
-function parseDraft(value: string | undefined): ServiceDraft | null {
-  if (!value) return null;
-
-  try {
-    const parsed = JSON.parse(value) as Partial<ServiceDraft>;
-    if (!parsed.category || !parsed.title) return null;
-
-    return {
-      allowMessages: parsed.allowMessages ?? true,
-      autoPauseEnabled: parsed.autoPauseEnabled ?? false,
-      autoReplyEnabled: parsed.autoReplyEnabled ?? false,
-      availability: parsed.availability ?? '',
-      category: parsed.category,
-      customCategory: parsed.customCategory ?? '',
-      description: parsed.description ?? '',
-      experienceLevel: parsed.experienceLevel ?? 'any',
-      certificationAvailable: parsed.certificationAvailable ?? false,
-      certificationNote: parsed.certificationNote ?? '',
-      serviceGroup: parsed.serviceGroup ?? null,
-      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      locationText: parsed.locationText ?? '',
-      photoUrls: Array.isArray(parsed.photoUrls) ? parsed.photoUrls : [],
-      rate: parsed.rate ?? '',
-      rateMin: parsed.rateMin ?? '',
-      rateMax: parsed.rateMax ?? '',
-      rateType: parsed.rateType ?? 'per_project',
-      rateNegotiable: parsed.rateNegotiable ?? false,
-      title: parsed.title,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function getStatusLine(draft: ServiceDraft) {
   const availability = draft.availability.trim();
   if (!availability) return 'Available nearby';
   if (/^(available|unavailable|availability)\b/i.test(availability)) return availability;
-  return `Available ${availability}`;
+  return availability;
 }
 
 function getRateLine(draft: ServiceDraft) {
@@ -133,60 +106,72 @@ export default function CreateServicePreviewScreen() {
   const router = useRouter();
   const { showErrorToast, showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{
-    draft?: string | string[];
+    revision?: string | string[];
     draftId?: string | string[];
     returnTo?: string | string[];
+    serviceId?: string | string[];
   }>();
   const { profile, loading, refresh } = useProfile();
-  const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
-  const [draftId, setDraftId] = useState(getParamValue(params.draftId));
+  const [draft, setDraft] = useState<ServiceDraft | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [retryReview, setRetryReview] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      await Promise.resolve();
+      if (!active) return;
+      setReviewLoading(true);
+      setReviewError(null);
+      const id = getParamValue(params.draftId);
+      const result = id ? await getServiceDraft(id).then(result => ({ data:result.data ? serviceDraftToReview(result.data) : null, error:result.error })) : {data:null,error:null};
+      const requested = getParamValue(params.revision);
+      if (result.data && requested && result.data.revision !== Number(requested)) { result.data=null; result.error='This draft changed after review. Go back to review the latest saved changes.'; }
+      if (!active) return;
+      setDraft(result.data);
+      setReviewError(result.error);
+      setReviewLoading(false);
+    };
+    void load().catch(() => { if (active) { setDraft(null); setReviewError('Could not load your review. Check your connection and retry.'); setReviewLoading(false); } });
+    return () => { active = false; };
+  }, [params.draftId, params.revision, retryReview]);
+  const draftId = getParamValue(params.draftId);
   const returnTo = getParamValue(params.returnTo);
+  const serviceId = draft?.sourceListingId ?? null;
   const [publishing, setPublishing] = useState(false);
+  const editDraft = () => {
+    if (draftId) router.dismissTo({pathname:'/create-service',params:{draftId,returnTo,reloadDraft:String(Date.now())}});
+    else router.back();
+  };
+  const [commitError, setCommitError] = useState<string | null>(null);
+  const [replaceConfirmation,setReplaceConfirmation] = useState(false);
+  const loadLatestListing = () => setReplaceConfirmation(true);
+  const replaceDraft = async () => {
+    if (!draftId || draft?.revision === undefined) return;
+    setPublishing(true);
+    try {
+      const result=await restartListingEdit('service',draftId,draft.revision);
+      if (result.error) {setCommitError(result.error);return;}
+      setReplaceConfirmation(false);
+      editDraft();
+    } finally {setPublishing(false);}
+  };
   const [gateVisible, setGateVisible] = useState(false);
   const { isPending: isVerificationPending, isVerified } = useVerificationGate();
 
-  const saveCurrentDraft = async () => {
-    if (!draft) return null;
-
-    const result = await saveServiceDraft({
-      draftId,
-      input: {
-        allowMessages: draft.allowMessages,
-        autoPauseEnabled: draft.autoPauseEnabled,
-        autoReplyEnabled: draft.autoReplyEnabled,
-        availabilityText: draft.availability,
-        category: draft.category,
-        certificationAvailable: draft.certificationAvailable,
-        certificationNote: draft.certificationNote,
-        customCategory: draft.customCategory,
-        description: draft.description,
-        experienceLevel: draft.experienceLevel,
-        locationText: draft.locationText,
-        barangay: draft.locationText,
-        photoUrls: draft.photoUrls,
-        rateText: draft.rate,
-        rateMin: parseNumber(draft.rateMin),
-        rateMax: parseNumber(draft.rateMax),
-        rateType: draft.rateType,
-        rateNegotiable: draft.rateNegotiable,
-        tags: draft.tags,
-        title: draft.title,
-      },
-    });
-
-    if (result.data) setDraftId(result.data.id);
-    return result;
+  const publishService = async () => {
+    try { await publishServiceReview(); }
+    catch { showAlert('Could not save service', 'Check your connection and try again.'); }
+    finally { setPublishing(false); }
   };
 
-  const publishService = async () => {
+  const publishServiceReview = async () => {
     if (!draft || publishing) return;
 
     setPublishing(true);
-    const saved = await saveCurrentDraft();
-
-    if (saved?.error || !saved?.data) {
+    if (!draftId || draft.revision === undefined) {
       setPublishing(false);
-      showDraftSaveAlert(saved?.error);
+      showDraftSaveAlert('Reopen this draft before publishing.');
       return;
     }
 
@@ -196,30 +181,10 @@ export default function CreateServicePreviewScreen() {
       return;
     }
 
-    const result = await createService({
-      category: draft.category,
-      customCategory: draft.customCategory,
-      title: draft.title,
-      description: draft.description,
-      tags: getPreviewTags(draft),
-      photoUrls: draft.photoUrls,
-      availabilityText: draft.availability,
-      rateText: draft.rate,
-      rateMin: parseNumber(draft.rateMin),
-      rateMax: parseNumber(draft.rateMax),
-      rateType: draft.rateType,
-      rateNegotiable: draft.rateNegotiable,
-      experienceLevel: draft.experienceLevel,
-      certificationAvailable: draft.certificationAvailable,
-      certificationNote: draft.certificationNote,
-      barangay: draft.locationText,
-      locationText: draft.locationText,
-      allowMessages: draft.allowMessages,
-      autoReplyEnabled: draft.autoReplyEnabled,
-      autoPauseEnabled: draft.autoPauseEnabled,
-    });
+    const result = await publishServiceDraft(draftId!,draft.revision);
 
     if (result.error || !result.data) {
+      setCommitError(result.error ?? 'Could not save this post.');
       setPublishing(false);
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'work';
@@ -233,15 +198,11 @@ export default function CreateServicePreviewScreen() {
         return;
       }
 
-      showAlert('Could not publish service', result.error ?? 'Please try again.');
+
       return;
     }
 
-    showSuccessToast('Service posted');
-    const deleteResult = await deleteServiceDraft(saved.data.id);
-    if (deleteResult.error && __DEV__) {
-      console.warn('Service draft cleanup failed after publish', deleteResult.error);
-    }
+    showSuccessToast(serviceId ? 'Service updated' : 'Service posted');
     await refresh();
 
     // Only after a confirmed publish, and never as a gate on navigation.
@@ -298,22 +259,13 @@ export default function CreateServicePreviewScreen() {
   };
 
   const startVerification = async () => {
-    if (draft && !publishing) {
-      setPublishing(true);
-      const saved = await saveCurrentDraft();
-      setPublishing(false);
-      if (saved?.error || !saved?.data) {
-        showDraftSaveAlert(saved?.error);
-        return;
-      }
-    }
     setGateVisible(false);
     router.push('/verification');
   };
 
-  if (loading) {
+  if (loading || reviewLoading) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}><ConfirmationDialog visible={replaceConfirmation} title="Replace this edit draft?" message="This loads the latest published details. Keep a copy of any edits you want to reapply." confirmLabel="Load latest listing" cancelLabel="Keep draft" busy={publishing} onCancel={() => setReplaceConfirmation(false)} onConfirm={() => {void replaceDraft();}} />
         <View style={styles.screen}>
           <View style={styles.header}>
             <Skeleton height={32} width={32} borderRadius={radius.pill} />
@@ -330,12 +282,13 @@ export default function CreateServicePreviewScreen() {
 
   if (!draft) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}><ConfirmationDialog visible={replaceConfirmation} title="Replace this edit draft?" message="This loads the latest published details. Keep a copy of any edits you want to reapply." confirmLabel="Load latest listing" cancelLabel="Keep draft" busy={publishing} onCancel={() => setReplaceConfirmation(false)} onConfirm={() => {void replaceDraft();}} />
         <View style={styles.screen}>
-          <Header actionLabel="" onBack={() => router.back()} title="Preview" />
+          <Header actionLabel="" onBack={() => editDraft()} title="Preview" />
           <View style={styles.centered}>
             <Text style={styles.title}>Preview unavailable</Text>
-            <Text style={styles.bodyMuted}>Go back and complete the service details first.</Text>
+            <Text style={styles.bodyMuted}>{reviewError || 'Go back and complete the service details first.'}</Text>
+            {reviewError ? <Pressable accessibilityRole="button" onPress={() => setRetryReview(value => value + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.title}>Retry</Text></Pressable> : null}
           </View>
         </View>
       </SafeAreaView>
@@ -343,19 +296,20 @@ export default function CreateServicePreviewScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}><ConfirmationDialog visible={replaceConfirmation} title="Replace this edit draft?" message="This loads the latest published details. Keep a copy of any edits you want to reapply." confirmLabel="Load latest listing" cancelLabel="Keep draft" busy={publishing} onCancel={() => setReplaceConfirmation(false)} onConfirm={() => {void replaceDraft();}} />
       <View style={styles.screen}>
         <Header
-          actionLabel={publishing ? 'Publishing...' : 'Publish'}
+          actionLabel={publishing ? 'Saving...' : serviceId ? 'Save changes' : 'Publish'}
           disabled={publishing}
           onAction={publishService}
-          onBack={() => router.back()}
+          onBack={editDraft}
           title="Preview"
         />
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {commitError ? <NoticeBanner title="Changes have not been published" message={commitError} variant="warning" actionLabel={commitError.includes('listing changed') ? 'Load latest listing' : 'Edit draft'} onActionPress={commitError.includes('listing changed') ? loadLatestListing : () => editDraft()} /> : null}
           <View style={styles.safetyBox}>
-            <Text style={styles.safetyTitle}>Before publishing</Text>
+            <Text style={styles.safetyTitle}>{serviceId ? 'Before saving' : 'Before publishing'}</Text>
             <SafetyLine text="No phone number in public text" />
             <SafetyLine text="Only your barangay is shown publicly" />
             <SafetyLine text="Clients must verify before messaging" />
@@ -394,15 +348,20 @@ export default function CreateServicePreviewScreen() {
             />
           </View>
 
+          <PostingReviewDetails items={[
+            { label: 'Description', value: draft.description },
+            { label: 'Price', value: getRateLine(draft) },
+            { label: 'What is included / price note', value: draft.rate },
+            { label: 'Availability', value: draft.availability },
+            { label: 'Location', value: draft.locationText },
+          ]} />
           <View style={styles.optionsHeader}>
             <Text style={styles.optionsTitle}>Listing Options</Text>
-            <Pressable accessibilityRole="button" onPress={() => router.back()}>
+            <Pressable accessibilityRole="button" onPress={editDraft}>
               <Text style={styles.editLink}>Edit</Text>
             </Pressable>
           </View>
           <OptionReadout label="Allow messages" value={draft.allowMessages ? 'On' : 'Off'} />
-          <OptionReadout label="Auto-reply" value={draft.autoReplyEnabled ? 'On' : 'Off'} />
-          <OptionReadout label="Pause listing when unavailable" value={draft.autoPauseEnabled ? 'On' : 'Off'} />
         </ScrollView>
 
         <VerificationGateModal

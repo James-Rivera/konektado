@@ -1,4 +1,8 @@
+> Current posting behavior: [DEC-141 — durable edits and structured schedules](18-posting-recovery-and-schedules.md) supersedes older edit-review and schedule-storage details below.
+
 # User Flows
+
+Current posting/profile repair rules (DEC-140): [repair contract](17-posting-profile-repair-contract.md) and [implementation/verification report](posting-profile-implementation-2026-11-13.md). These supersede conflicting older field and save-flow descriptions below.
 
 ## Authentication Flow
 

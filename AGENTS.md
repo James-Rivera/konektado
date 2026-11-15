@@ -6,11 +6,10 @@ Use this file as the first stop for any AI or agent working in this repository.
 
 - Read `/docs` before changing code.
 - Treat `/docs` as the product, architecture, permissions, and design source of truth.
-- Treat the established Konektado Figma file as the visual source of truth: `http://127.0.0.1:3845/mcp`.
-- Before implementing or changing a user-facing screen/component, check the Konektado Figma design for the matching screen or component.
-- If the exact screen exists in Figma, follow it closely.
-- If the exact screen does not exist, derive the UI from nearby Konektado Figma patterns instead of inventing a separate style.
-- Figma is the visual source of truth, but implementation must still be responsive and production-safe. Do not copy Figma as fixed absolute coordinates unless the design explicitly requires it.
+- The user superseded Figma as visual authority on 2026-11-15: the current Figma work is not an approved production UI specification.
+- Follow the latest user-approved interaction requirements, the product and permission rules in /docs, accessibility, and responsive usability checks.
+- Preserve coherent Konektado branding; improve weak existing layouts rather than copying them merely because they exist in Figma.
+- Do not require a Figma inspection before UI changes unless the user explicitly requests implementation from a particular design.
 - Pay special attention to:
   - `docs/00-project-brief.md`
   - `docs/01-product-scope.md`
@@ -47,16 +46,12 @@ Use this file as the first stop for any AI or agent working in this repository.
 - If existing code and the requested Figma design conflict, replace only the affected visual components. Do not rewrite unrelated logic.
 - If a screen has already been completed and the task only needs wiring, do not redesign that screen.
 
-## Figma Implementation Rules
+## Design Implementation Rules
 
-- Treat Figma nodes as screen states or flow variants when appropriate, not automatically as separate routes.
-- Inspect the Figma nodes first and identify what each one represents before coding.
-- When multiple Figma nodes belong to one flow, implement them as one stateful flow unless the app architecture clearly requires separate routes.
-- Match Figma layout, spacing, typography, colors, border radius, icon treatment, and component hierarchy closely.
-- Do not preserve old visual components when they conflict with the current Figma direction.
-- Reuse safe logic, navigation, services, types, and utilities where appropriate.
-- Prefer creating flow-specific components when old components cause visual drift.
-- Use “services” instead of “skills” in user-facing copy unless explicitly required by the latest approved copy.
+- User-approved interaction requirements and validated usability take precedence over historical Figma layouts.
+- Use responsive components, clear hierarchy, accessible feedback, and consistent theme tokens.
+- Reuse safe logic, navigation, services, types and utilities; keep changes scoped to the requested flows.
+- Use Services in user-facing copy.
 
 ## Coding Rules
 
@@ -71,7 +66,7 @@ Use this file as the first stop for any AI or agent working in this repository.
 
 ## UI Implementation Rules
 
-When implementing Figma designs, match the visual direction closely but do not hardcode the Figma frame size. The app must work across different phone sizes and safe-area environments.
+When implementing designs, follow the approved interaction requirements and do not hardcode a reference frame size. The app must work across different phone sizes and safe-area environments.
 
 ### Responsive layout requirements
 

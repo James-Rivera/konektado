@@ -72,7 +72,6 @@ export function GroupedServicePickerSheet({
   const [activeCategory, setActiveCategory] = useState<string>(selectedCategory ?? categories[0] ?? '');
   const [draftServices, setDraftServices] = useState<string[]>(selectedServices);
   const [draftCustomServices, setDraftCustomServices] = useState<string[]>(selectedCustomServices);
-  const [customServiceText, setCustomServiceText] = useState('');
   const [applying, setApplying] = useState(false);
   // Category browsing is a secondary fallback: residents should be able to add
   // a skill without first working out which category it belongs to.
@@ -91,7 +90,6 @@ export function GroupedServicePickerSheet({
       setDraftCustomServices(selectedCustomServices);
     } else {
       setQuery('');
-      setCustomServiceText('');
       setBrowseOpen(false);
       setNotice(null);
     }
@@ -155,39 +153,8 @@ export function GroupedServicePickerSheet({
    * normalized de-duplication, product-scope exclusions, and the cap behave
    * identically here, in onboarding, and in Create Service.
    */
-  const addCustomService = () => {
-    const outcome = addSkillToList({
-      input: customServiceText,
-      state: { skills: draftServices, customSkills: draftCustomServices },
-      limit: maxSelections,
-    });
-
-    switch (outcome.status) {
-      case 'empty':
-        return;
-      case 'blocked':
-        setNotice("Konektado doesn't support this type of service yet.");
-        return;
-      case 'limit':
-        setNotice(`You can add up to ${outcome.limit}. Remove one first to add another.`);
-        return;
-      case 'duplicate':
-        setNotice('That is already on your list.');
-        setCustomServiceText('');
-        return;
-      case 'added':
-      default:
-        setDraftServices(outcome.state.skills);
-        setDraftCustomServices(outcome.state.customSkills);
-        setCustomServiceText('');
-        setQuery('');
-        setNotice(null);
-    }
-  };
-
   /** Adds whatever is in the search box when nothing in the taxonomy matches. */
   const addTypedQueryAsCustom = () => {
-    setCustomServiceText(query);
     const outcome = addSkillToList({
       input: query,
       state: { skills: draftServices, customSkills: draftCustomServices },
@@ -198,7 +165,6 @@ export function GroupedServicePickerSheet({
       setDraftServices(outcome.state.skills);
       setDraftCustomServices(outcome.state.customSkills);
       setQuery('');
-      setCustomServiceText('');
       setNotice(null);
       return;
     }
@@ -226,7 +192,6 @@ export function GroupedServicePickerSheet({
   const cancelMultiSelection = () => {
     setDraftServices(selectedServices);
     setDraftCustomServices(selectedCustomServices);
-    setCustomServiceText('');
     setQuery('');
     onClose();
   };
@@ -437,7 +402,7 @@ export function GroupedServicePickerSheet({
             </>
           )}
 
-          {isMulti ? (
+          {isMulti && draftCustomServices.length ? (
             <View style={styles.customBlock}>
               <View style={styles.customHeader}>
                 <Text style={styles.sectionTitle}>Other service</Text>
@@ -458,23 +423,6 @@ export function GroupedServicePickerSheet({
                   ))}
                 </View>
               ) : null}
-              <View style={styles.customInputRow}>
-                <TextInput
-                  onChangeText={setCustomServiceText}
-                  onSubmitEditing={addCustomService}
-                  placeholder="Add other service"
-                  placeholderTextColor={color.textSubtle}
-                  returnKeyType="done"
-                  style={styles.customInput}
-                  value={customServiceText}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={addCustomService}
-                  style={({ pressed }) => [styles.customAddButton, pressed && styles.pressed]}>
-                  <Text style={styles.customAddText}>Add</Text>
-                </Pressable>
-              </View>
             </View>
           ) : null}
         </ScrollView>

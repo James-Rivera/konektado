@@ -1,18 +1,23 @@
+import { ConfirmationDialog } from '@/components/ConfirmationDialog';
+import { NoticeBanner } from '@/components/NoticeBanner';
+import { restartListingEdit } from '@/services/listing-edit.service';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { PostingReviewDetails } from '@/components/PostingReviewDetails';
+import { jobDraftToReview } from '@/services/posting-review';
+import { publishJobDraft } from '@/services/posting-publish.service';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { JobCard } from '@/components/JobCard';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useVerificationGate } from '@/hooks/use-verification-gate';
-import { deleteJobDraft, saveJobDraft } from '@/services/job-draft.service';
-import { createJob, updateJob } from '@/services/job.service';
+import { getJobDraft } from '@/services/job-draft.service';
 import { formatJobBudget, formatJobPostTitle } from '@/services/marketplace.helpers';
 import {
     getCompletionModeForError,
@@ -25,6 +30,8 @@ import { getCardImageUrl } from '@/utils/image-processing';
 import { showAlert } from '@/utils/alert';
 
 type JobDraft = {
+  revision?: number;
+  sourceListingId?: string | null;
   title: string;
   description: string;
   category: string;
@@ -88,86 +95,69 @@ export default function CreateJobPreviewScreen() {
   const router = useRouter();
   const { showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{
-    draft?: string | string[];
+    revision?: string | string[];
     draftId?: string | string[];
     jobId?: string | string[];
     returnTo?: string | string[];
   }>();
   const { loading, refresh } = useProfile();
   const { isPending: isVerificationPending, isVerified } = useVerificationGate();
-  const draft = useMemo(() => parseDraft(getParamValue(params.draft)), [params.draft]);
-  const [draftId, setDraftId] = useState(getParamValue(params.draftId));
-  const jobId = getParamValue(params.jobId) ?? null;
+  const [draft, setDraft] = useState<JobDraft | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [retryReview, setRetryReview] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      await Promise.resolve();
+      if (!active) return;
+      setReviewLoading(true);
+      setReviewError(null);
+      const id = getParamValue(params.draftId);
+      const result = id ? await getJobDraft(id).then(result => ({ data:result.data ? parseDraft(JSON.stringify(jobDraftToReview(result.data))) : null, error:result.error })) : {data:null,error:null};
+      const requested = getParamValue(params.revision);
+      if (result.data && requested && result.data.revision !== Number(requested)) { result.data=null; result.error='This draft changed after review. Go back to review the latest saved changes.'; }
+      if (!active) return;
+      setDraft(result.data);
+      setReviewError(result.error);
+      setReviewLoading(false);
+    };
+    void load().catch(() => { if (active) { setDraft(null); setReviewError('Could not load your review. Check your connection and retry.'); setReviewLoading(false); } });
+    return () => { active = false; };
+  }, [params.draftId, params.revision, retryReview]);
+  const draftId = getParamValue(params.draftId);
+  const jobId = draft?.sourceListingId ?? null;
   const returnTo = getParamValue(params.returnTo);
   const [publishing, setPublishing] = useState(false);
+  const editDraft = () => {
+    if (draftId) router.dismissTo({pathname:'/create-job',params:{draftId,returnTo,reloadDraft:String(Date.now())}});
+    else router.back();
+  };
+  const [commitError, setCommitError] = useState<string | null>(null);
+  const [replaceConfirmation,setReplaceConfirmation] = useState(false);
+  const loadLatestListing = () => setReplaceConfirmation(true);
+  const replaceDraft = async () => {
+    if (!draftId || draft?.revision === undefined) return;
+    setPublishing(true);
+    try {
+      const result=await restartListingEdit('job',draftId,draft.revision);
+      if (result.error) {setCommitError(result.error);return;}
+      setReplaceConfirmation(false);
+      editDraft();
+    } finally {setPublishing(false);}
+  };
   const [gateVisible, setGateVisible] = useState(false);
   const budgetMin = draft ? parseNumber(draft.budgetMin) : null;
   const budgetMax = draft ? parseNumber(draft.budgetMax) : null;
   const workersNeeded = draft ? parseNumber(draft.workersNeeded) : null;
 
-  const saveCurrentDraft = async () => {
-    if (!draft) return null;
-
-    const result = await saveJobDraft({
-      draftId,
-      input: {
-        title: draft.title,
-        description: draft.description,
-        category: draft.category,
-        serviceNeeded: draft.serviceNeeded,
-        tags: draft.tags,
-        photoUrls: draft.photoUrls,
-        barangay: draft.barangay,
-        locationText: draft.locationText,
-        privateLocationNotes: draft.privateLocationNotes,
-        budgetMin,
-        budgetMax,
-        rateType: draft.rateType,
-        budgetNegotiable: draft.budgetNegotiable,
-        workersNeeded,
-        scheduleText: draft.scheduleText,
-        experienceLevel: draft.experienceLevel,
-        certificationRequired: draft.certificationRequired,
-        certificationNote: draft.certificationNote,
-        allowMessages: draft.allowMessages,
-        autoReplyEnabled: draft.autoReplyEnabled,
-        autoCloseEnabled: draft.autoCloseEnabled,
-      },
-    });
-
-    if (result.data) setDraftId(result.data.id);
-    return result;
-  };
-
-  const publishVerifiedJob = async (draftToDeleteId?: string | null) => {
+  const publishVerifiedJob = async () => {
     if (!draft) return;
 
-    const input = {
-      title: draft.title,
-      description: draft.description,
-      category: draft.category,
-      serviceNeeded: draft.serviceNeeded,
-      tags: draft.tags,
-      photoUrls: draft.photoUrls,
-      barangay: draft.barangay,
-      locationText: draft.locationText,
-      privateLocationNotes: draft.privateLocationNotes,
-      budgetMin,
-      budgetMax,
-      rateType: draft.rateType,
-      budgetNegotiable: draft.budgetNegotiable,
-      workersNeeded,
-      scheduleText: draft.scheduleText,
-      experienceLevel: draft.experienceLevel,
-      certificationRequired: draft.certificationRequired,
-      certificationNote: draft.certificationNote,
-      allowMessages: draft.allowMessages,
-      autoReplyEnabled: draft.autoReplyEnabled,
-      autoCloseEnabled: draft.autoCloseEnabled,
-    };
-    const result = jobId ? await updateJob(jobId, input) : await createJob(input);
+    const result = await publishJobDraft(draftId!,draft.revision);
 
     if (result.error || !result.data) {
+      setCommitError(result.error ?? 'Could not save this post.');
       if (isProfileCompletionRequiredError(result.error)) {
         const mode = getCompletionModeForError(result.error) ?? 'hiring';
         showAlert(getCompletionTitleForMode(mode), getProfileSetupGateMessage(), [
@@ -180,12 +170,12 @@ export default function CreateJobPreviewScreen() {
         return;
       }
 
-      showAlert('Could not publish post', result.error ?? 'Please try again.');
+
       return;
     }
 
     showSuccessToast(jobId ? 'Job updated' : 'Job posted');
-    if (!jobId && draftToDeleteId) await deleteJobDraft(draftToDeleteId);
+
     await refresh();
     if (returnTo === 'post') {
       router.replace('/post/active');
@@ -202,11 +192,9 @@ export default function CreateJobPreviewScreen() {
     if (!draft || publishing) return;
 
     setPublishing(true);
-    const saved = jobId ? null : await saveCurrentDraft();
-
-    if (!jobId && (saved?.error || !saved?.data)) {
+    if (!draftId || draft.revision === undefined) {
       setPublishing(false);
-      showAlert('Draft', saved?.error ?? 'Could not save this draft.');
+      showAlert('Draft', 'Reopen this draft before publishing.');
       return;
     }
 
@@ -216,27 +204,19 @@ export default function CreateJobPreviewScreen() {
       return;
     }
 
-    await publishVerifiedJob(jobId ? null : saved?.data?.id);
-    setPublishing(false);
+    try { await publishVerifiedJob(); }
+    catch { showAlert('Could not save post', 'Check your connection and try again.'); }
+    finally { setPublishing(false); }
   };
 
   const startVerification = async () => {
-    if (draft && !publishing && !jobId) {
-      setPublishing(true);
-      const saved = await saveCurrentDraft();
-      setPublishing(false);
-      if (saved?.error || !saved?.data) {
-        showAlert('Draft', saved?.error ?? 'Could not save this draft.');
-        return;
-      }
-    }
     setGateVisible(false);
     router.push('/verification');
   };
 
-  if (loading) {
+  if (loading || reviewLoading) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}><ConfirmationDialog visible={replaceConfirmation} title="Replace this edit draft?" message="This loads the latest published details. Keep a copy of any edits you want to reapply." confirmLabel="Load latest listing" cancelLabel="Keep draft" busy={publishing} onCancel={() => setReplaceConfirmation(false)} onConfirm={() => {void replaceDraft();}} />
         <View style={styles.screen}>
           <View style={styles.header}>
             <Skeleton height={32} width={32} borderRadius={radius.pill} />
@@ -253,12 +233,13 @@ export default function CreateJobPreviewScreen() {
 
   if (!draft) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}><ConfirmationDialog visible={replaceConfirmation} title="Replace this edit draft?" message="This loads the latest published details. Keep a copy of any edits you want to reapply." confirmLabel="Load latest listing" cancelLabel="Keep draft" busy={publishing} onCancel={() => setReplaceConfirmation(false)} onConfirm={() => {void replaceDraft();}} />
         <View style={styles.screen}>
-          <Header actionLabel="" title="Preview" onBack={() => router.back()} />
+          <Header actionLabel="" title="Preview" onBack={() => editDraft()} />
           <View style={styles.centered}>
             <Text style={styles.title}>Preview unavailable</Text>
-            <Text style={styles.bodyMuted}>Go back and complete the job post details.</Text>
+            <Text style={styles.bodyMuted}>{reviewError || 'Go back and complete the job post details.'}</Text>
+            {reviewError ? <Pressable accessibilityRole="button" onPress={() => setRetryReview(value => value + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.title}>Retry</Text></Pressable> : null}
           </View>
         </View>
       </SafeAreaView>
@@ -266,21 +247,22 @@ export default function CreateJobPreviewScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}><ConfirmationDialog visible={replaceConfirmation} title="Replace this edit draft?" message="This loads the latest published details. Keep a copy of any edits you want to reapply." confirmLabel="Load latest listing" cancelLabel="Keep draft" busy={publishing} onCancel={() => setReplaceConfirmation(false)} onConfirm={() => {void replaceDraft();}} />
       <View style={styles.screen}>
         <Header
-          actionLabel={publishing ? (jobId ? 'Saving...' : 'Publishing...') : (jobId ? 'Save' : 'Publish')}
+          actionLabel={publishing ? (jobId ? 'Saving...' : 'Publishing...') : (jobId ? 'Save changes' : 'Publish')}
           disabled={publishing}
           onAction={onPublish}
-          onBack={() => router.back()}
+          onBack={editDraft}
           title="Preview"
         />
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {commitError ? <NoticeBanner title="Changes have not been published" message={commitError} variant="warning" actionLabel={commitError.includes('listing changed') ? 'Load latest listing' : 'Edit draft'} onActionPress={commitError.includes('listing changed') ? loadLatestListing : () => editDraft()} /> : null}
           <View style={styles.safetyBox}>
             <Text style={styles.safetyTitle}>{jobId ? 'Before saving' : 'Before publishing'}</Text>
             <SafetyLine text="No phone number in public text" />
-            <SafetyLine text="Exact address hidden until worker is accepted" />
+            <SafetyLine text="Private notes stay with you; share meeting details in Messages" />
             <SafetyLine text="Workers must verify before messaging" />
           </View>
 
@@ -323,15 +305,20 @@ export default function CreateJobPreviewScreen() {
             />
           </View>
 
+          <PostingReviewDetails items={[
+            { label: 'Description', value: draft.description },
+            { label: 'Budget', value: formatJobBudget({ budgetMin, budgetMax, rateType: draft.rateType, budgetNegotiable: draft.budgetNegotiable }) },
+            { label: 'Schedule', value: draft.scheduleText },
+            { label: 'Location', value: draft.locationText },
+            { label: 'Private notes (only you and barangay staff)', value: draft.privateLocationNotes },
+          ]} />
           <View style={styles.optionsHeader}>
             <Text style={styles.optionsTitle}>Listing Options</Text>
-            <Pressable accessibilityRole="button" onPress={() => router.back()}>
+            <Pressable accessibilityRole="button" onPress={editDraft}>
               <Text style={styles.editLink}>Edit</Text>
             </Pressable>
           </View>
           <OptionReadout label="Allow messages before hiring" value={draft.allowMessages ? 'On' : 'Off'} />
-          <OptionReadout label="Auto-reply" value={draft.autoReplyEnabled ? 'On' : 'Off'} />
-          <OptionReadout label="Auto-close post" value={draft.autoCloseEnabled ? 'On' : 'Off'} />
         </ScrollView>
 
         <VerificationGateModal

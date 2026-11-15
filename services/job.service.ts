@@ -1,4 +1,7 @@
+import { scheduleToColumns, scheduleFromColumns, formatJobSchedule } from '@/services/job-schedule';
+import { validateJobPayload } from '@/services/listing-validation';
 import {
+  getStoredMvpServiceOption,
   getServiceSearchValues,
   getServiceSearchValuesForOptions,
 } from '@/constants/service-taxonomy';
@@ -31,7 +34,7 @@ import type {
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 type ClientStats = {
   averageRating: number | null;
@@ -149,11 +152,14 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
 
   const title = compactText(input.title);
   const description = compactText(input.description);
+  const payloadError = validateJobPayload(input);
+  if (payloadError) return { data: null, error: payloadError };
+
   const category = compactText(input.category);
   const tags = Array.from(new Set((input.tags ?? []).map(compactText).filter(Boolean))).slice(0, 4);
   const photoUrls = Array.from(new Set((input.photoUrls ?? []).map(compactText).filter(Boolean)));
   const workersNeeded = input.workersNeeded ?? null;
-  const serviceNeeded = compactText(input.serviceNeeded) || null;
+  const serviceNeeded = getStoredMvpServiceOption(input.serviceNeeded) ?? null;
   const budgetMin = input.budgetMin ?? null;
   const budgetMax = input.budgetMax ?? null;
   const rateType = normalizeRateType(input.rateType);
@@ -209,13 +215,14 @@ export async function createJob(input: CreateJobInput): Promise<ServiceResult<Jo
       rate_type: budgetRange.rateType,
       budget_negotiable: input.budgetNegotiable ?? false,
       workers_needed: workersNeeded,
-      schedule_text: compactText(input.scheduleText) || null,
+      ...scheduleToColumns(input.schedule),
+      schedule_text: formatJobSchedule(input.schedule) || null,
       experience_level: experienceLevel,
       certification_required: input.certificationRequired ?? false,
       certification_note: compactText(input.certificationNote) || null,
       allow_messages: input.allowMessages ?? true,
-      auto_reply_enabled: input.autoReplyEnabled ?? false,
-      auto_close_enabled: input.autoCloseEnabled ?? false,
+      auto_reply_enabled: false,
+      auto_close_enabled: false,
       status: 'open',
     })
     .select(JOB_COLUMNS)
@@ -318,6 +325,8 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
     );
   }
 
+  if (filters.budgetMin !== null && filters.budgetMin !== undefined) query = query.gte('budget_max', filters.budgetMin);
+  if (filters.budgetMax !== null && filters.budgetMax !== undefined) query = query.lte('budget_min', filters.budgetMax);
   query = query.limit(limit);
 
   const { data, error } = await query;
@@ -372,7 +381,7 @@ export async function getOwnedJobForEdit(
   const { data, error } = await supabase
     .from('jobs')
     .select(
-      'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, status, created_at, updated_at',
+      'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, allow_messages, auto_reply_enabled, auto_close_enabled, status, created_at, updated_at',
     )
     .eq('id', jobId)
     .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)
@@ -407,7 +416,8 @@ export async function getOwnedJobForEdit(
       rateType: normalizeRateType(data.rate_type as RateType),
       budgetNegotiable: Boolean(data.budget_negotiable),
       workersNeeded: data.workers_needed === null ? null : Number(data.workers_needed),
-      scheduleText: data.schedule_text ? String(data.schedule_text) : null,
+      schedule: scheduleFromColumns(data),
+      scheduleText: formatJobSchedule(scheduleFromColumns(data)) || (data.schedule_text ? String(data.schedule_text) : null),
       experienceLevel: normalizeExperienceLevel(data.experience_level as ExperienceLevel),
       certificationRequired: Boolean(data.certification_required),
       certificationNote: data.certification_note ? String(data.certification_note) : null,
@@ -436,8 +446,11 @@ export async function updateJob(
 
   const title = compactText(input.title);
   const description = compactText(input.description);
+  const payloadError = validateJobPayload(input);
+  if (payloadError) return { data: null, error: payloadError };
+
   const category = compactText(input.category);
-  const serviceNeeded = compactText(input.serviceNeeded);
+  const serviceNeeded = getStoredMvpServiceOption(input.serviceNeeded) ?? compactText(input.serviceNeeded);
   const rateType = normalizeRateType(input.rateType);
   const budgetRange = validateRateRange({
     min: input.budgetMin ?? null,
@@ -472,13 +485,14 @@ export async function updateJob(
       rate_type: budgetRange.rateType,
       budget_negotiable: input.budgetNegotiable ?? false,
       workers_needed: input.workersNeeded ?? null,
-      schedule_text: compactText(input.scheduleText) || null,
+      ...scheduleToColumns(input.schedule),
+      schedule_text: formatJobSchedule(input.schedule) || null,
       experience_level: normalizeExperienceLevel(input.experienceLevel),
       certification_required: input.certificationRequired ?? false,
       certification_note: compactText(input.certificationNote) || null,
       allow_messages: input.allowMessages ?? true,
-      auto_reply_enabled: input.autoReplyEnabled ?? false,
-      auto_close_enabled: input.autoCloseEnabled ?? false,
+      auto_reply_enabled: false,
+      auto_close_enabled: false,
     })
     .eq('id', jobId)
     .or(`owner_id.eq.${user.data},client_id.eq.${user.data}`)

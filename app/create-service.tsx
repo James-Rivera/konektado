@@ -1,6 +1,13 @@
+import { FormErrorSummary } from '@/components/FormErrorSummary';
+import { useFormErrorNavigation } from '@/hooks/use-form-error-navigation';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import { startServiceEdit } from '@/services/listing-edit.service';
+import { getServiceRepairIssues, type ListingIssue } from '@/services/listing-repair';
+import { DraftSaveStatus } from '@/components/DraftSaveStatus';
+import { NoticeBanner } from '@/components/NoticeBanner';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -18,11 +25,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarangayPickerSheet } from '@/components/BarangayPickerSheet';
 import { BottomSheet } from '@/components/BottomSheet';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
-import { useFeedback } from '@/components/FeedbackProvider';
 import { GroupedServicePickerSheet } from '@/components/GroupedServicePickerSheet';
 import { LocationMapPreview } from '@/components/LocationMapPreview';
 import { CurrentUserIdentityRow } from '@/components/profile/CurrentUserIdentity';
 import { RateRangeInput } from '@/components/RateRangeInput';
+import { parsePriceAmount } from '@/services/pricing';
 import { Skeleton } from '@/components/Skeleton';
 import {
   getServiceTagsForCategory,
@@ -52,7 +59,6 @@ import { validateRateRange } from '@/services/marketplace.helpers';
 import { getMyProfileCompletion } from '@/services/profile-completion.service';
 import { getServiceDraft, saveServiceDraft } from '@/services/service-draft.service';
 import { type ServicePhotoAsset, uploadServicePhotos } from '@/services/service-photo.service';
-import { getMyService, updateService } from '@/services/service-profile.service';
 import type {
   CreateServiceInput,
   ExperienceLevel,
@@ -79,17 +85,14 @@ type ServiceDraftErrors = Partial<
   Record<'category' | 'customCategory' | 'title' | 'description' | 'locationText' | 'rateMin', string>
 >;
 
-function parsePositiveNumber(value: string) {
-  if (!value.trim()) return null;
-  const parsed = Number(value.replace(/,/g, ''));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
-}
+function parsePositiveNumber(value: string) { return parsePriceAmount(value); }
 
 function hasMeaningfulDraft(input: UpsertServiceDraftInput) {
   return Boolean(
     input.category?.trim() ||
       input.customCategory?.trim() ||
-      input.title?.trim() ||
+      input.priceInput?.minimum?.trim() || input.priceInput?.maximum?.trim() ||
+    input.title?.trim() ||
       input.description?.trim() ||
       input.tags?.length ||
       input.photoUrls?.length ||
@@ -110,9 +113,9 @@ function hasMeaningfulDraft(input: UpsertServiceDraftInput) {
 
 export default function CreateServiceScreen() {
   const router = useRouter();
-  const { showSuccessToast } = useFeedback();
   const params = useLocalSearchParams<{
     draftId?: string | string[];
+    reloadDraft?: string | string[];
     serviceId?: string | string[];
     returnTo?: string | string[];
     focus?: string | string[];
@@ -120,7 +123,9 @@ export default function CreateServiceScreen() {
     skill?: string | string[];
   }>();
   const initialDraftId = getParamValue(params.draftId);
-  const serviceId = getParamValue(params.serviceId);
+  const reloadDraft = getParamValue(params.reloadDraft);
+  const routeServiceId = getParamValue(params.serviceId);
+  const [serviceId, setServiceId] = useState(routeServiceId);
   const returnTo = getParamValue(params.returnTo);
   const focusTarget = getParamValue(params.focus);
   const originSkill = getParamValue(params.skill);
@@ -128,13 +133,18 @@ export default function CreateServiceScreen() {
   const rateRangeOffsetRef = useRef<number | null>(null);
   const handledFocusRef = useRef(false);
   const defaultsAppliedRef = useRef(false);
-  const { profile, loading, refresh } = useProfile();
+  const { profile, loading } = useProfile();
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [availability, setAvailability] = useState('');
+  const [hasUserEdits, setHasUserEdits] = useState(false);
+  const [revision, setRevision] = useState<number | undefined>();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryLoad, setRetryLoad] = useState(0);
+  const [repairIssues, setRepairIssues] = useState<ListingIssue[]>([]);
   const [rate, setRate] = useState('');
   const [rateMin, setRateMin] = useState('');
   const [rateMax, setRateMax] = useState('');
@@ -164,7 +174,7 @@ export default function CreateServiceScreen() {
   const [barangayPickerVisible, setBarangayPickerVisible] = useState(false);
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
-  const [draftHydrated, setDraftHydrated] = useState(!initialDraftId);
+  const [draftHydrated, setDraftHydrated] = useState(!initialDraftId && !serviceId);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(initialDraftId));
   const [loadingService, setLoadingService] = useState(Boolean(serviceId));
   const [savingService, setSavingService] = useState(false);
@@ -290,27 +300,17 @@ export default function CreateServiceScreen() {
     };
   }, [initialDraftId, loading, originSkill, profile?.barangay, serviceId]);
 
-  // Loading a different listing starts over. Raised while rendering, so the
-  // effect below only fetches; initial state already covers the first load.
-  const [loadingServiceId, setLoadingServiceId] = useState(serviceId);
-  if (serviceId !== loadingServiceId) {
-    setLoadingServiceId(serviceId);
-    if (serviceId) setLoadingService(true);
-  }
-
   useEffect(() => {
-    if (!serviceId) return;
+    if (!initialDraftId && !routeServiceId) return;
     let active = true;
-
-    getMyService(serviceId).then((result) => {
+    void (async () => {
+      await Promise.resolve();
       if (!active) return;
-
-      if (result.error || !result.data) {
-        showAlert('Service', result.error ?? 'Could not load this service.');
-        router.back();
-        return;
-      }
-
+      setLoadingDraft(true); setDraftHydrated(false); setLoadError(null); setErrors({});
+      try {
+        const result = initialDraftId ? await getServiceDraft(initialDraftId) : await startServiceEdit(routeServiceId!);
+        if (!active) return;
+        if (result.error || !result.data) { setLoadError(result.error ?? 'Could not load your draft.'); return; }
       hydrateService(result.data, {
         setAllowMessages,
         setAutoPauseEnabled,
@@ -332,67 +332,17 @@ export default function CreateServiceScreen() {
         setTags,
         setTitle,
       });
-      setLoadingService(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [router, serviceId]);
-
-  useEffect(() => {
-    if (!initialDraftId || serviceId) return;
-    let active = true;
-
-    void (async () => {
-      setLoadingDraft(true);
-      try {
-        const result = await getServiceDraft(initialDraftId);
-        if (!active) return;
-
-        if (result.error || !result.data) {
-          showAlert('Draft', result.error ?? 'Could not load this draft.');
-        } else {
-          hydrateService(result.data, {
-            setAllowMessages,
-            setAutoPauseEnabled,
-            setAutoReplyEnabled,
-            setAvailability,
-            setCategory,
-            setCertificationAvailable,
-            setCertificationNote,
-            setCustomCategory,
-            setDescription,
-            setExperienceLevel,
-            setLocationBarangay,
-            setPhotoUrls,
-            setRate,
-            setRateMax,
-            setRateMin,
-            setRateNegotiable,
-            setRateType,
-            setTags,
-            setTitle,
-          });
-        }
-      } catch {
-        if (active) {
-          showAlert('Draft', 'Could not load this draft right now.');
-        }
-      } finally {
-        if (active) {
-          setDraftHydrated(true);
-          setLoadingDraft(false);
-        }
-      }
+        setDraftId(result.data.id); setRevision(result.data.revision); setServiceId(result.data.sourceListingId ?? undefined);
+        setRepairIssues(result.data.sourceListingId ? getServiceRepairIssues(result.data) : []);
+        setDraftHydrated(true);
+      } catch { if (active) setLoadError('Could not load your draft. Check your connection and retry.'); }
+      finally { if (active) { setLoadingDraft(false); setLoadingService(false); } }
     })();
-
-    return () => {
-      active = false;
-    };
-  }, [initialDraftId, serviceId]);
+    return () => { active = false; };
+  }, [initialDraftId, reloadDraft, routeServiceId, retryLoad]);
 
   const selectCategory = (value: string, source: ClassificationSource = 'chooser') => {
+    setHasUserEdits(true);
     setCategory(value);
     setCustomCategory('');
     setTags([]);
@@ -458,6 +408,7 @@ export default function CreateServiceScreen() {
   };
 
   const toggleTag = (tag: string) => {
+    setHasUserEdits(true);
     setTags((current) => {
       if (current.includes(tag)) return current.filter((item) => item !== tag);
       if (current.length >= 4) return current;
@@ -478,6 +429,7 @@ export default function CreateServiceScreen() {
       photoUrls,
       availabilityText: availability,
       rateText: rate,
+      priceInput: { minimum: rateMin, maximum: rateMax },
       rateMin: Number.isNaN(parsedRateMin) ? null : parsedRateMin,
       rateMax: Number.isNaN(parsedRateMax) ? null : parsedRateMax,
       rateType,
@@ -514,15 +466,17 @@ export default function CreateServiceScreen() {
   ]);
 
   const serviceDraftInput = useMemo(() => buildServiceDraftInput(), [buildServiceDraftInput]);
-  const { flush: flushDraft } = useDraftAutosave({
+  const { flush: flushDraft, saveStatus, saveError, hasUnsavedChanges, discardPending } = useDraftAutosave({
     draftId,
-    enabled: !serviceId && !loading && !loadingDraft,
+    revision, onRevisionChange: setRevision,
+    enabled: !loading && !loadingDraft && !loadingService && !loadError && (Boolean(draftId) || hasUserEdits),
     hydrated: draftHydrated,
     input: serviceDraftInput,
     isMeaningful: hasMeaningfulDraft,
     onDraftIdChange: setDraftId,
     saveDraft: saveServiceDraft,
   });
+  const leaveDialog = useUnsavedChanges(hasUnsavedChanges, { message:'Changes that have not saved will be discarded. Your public listing stays unchanged.', onDiscard:discardPending });
 
   /**
    * Normalizes the chosen classification before it is stored.
@@ -557,6 +511,8 @@ export default function CreateServiceScreen() {
     };
   };
 
+  const errorNavigation = useFormErrorNavigation(scrollRef, { category:() => setServicePickerVisible(true), customCategory:() => openCustomSheet(), locationText:() => setBarangayPickerVisible(true) });
+
   const onNext = async () => {
     if (uploadingPhotos) {
       showAlert('Add Photos', 'Wait for the photos to finish uploading.');
@@ -576,7 +532,8 @@ export default function CreateServiceScreen() {
         validation.customCategory = 'Konektado doesn’t support this type of service yet.';
       }
     }
-    if (!title.trim()) validation.title = 'Enter a short service title.';
+    if (!title.trim() || title.trim().length > 80) validation.title = 'Enter a service title of up to 80 characters.';
+    if (description.trim().length > 5000) validation.description = 'Use up to 5,000 characters for the description.';
     if (!description.trim()) validation.description = 'Describe what clients can expect from this service.';
     if (!locationText.trim()) validation.locationText = 'Choose a barangay.';
 
@@ -590,31 +547,7 @@ export default function CreateServiceScreen() {
     }
     setErrors(validation);
 
-    if (Object.keys(validation).length) return;
-
-    if (serviceId) {
-      setSavingService(true);
-      const result = await updateService({
-        serviceId,
-        input: serviceInput,
-      });
-      setSavingService(false);
-
-      if (result.error || !result.data) {
-        showAlert('Service', result.error ?? 'Could not save this service.');
-        return;
-      }
-
-      await refresh();
-      showSuccessToast('Service saved');
-      if (returnTo === 'profile') {
-        router.replace('/(tabs)/profile');
-        return;
-      }
-
-      router.back();
-      return;
-    }
+    if (Object.keys(validation).length) { errorNavigation.focusFirstError(validation); return; }
 
     setSavingService(true);
     const saved = await flushDraft(serviceDraftInput);
@@ -629,36 +562,17 @@ export default function CreateServiceScreen() {
       pathname: '/create-service-preview',
       params: {
         draftId: saved.data.id,
+        revision: String(saved.data.revision),
         returnTo,
-        draft: JSON.stringify({
-          allowMessages,
-          autoPauseEnabled,
-          autoReplyEnabled,
-          availability,
-          category,
-          customCategory: customCategory.trim(),
-          description,
-          serviceGroup,
-          experienceLevel,
-          certificationAvailable,
-          certificationNote,
-          tags,
-          locationText,
-          photoUrls,
-          rate,
-          rateMin,
-          rateMax,
-          rateType,
-          rateNegotiable,
-          title,
-        }),
       },
     });
   };
 
+  if (loadError) return <SafeAreaView style={styles.safeArea}>{leaveDialog}<NoticeBanner title="Draft unavailable" message={loadError} actionLabel="Retry" onActionPress={() => setRetryLoad(value => value+1)} /><Pressable accessibilityRole="button" onPress={() => router.back()} style={{ minHeight:44 }}><Text>Go back</Text></Pressable></SafeAreaView>;
+
   if (loading || loadingDraft || loadingService) {
     return (
-      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>{leaveDialog}
         <View style={styles.header}>
           <View style={{ width: 24, height: 24 }} />
           <Skeleton height={20} width={100} />
@@ -672,7 +586,7 @@ export default function CreateServiceScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>{leaveDialog}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
         <View style={styles.header}>
           <Pressable
@@ -692,7 +606,7 @@ export default function CreateServiceScreen() {
               pressed && !savingService && !uploadingPhotos && styles.pressed,
             ]}>
             <Text style={styles.headerAction}>
-              {uploadingPhotos ? 'Uploading...' : savingService ? 'Saving...' : serviceId ? 'Save' : 'Next'}
+              {uploadingPhotos ? 'Uploading...' : savingService ? 'Saving...' : 'Next'}
             </Text>
           </Pressable>
         </View>
@@ -702,6 +616,10 @@ export default function CreateServiceScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
+          <FormErrorSummary errors={errors} onSelect={errorNavigation.focusField} />
+          {serviceId ? <Text style={styles.smallHelper}>Edits stay private until Review → Save changes.</Text> : null}
+          <DraftSaveStatus status={saveStatus} error={saveError} onRetry={() => { void flushDraft(); }} />
+          <FormErrorSummary title="Update these details before saving" errors={Object.fromEntries(repairIssues.filter(issue => getServiceRepairIssues(serviceDraftInput).some(current => current.field === issue.field)).map(issue => [issue.field,issue.message]))} onSelect={errorNavigation.focusField} />
           <Section
             helper="Start with a clear offer. Photos and a short title help clients understand it quickly."
             title="What are you offering?">
@@ -716,7 +634,7 @@ export default function CreateServiceScreen() {
                       <Pressable
                         accessibilityLabel={`Remove photo ${index + 1}`}
                         accessibilityRole="button"
-                        onPress={() => setPhotoUrls((current) => current.filter((item) => item !== url))}
+                        onPress={() => { setHasUserEdits(true); setPhotoUrls(current => current.filter(item => item !== url)); }}
                         style={({ pressed }) => [styles.photoRemoveButton, pressed && styles.pressed]}>
                         <MaterialIcons color={color.white} name="close" size={14} />
                       </Pressable>
@@ -726,7 +644,7 @@ export default function CreateServiceScreen() {
                     <Pressable
                       accessibilityRole="button"
                       disabled={uploadingPhotos}
-                      onPress={() => void addPhotos(photoUrls, setPhotoUrls, setUploadingPhotos, draftId ?? photoFolderId)}
+                      onPress={() => void addPhotos(photoUrls, values => { setHasUserEdits(true); setPhotoUrls(values); }, setUploadingPhotos, draftId ?? photoFolderId)}
                       style={({ pressed }) => [
                         styles.photoAddTile,
                         pressed && !uploadingPhotos && styles.pressed,
@@ -765,10 +683,13 @@ export default function CreateServiceScreen() {
             <Field
               error={errors.title}
               helperText={`${title.length}/${MAX_SERVICE_TITLE_LENGTH} characters. Keep it short and searchable.`}
+              inputRef={errorNavigation.register('title')}
+              errorId="service-title-error"
               label="Service title"
               maxLength={MAX_SERVICE_TITLE_LENGTH}
               multiline
               onChangeText={(value) => {
+                setHasUserEdits(true);
                 setTitle(value);
                 clearError('title');
               }}
@@ -778,9 +699,13 @@ export default function CreateServiceScreen() {
 
             <Field
               error={errors.description}
+              inputRef={errorNavigation.register('description')}
+              errorId="service-description-error"
               label="Description"
+              maxLength={5000}
               multiline
               onChangeText={(value) => {
+                setHasUserEdits(true);
                 setDescription(value);
                 clearError('description');
               }}
@@ -795,7 +720,7 @@ export default function CreateServiceScreen() {
             <Field
               helperText="Keep this short and practical so clients know when to message."
               label="Availability"
-              onChangeText={setAvailability}
+              onChangeText={(value) => { setHasUserEdits(true); setAvailability(value); }}
               placeholder="Example: Weekends and weekday afternoons"
               value={availability}
             />
@@ -827,30 +752,32 @@ export default function CreateServiceScreen() {
             }}>
             <Section
               helper="Set a clear rate range. Final details can still be discussed in Messages."
-              title="Pricing and negotiation">
-              <RateRangeInput
+              title="Your price">
+              <RateRangeInput ref={errorNavigation.register('rateMin')}
                 error={errors.rateMin}
                 label="Rate range"
                 maxValue={rateMax}
                 minValue={rateMin}
                 negotiable={rateNegotiable}
                 onMaxChange={(value) => {
+                  setHasUserEdits(true);
                   setRateMax(value);
                   clearError('rateMin');
                 }}
                 onMinChange={(value) => {
+                  setHasUserEdits(true);
                   setRateMin(value);
                   clearError('rateMin');
                 }}
-                onNegotiableChange={setRateNegotiable}
-                onRateTypeChange={setRateType}
+                onNegotiableChange={value => { setHasUserEdits(true); setRateNegotiable(value); }}
+                onRateTypeChange={value => { setHasUserEdits(true); setRateType(value); }}
                 previewPrefix="Service rate"
                 rateType={rateType}
               />
               <Field
                 helperText="Optional. Mention useful details such as supplies or materials."
                 label="Rate note"
-                onChangeText={setRate}
+                onChangeText={(value) => { setHasUserEdits(true); setRate(value); }}
                 placeholder="Example: Cleaning supplies included"
                 value={rate}
               />
@@ -998,7 +925,7 @@ export default function CreateServiceScreen() {
                         accessibilityRole="button"
                         accessibilityState={{ selected: experienceLevel === option.value }}
                         key={option.value}
-                        onPress={() => setExperienceLevel(option.value)}
+                        onPress={() => { setHasUserEdits(true); setExperienceLevel(option.value); }}
                         style={({ pressed }) => [
                           styles.chip,
                           experienceLevel === option.value && styles.chipActive,
@@ -1014,13 +941,13 @@ export default function CreateServiceScreen() {
                 <ToggleRow
                   description="Only safe certificate details are shown publicly. Uploaded documents stay private."
                   label="Certification available"
-                  onValueChange={setCertificationAvailable}
+                  onValueChange={value => { setHasUserEdits(true); setCertificationAvailable(value); }}
                   value={certificationAvailable}
                 />
                 {certificationAvailable ? (
                   <Field
                     label="Certification note"
-                    onChangeText={setCertificationNote}
+                    onChangeText={(value) => { setHasUserEdits(true); setCertificationNote(value); }}
                     placeholder="Example: TESDA certificate available for admin review"
                     value={certificationNote}
                   />
@@ -1031,20 +958,8 @@ export default function CreateServiceScreen() {
                   <ToggleRow
                     description="Let verified residents contact you from this service post."
                     label="Allow messages"
-                    onValueChange={setAllowMessages}
+                    onValueChange={value => { setHasUserEdits(true); setAllowMessages(value); }}
                     value={allowMessages}
-                  />
-                  <ToggleRow
-                    description="Send a quick reply when someone messages from this post."
-                    label="Auto-reply"
-                    onValueChange={setAutoReplyEnabled}
-                    value={autoReplyEnabled}
-                  />
-                  <ToggleRow
-                    description="Pause this post when you are no longer available."
-                    label="Pause post when unavailable"
-                    onValueChange={setAutoPauseEnabled}
-                    value={autoPauseEnabled}
                   />
                 </View>
               </View>
@@ -1080,7 +995,7 @@ export default function CreateServiceScreen() {
           <Text style={styles.sheetDescription}>Based on your Work Profile</Text>
           {workProfileSkills.length > SKILL_FILTER_THRESHOLD ? (
             <TextInput
-              onChangeText={setSkillFilter}
+              onChangeText={(value) => { setHasUserEdits(true); setSkillFilter(value); }}
               placeholder="Search your skills"
               placeholderTextColor={color.textSubtle}
               style={styles.sheetInput}
@@ -1248,8 +1163,8 @@ function hydrateService(
   setters.setTags(service.tags);
   setters.setAvailability(service.availabilityText ?? '');
   setters.setRate(service.rateText ?? '');
-  setters.setRateMin(service.rateMin ? String(service.rateMin) : '');
-  setters.setRateMax(service.rateMax ? String(service.rateMax) : '');
+  setters.setRateMin(('priceInput' in service ? service.priceInput?.minimum : undefined) ?? (service.rateMin ? String(service.rateMin) : ''));
+  setters.setRateMax(('priceInput' in service ? service.priceInput?.maximum : undefined) ?? (service.rateMax ? String(service.rateMax) : ''));
   setters.setRateType(service.rateType);
   setters.setRateNegotiable(service.rateNegotiable);
   setters.setExperienceLevel(service.experienceLevel);
@@ -1285,6 +1200,8 @@ function Section({
 function Field({
   compact,
   error,
+  errorId,
+  inputRef,
   helperText,
   keyboardType,
   label,
@@ -1296,6 +1213,8 @@ function Field({
 }: {
   compact?: boolean;
   error?: string;
+  errorId?: string;
+  inputRef?: Ref<TextInput>;
   helperText?: string;
   keyboardType?: 'default' | 'numeric';
   label: string;
@@ -1310,6 +1229,10 @@ function Field({
       <Text style={styles.label}>{label}</Text>
       {helperText ? <Text style={styles.smallHelper}>{helperText}</Text> : null}
       <TextInput
+        ref={inputRef}
+        accessibilityHint={error || undefined}
+        {...(Platform.OS === 'web' ? { 'aria-invalid':Boolean(error), 'aria-describedby':error ? errorId : undefined } : {})}
+        accessibilityLabel={label}
         keyboardType={keyboardType}
         maxLength={maxLength}
         multiline={multiline}
@@ -1326,14 +1249,14 @@ function Field({
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />
-      <FieldError message={error} />
+      <FieldError message={error} id={errorId} />
     </View>
   );
 }
 
-function FieldError({ message }: { message?: string }) {
+function FieldError({ message, id }: { message?: string; id?:string }) {
   if (!message) return null;
-  return <Text style={styles.errorText}>{message}</Text>;
+  return <Text nativeID={id} accessibilityLiveRegion="polite" style={styles.errorText}>{message}</Text>;
 }
 
 function showDraftSaveAlert(error?: string | null) {

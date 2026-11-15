@@ -1,3 +1,4 @@
+import { draftPriceValues } from '@/services/pricing';
 import type { ServiceResult } from '@/services/auth.service';
 import {
   deleteOwnDraftRow,
@@ -13,7 +14,7 @@ import {
 import type { ServiceDraftSummary, UpsertServiceDraftInput } from '@/types/marketplace.types';
 
 const SERVICE_DRAFT_COLUMNS =
-  'id, user_id, category, custom_category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, created_at, updated_at';
+  'id, user_id, category, custom_category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, revision, source_listing_id, source_version, editor_state, created_at, updated_at';
 
 type ServiceDraftRow = {
   id: string;
@@ -39,13 +40,18 @@ type ServiceDraftRow = {
   allow_messages: boolean | null;
   auto_reply_enabled: boolean | null;
   auto_pause_enabled: boolean | null;
+  editor_state?: { minimum?: string; maximum?: string } | null;
+  revision: number;
+  source_listing_id: string | null;
+  source_version: number | null;
   created_at: string;
   updated_at: string;
 };
 
 function mapDraft(row: ServiceDraftRow): ServiceDraftSummary {
   return {
-    id: row.id,
+    id: row.id, revision: row.revision, sourceListingId: row.source_listing_id, sourceVersion: row.source_version,
+    priceInput: typeof row.editor_state?.minimum === 'string' && typeof row.editor_state?.maximum === 'string' ? { minimum: row.editor_state.minimum, maximum: row.editor_state.maximum } : undefined,
     userId: row.user_id,
     category: row.category,
     customCategory: row.custom_category,
@@ -80,6 +86,7 @@ function normalizeDraftPayload(input: UpsertServiceDraftInput) {
   return {
     category: compactText(input.category) || null,
     custom_category: compactText(input.customCategory) || null,
+    editor_state: input.priceInput ?? {},
     title: compactText(input.title) || null,
     description: compactText(input.description) || null,
     tags,
@@ -87,8 +94,8 @@ function normalizeDraftPayload(input: UpsertServiceDraftInput) {
     years_experience: input.yearsExperience ?? null,
     availability_text: compactText(input.availabilityText) || null,
     rate_text: compactText(input.rateText) || null,
-    rate_min: input.rateMin ?? null,
-    rate_max: input.rateMax ?? null,
+    rate_min: draftPriceValues(input.rateMin, input.rateMax).minimum,
+    rate_max: draftPriceValues(input.rateMin, input.rateMax).maximum,
     rate_type: normalizeRateType(input.rateType),
     rate_negotiable: input.rateNegotiable ?? false,
     experience_level: normalizeExperienceLevel(input.experienceLevel),
@@ -123,7 +130,9 @@ export async function getServiceDraft(
 export async function saveServiceDraft({
   draftId,
   input,
+  expectedRevision,
 }: {
+  expectedRevision?: number;
   draftId?: string | null;
   input: UpsertServiceDraftInput;
 }): Promise<ServiceResult<ServiceDraftSummary>> {
@@ -131,6 +140,7 @@ export async function saveServiceDraft({
     table: 'service_drafts',
     columns: SERVICE_DRAFT_COLUMNS,
     draftId,
+    expectedRevision,
     payload: normalizeDraftPayload(input),
   });
   if (result.error || !result.data) return { data: null, error: result.error };
