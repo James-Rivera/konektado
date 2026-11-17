@@ -2,6 +2,10 @@
 
 # User Flows
 
+## Linked Home and Search discovery (2026-11-16)
+
+Home and Search share Find work (job posts) or Hire help (offered services), the current search text, and compatible applied filters. Home's search entry opens the dedicated Search screen; Back or the Home tab preserves the session. Mode changes preserve the query and filter selections. Advanced Search refinements remain in Search. Explicit category shortcuts replace conflicting category/query selections. See [linked discovery](20-linked-discovery.md) for filter, session-reset and undo details.
+
 Current posting/profile repair rules (DEC-140): [repair contract](17-posting-profile-repair-contract.md) and [implementation/verification report](posting-profile-implementation-2026-11-13.md). These supersede conflicting older field and save-flow descriptions below.
 
 ## Authentication Flow

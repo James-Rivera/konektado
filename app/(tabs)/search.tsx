@@ -16,7 +16,7 @@ import {
 import { SearchHeaderRow } from '@/components/search/SearchHeaderRow';
 import { SearchJobResultCard } from '@/components/search/SearchJobResultCard';
 import { SearchResultHeader } from '@/components/search/SearchResultHeader';
-import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
+import { DiscoverySearchCard } from '@/components/search/DiscoverySearchCard';
 import { SearchWorkerResultCard } from '@/components/search/SearchWorkerResultCard';
 import type { SearchJobItem, SearchMode, SearchWorkerItem } from '@/constants/search-demo-data';
 import {
@@ -27,6 +27,7 @@ import {
   doesServiceMatchWorkType,
   getDiscoveryGroupsForWorkType,
   getDiscoveryGroupForService,
+  getCategoryForMvpService,
   getDisplayLabelForMvpService,
   getDisplayTitleForMvpService,
   getOrderedDiscoveryGroupsForMode,
@@ -37,6 +38,8 @@ import {
 } from '@/constants/service-taxonomy';
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useDiscoverySession } from '@/hooks/use-discovery-session';
+import { buildDefaultDiscoveryFilters, getDiscoveryServices } from '@/utils/discovery-session';
 import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
@@ -149,8 +152,7 @@ export default function SearchScreen() {
   const queryParam = getParamValue(params.q);
   const { isPending: isVerificationPending, isVerified, requireVerified } = useVerificationGate();
   const verificationKnown = !profileLoading;
-  const [mode, setMode] = useState<SearchMode>(() => getInitialMode(filterParam));
-  const [query, setQuery] = useState('');
+  const { mode, setMode, query, setQuery, filters: appliedFilters, setFilters: setAppliedFilters } = useDiscoverySession();
   const [browseGroup, setBrowseGroup] = useState<DiscoveryGroupKey>('Home & Errands');
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -163,8 +165,7 @@ export default function SearchScreen() {
   // in-flight flag and the visible error are derived from these below, so the
   // search effect never has to set state before its request resolves.
   const [settledSearch, setSettledSearch] = useState<{ error: string | null; request: object } | null>(null);
-  const [appliedFilters, setAppliedFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
-  const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(() => buildDefaultFilters());
+  const [draftFilters, setDraftFilters] = useState<SearchDiscoveryFilters>(appliedFilters);
   const [actionsTarget, setActionsTarget] = useState<SearchActionTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<SearchActionTarget | null>(null);
   const [reporting, setReporting] = useState(false);
@@ -192,22 +193,13 @@ export default function SearchScreen() {
     void refreshSavedPosts();
   }, [isFocused, profileLoading, refreshSavedPosts]);
 
-  // Filters and the browse group are seeded from the current group ordering, so
-  // they reset when the mode switches or when discovery preferences change the
-  // ordering. Compared by value, not identity: `getOrderedDiscoveryGroupsForMode`
-  // returns a fresh array for every new `preferences` object, and `useProfile`
-  // polls a fresh one every 30s (plus on foreground and realtime events), so
-  // resetting on identity wiped the user's applied filters mid-session and
-  // re-ran the search. Done during render rather than in an effect so a reset
-  // never renders one commit late.
-  const orderedGroupsKey = `${mode}:${orderedGroups.join('|')}`;
+  // Preference ordering changes the browse preview, never the shared query
+  // or applied filters when switching mode or refreshing the profile.
+  const orderedGroupsKey = orderedGroups.join('|');
   const [lastOrderedGroupsKey, setLastOrderedGroupsKey] = useState(orderedGroupsKey);
   if (orderedGroupsKey !== lastOrderedGroupsKey) {
     setLastOrderedGroupsKey(orderedGroupsKey);
-    const nextDefaultFilters = buildDefaultFilters();
-    const nextBrowseGroups = getDiscoveryGroupsForWorkType(nextDefaultFilters.workType, orderedGroups);
-    setAppliedFilters(nextDefaultFilters);
-    setDraftFilters(nextDefaultFilters);
+    const nextBrowseGroups = getDiscoveryGroupsForWorkType(appliedFilters.workType, orderedGroups);
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
   } else {
     // Keep the browse group inside the groups the work type allows. The
@@ -462,14 +454,6 @@ export default function SearchScreen() {
     listRef.current?.scrollToOffset({ animated: false, offset: 0 });
   }, [setControlsVisible]);
 
-  // A new `filter` param from the route picks the mode while rendering; the
-  // scroll reset below is a side effect, so it stays in an effect.
-  const [modeFromFilterParam, setModeFromFilterParam] = useState(filterParam);
-  if (filterParam !== modeFromFilterParam) {
-    setModeFromFilterParam(filterParam);
-    setMode(getInitialMode(filterParam));
-  }
-
   useEffect(() => {
     revealControlsAtTop();
   }, [filterParam, revealControlsAtTop]);
@@ -496,7 +480,7 @@ export default function SearchScreen() {
   const handleModeChange = useCallback((nextMode: SearchMode) => {
     revealControlsAtTop();
     setMode(nextMode);
-  }, [revealControlsAtTop]);
+  }, [revealControlsAtTop, setMode]);
 
   const handleGroupPress = useCallback((group: DiscoveryGroupKey) => {
     revealControlsAtTop();
@@ -512,16 +496,18 @@ export default function SearchScreen() {
     setBrowseGroup(nextGroup);
     setAppliedFilters((current) => ({
       ...current,
+      category: 'all',
       serviceGroup: nextGroup,
       service: nextSelected ?? 'all',
     }));
     setDraftFilters((current) => ({
       ...current,
+      category: 'all',
       serviceGroup: nextGroup,
       service: nextSelected ?? 'all',
     }));
     setQuery(nextSelected ? getDisplayLabelForMvpService(nextSelected) : '');
-  }, [browseGroup, revealControlsAtTop, selectedService]);
+  }, [browseGroup, revealControlsAtTop, selectedService, setAppliedFilters, setQuery]);
 
   const clearSearch = useCallback(() => {
     const nextDefaults = buildDefaultFilters();
@@ -531,7 +517,7 @@ export default function SearchScreen() {
     setAppliedFilters(nextDefaults);
     setDraftFilters(nextDefaults);
     setBrowseGroup(nextBrowseGroups[0] ?? orderedGroups[0] ?? 'Home & Local Help');
-  }, [orderedGroups, revealControlsAtTop]);
+  }, [orderedGroups, revealControlsAtTop, setAppliedFilters, setQuery]);
 
   /**
    * Search is no longer a bottom-navigation destination, so it needs an explicit
@@ -579,14 +565,15 @@ export default function SearchScreen() {
 
   /**
    * Home can hand over a taxonomy discovery group and/or a starting query.
-   * Applied only once preferences have settled, because the ordering reset
-   * above clears `browseGroup`/filters whenever preference ordering changes.
+   * Consume explicit deep links once; ordinary navigation uses the shared
+   * discovery session, including native/browser Back and the Home tab.
    */
   useEffect(() => {
     if (!isFocused || profileLoading) return;
-    if (!groupParam && !queryParam) return;
+    if (!filterParam && !groupParam && queryParam === undefined) return;
 
     revealControlsAtTop();
+    if (filterParam) setMode(getInitialMode(filterParam));
 
     // Consuming a one-shot route param: the state it carries is applied in the
     // same effect that clears it from the route. Doing the state half during
@@ -596,16 +583,18 @@ export default function SearchScreen() {
       const nextGroup = groupParam;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBrowseGroup(nextGroup);
-      setAppliedFilters((current) => ({ ...current, serviceGroup: nextGroup, service: 'all' }));
-      setDraftFilters((current) => ({ ...current, serviceGroup: nextGroup, service: 'all' }));
+      const selectGroup = (current: SearchDiscoveryFilters): SearchDiscoveryFilters => ({ ...current, category: 'all', workType: getDiscoveryGroupsForWorkType(current.workType, orderedGroups).includes(nextGroup) ? current.workType : 'either', serviceGroup: nextGroup, service: 'all' });
+      setAppliedFilters(selectGroup);
+      setDraftFilters(selectGroup);
+      setQuery('');
     }
 
-    if (queryParam) {
+    if (queryParam !== undefined) {
       setQuery(queryParam);
     }
 
-    router.setParams({ group: undefined, q: undefined });
-  }, [groupParam, isFocused, profileLoading, queryParam, revealControlsAtTop, router]);
+    router.setParams({ filter: undefined, group: undefined, q: undefined });
+  }, [filterParam, groupParam, isFocused, orderedGroups, profileLoading, queryParam, revealControlsAtTop, router, setAppliedFilters, setMode, setQuery]);
 
   const handleDraftFilterChange = useCallback(
     <K extends keyof SearchDiscoveryFilters,>(key: K, value: SearchDiscoveryFilters[K]) => {
@@ -617,10 +606,12 @@ export default function SearchScreen() {
         }
 
         if (key === 'serviceGroup') {
+          next.category = 'all';
           next.service = 'all';
         }
 
         if (key === 'service' && value !== 'all') {
+          next.category = 'all';
           next.serviceGroup = getDiscoveryGroupForService(value as MvpServiceOption) ?? current.serviceGroup;
         }
         return next;
@@ -648,7 +639,7 @@ export default function SearchScreen() {
     }
     revealControlsAtTop();
     setIsFilterSheetVisible(false);
-  }, [browseGroup, draftFilters, orderedGroups, revealControlsAtTop]);
+  }, [browseGroup, draftFilters, orderedGroups, revealControlsAtTop, setAppliedFilters, setQuery]);
 
   const openJob = useCallback((jobId: string) => {
     router.push({ pathname: '/job/[jobId]', params: { jobId } });
@@ -785,8 +776,9 @@ export default function SearchScreen() {
     () => (
       <>
         <View style={[styles.searchModule, { paddingTop: topInset + 12 }]}>
-          <SearchHeaderRow flush onBack={handleBack} onChangeText={setQuery} value={query} />
-          <SearchSegmentedControl flush mode={mode} onChange={handleModeChange} />
+          <DiscoverySearchCard mode={mode} onModeChange={handleModeChange}>
+            <SearchHeaderRow embedded flush onBack={handleBack} onChangeText={setQuery} placeholder={mode === 'jobs' ? 'Search jobs…' : 'Search services…'} value={query} />
+          </DiscoverySearchCard>
         </View>
         <PopularServicesSection
           collapsedServices={collapsedBrowseServices}
@@ -810,6 +802,7 @@ export default function SearchScreen() {
       handleModeChange,
       mode,
       query,
+      setQuery,
       selectedService,
       topInset,
     ],
@@ -1006,19 +999,7 @@ export default function SearchScreen() {
 }
 
 function buildDefaultFilters(): SearchDiscoveryFilters {
-  return {
-    workType: 'either',
-    serviceGroup: 'all',
-    service: 'all',
-    locationScope: 'nearby',
-    rateType: 'any',
-    rateMin: null,
-    rateMax: null,
-    experienceLevel: 'all',
-    certification: 'any',
-    verifiedOnly: false,
-    sort: 'relevant',
-  };
+  return buildDefaultDiscoveryFilters();
 }
 
 function reconcileFiltersForWorkType(
@@ -1043,15 +1024,12 @@ function reconcileFiltersForWorkType(
 }
 
 function getStructuredServiceFilterValues(filters: SearchDiscoveryFilters) {
-  if (filters.service !== 'all') {
-    return doesServiceMatchWorkType(filters.service, filters.workType) ? [filters.service] : [];
-  }
-
-  return getServicesForDiscoveryGroupAndWorkType(filters.serviceGroup, filters.workType);
+  return getDiscoveryServices(filters);
 }
 
 function getSearchFilterCount(filters: SearchDiscoveryFilters) {
   let count = 0;
+  if (filters.category !== 'all') count += 1;
   if (filters.workType !== 'either') count += 1;
   if (filters.service !== 'all' || filters.serviceGroup !== 'all') count += 1;
   if (filters.locationScope !== 'nearby') count += 1;
@@ -1107,6 +1085,7 @@ function normalizeSearchText(value: string) {
 
 function filterJobsForClient(items: JobSummary[], context: RankingContext) {
   return items.filter((job) => {
+    if (context.filters.category !== 'all' && getCategoryForMvpService(job.serviceNeeded) !== context.filters.category) return false;
     if (!matchesWorkType(job.serviceNeeded, context.filters.workType)) return false;
     if (!matchesGroup(job.serviceNeeded, context.filters.serviceGroup)) return false;
     if (
@@ -1123,6 +1102,7 @@ function filterJobsForClient(items: JobSummary[], context: RankingContext) {
 
 function filterWorkersForClient(items: ServiceSearchResult[], context: RankingContext) {
   return items.filter((service) => {
+    if (context.filters.category !== 'all' && getCategoryForMvpService(service.category) !== context.filters.category) return false;
     if (!matchesWorkType(service.category, context.filters.workType)) return false;
     if (!matchesGroup(service.category, context.filters.serviceGroup)) return false;
     if (
@@ -1433,7 +1413,6 @@ const styles = StyleSheet.create({
   },
   searchModule: {
     backgroundColor: color.background,
-    gap: 10,
     paddingBottom: 12,
     paddingHorizontal: 20,
   },

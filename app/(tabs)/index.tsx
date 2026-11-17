@@ -28,7 +28,7 @@ import { ServiceAreaSheet } from '@/components/ServiceAreaSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
 import { HomeFeedCard, type HomeFeedCardProps } from '@/components/home/HomeFeedCard';
-import { SearchSegmentedControl } from '@/components/search/SearchSegmentedControl';
+import { DiscoverySearchCard } from '@/components/search/DiscoverySearchCard';
 import { type HomeFilter } from '@/constants/demo-data';
 import { type SearchMode } from '@/constants/search-demo-data';
 import {
@@ -40,6 +40,7 @@ import {
 } from '@/constants/service-taxonomy';
 import { color, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useDiscoverySession } from '@/hooks/use-discovery-session';
 import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
@@ -65,10 +66,8 @@ import {
   DEFAULT_HOME_FEED_FILTERS,
   applyHomeFeedFilters,
   getHomeFeedFilterCount,
-  getDefaultHomeFilter,
-  type HomeFeedFilters,
-  type HomeFeedType,
   resolveHomeFeedMode,
+  type HomeFeedFilters,
   withWorkProfileSkills,
 } from '@/services/home-feed.service';
 import { getProfileCompletionDestination } from '@/services/profile-completion-actions';
@@ -120,36 +119,14 @@ let homeFeedInFlight:
     }
   | null = null;
 
-function mapHomeFilterToFeedType(filter: HomeFilter): HomeFeedType {
-  if (filter === 'Jobs') return 'jobs';
-  if (filter === 'Services') return 'services';
-  return 'all';
-}
-
-function mapFeedTypeToHomeFilter(feedType: HomeFeedType): HomeFilter {
-  if (feedType === 'jobs') return 'Jobs';
-  if (feedType === 'services') return 'Services';
-  return 'For you';
-}
 
 /**
  * Home reuses the Search segmented control. `jobs` means "I am looking for work"
  * and `workers` means "I want to hire help", matching Search's own mode values so
  * the selection can be handed straight to the Search route.
  */
-const HOME_MODE_LABELS: Record<SearchMode, string> = {
-  jobs: 'Find work',
-  workers: 'Hire help',
-};
-
 /** Space between the status bar and the pinned search bar once the band is gone. */
 const HOME_PINNED_TOP_GAP = 8;
-
-function mapHomeFilterToSearchMode(filter: HomeFilter): SearchMode | null {
-  if (filter === 'Jobs') return 'jobs';
-  if (filter === 'Services') return 'workers';
-  return null;
-}
 
 function mapSearchModeToHomeFilter(mode: SearchMode): HomeFilter {
   return mode === 'jobs' ? 'Jobs' : 'Services';
@@ -338,7 +315,8 @@ export default function HomeScreen() {
   const { isPending, isSaved, refreshSavedPosts, toggleSaved } = useSavedPosts();
   const topInset = useSafeTopInset();
   const { requireVerified } = useVerificationGate();
-  const [selectedFilter, setSelectedFilter] = useState<HomeFilter>('For you');
+  const { mode: searchMode, query: searchQuery, homeFilters: appliedFeedFilters, setHomeFilters: setAppliedFeedFilters, setMode: changeSearchMode } = useDiscoverySession();
+  const selectedFilter = mapSearchModeToHomeFilter(searchMode);
   const [feedSources, setFeedSources] = useState<{ jobs: HomeJobFeedItem[]; workers: HomeWorkerFeedItem[] }>({
     jobs: [],
     workers: [],
@@ -356,7 +334,6 @@ export default function HomeScreen() {
   const [hasLoadedSetupStatus, setHasLoadedSetupStatus] = useState(false);
   const hasLoadedSetupStatusRef = useRef(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [appliedFeedFilters, setAppliedFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [draftFeedFilters, setDraftFeedFilters] = useState<HomeFeedFilters>(DEFAULT_HOME_FEED_FILTERS);
   const [feedFiltersVisible, setFeedFiltersVisible] = useState(false);
   const [serviceAreaVisible, setServiceAreaVisible] = useState(false);
@@ -364,23 +341,7 @@ export default function HomeScreen() {
   const [pinnedHeight, setPinnedHeight] = useState(0);
   const [headerPinned, setHeaderPinned] = useState(false);
   const [scrollY] = useState(() => new Animated.Value(0));
-  const initialHomeFilterAppliedRef = useRef(false);
   const feedRequestRef = useRef(0);
-
-  useEffect(() => {
-    if (profileLoading || initialHomeFilterAppliedRef.current) return;
-
-    initialHomeFilterAppliedRef.current = true;
-    const defaultFilter = getDefaultHomeFilter({
-      activeRole: profile?.active_role,
-      preferences,
-    });
-    const defaultFeedType = mapHomeFilterToFeedType(defaultFilter);
-
-    setSelectedFilter(defaultFilter);
-    setAppliedFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
-    setDraftFeedFilters((current) => ({ ...current, feedType: defaultFeedType }));
-  }, [preferences, profile?.active_role, profileLoading]);
 
   useEffect(() => {
     let active = true;
@@ -546,15 +507,6 @@ export default function HomeScreen() {
 
   const feed = feedVariants[selectedFilter];
 
-  const searchMode = mapHomeFilterToSearchMode(selectedFilter);
-  /** Used when the feed is on the mixed "For you" variant and no segment is active. */
-  const searchModeFallback: SearchMode = useMemo(
-    () =>
-      resolveHomeFeedMode({ activeRole: profile?.active_role, preferences }) === 'client'
-        ? 'workers'
-        : 'jobs',
-    [preferences, profile?.active_role],
-  );
 
   const greeting = getHomeGreeting(profile?.first_name, profile?.full_name);
   const locationLabel = getHomeLocationLabel({
@@ -673,25 +625,15 @@ export default function HomeScreen() {
   }, [router]);
 
   const openAdvancedSearch = useCallback(() => {
-    const homeMode = resolveHomeFeedMode({
-      activeRole: profile?.active_role,
-      preferences,
-    });
-    const searchFilter =
-      draftFeedFilters.feedType === 'services' ||
-      (draftFeedFilters.feedType === 'all' && homeMode === 'client')
-        ? 'Services'
-        : 'Jobs';
-
+    setAppliedFeedFilters(draftFeedFilters);
     setFeedFiltersVisible(false);
     router.push({
       pathname: '/(tabs)/search',
       params: {
-        filter: searchFilter,
         openFilters: '1',
       },
     });
-  }, [draftFeedFilters.feedType, preferences, profile?.active_role, router]);
+  }, [draftFeedFilters, router, setAppliedFeedFilters]);
 
   /**
    * Home is the only entry point into Search now, so it hands over the current
@@ -699,8 +641,7 @@ export default function HomeScreen() {
    */
   const openSearch = useCallback(
     (options?: { group?: DiscoveryGroupKey; openFilters?: boolean }) => {
-      const mode = mapHomeFilterToSearchMode(selectedFilter) ?? searchModeFallback;
-
+      const mode = searchMode;
       router.push({
         pathname: '/(tabs)/search',
         params: {
@@ -710,7 +651,7 @@ export default function HomeScreen() {
         },
       });
     },
-    [router, searchModeFallback, selectedFilter],
+    [router, searchMode],
   );
 
   const openCategory = useCallback(
@@ -719,14 +660,6 @@ export default function HomeScreen() {
     },
     [openSearch],
   );
-
-  const changeSearchMode = useCallback((mode: SearchMode) => {
-    const filter = mapSearchModeToHomeFilter(mode);
-    const feedType = mapHomeFilterToFeedType(filter);
-    setSelectedFilter(filter);
-    setAppliedFeedFilters((current) => ({ ...current, feedType }));
-    setDraftFeedFilters((current) => ({ ...current, feedType }));
-  }, []);
 
   const openDiscoveryPreferences = useCallback(() => {
     setFeedFiltersVisible(false);
@@ -756,13 +689,12 @@ export default function HomeScreen() {
 
   const applyFeedFilters = useCallback(() => {
     setAppliedFeedFilters(draftFeedFilters);
-    setSelectedFilter(mapFeedTypeToHomeFilter(draftFeedFilters.feedType));
     setFeedFiltersVisible(false);
-  }, [draftFeedFilters]);
+  }, [draftFeedFilters, setAppliedFeedFilters]);
 
   const resetFeedFilters = useCallback(() => {
-    setDraftFeedFilters(DEFAULT_HOME_FEED_FILTERS);
-  }, []);
+    setDraftFeedFilters({ ...DEFAULT_HOME_FEED_FILTERS, feedType: searchMode === 'jobs' ? 'jobs' : 'services' });
+  }, [searchMode]);
 
   const keyExtractor = useCallback((item: HomeFeedItem) => item.key, []);
 
@@ -885,18 +817,16 @@ export default function HomeScreen() {
             pointerEvents="none"
             style={[styles.pinnedBackdrop, { opacity: pinnedBackdropOpacity }]}
           />
-          <HomeSearchBar
-            activeFilterCount={activeFeedFilterCount}
-            onOpenFilters={openFeedFilters}
-            onOpenSearch={() => openSearch()}
-          />
-          <View style={styles.modeRow}>
-            <SearchSegmentedControl
-              flush
-              labels={HOME_MODE_LABELS}
-              mode={searchMode}
-              onChange={changeSearchMode}
-            />
+          <View style={styles.discoveryModule}>
+            <DiscoverySearchCard mode={searchMode} onModeChange={changeSearchMode}>
+              <HomeSearchBar
+                activeFilterCount={activeFeedFilterCount}
+                onOpenFilters={openFeedFilters}
+                onOpenSearch={() => openSearch()}
+                placeholder={searchMode === 'jobs' ? 'Search jobs…' : 'Search services…'}
+                query={searchQuery}
+              />
+            </DiscoverySearchCard>
           </View>
         </Animated.View>
 
@@ -1232,11 +1162,11 @@ const styles = StyleSheet.create({
     borderBottomColor: color.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  modeRow: {
-    backgroundColor: color.background,
-    paddingBottom: 10,
+  discoveryModule: {
+    // Only the inset card paints white. The surrounding overlap must stay
+    // transparent so the original blue curve and sun remain visible.
+    paddingBottom: 12,
     paddingHorizontal: 20,
-    paddingTop: 12,
   },
   content: {
     paddingBottom: space.md,

@@ -8,13 +8,17 @@ export function SearchHeaderRow({
   onChangeText,
   autoFocus = false,
   flush = false,
+  embedded = false,
   onBack,
+  placeholder = 'Search jobs…',
 }: {
   value: string;
   onChangeText: (value: string) => void;
   autoFocus?: boolean;
   flush?: boolean;
+  embedded?: boolean;
   onBack?: () => void;
+  placeholder?: string;
 }) {
   return (
     <View style={[styles.container, flush && styles.containerFlush]}>
@@ -27,13 +31,14 @@ export function SearchHeaderRow({
           <MaterialIcons color={color.text} name="arrow-back" size={22} />
         </Pressable>
       ) : null}
-      <View style={styles.searchBar}>
+      <View style={[styles.searchBar, embedded && styles.searchBarEmbedded]}>
         <TextInput
+          accessibilityLabel={placeholder}
           autoCapitalize="none"
           autoCorrect={false}
           autoFocus={autoFocus}
           onChangeText={onChangeText}
-          placeholder="Search nearby jobs or services"
+          placeholder={placeholder}
           placeholderTextColor={color.textSubtle}
           returnKeyType="search"
           selectionColor={color.primary}
@@ -61,9 +66,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    height: 24,
+    height: 44,
     justifyContent: 'center',
-    width: 24,
+    width: 44,
   },
   searchBar: {
     alignItems: 'center',
@@ -76,6 +81,14 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  searchBarEmbedded: {
+    borderRadius: 0,
+    borderWidth: 0,
+    minHeight: 48,
+    minWidth: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
   },
   input: {
     ...typography.body,

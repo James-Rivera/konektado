@@ -9,17 +9,20 @@ export function SearchSegmentedControl({
   mode,
   onChange,
   flush = false,
+  embedded = false,
   labels = searchModeLabels,
 }: {
   /** `null` renders both segments unselected (Home's mixed "For you" feed). */
   mode: SearchMode | null;
   onChange: (mode: SearchMode) => void;
   flush?: boolean;
-  /** Home reuses this control with its own wording ("Find work" / "Hire help"). */
+  /** The surrounding card owns the outer border and background. */
+  embedded?: boolean;
+  /** Optional labels for other contexts; Home and Search use the same wording. */
   labels?: Record<SearchMode, string>;
 }) {
   return (
-    <View style={[styles.container, flush && styles.containerFlush]}>
+    <View style={[styles.container, flush && styles.containerFlush, embedded && styles.embedded]}>
       {modes.map((item) => {
         const selected = item === mode;
 
@@ -27,6 +30,7 @@ export function SearchSegmentedControl({
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ selected }}
+            aria-pressed={selected}
             key={item}
             onPress={() => onChange(item)}
             style={({ pressed }) => [
@@ -57,12 +61,18 @@ const styles = StyleSheet.create({
   containerFlush: {
     marginHorizontal: 0,
   },
+  embedded: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    marginHorizontal: 0,
+    padding: 0,
+  },
   segment: {
     alignItems: 'center',
     borderRadius: 17,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 34,
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },

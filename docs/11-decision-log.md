@@ -2,6 +2,12 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Linked discovery (2026-11-16)
+
+DEC-144: The user approved keeping the dedicated Search screen and linking Home's search entry and Find work/Hire help control to it, with shared intent/query and compatible filters in both directions. Use consistent intent labels and mode-specific placeholders, keep an explicit selected intent, preserve applied selections across mode changes and Back, and clear the in-memory state when accounts change. Keep Search-specific refinements in Search and retain existing marketplace services/permissions. Implement on an isolated branch with a guarded local undo snapshot; commits, pushes and deployment are separate. See [linked discovery](20-linked-discovery.md).
+
+Visual clarification: the user approved one inset white discovery card with a search row, divider, and intent options, retaining the original curved blue hero/sun overlap. Remove separate search/toggle pill frames and the full-width opaque wrapper; use sibling search/filter actions to avoid nested buttons. Preserve the linked behavior and guarded undo support.
+
 ## Release checkpoint and automation (2026-11-15)
 
 DEC-142: Preserve the reviewed 70-file posting/profile implementation in local commit `e3ee479`, with private screenshot evidence backed up separately. Prepare staging-first validation and manually dispatched, action-specific release automation. Pushing, database changes, builds and deployment retain separate approval. GitHub/Supabase/Vercel MCP are connected; staging provisioning is pending after Supabase rejected empty-project creation at the account's free-project limit. No demo migration or deployment is authorized by this setup. See [release workflow](19-release-workflow.md). This adds delivery tooling without changing application architecture or marketplace behavior.

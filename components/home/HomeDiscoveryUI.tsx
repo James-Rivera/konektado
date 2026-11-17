@@ -22,7 +22,6 @@ const HERO_TOP_GAP = 27; // greeting 65 - status bar 38
 const HERO_BAND_BOTTOM_GAP = 49; // band bottom 168 - location bottom 119
 const HERO_SEARCH_OVERLAP = 25; // band bottom 168 - search top 143
 const HERO_SEARCH_HEIGHT = 45; // search 143 -> 188
-const HERO_SEARCH_BOTTOM_GAP = 19; // segmented control 207 - search bottom 188
 const HERO_SIDE_PADDING = 24;
 
 // The band's bottom corners are deliberately asymmetric in the design.
@@ -155,39 +154,43 @@ export function HomeSearchBar({
   activeFilterCount = 0,
   onOpenFilters,
   onOpenSearch,
+  placeholder = 'Search jobs…',
+  query = '',
 }: {
   activeFilterCount?: number;
   onOpenFilters: () => void;
   onOpenSearch: () => void;
+  placeholder?: string;
+  query?: string;
 }) {
   return (
     <View style={styles.searchRow}>
       <Pressable
         accessibilityHint="Opens search with filters, categories, and rate range"
-        accessibilityLabel="Search for a job or service"
-        accessibilityRole="search"
+        accessibilityLabel={query ? `${placeholder} ${query}` : placeholder}
+        accessibilityRole="button"
         onPress={onOpenSearch}
         style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}>
         <MaterialIcons color={color.accentYellow} name="search" size={22} />
         <Text numberOfLines={1} style={styles.searchPlaceholder}>
-          Kailangan ko ng ...
+          {query || placeholder}
         </Text>
-        <View style={styles.searchDivider} />
-        <Pressable
-          accessibilityLabel="Feed filters"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={onOpenFilters}
-          style={({ pressed }) => [styles.searchTune, pressed && styles.pressed]}>
-          <MaterialIcons color={color.textMuted} name="tune" size={20} />
-          {activeFilterCount > 0 ? (
-            <View style={styles.tuneBadge}>
-              <Text style={styles.tuneBadgeText}>
-                {activeFilterCount > 9 ? '9+' : activeFilterCount}
-              </Text>
-            </View>
-          ) : null}
-        </Pressable>
+      </Pressable>
+      <View style={styles.searchDivider} />
+      <Pressable
+        accessibilityLabel="Feed filters"
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onOpenFilters}
+        style={({ pressed }) => [styles.searchTune, pressed && styles.pressed]}>
+        <MaterialIcons color={color.textMuted} name="tune" size={20} />
+        {activeFilterCount > 0 ? (
+          <View style={styles.tuneBadge}>
+            <Text style={styles.tuneBadgeText}>
+              {activeFilterCount > 9 ? '9+' : activeFilterCount}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -354,24 +357,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   searchRow: {
-    // No negative margin here: Home places this layer HERO_SEARCH_OVERLAP above
-    // the band's bottom edge, so it straddles the blue/white boundary.
-    paddingBottom: HERO_SEARCH_BOTTOM_GAP,
-    paddingHorizontal: HERO_SIDE_PADDING,
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: 48,
   },
   searchBar: {
     alignItems: 'center',
-    backgroundColor: color.white,
-    borderRadius: 24,
-    elevation: 3,
+    flex: 1,
     flexDirection: 'row',
     gap: 10,
     minHeight: HERO_SEARCH_HEIGHT,
-    paddingHorizontal: 16,
-    shadowColor: '#0B2545',
-    shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    minWidth: 0,
+    paddingHorizontal: 8,
   },
   searchPlaceholder: {
     color: color.textSubtle,
@@ -387,10 +384,10 @@ const styles = StyleSheet.create({
   },
   searchTune: {
     alignItems: 'center',
-    height: 28,
+    height: 44,
     justifyContent: 'center',
     position: 'relative',
-    width: 28,
+    width: 44,
   },
   tuneBadge: {
     alignItems: 'center',

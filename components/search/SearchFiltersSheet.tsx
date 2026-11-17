@@ -12,22 +12,11 @@ import type {
   MvpServiceOption,
   SearchWorkType,
 } from '@/constants/service-taxonomy';
-import type { RateType, ExperienceLevel } from '@/types/marketplace.types';
+import type { SearchDiscoveryFilters } from '@/types/discovery.types';
 import { color, radius, space, typography } from '@/constants/theme';
 
-export type SearchDiscoveryFilters = {
-  workType: SearchWorkType;
-  serviceGroup: 'all' | DiscoveryGroupKey;
-  service: 'all' | MvpServiceOption;
-  locationScope: 'same_barangay' | 'nearby';
-  rateType?: RateType | 'any';
-  rateMin: number | null;
-  rateMax: number | null;
-  experienceLevel: 'all' | ExperienceLevel;
-  certification: 'any' | 'required_or_available';
-  verifiedOnly: boolean;
-  sort: 'relevant' | 'newest' | 'nearby';
-};
+export type { SearchDiscoveryFilters } from '@/types/discovery.types';
+
 
 type FilterOption<T extends string> = {
   key: T;
@@ -129,6 +118,14 @@ export function SearchFiltersSheet({
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
+        {filters.category !== 'all' ? (
+          <FilterSection title="Category">
+            <Text>{filters.category}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear category filter" onPress={() => onChange('category', 'all')} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: color.verificationBlue }}>Clear category filter</Text>
+            </Pressable>
+          </FilterSection>
+        ) : null}
         <FilterSection title="Work type">
           <View style={styles.chipRow}>
             {WORK_TYPE_OPTIONS.map((option) => (

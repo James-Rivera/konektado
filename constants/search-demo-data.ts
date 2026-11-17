@@ -1,6 +1,6 @@
 export const searchModeLabels = {
-  jobs: 'Find Jobs',
-  workers: 'Find Services',
+  jobs: 'Find work',
+  workers: 'Hire help',
 } as const;
 
 export type SearchMode = keyof typeof searchModeLabels;
