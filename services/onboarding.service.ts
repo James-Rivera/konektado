@@ -140,21 +140,26 @@ export async function loadOnboardingDraft(): Promise<
   let preferences = preferencesResult;
 
   if (isMissingOfferedDeliveryModeColumn(preferencesError)) {
-    const { data: legacyPreferences } = await supabase
+    const { data: legacyPreferences, error: legacyError } = await supabase
       .from("user_preferences")
       .select(LEGACY_PREFERENCES_SELECT)
       .eq("user_id", user.id)
       .maybeSingle<UserPreferencesRow>();
 
+    if (legacyError) return { data: null, error: legacyError.message };
     preferences = legacyPreferences ? { ...legacyPreferences, offered_delivery_mode: null } : null;
+  } else if (preferencesError) {
+    return { data: null, error: preferencesError.message };
   }
 
-  const { data: userRoles } = await supabase
+  const { data: userRoles, error: rolesError } = await supabase
     .from("user_roles")
     .select("role, is_active")
     .eq("user_id", user.id)
     .order("is_active", { ascending: false })
     .limit(1);
+
+  if (rolesError) return { data: null, error: rolesError.message };
 
   const activeRole =
     normalizeIntent(profile?.active_role) ??
@@ -166,12 +171,13 @@ export async function loadOnboardingDraft(): Promise<
   let providerServiceType = "";
 
   if (intent === "provider") {
-    const { data: providerProfile } = await supabase
+    const { data: providerProfile, error: providerError } = await supabase
       .from("provider_profiles")
       .select("service_type, has_certifications, certification_details")
       .eq("user_id", user.id)
       .maybeSingle();
 
+    if (providerError && !preferences?.offered_services?.length) return { data: null, error: providerError.message };
     providerServiceType = providerProfile?.service_type ?? "";
   }
 

@@ -91,6 +91,8 @@ type ProviderProfileRecord = {
 
 type ProfileContextValue = {
   authenticated: boolean;
+  accountVersion: number;
+  dataReady: boolean;
   error: string | null;
   /** Latest verification request status; null when none was ever submitted. */
   latestVerificationStatus: VerificationStatus | null;
@@ -116,6 +118,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [accountVersion, setAccountVersion] = useState(0);
+  const [dataReady, setDataReady] = useState(false);
+  const accountRef = useRef<string | null>(null);
+  const generationRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const hasLoadedOnceRef = useRef(false);
@@ -123,6 +129,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const inFlightRef = useRef(false);
   const pendingLoadRef = useRef(false);
   const loadPromiseRef = useRef<Promise<void> | null>(null);
+  const loadInternalRef = useRef<((options?: LoadOptions) => Promise<void>) | null>(null);
   // True while the profile realtime channel is subscribed; the poll skips then.
   const realtimeSubscribedRef = useRef(false);
 
@@ -138,35 +145,50 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (showLoading || !hasLoadedOnceRef.current) {
         setLoading(true);
       }
-      setError(null);
 
+      let generation = generationRef.current;
       try {
         do {
           pendingLoadRef.current = false;
 
           // The local session, not `getUser()`: no Auth round trip before the
           // reads below can start (DEC-137). RLS still checks every query.
+          generation = generationRef.current;
           const { error: sessionError, user: sessionUser } = await getSessionUser();
 
-          if (!activeRef.current) return;
+          if (!activeRef.current || generation !== generationRef.current) continue;
 
-          if (sessionError || !sessionUser) {
+          if (sessionError) {
+            setError(sessionError);
+            return;
+          }
+          if (!sessionUser) {
+            accountRef.current = null;
+            setDataReady(false);
             setAuthenticated(false);
             setUser(null);
             setProfile(null);
             setPreferences(null);
             setLatestVerificationStatus(null);
-            setError(sessionError);
+            setError(null);
             return;
           }
 
+          if (accountRef.current !== sessionUser.id) {
+            accountRef.current = sessionUser.id;
+            setAccountVersion((current) => current + 1);
+            setProfile(null);
+            setPreferences(null);
+            setLatestVerificationStatus(null);
+            setDataReady(false);
+          }
           setAuthenticated(true);
           setUser(sessionUser);
 
           // Independent reads, so they share one round trip instead of three.
           const [
             { data, error: profileError },
-            { data: providerData },
+            { data: providerData, error: providerError },
             preferencesResult,
             verificationResult,
           ] = await Promise.all([
@@ -186,12 +208,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             getLatestVerificationStatus(sessionUser.id),
           ]);
 
-          if (!activeRef.current) return;
+          if (!activeRef.current || generation !== generationRef.current) continue;
 
-          if (profileError) {
-            setProfile(null);
-            setPreferences(null);
-            setError(profileError.message);
+          if (profileError || preferencesResult.error || providerError) {
+            setError(profileError?.message ?? preferencesResult.error ?? providerError?.message ?? "Could not load profile");
             return;
           }
 
@@ -211,13 +231,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                 }
               : null,
           );
-          setPreferences(preferencesResult.error ? null : preferencesResult.data);
+          setPreferences(preferencesResult.data);
+          setDataReady(true);
+          setError(null);
           // Keep the last known status on a failed read rather than flashing a
           // pending resident back to "unverified".
           if (!verificationResult.error) setLatestVerificationStatus(verificationResult.data);
         } while (pendingLoadRef.current && activeRef.current);
       } catch (loadError) {
-        if (!activeRef.current) return;
+        if (!activeRef.current || generation !== generationRef.current) return;
         setError(loadError instanceof Error ? loadError.message : 'Could not load profile');
       } finally {
         if (activeRef.current) {
@@ -227,12 +249,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         }
         inFlightRef.current = false;
         loadPromiseRef.current = null;
+        if (pendingLoadRef.current && activeRef.current) {
+          pendingLoadRef.current = false;
+          void loadInternalRef.current?.();
+        }
       }
     })();
 
     loadPromiseRef.current = loadPromise;
     await loadPromise;
   }, []);
+
+  useEffect(() => {
+    loadInternalRef.current = loadInternal;
+  }, [loadInternal]);
 
   const refresh = useCallback(async () => {
     await loadInternal();
@@ -242,11 +272,29 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     activeRef.current = true;
     void loadInternal({ showLoading: true });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       // The mount load above already reads the initial session, so reloading
       // on INITIAL_SESSION ran the whole startup chain a second time. A token
       // refresh changes no profile data, so it does not reload either.
       if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+
+      if (event === 'SIGNED_OUT' || (session?.user?.id && session.user.id !== accountRef.current)) {
+        generationRef.current += 1;
+        setAccountVersion((current) => current + 1);
+        accountRef.current = session?.user?.id ?? null;
+        setProfile(null);
+        setPreferences(null);
+        setLatestVerificationStatus(null);
+        setDataReady(false);
+        setUser(session?.user ?? null);
+        setAuthenticated(Boolean(session?.user));
+      }
+
+      if ((event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') && session?.user) {
+        // Recovery flags must take effect even when the subsequent read is offline.
+        generationRef.current += 1;
+        setUser(session.user);
+      }
 
       const shouldShowLoading =
         event === 'SIGNED_IN' ||
@@ -392,6 +440,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       authenticated,
+      accountVersion,
+      dataReady,
       error,
       latestVerificationStatus,
       loading,
@@ -401,7 +451,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       user,
       version,
     }),
-    [authenticated, error, latestVerificationStatus, loading, preferences, profile, refresh, user, version],
+    [authenticated, accountVersion, dataReady, error, latestVerificationStatus, loading, preferences, profile, refresh, user, version],
   );
 
   // `value` carries `refresh`, a useCallback that reads activeRef/inFlightRef/

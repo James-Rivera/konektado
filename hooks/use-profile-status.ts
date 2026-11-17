@@ -203,6 +203,8 @@ function activeRoleFromIntent(role: string | null | undefined): 'client' | 'prov
 
 export type ProfileStatus = {
   loading: boolean;
+  unavailable: boolean;
+  accountKey: string | null;
   authenticated: boolean;
   needsRole: boolean;
   needsProfile: boolean;
@@ -221,6 +223,9 @@ export type ProfileStatus = {
 export function useProfileStatus(): ProfileStatus {
   const {
     authenticated,
+    accountVersion,
+    dataReady,
+    error: profileError,
     loading: profileLoading,
     preferences,
     profile,
@@ -229,6 +234,8 @@ export function useProfileStatus(): ProfileStatus {
   } = useProfile();
   const [state, setState] = useState<ProfileStatus>({
     loading: true,
+    unavailable: false,
+    accountKey: null,
     authenticated: false,
     needsRole: false,
     needsProfile: false,
@@ -238,6 +245,7 @@ export function useProfileStatus(): ProfileStatus {
     isAdmin: false,
     profile: null,
   });
+  const resolvedUserRef = useRef<string | null>(null);
   const hasLoadedStatusRef = useRef(false);
   const loadRequestRef = useRef(0);
   const mountedRef = useRef(false);
@@ -259,13 +267,33 @@ export function useProfileStatus(): ProfileStatus {
 
     if (!authenticated || !user) {
       hasLoadedStatusRef.current = true;
+      resolvedUserRef.current = null;
       setStatusState({
         loading: false,
+        unavailable: Boolean(profileError),
+        accountKey: null,
         authenticated: false,
         needsRole: false,
         needsProfile: false,
         needsSignupPassword: false,
         needsPasswordRecovery: false,
+        needsCertificationReview: false,
+        isAdmin: false,
+        profile: null,
+      });
+      return;
+    }
+
+    if (!dataReady) {
+      setStatusState({
+        loading: false,
+        unavailable: true,
+        accountKey: `${user.id}:${accountVersion}`,
+        authenticated: true,
+        needsRole: false,
+        needsProfile: false,
+        needsSignupPassword: user.user_metadata?.signup_password_required === true,
+        needsPasswordRecovery: user.user_metadata?.password_recovery_pending === true,
         needsCertificationReview: false,
         isAdmin: false,
         profile: null,
@@ -285,7 +313,7 @@ export function useProfileStatus(): ProfileStatus {
     let userRolesRole: string | null = null;
 
     try {
-      const { data: userRoles } = await supabase
+      const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('role, is_active')
         .eq('user_id', user.id)
@@ -294,13 +322,34 @@ export function useProfileStatus(): ProfileStatus {
 
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
 
+      if (rolesError) throw rolesError;
       userRolesRole = userRoles && userRoles.length ? userRoles[0].role : null;
     } catch (error) {
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
-      warnProfileStatusRealtime(
-        'Could not read user_roles; falling back to preferences, metadata, and the profile row.',
-        error,
-      );
+      warnProfileStatusRealtime('Could not read user_roles.', error);
+      if (resolvedUserRef.current !== `${user.id}:${accountVersion}`) {
+        setStatusState({
+        loading: false,
+        unavailable: true,
+        accountKey: `${user.id}:${accountVersion}`,
+        authenticated: true,
+        needsRole: false,
+        needsProfile: false,
+        needsSignupPassword: user.user_metadata?.signup_password_required === true,
+        needsPasswordRecovery: user.user_metadata?.password_recovery_pending === true,
+        needsCertificationReview: false,
+        isAdmin: false,
+        profile: null,
+      });
+      } else {
+        setStatusState((current) => ({
+          ...current,
+          loading: false,
+          needsSignupPassword: user.user_metadata?.signup_password_required === true,
+          needsPasswordRecovery: user.user_metadata?.password_recovery_pending === true,
+        }));
+      }
+      return;
     }
 
     const metadataRole = user.user_metadata?.role as string | null | undefined;
@@ -329,8 +378,11 @@ export function useProfileStatus(): ProfileStatus {
       !isAdmin && (!hasName || !hasCompletedTasteSetup || !candidateRole);
 
     hasLoadedStatusRef.current = true;
+    resolvedUserRef.current = `${user.id}:${accountVersion}`;
     setStatusState({
       loading: false,
+      unavailable: false,
+      accountKey: `${user.id}:${accountVersion}`,
       authenticated: true,
       needsRole,
       needsProfile,
@@ -340,7 +392,7 @@ export function useProfileStatus(): ProfileStatus {
       isAdmin,
       profile: profile ?? null,
     });
-  }, [authenticated, preferences, profile, profileLoading, setStatusState, user]);
+  }, [authenticated, accountVersion, dataReady, preferences, profile, profileError, profileLoading, setStatusState, user]);
 
   const loadStatusRef = useRef(loadStatus);
 
@@ -369,5 +421,20 @@ export function useProfileStatus(): ProfileStatus {
     });
   }, [authenticated, user?.id]);
 
-  return state;
+  if (!authenticated) {
+    return {
+      ...state, loading: profileLoading, unavailable: Boolean(profileError), authenticated: false,
+      needsRole: false, needsProfile: false, needsSignupPassword: false,
+      needsPasswordRecovery: false, isAdmin: false, profile: null,
+    };
+  }
+  if (authenticated && user && state.accountKey !== `${user.id}:${accountVersion}`) {
+    return {
+      ...state, loading: true, unavailable: false, authenticated: true,
+      needsSignupPassword: user.user_metadata?.signup_password_required === true,
+      needsPasswordRecovery: user.user_metadata?.password_recovery_pending === true,
+      needsRole: false, needsProfile: false, isAdmin: false, profile: null,
+    };
+  }
+  return user && authenticated ? { ...state, needsSignupPassword: user.user_metadata?.signup_password_required === true, needsPasswordRecovery: user.user_metadata?.password_recovery_pending === true } : state;
 }

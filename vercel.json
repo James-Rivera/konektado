@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "offline-startup-recovery": false
+    }
+  },
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
   "devCommand": "npm run web",

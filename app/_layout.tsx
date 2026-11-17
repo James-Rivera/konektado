@@ -12,10 +12,11 @@ import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import "react-native-reanimated";
 
+import { RecoveryScreen } from "@/components/recovery-screen";
 import { AppSplashScreen } from "@/components/app-splash-screen";
 import { FeedbackProvider } from "@/components/FeedbackProvider";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { ProfileProvider } from "@/hooks/use-profile";
+import { ProfileProvider, useProfile } from "@/hooks/use-profile";
 import { useProfileStatus } from "@/hooks/use-profile-status";
 
 export const unstable_settings = {
@@ -68,6 +69,8 @@ function RootNavigator() {
   const segments = useSegments();
   const {
     loading,
+    unavailable,
+    accountKey,
     authenticated,
     needsRole,
     needsProfile,
@@ -75,6 +78,7 @@ function RootNavigator() {
     needsPasswordRecovery,
     isAdmin,
   } = useProfileStatus();
+  const { accountVersion, refresh, user } = useProfile();
   const [hasResolvedInitialStatus, setHasResolvedInitialStatus] = useState(false);
 
   // Latches once the first status load finishes. Set while rendering, so the
@@ -85,7 +89,7 @@ function RootNavigator() {
 
   useEffect(() => {
     if (!rootNavigationState?.key) return;
-    if (loading) return;
+    if (loading || (unavailable && !needsPasswordRecovery && !needsSignupPassword)) return;
 
     const routeSegments = [...segments] as string[];
     const activeGroup = routeSegments[0];
@@ -176,6 +180,7 @@ function RootNavigator() {
     }
   }, [
     authenticated,
+    unavailable,
     isAdmin,
     loading,
     needsPasswordRecovery,
@@ -187,8 +192,12 @@ function RootNavigator() {
     segments,
   ]);
 
-  if (loading && !hasResolvedInitialStatus) {
+  if (loading && (!hasResolvedInitialStatus || unavailable || (accountKey !== (user ? `${user.id}:${accountVersion}` : null)))) {
     return <AppSplashScreen />;
+  }
+
+  if (unavailable && !needsPasswordRecovery && !needsSignupPassword) {
+    return <RecoveryScreen retry={refresh} />;
   }
 
   if (segments[0] === "admin" && !isAdmin) {

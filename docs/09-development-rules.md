@@ -198,6 +198,8 @@ Manual test examples:
 
 ## Git and Documentation Rules
 
+- Use task-based branch names without tool, provider, or model prefixes.
+- Keep commit messages, PR titles and descriptions, source comments, and project documentation focused on the change; omit tool/model branding and generated-by attribution unless explicitly requested.
 - Update `/docs` when product scope, data model, permissions, or architecture changes.
 - Record major decisions in `docs/11-decision-log.md`.
 - Keep README short and link to `/docs` once documentation is stable.
