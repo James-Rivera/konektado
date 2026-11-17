@@ -1,6 +1,7 @@
 import type { SearchMode } from '@/constants/search-demo-data';
-import { doesServiceMatchWorkType, getCategoryForMvpService, getServicesForDiscoveryGroupAndWorkType } from '@/constants/service-taxonomy';
+import { doesServiceMatchWorkType, getCategoryForMvpService, getDiscoveryGroupForService, getServicesForDiscoveryGroupAndWorkType, isMvpServiceCategory } from '@/constants/service-taxonomy';
 import { DEFAULT_HOME_FEED_FILTERS, type HomeFeedFilters } from '@/services/home-feed.service';
+import type { JobSummary } from '@/types/marketplace.types';
 import type { SearchDiscoveryFilters } from '@/types/discovery.types';
 
 export type DiscoverySession = {
@@ -47,6 +48,19 @@ export function getDiscoveryServices(filters: SearchDiscoveryFilters) {
     ? getServicesForDiscoveryGroupAndWorkType(filters.serviceGroup, filters.workType)
     : doesServiceMatchWorkType(filters.service, filters.workType) ? [filters.service] : [];
   return services.filter(service => filters.category === 'all' || getCategoryForMvpService(service) === filters.category);
+}
+
+/** Apply the same broad category interpretation as the Home feed. */
+export function matchesJobDiscoveryFilters(job: JobSummary, filters: SearchDiscoveryFilters) {
+  const categoryOf = (value: string | null | undefined) =>
+    isMvpServiceCategory(value) ? value : getCategoryForMvpService(value);
+  if (filters.category !== 'all' &&
+    categoryOf(job.category) !== filters.category &&
+    categoryOf(job.serviceNeeded) !== filters.category) return false;
+  if (!doesServiceMatchWorkType(job.serviceNeeded ?? job.category, filters.workType)) return false;
+  if (filters.serviceGroup !== 'all' &&
+    getDiscoveryGroupForService(job.serviceNeeded) !== filters.serviceGroup) return false;
+  return true;
 }
 
 function resolve<T>(update: Update<T>, current: T): T {

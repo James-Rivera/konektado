@@ -17,6 +17,8 @@ The development-mode nested-button warning also affected existing feed cards. Th
 
 Existing marketplace services, verification gates, ranking and database permissions are retained. No new queries, migrations, dependencies, deployment or remote configuration are required by this UI-state change.
 
+Pre-PR category consistency correction: an inherited broad category checks both the stored job category and its primary service, including supported legacy rows with no primary service. Category and work-type predicates run before the search result limit. Work type prefers an existing primary service and falls back to the stored category only when that service is null, matching Home. Explicit service selections retain their narrower filtering. The correction changes the existing job-search query; it adds no migration or new backend endpoint.
+
 ## Validation
 
 Run application lint/TypeScript and the existing test suite. The discovery-session tests cover bidirectional common filters, preserved query/advanced filters through mode changes, complete broad-category mapping, contradictory selections and session reset.
@@ -31,10 +33,12 @@ After the visual clarification, the user-authorized Expo development server was 
 
 Integrated checkpoint validation (2026-11-17): the combined Home/Search changes, merged offline recovery, and separate tooling cleanup passed `npm run lint`, CI-equivalent uncached ESLint, application TypeScript, all 262 application tests, and all 16 release-guard tests. Uncached lint retains one existing unused-import warning in `services/home-feed.service.ts`. Native Android acceptance remains pending. No push, release build, database change, or deployment was performed for this checkpoint.
 
+Final pre-PR validation (2026-11-17): independent checks passed uncached ESLint and application TypeScript, all 266 application tests, and all 16 release guards. Four added cases exercise the actual job-search service and client filter, covering legacy category handoff, unrelated rows before the limit, explicit service refinement, and mixed work types with more than 80 incompatible rows ahead of eligible results. Source review found no remaining blocking findings. These checks use mocked external I/O; native-device and live PostgREST acceptance remain separate checks.
+
 Original source baseline: `a226f780f1d4d3e1ceac7ae4a8bf55939a042245`, on `link-home-search`. The integrated checkpoint is on `home-search-and-tooling`, based on merged main `6248296`. Home/Search and tooling cleanup are preserved as separate commits.
 
 Automatic Vercel deployment is disabled for the `home-search-and-tooling` review branch in `vercel.json`. GitHub quality checks can run before release approval; opening a PR does not approve a merge, release build, database change, or deployment.
 
-To undo the committed Home/Search checkpoint, prepare a normal reviewed Git revert of only its dedicated feature commit. Retain the separate tooling-cleanup commit and the merged offline-recovery fixes. Review conflicts and rerun validation before any approved push or deployment. This change has no database migration to reverse.
+To undo the committed Home/Search work, prepare normal reviewed Git reverts of the discovery query-correction commit followed by the dedicated Home/Search feature commit. Retain the separate tooling-cleanup commit and merged offline-recovery fixes. Review conflicts and rerun validation before any approved push or deployment. This change has no database migration to reverse.
 
 The original development checkout and its ignored `.test-build` snapshot remain untouched. Its guarded local undo helper applies only to that original uncommitted copy: it checks feature-file hashes, refuses later edits, and retains added files rather than deleting them. It must not be used to undo this integrated checkpoint or a deployed release.

@@ -39,7 +39,7 @@ import {
 import { color, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useDiscoverySession } from '@/hooks/use-discovery-session';
-import { buildDefaultDiscoveryFilters, getDiscoveryServices } from '@/utils/discovery-session';
+import { matchesJobDiscoveryFilters, buildDefaultDiscoveryFilters, getDiscoveryServices } from '@/utils/discovery-session';
 import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { useSafeTopInset } from '@/hooks/use-safe-top-inset';
@@ -253,8 +253,13 @@ export default function SearchScreen() {
             text: normalizedQuery,
             serviceNeeded:
               appliedFilters.service !== 'all' ? appliedFilters.service : undefined,
+            discoveryCategory:
+              appliedFilters.category !== 'all' && appliedFilters.serviceGroup === 'all' && appliedFilters.service === 'all'
+                ? appliedFilters.category
+                : undefined,
+            discoveryWorkType: appliedFilters.workType,
             serviceNeededIn:
-              appliedFilters.service === 'all' && structuredServices.length !== getAllServiceCount()
+              appliedFilters.category === 'all' && appliedFilters.service === 'all' && structuredServices.length !== getAllServiceCount()
                 ? structuredServices
                 : undefined,
             barangay: barangayFilter,
@@ -1085,9 +1090,7 @@ function normalizeSearchText(value: string) {
 
 function filterJobsForClient(items: JobSummary[], context: RankingContext) {
   return items.filter((job) => {
-    if (context.filters.category !== 'all' && getCategoryForMvpService(job.serviceNeeded) !== context.filters.category) return false;
-    if (!matchesWorkType(job.serviceNeeded, context.filters.workType)) return false;
-    if (!matchesGroup(job.serviceNeeded, context.filters.serviceGroup)) return false;
+    if (!matchesJobDiscoveryFilters(job, context.filters)) return false;
     if (
       context.filters.locationScope === 'same_barangay' &&
       context.userBarangay &&

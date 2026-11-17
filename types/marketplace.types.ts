@@ -1,3 +1,4 @@
+import type { MvpServiceCategory, SearchWorkType } from '@/constants/service-taxonomy';
 export type JobStatus =
   | 'open'
   | 'reviewing'
@@ -229,6 +230,8 @@ export type JobSearchFilters = {
   category?: string;
   serviceNeeded?: string;
   serviceNeededIn?: string[];
+  discoveryCategory?: MvpServiceCategory;
+  discoveryWorkType?: SearchWorkType;
   barangay?: string;
   budgetMin?: number | null;
   budgetMax?: number | null;
