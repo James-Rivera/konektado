@@ -2,9 +2,11 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 
 import { BottomNav } from '@/components/BottomNav';
+import { DiscoverySessionProvider } from '@/hooks/use-discovery-session';
 
 export default function TabLayout() {
   return (
+    <DiscoverySessionProvider>
     <Tabs
       tabBar={(props) => <BottomNav {...props} />}
       screenOptions={{
@@ -49,5 +51,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </DiscoverySessionProvider>
   );
 }

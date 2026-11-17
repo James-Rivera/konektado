@@ -127,14 +127,13 @@ export function HomeFeedCard({
   }
 
   return (
-    <Pressable
-      accessibilityHint={primaryActionLabel}
-      accessibilityLabel={`${name} ${label}. ${title}`}
-      accessibilityRole="button"
-      onPress={onPress ?? onPrimaryAction}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <View style={styles.card}>
       <View style={styles.headerRow}>
-        <View style={styles.identityRow}>
+        <Pressable
+          accessibilityLabel={`View ${name}'s ${kind === 'job' ? 'job' : 'service'}`}
+          accessibilityRole="button"
+          onPress={onPress ?? onPrimaryAction}
+          style={({ pressed }) => [styles.identityRow, pressed && styles.pressed]}>
           <Avatar imageUrl={avatarUrl} isOnline={isOnline} name={name} />
           <View style={styles.identityCopy}>
             <Text numberOfLines={1} style={styles.name}>
@@ -150,7 +149,7 @@ export function HomeFeedCard({
               </Text>
             </View>
           </View>
-        </View>
+        </Pressable>
         {onSave ? (
           <IconButton
             disabled={savePending}
@@ -169,6 +168,12 @@ export function HomeFeedCard({
         ) : null}
       </View>
 
+      <Pressable
+        accessibilityHint={primaryActionLabel}
+        accessibilityLabel={`${name} ${label}. ${title}`}
+        accessibilityRole="button"
+        onPress={onPress ?? onPrimaryAction}
+        style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}>
       <View style={styles.bodyBlock}>
         {detailLine ? (
           <Text numberOfLines={1} style={styles.detailLine}>
@@ -216,7 +221,8 @@ export function HomeFeedCard({
           <Meta key={`${item.icon}-${item.text}`} icon={item.icon} text={item.text} />
         ))}
       </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 }
 
@@ -348,6 +354,9 @@ const styles = StyleSheet.create({
     backgroundColor: color.background,
     gap: 18,
     padding: 16,
+  },
+  cardBody: {
+    gap: 18,
   },
   pressed: {
     opacity: 0.78,

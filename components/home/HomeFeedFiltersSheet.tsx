@@ -36,9 +36,8 @@ type HomeFeedFiltersSheetProps = {
 };
 
 const FEED_TYPE_OPTIONS: FilterOption<HomeFeedType>[] = [
-  { key: 'all', label: 'All' },
-  { key: 'jobs', label: 'Jobs' },
-  { key: 'services', label: 'Services' },
+  { key: 'jobs', label: 'Find work' },
+  { key: 'services', label: 'Hire help' },
 ];
 
 const WORK_TYPE_OPTIONS: FilterOption<SearchWorkType>[] = [
@@ -182,7 +181,7 @@ export function HomeFeedFiltersSheet({
           accessibilityRole="button"
           onPress={onAdvancedSearch}
           style={({ pressed }) => [styles.advancedSearchButton, pressed && styles.pressed]}>
-          <Text style={styles.advancedSearchText}>Advanced search</Text>
+            <Text style={styles.advancedSearchText}>Apply & refine in Search</Text>
           <MaterialIcons color={color.primary} name="arrow-forward" size={18} />
         </Pressable>
       </ScrollView>

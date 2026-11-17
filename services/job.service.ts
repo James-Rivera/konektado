@@ -2,6 +2,9 @@ import { scheduleToColumns, scheduleFromColumns, formatJobSchedule } from '@/ser
 import { validateJobPayload } from '@/services/listing-validation';
 import {
   getStoredMvpServiceOption,
+  getServicesForMvpCategory,
+  getServicesForDiscoveryGroupAndWorkType,
+  isMvpServiceCategory,
   getServiceSearchValues,
   getServiceSearchValuesForOptions,
 } from '@/constants/service-taxonomy';
@@ -284,7 +287,36 @@ export async function searchJobs(filters: JobSearchFilters = {}): Promise<Servic
     query = query.ilike('category', `%${filters.category}%`);
   }
 
-  if (filters.serviceNeeded) {
+  if (
+    filters.discoveryCategory &&
+    isMvpServiceCategory(filters.discoveryCategory) &&
+    !filters.serviceNeeded &&
+    !filters.serviceNeededIn?.length
+  ) {
+    // Keep category and work type as separate grouped predicates before the
+    // limit. Home uses category OR service for category, but prefers a
+    // present service over category for the work type.
+    const workType = filters.discoveryWorkType ?? 'either';
+    const categoryServices = getServicesForMvpCategory(filters.discoveryCategory);
+    const quoteValues = (values: string[]) => values
+      .map((value) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+      .join(',');
+    const categoryValues = quoteValues([
+      filters.discoveryCategory,
+      ...getServiceSearchValuesForOptions(categoryServices),
+    ]);
+    query = query.or(`category.in.(${categoryValues}),service_needed.in.(${categoryValues})`);
+
+    if (workType !== 'either') {
+      // The effective service can belong to another category when the stored
+      // category matches. Work type is independent of the category predicate.
+      const eligible = getServiceSearchValuesForOptions(
+        getServicesForDiscoveryGroupAndWorkType('all', workType),
+      );
+      const values = quoteValues(eligible);
+      query = query.or(`service_needed.in.(${values}),and(service_needed.is.null,category.in.(${values}))`);
+    }
+  } else if (filters.serviceNeeded) {
     query = query.in('service_needed', getServiceSearchValues(filters.serviceNeeded));
   } else if (filters.serviceNeededIn?.length) {
     query = query.in('service_needed', getServiceSearchValuesForOptions(filters.serviceNeededIn));

@@ -1,6 +1,6 @@
 # AI Instructions for Konektado
 
-Use this instruction file when asking ChatGPT, Claude, Copilot, or another AI tool to help with Konektado.
+Use this instruction file when requesting development assistance for Konektado.
 
 ```text
 You are helping build Konektado, a barangay-verified service and micro-gig marketplace for Barangay San Pedro residents.
