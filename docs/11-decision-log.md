@@ -182,3 +182,7 @@ When a major decision changes scope, architecture, data model, security, or deli
 | ID      | Date       | Decision            | Status                     | Rationale                   | Consequences                       |
 | ------- | ---------- | ------------------- | -------------------------- | --------------------------- | ---------------------------------- |
 | DEC-XXX | YYYY-MM-DD | Decision statement. | Proposed/Accepted/Replaced | Why this decision was made. | What this changes for the project. |
+
+## Offline startup recovery (2026-11-17)
+
+Unavailable required account reads produce a retryable recovery state rather than an onboarding or sign-in inference. Same-account in-memory data remains available during transient refresh failures; account changes invalidate it. See [Offline startup recovery](21-offline-startup-recovery.md).

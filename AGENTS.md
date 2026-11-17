@@ -115,6 +115,8 @@ The screen should remain usable on all three sizes, including with long text, bo
 
 ## Documentation Rules
 
+- Use task-based branch names without tool, provider, or model prefixes.
+- Keep commit messages, PR titles and descriptions, source comments, and project documentation free of tool or model branding and generated-by attribution unless explicitly requested by the user.
 - Update `/docs` whenever product scope, auth/onboarding behavior, permissions, data model, architecture, or major UI direction changes.
 - Record major decisions in `docs/11-decision-log.md`.
 - If code and docs disagree, stop and update the docs or ask for clarification before building more behavior.

@@ -1,11 +1,14 @@
 import { Redirect, Stack, useSegments } from 'expo-router';
 
+import { RecoveryScreen } from '@/components/recovery-screen';
+import { useProfile } from '@/hooks/use-profile';
 import { AppSplashScreen } from '@/components/app-splash-screen';
 import { useProfileStatus } from '@/hooks/use-profile-status';
 import { OnboardingProvider } from './onboarding-context';
 
 export default function OnboardingLayout() {
   const status = useProfileStatus();
+  const { refresh } = useProfile();
   const segments = useSegments();
   const routeSegments = [...segments] as string[];
   // `verify` and `complete` run after the profile is saved (needsProfile is
@@ -17,6 +20,8 @@ export default function OnboardingLayout() {
   if (status.loading) {
     return <AppSplashScreen />;
   }
+
+  if (status.unavailable) return <RecoveryScreen retry={refresh} />;
 
   if (!status.authenticated) {
     return <Redirect href="/(auth)" />;

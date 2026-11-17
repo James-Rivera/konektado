@@ -28,7 +28,7 @@ The correction was verified against the restored snapshot and a clean replay of 
 
 ## Preserved baseline
 
-The user approved the local 70-file source/test/docs/migration checkpoint on 2026-11-15. Commit `e3ee4794832a7b3f2921c94a19d15b852dacf887`, on `codex/checkpoint-posting-2026-11-15`, preserves that exact reviewed snapshot. Release-tooling changes are separate from this commit.
+The user approved the local 70-file source/test/docs/migration checkpoint on 2026-11-15. Commit `e3ee4794832a7b3f2921c94a19d15b852dacf887` preserves that exact reviewed snapshot. Release-tooling changes are separate from this commit.
 
 All 52 original screenshots remain in `docs/audit-assets/`, explicitly ignored and not tracked. The primary verified ZIP and SHA-256 manifest are outside the repository under `%USERPROFILE%/.konektado-private/checkpoints/posting-profile-20261115-e3ee479/`, with inherited access removed and access limited to the owner and SYSTEM. An ignored working copy also remains in `.test-build/private-evidence/`; workspace copies and original screenshots are not a substitute for that protected backup. This is a local backup, not an off-device backup or encrypted archive. Do not upload it or commit raw evidence without a privacy review. Retained PostgreSQL test data elsewhere in `.test-build` is not disposable cache.
 

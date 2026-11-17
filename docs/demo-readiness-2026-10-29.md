@@ -136,3 +136,5 @@ two-party realtime messaging, or admin review end to end. The emulator uses a
 temporary read-only/no-snapshot session; its connectivity is restored and it is
 shut down after testing. Existing app changes from the APK task remain uncommitted
 and were preserved.
+
+Source correction work is described in [Offline startup recovery](21-offline-startup-recovery.md); this audit remains a historical record of the tested APK.
