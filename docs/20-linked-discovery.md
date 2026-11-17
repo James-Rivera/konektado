@@ -33,6 +33,8 @@ Integrated checkpoint validation (2026-11-17): the combined Home/Search changes,
 
 Original source baseline: `a226f780f1d4d3e1ceac7ae4a8bf55939a042245`, on `link-home-search`. The integrated checkpoint is on `home-search-and-tooling`, based on merged main `6248296`. Home/Search and tooling cleanup are preserved as separate commits.
 
+Automatic Vercel deployment is disabled for the `home-search-and-tooling` review branch in `vercel.json`. GitHub quality checks can run before release approval; opening a PR does not approve a merge, release build, database change, or deployment.
+
 To undo the committed Home/Search checkpoint, prepare a normal reviewed Git revert of only its dedicated feature commit. Retain the separate tooling-cleanup commit and the merged offline-recovery fixes. Review conflicts and rerun validation before any approved push or deployment. This change has no database migration to reverse.
 
 The original development checkout and its ignored `.test-build` snapshot remain untouched. Its guarded local undo helper applies only to that original uncommitted copy: it checks feature-file hashes, refuses later edits, and retains added files rather than deleting them. It must not be used to undo this integrated checkpoint or a deployed release.
