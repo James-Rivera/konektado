@@ -129,6 +129,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const inFlightRef = useRef(false);
   const pendingLoadRef = useRef(false);
   const loadPromiseRef = useRef<Promise<void> | null>(null);
+  const loadInternalRef = useRef<((options?: LoadOptions) => Promise<void>) | null>(null);
   // True while the profile realtime channel is subscribed; the poll skips then.
   const realtimeSubscribedRef = useRef(false);
 
@@ -250,7 +251,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         loadPromiseRef.current = null;
         if (pendingLoadRef.current && activeRef.current) {
           pendingLoadRef.current = false;
-          void loadInternal();
+          void loadInternalRef.current?.();
         }
       }
     })();
@@ -258,6 +259,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     loadPromiseRef.current = loadPromise;
     await loadPromise;
   }, []);
+
+  useEffect(() => {
+    loadInternalRef.current = loadInternal;
+  }, [loadInternal]);
 
   const refresh = useCallback(async () => {
     await loadInternal();

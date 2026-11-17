@@ -12,8 +12,8 @@ export function runtimeHook<T>(id: string, mocks: Record<string, unknown>) {
   const contexts: Context[] = [];
   const contextValues = new Map<Context, unknown>();
   const providerContexts = new Map<unknown, Context>();
-  const instances = new Map<Function, { hooks: unknown[]; effects: Array<{ deps?: unknown[]; cleanup?: () => void }> }>();
-  let current: { hooks: unknown[]; effects: Array<{ deps?: unknown[]; cleanup?: () => void }>; index: number; effectIndex: number } | null = null;
+  const instances = new Map<Function, { hooks: unknown[]; effects: { deps?: unknown[]; cleanup?: () => void }[] }>();
+  let current: { hooks: unknown[]; effects: { deps?: unknown[]; cleanup?: () => void }[]; index: number; effectIndex: number } | null = null;
   let rerender = false;
   let output: unknown;
   const react = {
@@ -31,7 +31,7 @@ export function runtimeHook<T>(id: string, mocks: Record<string, unknown>) {
     useCallback<TValue extends Function>(fn: TValue, deps: unknown[]) { const slot = current!.index++; const prior = current!.hooks[slot] as { deps: unknown[]; value: TValue } | undefined; if (!prior || !same(prior.deps, deps)) current!.hooks[slot] = { deps, value: fn }; return (current!.hooks[slot] as any).value; },
     useEffect(effect: () => void | (() => void), deps?: unknown[]) { const i = current!.effectIndex++; const instance = current!; const old = instance.effects[i]; if (!old || !same(old.deps, deps)) pendingEffects.push(() => { old?.cleanup?.(); const cleanup = effect(); instance.effects[i] = { deps, cleanup: typeof cleanup === 'function' ? cleanup : undefined }; }); },
   };
-  const pendingEffects: Array<() => void> = [];
+  const pendingEffects: (() => void)[] = [];
   const load = (name: string): any => {
     if (name in mocks) return mocks[name];
     if (name === 'react') return react;

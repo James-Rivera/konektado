@@ -13,6 +13,7 @@ Onboarding drafts must not become editable when their required reads fail. Retry
 ## Local verification — 2026-11-17
 
 - `npm run lint`: passed.
+- CI-equivalent `npx --no-install eslint . --no-cache`: passed. An existing unused-import warning in `services/home-feed.service.ts` remains outside this change.
 - `npx --no-install tsc --noEmit`: passed.
 - `npm run test:service-classification`: 256 tests passed, including 15 new offline-recovery cases (11 hook orchestration cases and four draft-service cases).
 - `node --test tests/release-preflight.test.cjs`: 16 tests passed.
