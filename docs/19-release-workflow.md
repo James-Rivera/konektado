@@ -1,5 +1,9 @@
 # Checkpoint and approved releases
 
+## Security and onboarding review branches (2026-11-18)
+
+`home-feed-simplification`, `stabilize-marketplace-security` and `simplify-onboarding-services` disable Git-triggered Vercel deployment in `vercel.json`, matching the existing review-branch guards. A later approved push can run quality checks without automatically building/deploying the app. This does not disable normal `main` deployment; merging or pushing to the production branch still requires the coordinated deployment approval. The prepared database order and remaining checks are recorded in [security stabilization](22-security-stabilization.md).
+
 ## Approved main/demo release (2026-11-15)
 
 After staging provisioning was blocked by the free-project limit, the user approved a coordinated main/demo release: commit the remaining release tooling separately, make and verify private database and Storage backups, apply the two pending November migrations in order, then push to `main`, monitor the Git-triggered Vercel deployment, and smoke-test it. This approval does not authorize resetting data, seeding, deleting projects, changing plans, or submitting Android builds to a store. Staging provisioning remains pending, and the staging-only workflow guards remain in force.

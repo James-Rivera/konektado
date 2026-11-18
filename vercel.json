@@ -3,7 +3,10 @@
   "git": {
     "deploymentEnabled": {
       "offline-startup-recovery": false,
-      "home-search-and-tooling": false
+      "home-search-and-tooling": false,
+      "home-feed-simplification": false,
+      "stabilize-marketplace-security": false,
+      "simplify-onboarding-services": false
     }
   },
   "buildCommand": "npm run vercel-build",
