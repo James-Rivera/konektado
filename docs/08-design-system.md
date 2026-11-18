@@ -20,6 +20,7 @@ Historical visual references (subject to the current approved requirements):
 - The Konektado wordmark/header belongs on Home only. Other bottom tabs use clear screen-specific titles where they improve orientation.
 - Feed sections for jobs and services.
 - Home feed uses one unified card shell for mixed job and service posts.
+- Home's Explore Services grid leads directly into the Nearby results section. The promotional Featured carousel and pagination dots are excluded from the capstone layout (DEC-145).
 - Post dashboard for creating and managing job/service posts.
 - Messages screens for job/service coordination.
 - Profile with Work Profile and Hiring Profile tabs.

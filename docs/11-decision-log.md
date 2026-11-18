@@ -2,6 +2,10 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Home feed simplification (2026-11-17)
+
+DEC-145: Remove the promotional Featured carousel and its pagination dots from Home because the user considers them irrelevant to the capstone. Explore Services leads directly into Nearby results. This supersedes only the carousel portion of DEC-122; retain the blue hero, shared search/intent card, services grid, filtering, ranking, saved posts, and permission gates.
+
 ## Linked discovery (2026-11-16)
 
 DEC-144: The user approved keeping the dedicated Search screen and linking Home's search entry and Find work/Hire help control to it, with shared intent/query and compatible filters in both directions. Use consistent intent labels and mode-specific placeholders, keep an explicit selected intent, preserve applied selections across mode changes and Back, and clear the in-memory state when accounts change. Keep Search-specific refinements in Search and retain existing marketplace services/permissions. Implement on an isolated branch with a guarded local undo snapshot; commits, pushes and deployment are separate. See [linked discovery](20-linked-discovery.md).

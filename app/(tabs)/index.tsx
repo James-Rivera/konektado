@@ -22,7 +22,6 @@ import {
   HomeSectionLink,
   type HomeCategoryTile,
 } from '@/components/home/HomeDiscoveryUI';
-import { HomeFeaturedCarousel } from '@/components/home/HomeFeaturedCarousel';
 import { HomeFeedFiltersSheet } from '@/components/home/HomeFeedFiltersSheet';
 import { ServiceAreaSheet } from '@/components/ServiceAreaSheet';
 import { EmptyState } from '@/components/EmptyState';
@@ -729,8 +728,6 @@ export default function HomeScreen() {
 
         <HomeSectionLink onAction={() => openSearch()} title="Explore Services" />
         <HomeCategoryGrid onSelect={openCategory} tiles={categoryTiles} />
-
-        <HomeFeaturedCarousel />
 
         <HomeSectionLink
           onAction={() => openSearch()}
