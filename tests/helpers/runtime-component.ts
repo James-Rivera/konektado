@@ -6,7 +6,7 @@ import ts from 'typescript';
 export type TestElement = { type: any; props: any };
 
 /** Exercises real component handlers; native layout and platform I/O are replaced. */
-export function runtimeComponent(id: string, exportName: string, mocks: Record<string, unknown>) {
+export function runtimeComponent(id: string, exportName: string, mocks: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const cache = new Map<string, { exports: any }>();
   const slots: any[] = [];
   const effects: { deps?: unknown[]; cleanup?: () => void }[] = [];
@@ -58,7 +58,7 @@ export function runtimeComponent(id: string, exportName: string, mocks: Record<s
     const module = { exports: {} };
     cache.set(file, module);
     const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-    const run = vm.runInNewContext(`(function(require,module,exports){${code}\n})`, { console, Date, requestAnimationFrame: (fn: () => void) => fn(), setTimeout: () => 1, clearTimeout: () => undefined });
+    const run = vm.runInNewContext(`(function(require,module,exports){${code}\n})`, { console, Date, requestAnimationFrame: (fn: () => void) => fn(), setTimeout: () => 1, clearTimeout: () => undefined, __DEV__: false, ...globals });
     run((dependency: string) => load(dependency, file), module, module.exports);
     return module.exports;
   }

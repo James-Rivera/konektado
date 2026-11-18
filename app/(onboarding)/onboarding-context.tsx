@@ -26,7 +26,7 @@ export type OnboardingContextValue = {
   saveProfile: () => Promise<boolean>;
 };
 
-const OnboardingContext = createContext<OnboardingContextValue | undefined>(undefined);
+export const OnboardingContext = createContext<OnboardingContextValue | undefined>(undefined);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const router = useRouter();

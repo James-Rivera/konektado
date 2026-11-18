@@ -28,6 +28,10 @@ Static responsive checks rendered the actual screen and scaffold with React Nati
 
 No onboarding database migration is required. The separate [security stabilization](22-security-stabilization.md) migrations retain their own approval and deployment steps. The existing sequential multi-table onboarding save remains non-atomic; recovery from partial remote saves is separate work.
 
+## Local development preview
+
+The user requested an account-free preview at `/internal/onboarding-preview`. It is available only when `__DEV__` is true; production redirects to the app entry. The preview supplies an in-memory onboarding context, uses the real service-selection screen and picker, switches Find work/Hire help, and offers a local review. Its save function returns false and it never calls the real onboarding loader/save or verification. It does not change a signed-in account, create an account or persist preferences. Reset clears the preview draft. The real auth/onboarding route guards remain unchanged. Removing this preview does not undo Option B.
+
 ## Undo
 
 Keep onboarding in a focused commit after the security checkpoint. Reverting the onboarding commit restores the previous onboarding interaction without reverting database security containment or the Featured removal. Do not remove applied security migrations or restore unsafe permissions to undo an onboarding design change.

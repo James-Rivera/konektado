@@ -1,5 +1,11 @@
 # Checkpoint and approved releases
 
+## Approved stabilization release (2026-11-18)
+
+The user approved finalizing the development-only onboarding preview, a production web build, a fresh private database backup, application of the three prepared security migrations in order, release through `main`, and deployed smoke tests. The account-free preview remains development-only; production follows normal authentication. No Android/store build, data reset, seeding, unrelated account changes, history rewrite or force-push is included.
+
+Pre-release remote `main` is `b0bab085b2a16cf1547e7b70a76bed25a65d3e71`. The ready production rollback target is `dpl_6X5QGwUg9XG1KZJdk96BUnuntdkX`, serving `demo.konektado.app` from Vercel project `prj_D6ULsLK7sHN55AKJydvVOxEKcOJo`. Preserve that deployment and the existing private backups. Apply only `20261118054147`, `20261118054152`, and `20261118054156` using their committed migration files after the fresh backup and exact dry-run. Record actual results separately; this approval record does not assert completion. See [security stabilization](22-security-stabilization.md) for compatibility limits and forward-repair rollback.
+
 ## Security and onboarding review branches (2026-11-18)
 
 `home-feed-simplification`, `stabilize-marketplace-security` and `simplify-onboarding-services` disable Git-triggered Vercel deployment in `vercel.json`, matching the existing review-branch guards. A later approved push can run quality checks without automatically building/deploying the app. This does not disable normal `main` deployment; merging or pushing to the production branch still requires the coordinated deployment approval. The prepared database order and remaining checks are recorded in [security stabilization](22-security-stabilization.md).

@@ -2,6 +2,14 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Approved stabilization release (2026-11-18)
+
+DEC-149: Proceed with the reviewed release order: preserve the account-free development preview, validate the production web build, take a fresh private backup, apply the three committed security migrations in order, release through main and test the deployed app. Keep the preview disabled in production and preserve the previous deployment and migration history. This approval covers this coordinated release; it does not authorize resets, unrelated data changes, force-pushes or an Android/store release. Record observed outcomes in the release record.
+
+## Account-free local onboarding preview (2026-11-18)
+
+DEC-148: Add a development-only internal preview so the user can inspect Option B without registration. Reuse the real service screen and picker with a non-saving in-memory draft and local selection review. Keep normal authentication/verification and database permissions unchanged; production redirects away from the preview. No signup, verification submission or real profile save is performed by the preview.
+
 ## Service-first onboarding (2026-11-18)
 
 DEC-147: After verifying a hidden incompatible-selection bug and comparing three options, replace onboarding's required setup/category/service chain with service-first selection. Reuse the shared searchable multi-picker with common choices, optional Browse by type and explicit custom entry; categories are not a prerequisite. Keep at least one service required. Workers explicitly choose delivery mode; preserve conflicting selections and block Next/save with named feedback until resolved. Remove the mandatory temporary client help-setup control. Confirmed choices update the in-memory onboarding draft on Apply; Cancel discards only unconfirmed sheet edits. Preserve canonical/custom arrays, provider setup storage, verification and profile readiness gates. Do not introduce an onboarding selection cap or silently truncate existing choices; existing Work Profile caps remain explicit. This supersedes only the category-first onboarding interaction in DEC-059/065, not persisted taxonomy or role contracts. See [onboarding service selection](23-onboarding-services.md).

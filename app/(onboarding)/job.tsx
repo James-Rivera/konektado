@@ -21,7 +21,7 @@ import {
 } from '@/services/onboarding-selection';
 import { useOnboarding } from './onboarding-context';
 
-export default function JobStep() {
+export default function JobStep({ onNext, onBack }: { onNext?: () => void; onBack?: () => void } = {}) {
   const router = useRouter();
   const { draft, role, updateDraft } = useOnboarding();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -76,6 +76,7 @@ export default function JobStep() {
 
   const next = () => {
     if (!validRole || selectionError) return;
+    if (onNext) { onNext(); return; }
     router.push('/(onboarding)/review');
   };
 
@@ -87,7 +88,7 @@ export default function JobStep() {
         currentStep={2}
         footer={<OnboardingButton disabled={Boolean(selectionError)} label="Next" onPress={next} />}
         helper="These choices help personalize Home. You can change them later. This does not create a public post."
-        onBack={() => router.back()}
+        onBack={onBack ?? (() => router.back())}
         title={isProvider ? 'What services can you offer?' : 'What help might you need?'}>
         <Pressable
           accessibilityLabel={isProvider ? 'Choose services you can offer' : 'Choose help you may need'}
