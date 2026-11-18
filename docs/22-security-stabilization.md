@@ -1,6 +1,10 @@
 # Security stabilization (2026-11-18)
 
-This is a prepared implementation and local validation record. None of these migrations has been applied to the hosted project as part of this work. Pushes, remote migration application, builds and deployment require separate approval.
+The user approved the coordinated release on 2026-11-18 (DEC-149). All three migrations below were applied through the linked CLI after a fresh private backup, restoration rehearsal and exact dry-run. Hosted history contains 45 versions. Anonymous/resident view writes are denied, legacy reads remain available, all eight restricted RPCs deny anonymous execution and retain authenticated execution, helper search paths are pinned, and public tables retain RLS. Checked application/Auth/Storage row counts are unchanged. Client release evidence is recorded separately; a database success is not proof of a deployed client.
+
+The production export passed, with 112 files checked and no server credential matches. The complete candidate passed 306 application tests and 16 release guards, plus lint and TypeScript. Thirteen hosted API checks passed with the dedicated unverified QA account: login/identity, nonadmin status, legacy visibility reads, anonymous/resident write denial against nonexistent probe IDs, participant inbox access, anonymous inbox denial, job/service discovery, verification state and private-note denial. No application rows were published or edited by these checks.
+
+Fresh database/Auth/Storage archives, password-free roles, hashes, all 69 Storage objects and verification receipts are stored under `%USERPROFILE%/.konektado-private/releases/main-20261118-stabilization/`, restricted to the owner and SYSTEM. The new application recovery archive restored successfully into an isolated PostgreSQL 18 cluster; applying these three migrations there preserved checked row counts. This does not certify a full managed Supabase service restore. Hosted Storage signing, Realtime and native acceptance still have the limits described below.
 
 ## Scope and order
 
@@ -22,7 +26,7 @@ All 34 canonical services also passed the SQL publication contract. Concurrent p
 
 The test database and fresh cluster are retained under ignored local test artifacts, with the cluster stopped after the rehearsal. No hosted data, Auth users or Storage objects were changed. Runtime service tests replace only external I/O; component handler tests do not certify native rendering.
 
-## Release checks still required
+## Release procedure and remaining acceptance
 
 - Take and verify a fresh private backup before approved remote application; the November 15 backup is historical, not a replacement for current recovery data.
 - Review a linked CLI dry-run against the committed files. Apply only the three files above, in order, after explicit approval. Inspect the exact target and migration history first.
