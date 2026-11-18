@@ -78,6 +78,9 @@ export default function ConversationDetailScreen() {
   const params = useLocalSearchParams<{ conversationId?: string | string[] }>();
   const conversationId = getParamValue(params.conversationId);
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
+  const currentUserId = profile?.id;
+  const participantClientId = conversation?.clientId;
+  const participantProviderId = conversation?.providerId;
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
   const [conversationReady, setConversationReady] = useState(false);
@@ -117,12 +120,12 @@ export default function ConversationDetailScreen() {
         showAlert('Conversation', result.error);
       } else {
         setConversation(result.data);
-        void markConversationRead(conversationId).then((readResult) => {
+        if (result.data && currentUserId && [result.data.clientId, result.data.providerId].includes(currentUserId)) void markConversationRead(conversationId).then((readResult) => {
           if (readResult.error) return;
           emitConversationPreviewUpdate({
             conversationId,
             unreadCount: 0,
-            userId: profile?.id,
+            userId: currentUserId,
           });
         });
       }
@@ -130,7 +133,7 @@ export default function ConversationDetailScreen() {
       setLoading(false);
       setConversationReady(true);
     });
-  }, [conversationId, profile?.id]);
+  }, [conversationId, currentUserId]);
 
   useEffect(() => {
     fetchConversation();
@@ -159,7 +162,7 @@ export default function ConversationDetailScreen() {
             const hydratedMessage = { ...message, attachmentUrl };
             setConversation((current) => reconcileConversationMessage(current, hydratedMessage));
             emitConversationPreviewUpdate({ conversationId, message: hydratedMessage, userId: profile?.id });
-            if (hydratedMessage.senderId !== profile?.id) {
+            if (hydratedMessage.senderId !== currentUserId && currentUserId && [participantClientId, participantProviderId].includes(currentUserId)) {
               void markConversationRead(conversationId).then((readResult) => {
                 if (readResult.error) return;
                 emitConversationPreviewUpdate({
@@ -197,7 +200,7 @@ export default function ConversationDetailScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, profile?.id]);
+  }, [conversationId, profile?.id, currentUserId, participantClientId, participantProviderId]);
 
   const scrollToBottom = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -232,6 +235,7 @@ export default function ConversationDetailScreen() {
   const canOpenProfile = Boolean(
     conversation && profile?.id && [conversation.clientId, conversation.providerId].includes(profile.id),
   );
+  const isParticipant = canOpenProfile;
   const prompts = isJobConversation ? JOB_PROMPTS : SERVICE_PROMPTS;
 
   const { failed: avatarFailed, onImageError: onAvatarError } = useImageFallback(avatarUrl);
@@ -253,7 +257,7 @@ export default function ConversationDetailScreen() {
     retryMessageId?: string,
     overrideAttachment?: MessageAttachmentDraft | null,
   ) => {
-    if (!conversationId) return;
+    if (!conversationId || !isParticipant) return;
 
     const messageBody = (overrideBody ?? body).trim();
     const messageAttachment = overrideAttachment ?? selectedAttachment;
@@ -397,26 +401,26 @@ export default function ConversationDetailScreen() {
             <MaterialIcons color={color.text} name="arrow-back-ios" size={18} />
           </Pressable>
           <View style={styles.headerAvatar}>
-            {avatarUrl && !avatarFailed ? (
+            {isParticipant && avatarUrl && !avatarFailed ? (
               <CachedRemoteImage
                 onError={onAvatarError}
                 uri={avatarUrl}
                 style={styles.headerAvatarImage}
               />
             ) : (
-              <Text style={styles.headerAvatarText}>{getInitials(other?.fullName ?? 'Resident')}</Text>
+              <Text style={styles.headerAvatarText}>{getInitials(isParticipant ? other?.fullName ?? 'Resident' : 'Report')}</Text>
             )}
-            <PresenceDot active={isPresenceActive(other?.availability)} borderColor={color.background} size={8} style={styles.onlineDot} />
+            {isParticipant ? <PresenceDot active={isPresenceActive(other?.availability)} borderColor={color.background} size={8} style={styles.onlineDot} /> : null}
           </View>
           <View style={styles.headerCopy}>
             <Text numberOfLines={1} style={styles.headerTitle}>
-              {other?.fullName ?? 'Conversation'}
+              {isParticipant ? other?.fullName ?? 'Conversation' : 'Reported conversation'}
             </Text>
             <Text numberOfLines={1} style={styles.headerSubtitle}>
-              {getParticipantSubtitle(conversation, profile?.id)}
+              {isParticipant ? getParticipantSubtitle(conversation, profile?.id) : 'Moderation review'}
             </Text>
           </View>
-          <Pressable
+          {isParticipant ? <Pressable
             accessibilityLabel="Conversation details"
             onPress={() => {
               if (!conversationId) return;
@@ -427,10 +431,10 @@ export default function ConversationDetailScreen() {
             }}
             style={styles.headerIcon}>
             <MaterialIcons color={color.verificationBlue} name="more-vert" size={22} />
-          </Pressable>
+          </Pressable> : null}
         </View>
 
-        {conversation ? (
+        {conversation && isParticipant ? (
           <ConversationContextCard
             canMarkHired={canMarkHired}
             canOpenProfile={canOpenProfile}
@@ -490,8 +494,10 @@ export default function ConversationDetailScreen() {
             const nextMessage = messages[index + 1];
 
             return (
+              <View key={message.id}>
+              {!isParticipant ? <Text style={styles.threadStatus}>{message.senderId === conversation.clientId ? 'Client' : 'Provider'}</Text> : null}
               <MessageBubble
-                currentUserId={profile?.id}
+                currentUserId={isParticipant ? profile?.id : conversation.clientId}
                 key={message.id}
                 message={message}
                 nextMessage={nextMessage}
@@ -507,11 +513,12 @@ export default function ConversationDetailScreen() {
                 previousMessage={previousMessage}
                 showTime={visibleTimestampId === message.id}
               />
+              </View>
             );
           })}
         </ScrollView>
 
-        <View style={styles.composerWrap}>
+        {isParticipant ? <View style={styles.composerWrap}>
           {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
           {selectedAttachment ? (
             <View style={styles.attachmentPreview}>
@@ -562,7 +569,7 @@ export default function ConversationDetailScreen() {
               <MaterialIcons color={color.verificationBlue} name="send" size={24} />
             </Pressable>
           </View>
-        </View>
+        </View> : <View style={styles.composerWrap}><Text style={styles.threadStatus}>Read-only moderation view</Text></View>}
       </KeyboardAvoidingView>
       <Modal
         animationType="fade"

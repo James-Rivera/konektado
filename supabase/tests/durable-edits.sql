@@ -4,6 +4,8 @@ create function pg_temp.assert_true(label text, actual boolean) returns void lan
 begin if actual is distinct from true then raise exception 'FAIL: %',label; end if; end; $$;
 create function pg_temp.assert_denied(label text, statement text) returns void language plpgsql as $$
 begin begin execute statement; exception when others then return; end; raise exception 'FAIL: % unexpectedly succeeded',label; end; $$;
+grant execute on function pg_temp.assert_true(text, boolean),
+  pg_temp.assert_denied(text, text) to anon, authenticated, service_role;
 select pg_temp.assert_true('canonical historical date backfilled',exists(select 1 from jobs where id='82000000-0000-4000-8000-000000000001' and scheduled_date='2050-11-13' and time_preference='exact' and exact_time='09:30' and schedule_flexibility='fixed' and description='Keep this description'));
 select pg_temp.assert_true('undated legacy content preserved',exists(select 1 from jobs where id='82000000-0000-4000-8000-000000000002' and scheduled_date is null and schedule_text='Whenever convenient' and title='Legacy undated'));
 select pg_temp.assert_true('impossible legacy date never guessed',exists(select 1 from jobs where id='82000000-0000-4000-8000-000000000003' and scheduled_date is null and description='Keep this too'));

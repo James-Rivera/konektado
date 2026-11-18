@@ -12,6 +12,26 @@ export type PublicContentVisibilityRow = {
   visibility: PublicPhotoVisibility;
 };
 
+export type PublicPhotoVisibilityResult = Map<string, PublicContentVisibilityRow> & {
+  available: boolean;
+};
+
+const unavailableListeners = new Set<() => void>();
+
+export function subscribePhotoVisibilityUnavailable(listener: () => void): () => void {
+  unavailableListeners.add(listener);
+  return () => { unavailableListeners.delete(listener); };
+}
+
+function isVisibilityRow(value: unknown): value is PublicContentVisibilityRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.content_id === 'string' && row.content_id.length > 0
+    && ['profile_photo', 'job_photo', 'service_photo'].includes(String(row.content_type))
+    && (row.visibility === 'visible' || row.visibility === 'hidden')
+    && ['image_url', 'owner_id', 'source_id'].every((key) => row[key] === null || typeof row[key] === 'string');
+}
+
 export function compactPhotoUrl(value: string | null | undefined) {
   return value?.trim() ?? '';
 }
@@ -41,19 +61,34 @@ export function getPublicPhotoKey({
 
 export async function loadPublicPhotoVisibility(
   photoKeys: string[],
-): Promise<Map<string, PublicContentVisibilityRow>> {
+): Promise<PublicPhotoVisibilityResult> {
   const keys = Array.from(new Set(photoKeys.map(compactPhotoUrl).filter(Boolean)));
-  const visibility = new Map<string, PublicContentVisibilityRow>();
+  const visibility: PublicPhotoVisibilityResult = Object.assign(
+    new Map<string, PublicContentVisibilityRow>(), { available: true },
+  );
 
   if (!keys.length) return visibility;
 
-  const { data } = await supabase
-    .from('public_content_visibility')
-    .select('content_type, content_id, source_id, owner_id, image_url, visibility')
-    .in('content_id', keys);
+  try {
+    const { data, error } = await supabase
+      .from('public_content_visibility')
+      .select('content_type, content_id, source_id, owner_id, image_url, visibility')
+      .in('content_id', keys);
 
-  for (const row of ((data as PublicContentVisibilityRow[] | null) ?? [])) {
-    visibility.set(row.content_id, row);
+    if (error || !Array.isArray(data)) throw new Error('Photo visibility unavailable');
+    for (const row of data) {
+      if (!isVisibilityRow(row) || !keys.includes(row.content_id) || visibility.has(row.content_id)) {
+        throw new Error('Invalid photo visibility response');
+      }
+      visibility.set(row.content_id, row);
+    }
+  } catch {
+    // An unavailable lookup is different from a successful lookup with no moderation row.
+    visibility.clear();
+    visibility.available = false;
+    for (const listener of unavailableListeners) {
+      try { listener(); } catch { /* Feedback must not prevent safe photo suppression. */ }
+    }
   }
 
   return visibility;
@@ -79,6 +114,7 @@ export async function filterVisiblePhotoUrls({
     }),
   );
   const visibility = await loadPublicPhotoVisibility(keys);
+  if (!visibility.available) return [];
 
   return cleanUrls.filter((imageUrl) => {
     const key = getPublicPhotoKey({ imageUrl, sourceId, sourceType });
@@ -102,6 +138,7 @@ export async function getVisibleProfileAvatarUrl({
     sourceType: 'profile_photo',
   });
   const visibility = await loadPublicPhotoVisibility([photoKey]);
+  if (!visibility.available) return null;
 
   return visibility.get(photoKey)?.visibility === 'hidden' ? null : imageUrl;
 }
@@ -129,7 +166,7 @@ export async function applyPublicPhotoVisibilityToProfiles<
       sourceType: 'profile_photo',
     });
 
-    if (visibility.get(photoKey)?.visibility === 'hidden') {
+    if (!visibility.available || visibility.get(photoKey)?.visibility === 'hidden') {
       nextProfiles.set(id, { ...profile, avatarUrl: null });
     }
   }
@@ -154,7 +191,7 @@ export async function applyPublicPhotoVisibilityToRows<
       const cleanUrl = compactPhotoUrl(imageUrl);
       if (!cleanUrl) return false;
       const photoKey = getPublicPhotoKey({ imageUrl: cleanUrl, sourceId: row.id, sourceType });
-      return visibility.get(photoKey)?.visibility !== 'hidden';
+      return visibility.available && visibility.get(photoKey)?.visibility !== 'hidden';
     }),
   }));
 }

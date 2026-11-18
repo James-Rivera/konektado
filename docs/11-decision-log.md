@@ -2,6 +2,10 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Security stabilization (2026-11-18)
+
+DEC-146: Preserve the Home cleanup checkpoint, then implement focused moderation and permission repairs before onboarding simplification. Keep the legacy photo visibility SELECT contract while removing client writes; photo lookup failures suppress uncertain images. Ordinary inboxes are participant-only; admin read-only access requires a participant-filed conversation report. Harden only unnecessary function grants and the two mutable helper search paths, preserving public summaries, role guards and server-only OTP. The contact OTP fallback remains accepted, paid leaked-password protection remains deferred for the capstone, and Android acceptance follows the implementation work. Local fixtures do not authorize hosted application: pushes, database application, builds and deployment remain separate approvals. See [security stabilization](22-security-stabilization.md) for order, evidence, limitations and rollback.
+
 ## Home feed simplification (2026-11-17)
 
 DEC-145: Remove the promotional Featured carousel and its pagination dots from Home because the user considers them irrelevant to the capstone. Explore Services leads directly into Nearby results. This supersedes only the carousel portion of DEC-122; retain the blue hero, shared search/intent card, services grid, filtering, ranking, saved posts, and permission gates.

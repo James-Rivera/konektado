@@ -21,6 +21,9 @@ begin
 end;
 $$;
 
+grant execute on function pg_temp.expect_denied(text, text),
+  pg_temp.expect_true(text, boolean) to anon, authenticated, service_role;
+
 insert into auth.users(id, email)
 select ('10000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid, 'security-' || i || '@example.test'
 from generate_series(1,7) i;

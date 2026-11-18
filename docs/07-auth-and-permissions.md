@@ -209,6 +209,8 @@ These role permissions apply after the user's barangay verification is approved 
 
 ## Admin Rules
 
+Prepared hardening (DEC-146): the ordinary inbox remains participant-only. Admin conversation moderation requires a report filed by a conversation participant and grants read-only access to that reported conversation, its messages and scoped attachments. A historical report from an unrelated reporter does not authorize access. Database enforcement requires the three migrations and validation described in [security stabilization](22-security-stabilization.md); preparation is not hosted application.
+
 - Admin status must come from `user_roles.role = 'barangay_admin'` or a protected server-side claim.
 - Users must not be able to assign themselves admin role.
 - Admin actions should be routed through `AdminService`.
@@ -297,6 +299,7 @@ Discovery privacy rules:
 - Public job/service cards and details must use shared rate-range formatting and approximate location only.
 - Custom "Others / Specify" services are stored separately from official taxonomy values and can be marked for barangay/admin review so taxonomy filters continue to work.
 - Hidden public photos must be filtered before rendering public profile avatars, job photos, service photos, feed cards, search cards, and detail galleries. Hidden profile photos should fall back to initials/default avatars.
+- A failed or malformed photo-visibility lookup must suppress uncertain photos while keeping listing/profile text usable. Only a successful lookup with no moderation record permits the normal unmoderated-photo behavior. Refresh retries the lookup.
 
 ## Row Level Security Direction
 
