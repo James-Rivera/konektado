@@ -1,4 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -45,6 +46,7 @@ const filterLabels: Record<ReportFilter, string> = {
 const filterOrder: ReportFilter[] = ['open', 'reviewing', 'received', 'resolved', 'dismissed'];
 
 export default function AdminReportsScreen() {
+  const router = useRouter();
   const { showSuccessToast } = useFeedback();
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [filter, setFilter] = useState<ReportFilter>('open');
@@ -152,6 +154,9 @@ export default function AdminReportsScreen() {
             {visibleReports.map((report) => (
               <ReportCard
                 key={report.id}
+                onOpenConversation={() => {
+                  if (report.conversationId) router.push({ pathname: '/conversation/[conversationId]', params: { conversationId: report.conversationId } });
+                }}
                 onReview={(status) => review(report, status)}
                 report={report}
                 updating={updatingId === report.id}
@@ -171,10 +176,12 @@ export default function AdminReportsScreen() {
 }
 
 function ReportCard({
+  onOpenConversation,
   onReview,
   report,
   updating,
 }: {
+  onOpenConversation: () => void;
   onReview: (status: ReportStatus) => void;
   report: ReportSummary;
   updating: boolean;
@@ -205,6 +212,11 @@ function ReportCard({
       </View>
 
       <View style={styles.actions}>
+        {report.conversationId ? (
+          <Pressable accessibilityRole="button" onPress={onOpenConversation} style={styles.reviewButton}>
+            <Text style={styles.reviewButtonText}>Open reported conversation</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: updating || !canStartReview }}

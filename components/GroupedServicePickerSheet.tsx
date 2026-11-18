@@ -108,8 +108,9 @@ export function GroupedServicePickerSheet({
   const searchResults = useMemo(() => {
     if (!query.trim()) return [];
 
-    return searchSkillOptions(query, 8)
+    return searchSkillOptions(query, Number.POSITIVE_INFINITY)
       .filter((result) => allServices.has(result.service))
+      .slice(0, 8)
       .map((result) => result.service);
   }, [allServices, query]);
 
@@ -158,10 +159,14 @@ export function GroupedServicePickerSheet({
     const outcome = addSkillToList({
       input: query,
       state: { skills: draftServices, customSkills: draftCustomServices },
-      limit: maxSelections,
+      limit: maxSelections ?? Number.POSITIVE_INFINITY,
     });
 
     if (outcome.status === 'added') {
+      if (outcome.canonicalService && !allServices.has(outcome.canonicalService)) {
+        setNotice('That service is not available in these choices. Choose a listed service.');
+        return;
+      }
       setDraftServices(outcome.state.skills);
       setDraftCustomServices(outcome.state.customSkills);
       setQuery('');
@@ -207,6 +212,8 @@ export function GroupedServicePickerSheet({
       });
       if (result === false) return;
       onClose();
+    } catch {
+      setNotice('Could not keep your selections. Please try again.');
     } finally {
       setApplying(false);
     }
@@ -264,6 +271,7 @@ export function GroupedServicePickerSheet({
 
           <View style={styles.searchBox}>
             <TextInput
+              accessibilityLabel={searchPlaceholder}
               onChangeText={setQuery}
               placeholder={searchPlaceholder}
               placeholderTextColor={color.textSubtle}
@@ -276,7 +284,7 @@ export function GroupedServicePickerSheet({
           {notice ? (
             <View style={styles.noticeBox}>
               <MaterialIcons color={color.textMuted} name="info-outline" size={18} />
-              <Text style={styles.noticeText}>{notice}</Text>
+              <Text accessibilityLiveRegion="polite" style={styles.noticeText}>{notice}</Text>
             </View>
           ) : null}
 
@@ -297,11 +305,12 @@ export function GroupedServicePickerSheet({
 
               {renderOptionRows(searchResults)}
 
-              {!searchResults.length ? (
+              {isMulti || !searchResults.length ? (
                 <View style={styles.section}>
-                  <Text style={styles.emptyText}>No exact match found.</Text>
+                  <Text style={styles.emptyText}>{searchResults.length ? 'Not listed? Add your own service.' : 'No exact match found.'}</Text>
                   {isMulti ? (
                     <Pressable
+                      accessibilityLabel={`Add ${query.trim()}`}
                       accessibilityRole="button"
                       onPress={addTypedQueryAsCustom}
                       style={({ pressed }) => [styles.customAddRow, pressed && styles.pressed]}>
@@ -331,8 +340,8 @@ export function GroupedServicePickerSheet({
 
                     return (
                       <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
+                        accessibilityRole={isMulti ? 'checkbox' : 'button'}
+                        accessibilityState={isMulti ? { checked: active } : { selected: active }}
                         key={service}
                         onPress={() => selectService(service)}
                         style={({ pressed }) => [
@@ -402,14 +411,25 @@ export function GroupedServicePickerSheet({
             </>
           )}
 
-          {isMulti && draftCustomServices.length ? (
+          {isMulti && (draftServices.length || draftCustomServices.length) ? (
             <View style={styles.customBlock}>
               <View style={styles.customHeader}>
-                <Text style={styles.sectionTitle}>Other service</Text>
-                <Text style={styles.listHint}>Use this only when it is not listed above.</Text>
+                <Text style={styles.sectionTitle}>Selected services ({selectedCount})</Text>
+                <Text style={styles.listHint}>Remove any service you no longer want.</Text>
               </View>
-              {draftCustomServices.length ? (
+              {draftServices.length || draftCustomServices.length ? (
                 <View style={styles.selectedRow}>
+                  {draftServices.map((service) => (
+                    <Pressable
+                      accessibilityLabel={`Remove ${service}`}
+                      accessibilityRole="button"
+                      key={`official:${service}`}
+                      onPress={() => selectService(service)}
+                      style={({ pressed }) => [styles.customPill, pressed && styles.pressed]}>
+                      <Text style={styles.customPillText}>{service}</Text>
+                      <MaterialIcons color={color.primary} name="close" size={15} />
+                    </Pressable>
+                  ))}
                   {draftCustomServices.map((service) => (
                     <Pressable
                       accessibilityLabel={`Remove ${service}`}
@@ -507,7 +527,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 34,
+    minHeight: 44,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
@@ -529,7 +549,7 @@ const styles = StyleSheet.create({
   },
   listHeader: {
     gap: space.xs,
-    minHeight: 32,
+    minHeight: 44,
   },
   listHint: {
     ...typography.caption,
@@ -578,10 +598,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: space.xs,
-    minHeight: 32,
+    minHeight: 44,
+    maxWidth: '100%',
     paddingHorizontal: space.md,
   },
   customPillText: {
+    flexShrink: 1,
     ...typography.captionMedium,
     color: color.primary,
   },
@@ -652,6 +674,8 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   quickPick: {
+    minHeight: 44,
+    justifyContent: 'center',
     backgroundColor: color.surfaceAlt,
     borderColor: color.border,
     borderRadius: radius.pill,
@@ -671,6 +695,7 @@ const styles = StyleSheet.create({
     color: color.primary,
   },
   browseToggle: {
+    minHeight: 44,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',

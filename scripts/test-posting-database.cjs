@@ -56,6 +56,12 @@ function concurrent(statement) {
   console.log('PASS: posting/profile SQL, RLS, validation, rollback and retry assertions');
   sql('',db,'supabase/tests/durable-edits.sql');
   console.log('PASS: durable edits, stale-write rejection, legacy repair, source conflicts and rollback');
+  sql('',db,'supabase/tests/photo-visibility.sql');
+  console.log('PASS: photo visibility write containment and moderation');
+  sql('',db,'supabase/tests/conversation-privacy.sql');
+  console.log('PASS: participant-scoped inbox and reported moderation access');
+  sql('',db,'supabase/tests/function-permissions.sql');
+  console.log('PASS: function ACLs, role guards, defaults, search paths and triggers');
   const call = `set role authenticated; select set_config('request.jwt.claim.sub','71000000-0000-4000-8000-000000000001',false); select public.publish_job_draft('72000000-0000-4000-8000-000000000099');`;
   const [a,b] = await Promise.all([concurrent(call),concurrent(call)]);
   assert.equal(a,b,'concurrent publication must return the same listing');
@@ -68,4 +74,8 @@ function concurrent(statement) {
   assert.equal(sql("select content_version from jobs where id='74000000-0000-4000-8000-000000000001'"),'2');
   console.log('PASS: concurrent edit commits update the public row exactly once');
   console.log(`Isolated test database retained for inspection: ${db} on 127.0.0.1:${port}`);
-})().catch(error=>{console.error(error.message);process.exitCode=1;});
+})().catch(error=>{
+  console.error(error.message);
+  console.error(`Failed isolated test database retained: ${db} on 127.0.0.1:${port}`);
+  process.exitCode=1;
+});

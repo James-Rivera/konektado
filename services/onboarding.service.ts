@@ -12,6 +12,7 @@ import type {
 import { getSessionUser } from "@/services/session.service";
 import { saveUserRole } from "@/utils/save-role";
 import { supabase } from "@/utils/supabase";
+import { getOnboardingSelectionError, normalizeOnboardingServices } from "@/services/onboarding-selection";
 
 export const DEFAULT_PROVINCE = "Batangas";
 export const DEFAULT_CITY = "Santo Tomas";
@@ -231,19 +232,20 @@ export async function saveOnboardingProfile({
   intent: OnboardingIntent;
   userId: string;
 }): Promise<ServiceResult<void>> {
+  const selectionError = getOnboardingSelectionError({
+    intent,
+    services: intent === 'provider' ? draft.offeredServices : draft.neededServices,
+    customServices: intent === 'provider' ? draft.customOfferedServices : draft.customNeededServices,
+    deliveryMode: draft.offeredDeliveryMode,
+  });
+  if (selectionError) return { data: null, error: selectionError };
   const activeRole = activeRoleForIntent(intent);
-  const offeredSplit = splitOfficialAndCustomServices([
-    ...draft.offeredServices,
-    ...draft.customOfferedServices,
-  ]);
-  const neededSplit = splitOfficialAndCustomServices([
-    ...draft.neededServices,
-    ...draft.customNeededServices,
-  ]);
-  const offeredServices = compactServices(offeredSplit.official);
-  const neededServices = compactServices(neededSplit.official);
-  const customOfferedServices = compactServices(offeredSplit.custom);
-  const customNeededServices = compactServices(neededSplit.custom);
+  const offeredSplit = normalizeOnboardingServices(draft.offeredServices, draft.customOfferedServices);
+  const neededSplit = normalizeOnboardingServices(draft.neededServices, draft.customNeededServices);
+  const offeredServices = compactServices(offeredSplit.services);
+  const neededServices = compactServices(neededSplit.services);
+  const customOfferedServices = compactServices(offeredSplit.customServices);
+  const customNeededServices = compactServices(neededSplit.customServices);
   const privateAddress = compactServices([
     draft.houseNumber,
     draft.blockLot,

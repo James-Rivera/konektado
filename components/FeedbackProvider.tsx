@@ -20,6 +20,7 @@ import {
 } from 'react';
 
 import { color, radius, shadow, space, typography } from '@/constants/theme';
+import { subscribePhotoVisibilityUnavailable } from '@/services/content-visibility.service';
 
 type FeedbackVariant = 'success' | 'error' | 'info';
 
@@ -45,6 +46,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [opacity] = useState(() => new Animated.Value(0));
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextIdRef = useRef(0);
+  const lastPhotoNoticeRef = useRef<number | null>(null);
   const [toast, setToast] = useState<FeedbackMessage | null>(null);
 
   const hideToast = useCallback(() => {
@@ -117,6 +119,13 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  useEffect(() => subscribePhotoVisibilityUnavailable(() => {
+    const now = Date.now();
+    if (lastPhotoNoticeRef.current !== null && now - lastPhotoNoticeRef.current < 30_000) return;
+    lastPhotoNoticeRef.current = now;
+    showToast('Some photos are temporarily unavailable. Refresh to try again.', 'info');
+  }), [showToast]);
 
   const value = useMemo(
     () => ({

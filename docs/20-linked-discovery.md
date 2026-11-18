@@ -6,6 +6,8 @@ The user clarified and approved the visual structure after reviewing the develop
 
 The development-mode nested-button warning also affected existing feed cards. Their identity/body navigation actions and Save action are now sibling buttons within a non-interactive card; the visible card content and save/verification behavior are retained.
 
+Capstone layout simplification (DEC-145, 2026-11-17): Home no longer displays the promotional Featured carousel or its pagination dots. The services grid is followed directly by the Nearby results header and feed.
+
 - Find work shows job posts; Hire help shows offered services. Exactly one intent is active. The first intent follows the account's existing role/preferences; mixed or missing preferences start with Find work. Once selected, intent survives navigation and profile refreshes.
 - Both screens use the same labels. The search entry says Search jobs… or Search services… and Home shows the last typed query when returning from Search.
 - A tab-scoped, account-keyed in-memory session holds intent, query and applied filters. Browser/native Back, the Home tab and reopening Search use that same session. Account changes and restarting the app clear it. No discovery data is persisted to the database or device storage.

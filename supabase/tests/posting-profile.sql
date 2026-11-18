@@ -7,6 +7,8 @@ begin
   begin execute statement; exception when others then return; end;
   raise exception 'FAIL: % unexpectedly succeeded',label;
 end; $$;
+grant execute on function pg_temp.assert_true(text, boolean),
+  pg_temp.assert_denied(text, text) to anon, authenticated, service_role;
 insert into auth.users(id,email) values
  ('71000000-0000-4000-8000-000000000001','posting-one@example.invalid'),
  ('71000000-0000-4000-8000-000000000002','posting-two@example.invalid'),

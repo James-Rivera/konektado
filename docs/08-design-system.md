@@ -20,6 +20,7 @@ Historical visual references (subject to the current approved requirements):
 - The Konektado wordmark/header belongs on Home only. Other bottom tabs use clear screen-specific titles where they improve orientation.
 - Feed sections for jobs and services.
 - Home feed uses one unified card shell for mixed job and service posts.
+- Home's Explore Services grid leads directly into the Nearby results section. The promotional Featured carousel and pagination dots are excluded from the capstone layout (DEC-145).
 - Post dashboard for creating and managing job/service posts.
 - Messages screens for job/service coordination.
 - Profile with Work Profile and Hiring Profile tabs.
@@ -227,6 +228,8 @@ Examples:
 - Modal: delete account, discard draft, logout confirmation, verification-required publish gate
 
 Onboarding should feel guided rather than stop-start. Successful onboarding transitions should move the user forward visually; do not interrupt normal progress with success modals such as "Welcome" or "Onboarding complete".
+
+Onboarding service selection (DEC-147) starts with a resident's services or needs, not category classification. Use a searchable multi-select sheet with common choices, optional category browsing and custom entry. Show all confirmed selections and accessible Remove controls. Worker setup is an explicit separate choice; preserve incompatible selections and explain how to resolve them. Hiring onboarding has no mandatory temporary setup filter. Use Services in this flow, plain labels, wrapping text, 44px minimum action targets and keyboard-safe sheet content. See [onboarding service selection](23-onboarding-services.md) for the approved behavior and verification limits.
 
 Remediation prompts should deep-link to the part of the flow that resolves them. Profile prompts should point to identity, skills, service area, usual availability, coordination style, or preferred coordination time. Listing prompts should point to rates, budgets, dates, requirements, and message options.
 

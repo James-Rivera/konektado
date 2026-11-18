@@ -2,6 +2,26 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Approved stabilization release (2026-11-18)
+
+DEC-149: Proceed with the reviewed release order: preserve the account-free development preview, validate the production web build, take a fresh private backup, apply the three committed security migrations in order, release through main and test the deployed app. Keep the preview disabled in production and preserve the previous deployment and migration history. This approval covers this coordinated release; it does not authorize resets, unrelated data changes, force-pushes or an Android/store release. Record observed outcomes in the release record.
+
+## Account-free local onboarding preview (2026-11-18)
+
+DEC-148: Add a development-only internal preview so the user can inspect Option B without registration. Reuse the real service screen and picker with a non-saving in-memory draft and local selection review. Keep normal authentication/verification and database permissions unchanged; production redirects away from the preview. No signup, verification submission or real profile save is performed by the preview.
+
+## Service-first onboarding (2026-11-18)
+
+DEC-147: After verifying a hidden incompatible-selection bug and comparing three options, replace onboarding's required setup/category/service chain with service-first selection. Reuse the shared searchable multi-picker with common choices, optional Browse by type and explicit custom entry; categories are not a prerequisite. Keep at least one service required. Workers explicitly choose delivery mode; preserve conflicting selections and block Next/save with named feedback until resolved. Remove the mandatory temporary client help-setup control. Confirmed choices update the in-memory onboarding draft on Apply; Cancel discards only unconfirmed sheet edits. Preserve canonical/custom arrays, provider setup storage, verification and profile readiness gates. Do not introduce an onboarding selection cap or silently truncate existing choices; existing Work Profile caps remain explicit. This supersedes only the category-first onboarding interaction in DEC-059/065, not persisted taxonomy or role contracts. See [onboarding service selection](23-onboarding-services.md).
+
+## Security stabilization (2026-11-18)
+
+DEC-146: Preserve the Home cleanup checkpoint, then implement focused moderation and permission repairs before onboarding simplification. Keep the legacy photo visibility SELECT contract while removing client writes; photo lookup failures suppress uncertain images. Ordinary inboxes are participant-only; admin read-only access requires a participant-filed conversation report. Harden only unnecessary function grants and the two mutable helper search paths, preserving public summaries, role guards and server-only OTP. The contact OTP fallback remains accepted, paid leaked-password protection remains deferred for the capstone, and Android acceptance follows the implementation work. Local fixtures do not authorize hosted application: pushes, database application, builds and deployment remain separate approvals. See [security stabilization](22-security-stabilization.md) for order, evidence, limitations and rollback.
+
+## Home feed simplification (2026-11-17)
+
+DEC-145: Remove the promotional Featured carousel and its pagination dots from Home because the user considers them irrelevant to the capstone. Explore Services leads directly into Nearby results. This supersedes only the carousel portion of DEC-122; retain the blue hero, shared search/intent card, services grid, filtering, ranking, saved posts, and permission gates.
+
 ## Linked discovery (2026-11-16)
 
 DEC-144: The user approved keeping the dedicated Search screen and linking Home's search entry and Find work/Hire help control to it, with shared intent/query and compatible filters in both directions. Use consistent intent labels and mode-specific placeholders, keep an explicit selected intent, preserve applied selections across mode changes and Back, and clear the in-memory state when accounts change. Keep Search-specific refinements in Search and retain existing marketplace services/permissions. Implement on an isolated branch with a guarded local undo snapshot; commits, pushes and deployment are separate. See [linked discovery](20-linked-discovery.md).
