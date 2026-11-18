@@ -2,6 +2,10 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Service-first onboarding (2026-11-18)
+
+DEC-147: After verifying a hidden incompatible-selection bug and comparing three options, replace onboarding's required setup/category/service chain with service-first selection. Reuse the shared searchable multi-picker with common choices, optional Browse by type and explicit custom entry; categories are not a prerequisite. Keep at least one service required. Workers explicitly choose delivery mode; preserve conflicting selections and block Next/save with named feedback until resolved. Remove the mandatory temporary client help-setup control. Confirmed choices update the in-memory onboarding draft on Apply; Cancel discards only unconfirmed sheet edits. Preserve canonical/custom arrays, provider setup storage, verification and profile readiness gates. Do not introduce an onboarding selection cap or silently truncate existing choices; existing Work Profile caps remain explicit. This supersedes only the category-first onboarding interaction in DEC-059/065, not persisted taxonomy or role contracts. See [onboarding service selection](23-onboarding-services.md).
+
 ## Security stabilization (2026-11-18)
 
 DEC-146: Preserve the Home cleanup checkpoint, then implement focused moderation and permission repairs before onboarding simplification. Keep the legacy photo visibility SELECT contract while removing client writes; photo lookup failures suppress uncertain images. Ordinary inboxes are participant-only; admin read-only access requires a participant-filed conversation report. Harden only unnecessary function grants and the two mutable helper search paths, preserving public summaries, role guards and server-only OTP. The contact OTP fallback remains accepted, paid leaked-password protection remains deferred for the capstone, and Android acceptance follows the implementation work. Local fixtures do not authorize hosted application: pushes, database application, builds and deployment remain separate approvals. See [security stabilization](22-security-stabilization.md) for order, evidence, limitations and rollback.

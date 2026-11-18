@@ -64,7 +64,7 @@ The profile phase of the unified flow above. Steps 1 and 2 below happen in the a
 3. App collects basic profile identity.
 4. App collects current area as a separate selector step: fixed supported area `Brgy. San Pedro, Santo Tomas, Batangas`.
 5. App collects specific address details separately for profile completion, admin review, and private coordination; public resident/profile summaries show only a safe approximate location label.
-6. App collects lightweight taste setup data: offered services for workers or needed services for clients (not both). Provider and client service setup both use one clean screen with selector rows for setup, categories, services, and optional custom text; detailed choices happen in bottom sheets. Provider work setup is stored separately. Client help setup only filters the temporary selection UI and does not store a separate needed delivery mode.
+6. App collects lightweight service preferences: offered services for workers or needed services for clients (not both). The service-first picker offers common services, cross-category search, optional Browse by type and explicit custom entry without a category prerequisite. Confirmed choices are listed with Remove actions. Workers explicitly choose On-site, Online or Both separately; incompatible official services remain visible and block Next until resolved. Clients have no mandatory temporary help-setup choice. See [onboarding service selection](23-onboarding-services.md) (DEC-147), which supersedes the category-first onboarding interaction in DEC-059/065.
 7. App shows review.
 8. App saves onboarding and shows complete.
 9. App lets the user enter Home in viewer mode.
