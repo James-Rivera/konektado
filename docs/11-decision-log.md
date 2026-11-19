@@ -2,6 +2,10 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## QA repair release candidate (2026-11-19)
+
+DEC-150: Prepare the tested report and review repairs on the production baseline. Preserve read-only staff access to participant-reported conversations and the existing photo visibility protections. Use the same job action rules in Your Posts and Job Detail. See [QA repair contract](qa/2026-11-19/repair-contract.md) for behavior and the coordinated database and client release.
+
 ## Approved stabilization release (2026-11-18)
 
 DEC-149: Proceed with the reviewed release order: preserve the account-free development preview, validate the production web build, take a fresh private backup, apply the three committed security migrations in order, release through main and test the deployed app. Keep the preview disabled in production and preserve the previous deployment and migration history. This approval covers this coordinated release; it does not authorize resets, unrelated data changes, force-pushes or an Android/store release. Record observed outcomes in the release record.

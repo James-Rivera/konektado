@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ComponentProps } from 'react';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -70,7 +70,8 @@ export function ReportSheet({
   };
 
   return (
-    <BottomSheet maxHeight="88%" onClose={submitting ? () => {} : onClose} visible={visible}>
+    <BottomSheet avoidKeyboard maxHeight="88%" onClose={submitting ? () => {} : onClose} visible={visible}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>{helperText}</Text>
@@ -114,7 +115,9 @@ export function ReportSheet({
       <View style={styles.detailsWrap}>
         <Text style={styles.detailsLabel}>Details</Text>
         <TextInput
+          accessibilityLabel="Report details"
           editable={!submitting}
+          maxLength={5000}
           multiline
           onChangeText={setDetails}
           placeholder="Optional details for the barangay admin"
@@ -124,6 +127,7 @@ export function ReportSheet({
           value={details}
         />
       </View>
+      </ScrollView>
 
       <View style={styles.actions}>
         <PrimaryButton
@@ -145,6 +149,8 @@ export function ReportSheet({
 }
 
 const styles = StyleSheet.create({
+  scroll: { flexShrink: 1, minHeight: 0 },
+  form: { gap: space.lg, paddingBottom: space.sm },
   header: {
     gap: space.xs,
   },

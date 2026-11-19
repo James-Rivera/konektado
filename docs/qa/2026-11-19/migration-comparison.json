@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-19",
+  "timezone": "Asia/Manila",
+  "project_id": "dudlohdeydcbsvgccexd",
+  "read_only": true,
+  "local_count": 46,
+  "hosted_count": 45,
+  "hosted_only": [],
+  "local_only": [
+    {
+      "version": "20261118235200",
+      "name": "secure_report_review_moderation"
+    }
+  ],
+  "name_mismatches": [],
+  "recovered_statement_counts": [
+    {
+      "version": "20261118054147",
+      "statement_count": 5
+    },
+    {
+      "version": "20261118054152",
+      "statement_count": 20
+    },
+    {
+      "version": "20261118054156",
+      "statement_count": 17
+    }
+  ],
+  "normalization": "Normalize CRLF to LF, trim outer whitespace and terminate each hosted statement with a semicolon before joining with a blank line. Direct reconstructed-text equality verified for all three recovered files."
+}

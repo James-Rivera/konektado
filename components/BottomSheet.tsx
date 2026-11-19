@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { color, radius, shadow, space } from '@/constants/theme';
@@ -10,6 +10,7 @@ interface BottomSheetProps {
   onClose: () => void;
   visible: boolean;
   onShow?: () => void;
+  avoidKeyboard?: boolean;
 }
 
 /**
@@ -33,7 +34,7 @@ interface BottomSheetProps {
  * );
  * ```
  */
-export function BottomSheet({ children, maxHeight = '82%', onClose, visible, onShow }: BottomSheetProps) {
+export function BottomSheet({ children, maxHeight = '82%', onClose, visible, onShow, avoidKeyboard = false }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const [backdropOpacity] = useState(() => new Animated.Value(0));
   const [sheetTranslateY] = useState(() => new Animated.Value(500));
@@ -72,6 +73,7 @@ export function BottomSheet({ children, maxHeight = '82%', onClose, visible, onS
 
   return (
     <Modal onShow={onShow} animationType="none" onRequestClose={onClose} statusBarTranslucent transparent visible={visible}>
+      <KeyboardAvoidingView enabled={avoidKeyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardArea}>
       <Animated.View style={[styles.overlay, { opacity: backdropOpacity }]}>
         <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={onClose} style={styles.backdrop} />
         <Animated.View
@@ -88,11 +90,13 @@ export function BottomSheet({ children, maxHeight = '82%', onClose, visible, onS
           {children}
         </Animated.View>
       </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardArea: { flex: 1 },
   overlay: {
     backgroundColor: 'rgba(17,17,17,0.34)',
     flex: 1,

@@ -34,11 +34,16 @@ insert into public.conversation_reads(conversation_id,user_id) values
 insert into storage.objects(bucket_id,name) values
  ('message-attachments','70000000-0000-4000-8000-000000000002/71000000-0000-4000-8000-000000000001/a.jpg'),
  ('message-attachments','70000000-0000-4000-8000-000000000002/71000000-0000-4000-8000-000000000002/b.jpg');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','70000000-0000-4000-8000-000000000002',true);
 insert into public.reports(reporter_id,conversation_id,reason) values
  ('70000000-0000-4000-8000-000000000002','71000000-0000-4000-8000-000000000001','Fixture');
--- A historical unrelated report must not authorize access.
+reset role;
+-- Model a row that predates the insert guard. Restore the guard before testing access.
+alter table public.reports disable trigger guard_report_insert;
 insert into public.reports(reporter_id,conversation_id,reason) values
  ('70000000-0000-4000-8000-000000000003','71000000-0000-4000-8000-000000000002','Invalid legacy fixture');
+alter table public.reports enable trigger guard_report_insert;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','70000000-0000-4000-8000-000000000001',true);
 select pg_temp.assert_true('admin reads reported conversation',exists(select 1 from conversations where id='71000000-0000-4000-8000-000000000001'));

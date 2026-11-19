@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -32,6 +32,7 @@ import {
 import { createReview, getMyJobReviewState } from '@/services/review.service';
 import type { ConversationDetail, JobReviewState, Review } from '@/types/marketplace.types';
 import { showAlert } from '@/utils/alert';
+import { canHireFromConversation, getConversationReviewKey } from '@/utils/marketplace-lifecycle';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -63,25 +64,43 @@ export default function ConversationDetailsScreen() {
   const [reviewComment, setReviewComment] = useState('');
   const [submittedReview, setSubmittedReview] = useState<Review | null>(null);
   const [jobReviewState, setJobReviewState] = useState<JobReviewState | null>(null);
+  const [reviewRefresh, setReviewRefresh] = useState(0);
+  const loadRequestRef = useRef(0);
+  const viewGenerationRef = useRef(0);
 
-  const load = () => {
-    if (!conversationId) return;
+  useFocusEffect(useCallback(() => {
+    if (!conversationId || !profile?.id) return;
+    const request = ++loadRequestRef.current;
+    const generation = ++viewGenerationRef.current;
+    setCompleting(false);
+    setReviewSubmitting(false);
+    setReporting(false);
 
     getConversation(conversationId).then((result) => {
+      if (request !== loadRequestRef.current || generation !== viewGenerationRef.current) return;
       if (result.error) {
         showAlert('Details', result.error);
       } else {
         setConversation(result.data);
+        // A review may have been submitted, or the job completed, elsewhere.
+        setReviewRefresh((value) => value + 1);
       }
 
       setLoading(false);
+    }).catch(() => {
+      if (request !== loadRequestRef.current || generation !== viewGenerationRef.current) return;
+      showAlert('Details', 'Could not load this conversation. Check your connection and try again.');
+      setLoading(false);
     });
-  };
 
-  useEffect(load, [conversationId]);
+    return () => {
+      loadRequestRef.current += 1;
+      viewGenerationRef.current += 1;
+    };
+  }, [conversationId, profile?.id]));
 
   const isClient = conversation?.clientId === profile?.id;
-  const canMarkHired = Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
+  const canMarkHired = canHireFromConversation(conversation, profile?.id);
   const canMarkCompleted =
     Boolean(conversation?.jobId) &&
     isClient &&
@@ -97,14 +116,14 @@ export default function ConversationDetailsScreen() {
     [conversation.clientId, conversation.providerId].includes(profile.id)
       ? conversation.jobId
       : null;
-  const reviewKey = reviewJobId ? `${reviewJobId}:${profile?.id}` : null;
+  const reviewKey = getConversationReviewKey({ jobId: reviewJobId, userId: profile?.id, jobStatus: conversation?.job?.status, refresh: reviewRefresh });
   const reviewLoading = reviewKey !== null && loadedReviewKey !== reviewKey;
-  const currentJobReviewState = reviewKey ? jobReviewState : null;
+  const currentJobReviewState = reviewKey && !reviewLoading ? jobReviewState : null;
   const reviewState = getReviewState({
     conversation,
     jobReviewState: currentJobReviewState,
     loading: reviewLoading,
-    submittedReview: reviewKey ? submittedReview : null,
+    submittedReview: reviewKey && !reviewLoading ? submittedReview : null,
   });
 
   useEffect(() => {
@@ -121,6 +140,11 @@ export default function ConversationDetailsScreen() {
         setJobReviewState(result.data);
         setSubmittedReview(result.data?.review ?? null);
       }
+      setLoadedReviewKey(reviewKey);
+    }).catch(() => {
+      if (!active) return;
+      setSubmittedReview(null);
+      setJobReviewState(null);
       setLoadedReviewKey(reviewKey);
     });
 
@@ -169,21 +193,26 @@ export default function ConversationDetailsScreen() {
 
   const onMarkHired = async () => {
     if (!conversationId) return;
+    const generation = viewGenerationRef.current;
 
     const result = await markWorkerHired({ conversationId });
+    if (generation !== viewGenerationRef.current) return;
     if (result.error) {
       showAlert('Mark hired', result.error);
       return;
     }
 
+    loadRequestRef.current += 1;
     setConversation(result.data);
   };
 
   const onMarkCompleted = async () => {
     if (!conversationId) return;
+    const generation = viewGenerationRef.current;
 
     setCompleting(true);
     const result = await markHiredJobCompleted({ conversationId });
+    if (generation !== viewGenerationRef.current) return;
     setCompleting(false);
 
     if (result.error) {
@@ -191,12 +220,14 @@ export default function ConversationDetailsScreen() {
       return;
     }
 
+    loadRequestRef.current += 1;
     setConversation(result.data);
     showSuccessToast('Job marked completed');
   };
 
   const onSubmitReview = async () => {
     if (!conversation?.jobId) return;
+    const generation = viewGenerationRef.current;
 
     setReviewError(null);
     setReviewSubmitting(true);
@@ -205,6 +236,7 @@ export default function ConversationDetailsScreen() {
       rating: reviewRating,
       comment: reviewComment,
     });
+    if (generation !== viewGenerationRef.current) return;
     setReviewSubmitting(false);
 
     if (result.error) {
@@ -225,7 +257,8 @@ export default function ConversationDetailsScreen() {
   };
 
   const onReport = async ({ details, reason }: ReportSheetSubmitValue) => {
-    if (!conversationId || !conversation) return;
+    if (!conversationId || !conversation || reporting) return;
+    const generation = viewGenerationRef.current;
 
     setReporting(true);
     const result = await reportConversation({
@@ -237,6 +270,7 @@ export default function ConversationDetailsScreen() {
         conversation.clientId === profile?.id ? conversation.providerId : conversation.clientId,
       serviceId: conversation.serviceId,
     });
+    if (generation !== viewGenerationRef.current) return;
     setReporting(false);
 
     if (result.error) {

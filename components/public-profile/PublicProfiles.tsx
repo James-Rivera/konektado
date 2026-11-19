@@ -4,9 +4,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
+import { ReportSheet } from '@/components/ReportSheet';
 import { Skeleton, SkeletonAvatar, SkeletonChip, SkeletonText } from '@/components/Skeleton';
 import { getDisplayLabelForMvpService } from '@/constants/service-taxonomy';
 import { color, radius, space, typography } from '@/constants/theme';
+import { useReviewReport } from '@/hooks/use-review-report';
 import {
     formatJobBudget,
     formatJobPostTitle,
@@ -93,6 +95,7 @@ export function PublicWorkerProfileView({
   profile: PublicWorkerProfile;
 }) {
   const visibleServices = profile.services;
+  const reviewReport = useReviewReport();
 
   /*
    * Reading order follows what a resident decides on: who this is and whether
@@ -165,7 +168,7 @@ export function PublicWorkerProfileView({
           {profile.reviews.length ? (
             <View style={styles.cardList}>
               {profile.reviews.slice(0, 3).map((review) => (
-                <PublicReviewCard key={review.id} review={review} />
+                <PublicReviewCard key={review.id} review={review} onReport={adminViewOnly ? undefined : reviewReport.open} />
               ))}
             </View>
           ) : (
@@ -196,6 +199,7 @@ export function PublicWorkerProfileView({
         <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm schedule, exact location, and rate in Messages before starting." />
       </ScrollView>
       {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={withMessageHelper(cta)} />}
+      <ReportSheet {...reviewReport.sheet} />
     </View>
   );
 }
@@ -213,6 +217,7 @@ export function PublicClientProfileView({
   onOpenJob?: (jobId: string) => void;
   profile: PublicClientProfile;
 }) {
+  const reviewReport = useReviewReport();
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -273,7 +278,7 @@ export function PublicClientProfileView({
           {profile.reviews.length ? (
             <View style={styles.cardList}>
               {profile.reviews.slice(0, 3).map((review) => (
-                <PublicReviewCard key={review.id} review={review} />
+                <PublicReviewCard key={review.id} review={review} onReport={adminViewOnly ? undefined : reviewReport.open} />
               ))}
             </View>
           ) : (
@@ -294,6 +299,7 @@ export function PublicClientProfileView({
         <SafetyNote text="Payment and final agreement happen outside Konektado. Confirm scope, schedule, and budget in Messages before starting." />
       </ScrollView>
       {adminViewOnly ? null : <PublicProfileCta bottomInset={bottomInset} cta={withMessageHelper(cta)} />}
+      <ReportSheet {...reviewReport.sheet} />
     </View>
   );
 }
@@ -314,7 +320,7 @@ function CredentialCard({ credential }: { credential: CredentialSummary }) {
   );
 }
 
-function PublicReviewCard({ review }: { review: Review }) {
+function PublicReviewCard({ review, onReport }: { review: Review; onReport?: (review: Review) => void }) {
   return (
     <PublicCard>
       <View style={styles.contextHeaderRow}>
@@ -336,6 +342,11 @@ function PublicReviewCard({ review }: { review: Review }) {
             },
           ]}
         />
+      ) : null}
+      {onReport ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Report ${review.rating}/5 review`} onPress={() => onReport(review)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+          <Text style={{ ...typography.captionMedium, color: color.primaryText }}>Report review</Text>
+        </Pressable>
       ) : null}
     </PublicCard>
   );

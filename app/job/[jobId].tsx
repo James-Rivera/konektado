@@ -39,6 +39,7 @@ import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getDetailImageUrl } from '@/utils/image-processing';
 import { showAlert } from '@/utils/alert';
+import { getJobOwnerActionPolicy } from '@/utils/marketplace-lifecycle';
 import type { VerificationGateCopy } from '@/utils/verification-gate';
 
 function getParamValue(value: string | string[] | undefined) {
@@ -789,10 +790,9 @@ function getOwnerJobActions({
   updating: boolean;
 }) {
   const actions = [];
-  const isInactive = job.status === 'cancelled';
-  const isFinal = job.status === 'closed' || job.status === 'completed';
+  const policy = getJobOwnerActionPolicy(job.status);
 
-  if (['open', 'reviewing', 'cancelled'].includes(job.status)) {
+  if (policy.edit) {
     actions.push({
       disabled: updating,
       icon: 'edit' as const,
@@ -801,14 +801,14 @@ function getOwnerJobActions({
     });
   }
 
-  if (isInactive) {
+  if (policy.reactivate) {
     actions.push({
       disabled: updating,
       icon: 'play-circle' as const,
       label: updating ? 'Updating...' : 'Reactivate job',
       onPress: onReactivate,
     });
-  } else if (!isFinal) {
+  } else if (policy.deactivate) {
     actions.push({
       disabled: updating,
       icon: 'pause-circle' as const,
@@ -817,7 +817,7 @@ function getOwnerJobActions({
     });
   }
 
-  if (!isFinal) {
+  if (policy.close) {
     actions.push({
       disabled: updating,
       icon: 'task-alt' as const,

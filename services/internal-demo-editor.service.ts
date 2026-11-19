@@ -19,6 +19,7 @@ import {
   type PublicPhotoVisibility,
 } from '@/services/content-visibility.service';
 import { compactText, formatPublicLocation, isCurrentUserAdmin, normalizeRateType } from '@/services/marketplace.helpers';
+import { updateReportStatus } from '@/services/report.service';
 import type { JobStatus, RateType } from '@/types/marketplace.types';
 import {
   getCardCopyLocation,
@@ -1731,6 +1732,7 @@ export async function updateEditableConversationStatus(
 export async function updateEditableReportStatus(
   reportId: string,
   status: EditableReportStatus | string,
+  resolutionMessage?: string,
 ): Promise<ServiceResult<EditableReportSummary>> {
   const access = await requireInternalAccess();
   if (access.error || !access.data) return access;
@@ -1740,19 +1742,15 @@ export async function updateEditableReportStatus(
   if (!cleanReportId) return { data: null, error: 'Choose a report to update.' };
   if (!EDITABLE_REPORT_STATUSES.includes(cleanStatus)) return { data: null, error: 'Choose a valid report status.' };
 
-  const { data, error } = await supabase
-    .from('reports')
-    .update({
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: access.data.userId,
-      status: cleanStatus,
-    })
-    .eq('id', cleanReportId)
-    .select('id, reason, details, status, created_at')
-    .single<ReportRow>();
-
-  if (error) return { data: null, error: error.message };
-  return { data: mapReport(data), error: null };
+  const result = await updateReportStatus({ reportId: cleanReportId, status: cleanStatus, resolutionMessage });
+  if (result.error || !result.data) return { data: null, error: result.error ?? 'Could not update this report.' };
+  return { data: {
+    id: result.data.id,
+    reason: result.data.reason,
+    details: result.data.details ?? '',
+    status: result.data.status,
+    createdAt: result.data.createdAt,
+  }, error: null };
 }
 
 export async function moderateEditablePublicPhoto({

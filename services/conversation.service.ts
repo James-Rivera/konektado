@@ -31,7 +31,7 @@ const MESSAGE_COLUMNS =
   'id, conversation_id, sender_id, body, attachment_path, attachment_mime_type, attachment_width, attachment_height, created_at';
 const MESSAGE_ATTACHMENTS_BUCKET = 'message-attachments';
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 const SERVICE_COLUMNS =
   'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 
@@ -531,6 +531,25 @@ export async function getConversation(conversationId: string): Promise<ServiceRe
   };
 }
 
+async function hydrateSummaryListing(summary: ConversationSummary): Promise<ServiceResult<ConversationSummary>> {
+  // Inbox rows deliberately omit listing details. A thread refresh must not
+  // replace its loaded listing with the inbox's synthetic open/active values.
+  if (summary.jobId) {
+    const { data: job, error } = await supabase.from('jobs').select(JOB_COLUMNS)
+      .eq('id', summary.jobId).maybeSingle<JobRow>();
+    if (error) return { data: null, error: error.message };
+    const profiles = new Map(summary.client ? [[summary.clientId, summary.client]] : []);
+    summary.job = job ? mapJob(job, profiles) : null;
+  }
+  if (summary.serviceId) {
+    const { data: service, error } = await supabase.from('services').select(SERVICE_COLUMNS)
+      .eq('id', summary.serviceId).maybeSingle<ServiceRow>();
+    if (error) return { data: null, error: error.message };
+    summary.service = service ? mapService(service) : null;
+  }
+  return { data: summary, error: null };
+}
+
 export async function getConversationSummary(conversationId: string): Promise<ServiceResult<ConversationSummary>> {
   const { data: inboxRows, error: inboxError } = await supabase.rpc(
     'get_my_conversation_inbox',
@@ -543,7 +562,7 @@ export async function getConversationSummary(conversationId: string): Promise<Se
     if (!row) return { data: null, error: 'Conversation not found.' };
 
     const [summary] = await hydrateInboxProfiles([mapInboxRow(row)]);
-    return { data: summary, error: null };
+    return hydrateSummaryListing(summary);
   }
 
   const { data, error } = await supabase
@@ -556,7 +575,7 @@ export async function getConversationSummary(conversationId: string): Promise<Se
   if (!data) return { data: null, error: 'Conversation not found.' };
 
   const [summary] = await mapConversationRows([data]);
-  return { data: summary, error: null };
+  return hydrateSummaryListing(summary);
 }
 
 export async function startJobConversation({
@@ -1007,5 +1026,7 @@ export async function reportConversation({
     return { data: null, error: report.error };
   }
 
-  return updateConversationStatus({ conversationId, status: 'reported' });
+  // The complaint is durable now. Reporting is independent of hiring history,
+  // and a second write/read failure must not turn saved work into a retry prompt.
+  return { data: conversation.data, error: null };
 }

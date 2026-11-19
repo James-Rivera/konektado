@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Keyboard,
@@ -48,6 +48,7 @@ import {
 import type { ConversationDetail, ConversationMessage } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 import { showAlert } from '@/utils/alert';
+import { canHireFromConversation } from '@/utils/marketplace-lifecycle';
 
 const JOB_PROMPTS = ['Where is the exact location?', 'What should I bring?', 'Send me your location'];
 const SERVICE_PROMPTS = ['Are you available?', 'Can we discuss the schedule?', 'How much is your rate?'];
@@ -119,6 +120,7 @@ export default function ConversationDetailScreen() {
         setConversationError(result.error);
         showAlert('Conversation', result.error);
       } else {
+        setConversationError(null);
         setConversation(result.data);
         if (result.data && currentUserId && [result.data.clientId, result.data.providerId].includes(currentUserId)) void markConversationRead(conversationId).then((readResult) => {
           if (readResult.error) return;
@@ -132,15 +134,23 @@ export default function ConversationDetailScreen() {
 
       setLoading(false);
       setConversationReady(true);
+    }).catch(() => {
+      if (requestId !== loadRequestRef.current) return;
+      setConversationError('Could not refresh this conversation. Check your connection and retry.');
+      setLoading(false);
+      setConversationReady(true);
     });
   }, [conversationId, currentUserId]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchConversation();
-  }, [fetchConversation]);
+    return () => { loadRequestRef.current += 1; };
+  }, [fetchConversation]));
 
   useEffect(() => {
     if (!conversationId) return undefined;
+    let active = true;
+    let summaryRequest = 0;
 
     const channel = supabase
       .channel(`conversation-thread-${conversationId}`)
@@ -159,6 +169,7 @@ export default function ConversationDetailScreen() {
             const attachmentUrl = message.attachmentPath
               ? await getMessageAttachmentUrl(message.attachmentPath)
               : null;
+            if (!active) return;
             const hydratedMessage = { ...message, attachmentUrl };
             setConversation((current) => reconcileConversationMessage(current, hydratedMessage));
             emitConversationPreviewUpdate({ conversationId, message: hydratedMessage, userId: profile?.id });
@@ -184,20 +195,30 @@ export default function ConversationDetailScreen() {
           filter: `id=eq.${conversationId}`,
         },
         () => {
+          const request = ++summaryRequest;
           getConversationSummary(conversationId).then((result) => {
-            if (!result.data) return;
-            setConversation((current) => current ? { ...current, ...result.data } : current);
+            if (!active || request !== summaryRequest) return;
+            if (result.error || !result.data) {
+              setConversationError(result.error ?? 'Could not refresh the conversation details.');
+              return;
+            }
+            setConversationError(null);
+            setConversation((current) => current?.id === conversationId ? { ...current, ...result.data } : current);
             emitConversationPreviewUpdate({
               conversationId,
               conversation: result.data,
               userId: profile?.id,
             });
+          }).catch(() => {
+            if (!active || request !== summaryRequest) return;
+            setConversationError('Could not refresh the conversation details. Check your connection and retry.');
           });
         },
       )
       .subscribe();
 
     return () => {
+      active = false;
       supabase.removeChannel(channel);
     };
   }, [conversationId, profile?.id, currentUserId, participantClientId, participantProviderId]);
@@ -228,10 +249,8 @@ export default function ConversationDetailScreen() {
   const other =
     conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
   const avatarUrl = other?.avatarUrl ?? null;
-  const isClient = conversation?.clientId === profile?.id;
   const isJobConversation = Boolean(conversation?.jobId);
-  const canMarkHired =
-    Boolean(conversation?.jobId) && isClient && conversation?.status !== 'hired';
+  const canMarkHired = canHireFromConversation(conversation, profile?.id);
   const canOpenProfile = Boolean(
     conversation && profile?.id && [conversation.clientId, conversation.providerId].includes(profile.id),
   );
@@ -467,6 +486,15 @@ export default function ConversationDetailScreen() {
               scrollToBottom(false);
             }}
           />
+        ) : null}
+
+        {conversationError ? (
+          <View accessibilityRole="alert" style={{ paddingHorizontal: 16 }}>
+            <Text style={styles.sendError}>{conversationError}</Text>
+            <Pressable accessibilityRole="button" onPress={fetchConversation} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text>Retry conversation refresh</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <ScrollView

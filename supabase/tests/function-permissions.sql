@@ -36,6 +36,7 @@ begin
     'public.mark_conversation_read(uuid)',
     'public.create_completed_job_review(uuid,integer,text)',
     'public.get_my_conversation_inbox(boolean)',
+    'public.get_public_profile_trust_summary(uuid,text,integer)',
     'public.review_verification_request_atomic(uuid,text,text)',
     'public.internal_demo_create_job(uuid,jsonb)',
     'public.internal_demo_create_job_draft(uuid,jsonb)',
@@ -53,7 +54,6 @@ begin
     'public.get_public_profile_summaries(uuid[])',
     'public.get_public_client_profile_summaries(uuid[])',
     'public.get_public_provider_profile_summaries(uuid[])',
-    'public.get_public_profile_trust_summary(uuid,text,integer)',
     'public.is_barangay_admin()', 'public.is_verified_profile(uuid)'
   ] loop
     perform pg_temp.assert_permission(signature || ' retains anonymous dependencies', has_function_privilege('anon', signature, 'EXECUTE'));

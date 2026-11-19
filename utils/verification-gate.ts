@@ -17,7 +17,7 @@ export type VerificationGateStatus =
   | 'unverified';
 
 /** Interactions that barangay verification unlocks (docs/04-user-flows.md). */
-export type GatedAction = 'message' | 'save' | 'post' | 'hire' | 'review';
+export type GatedAction = 'message' | 'save' | 'post' | 'hire' | 'review' | 'report';
 
 export function resolveVerificationGateStatus({
   barangayVerifiedAt,
@@ -40,6 +40,7 @@ const ACTION_PHRASE: Record<GatedAction, string> = {
   message: 'messaging',
   post: 'posting',
   review: 'leaving reviews',
+  report: 'reporting content',
   save: 'saving posts',
 };
 

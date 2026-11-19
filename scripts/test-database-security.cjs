@@ -78,7 +78,12 @@ async function main() {
     await check('self approve credential', api(5, 'credentials', 'POST', { provider_id: uid(5), title: 'Forged', credential_type: 'other', status: 'approved' }), false);
     const credential = await check('submit pending credential', api(5, 'credentials', 'POST', { provider_id: uid(5), title: 'Proof', credential_type: 'other' }), true);
     await check('approve own pending credential', api(5, `credentials?id=eq.${credential.body[0].id}`, 'PATCH', { status: 'approved' }), false);
-    const job = { id: jid, owner_id: uid(2), client_id: uid(2), title: 'Test job', budget_min: 100, budget_max: 200, rate_type: 'per_job', private_location_notes: 'Secret gate', allow_messages: true };
+    const job = {
+      id: jid, owner_id: uid(2), client_id: uid(2), title: 'Test job', description: 'Synthetic local cleaning task',
+      category: 'Home & Local Help', service_needed: 'Cleaning', barangay: 'San Pedro',
+      scheduled_date: '2050-11-19', time_preference: 'morning', schedule_flexibility: 'flexible', schedule_timezone: 'Asia/Manila',
+      budget_min: 100, budget_max: 200, rate_type: 'per_job', private_location_notes: 'Secret gate', allow_messages: true,
+    };
     for (const n of [5,6]) {
       await check(`user ${n} bypass Hiring Profile gate`, api(n, 'jobs?select=id', 'POST', { ...job, owner_id: uid(n), client_id: uid(n) }), false);
       await check(`user ${n} bypass Work Profile gate`, api(n, 'services?select=id', 'POST', { provider_id: uid(n), title: 'Test', category: 'Cleaning', rate_min:100, rate_max:200, rate_type:'per_service' }), false);

@@ -177,7 +177,7 @@ function NotificationRow({
           {unread ? <View style={styles.unreadDot} /> : null}
         </View>
         {notification.body ? (
-          <Text numberOfLines={3} style={styles.body}>
+          <Text numberOfLines={notification.type === 'report_status_updated' ? undefined : 3} style={styles.body}>
             {notification.body}
           </Text>
         ) : null}

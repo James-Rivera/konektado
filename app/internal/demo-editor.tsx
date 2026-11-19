@@ -31,7 +31,6 @@ import {
   getEditableConversationStatuses,
   getEditableJobStatuses,
   getEditableRateTypes,
-  getEditableReportStatuses,
   getEditableVerificationFileTypes,
   getEditableUser,
   getInternalDemoEditorAccess,
@@ -41,7 +40,6 @@ import {
   updateEditableConversationStatus,
   updateEditableJob,
   updateEditableProfile,
-  updateEditableReportStatus,
   updateEditableService,
   updateVerificationNotes,
   upsertPrivateVerificationFile,
@@ -1987,6 +1985,7 @@ function PublicPhotosPreview({ user }: { user: EditableUserDetail }) {
 }
 
 function ActivitySummary({ user }: { user: EditableUserDetail }) {
+  const router = useRouter();
   const [conversations, setConversations] = useState<EditableConversationSummary[]>(user.conversations);
   const [reports, setReports] = useState<EditableReportSummary[]>(user.reports);
   const [savingActivityId, setSavingActivityId] = useState<string | null>(null);
@@ -2023,22 +2022,10 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
     );
   };
 
-  const saveReportStatus = async (report: EditableReportSummary, status: string) => {
-    if (report.status === status) return;
-    setSavingActivityId(`report-${report.id}`);
-    const result = await updateEditableReportStatus(report.id, status);
-    setSavingActivityId(null);
-    if (result.error || !result.data) {
-      showAlert('Report status', result.error ?? 'Could not update this report.');
-      return;
-    }
-    setReports((current) => current.map((item) => (item.id === report.id ? result.data : item)));
-  };
-
   return (
     <EditorPanel title="Conversations, Reviews, and Reports">
       <Notice icon="info">
-        Conversation messages and review text stay read-only. Status fields can be corrected for demo cleanup.
+        Conversation messages and review text stay read-only. Record complaint decisions in the report investigation screen.
       </Notice>
       <ActivityBlock count={conversations.length} icon="forum" title="Conversations">
         {conversations.slice(0, 8).map((item) => (
@@ -2071,12 +2058,12 @@ function ActivitySummary({ user }: { user: EditableUserDetail }) {
               <Text style={styles.activityMeta}>{item.reason || 'No reason'} - {formatDate(item.createdAt)}</Text>
             </View>
             <View style={styles.activityStatusControl}>
-              <SelectChips
-                label={savingActivityId === `report-${item.id}` ? 'Saving status' : 'Status'}
-                onSelect={(value) => void saveReportStatus(item, value)}
-                options={getEditableReportStatuses()}
-                value={item.status}
-              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/admin/reports', params: { reportId: item.id } })}
+                style={styles.secondaryButtonCompact}>
+                <Text style={styles.secondaryButtonText}>Investigate report</Text>
+              </Pressable>
             </View>
           </View>
         ))}

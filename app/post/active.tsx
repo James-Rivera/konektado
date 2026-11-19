@@ -15,6 +15,7 @@ import { getMyJobReviewState } from '@/services/review.service';
 import { listMyServices, updateServiceAvailability } from '@/services/service-profile.service';
 import type { JobReviewState, JobSummary, ProviderService } from '@/types/marketplace.types';
 import { showAlert } from '@/utils/alert';
+import { getJobOwnerActionPolicy } from '@/utils/marketplace-lifecycle';
 
 type ManageTarget =
   | { job: JobSummary; type: 'job' }
@@ -515,10 +516,9 @@ function getJobManagementActions({
       onPress: onView,
     },
   ];
-  const isInactive = job.status === 'cancelled';
-  const isFinal = job.status === 'closed' || job.status === 'completed';
+  const policy = getJobOwnerActionPolicy(job.status);
 
-  if (['open', 'reviewing', 'cancelled'].includes(job.status)) {
+  if (policy.edit) {
     actions.push({
       disabled: updating,
       icon: 'edit',
@@ -539,14 +539,14 @@ function getJobManagementActions({
     });
   }
 
-  if (isInactive) {
+  if (policy.reactivate) {
     actions.push({
       disabled: updating,
       icon: 'play-circle',
       label: updating ? 'Updating...' : 'Reactivate job',
       onPress: onReactivate,
     });
-  } else if (!isFinal) {
+  } else if (policy.deactivate) {
     actions.push({
       disabled: updating,
       icon: 'pause-circle',
@@ -555,7 +555,7 @@ function getJobManagementActions({
     });
   }
 
-  if (!isFinal) {
+  if (policy.close) {
     actions.push({
       disabled: updating,
       icon: 'task-alt',
