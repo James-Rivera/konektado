@@ -25,9 +25,9 @@ export default function RenewPostsScreen() {
 
         <View style={styles.emptyCard}>
           <MaterialIcons color={color.verificationBlue} name="event-available" size={36} />
-          <Text style={styles.emptyTitle}>Nothing to renew</Text>
+          <Text style={styles.emptyTitle}>Manage expired jobs</Text>
           <Text style={styles.emptyText}>
-            Konektado posts do not expire in this MVP. Manage visibility from Your Posts instead.
+            Unanswered job requests expire after their scheduled day in Philippine time. Visit Your Posts to see the status or post a new request.
           </Text>
           <Pressable
             accessibilityRole="button"

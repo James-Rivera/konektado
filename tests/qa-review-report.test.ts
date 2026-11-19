@@ -4,6 +4,18 @@ import { runtimeService } from './helpers/runtime-service';
 
 type HookValue = { open: (review: unknown) => void; sheet: { visible: boolean; submitting: boolean; onSubmit: (value: { reason: string; details: string | null }) => Promise<void> } };
 
+it('public reviews map only the role, rating and comment even on an older server', async () => {
+  const { getPublicProfileTrustSummary } = runtimeService<{ getPublicProfileTrustSummary: (id: string, role: 'worker') => Promise<{ data: { reviews: unknown[] } }> }>('@/services/review.service', {
+    '@/utils/supabase': { supabase: { rpc: async () => ({ error: null, data: {
+      recentReviews: [{ id: 'review', rating: 2, comment: 'Synthetic review', reviewer_id: 'author', job_id: 'job', created_at: 'today' }],
+    } }) } },
+    '@/services/marketplace.helpers': { loadPublicProfiles: () => { throw new Error('Public reviews must not load the author profile'); } },
+    '@/services/session.service': {},
+  });
+  const result = await getPublicProfileTrustSummary('profile', 'worker');
+  assert.equal(JSON.stringify(result.data.reviews), JSON.stringify([{ id: 'review', authorRole: 'client', rating: 2, comment: 'Synthetic review' }]));
+});
+
 it('an old account report response cannot close or clear a new account submission', async () => {
   // Execute the actual hook with a minimal hook scheduler and deferred service
   // boundary. This tests account/request ownership, not native rendering.

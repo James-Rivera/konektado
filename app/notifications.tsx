@@ -227,6 +227,7 @@ function getNotificationIcon(type: string) {
     case 'job_completed':
       return 'task-alt';
     case 'job_cancellation':
+    case 'job_expired':
       return 'event-busy';
     case 'report_status_updated':
       return 'report';

@@ -281,6 +281,7 @@ Rules:
 ### Cancellation and waiting for a worker
 
 - Before hiring, Your Posts shows whether a worker has messaged, the client is waiting for a reply, or no one has messaged yet. A client can pause a job or choose a reason and close it permanently.
+- An open request without a worker message expires after its scheduled day ends in Philippine time. The client receives a notice and can open the expired item in Your Posts. Existing chats stay readable.
 - After hiring, either participant opens Conversation Details to request cancellation. The other can accept or decline, and the requester can withdraw. Completion is paused until the request is settled.
 - An accepted cancellation closes the job and preserves the chat and hired worker. A dispute or unanswered request can be reported to San Pedro staff. [Full cancellation rules](24-panel-updates.md)
 

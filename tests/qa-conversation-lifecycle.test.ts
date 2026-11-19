@@ -183,6 +183,7 @@ describe('QA conversation lifecycle regressions', () => {
     const { canHireFromConversation } = lifecycleHelpers() as { canHireFromConversation: (conversation: unknown, userId: string) => boolean };
     const eligible = { clientId: 'client', jobId: 'job', hiredAt: null, status: 'active', job: { status: 'open', acceptedProviderId: null } };
     assert.equal(canHireFromConversation(eligible, 'client'), true);
+    assert.equal(canHireFromConversation({ ...eligible, jobRequestExpired: true }, 'client'), false);
     assert.equal(canHireFromConversation(eligible, 'worker'), false);
     for (const status of ['hired', 'declined', 'reported', 'archived']) assert.equal(canHireFromConversation({ ...eligible, status }, 'client'), false);
     for (const status of ['in_progress', 'completed', 'closed', 'cancelled']) assert.equal(canHireFromConversation({ ...eligible, job: { ...eligible.job, status } }, 'client'), false);

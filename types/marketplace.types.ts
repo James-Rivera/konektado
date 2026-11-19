@@ -10,7 +10,7 @@ export type JobStatus =
 export type ConversationStatus = 'active' | 'hired' | 'declined' | 'archived' | 'reported';
 
 export type UnfilledJobCancellationReason = 'not_needed' | 'found_elsewhere' | 'no_worker_found';
-export type JobClosureReason = UnfilledJobCancellationReason | 'mutual_cancellation';
+export type JobClosureReason = UnfilledJobCancellationReason | 'mutual_cancellation' | 'expired_no_worker';
 export type UnfilledJobInterest = 'worker_messaged' | 'awaiting_reply' | 'no_worker_message';
 export type HiredJobCancellationAction = 'request' | 'accept' | 'decline' | 'withdraw';
 export type HiredJobCancellationState = {
@@ -72,7 +72,7 @@ export type PublicClientProfile = {
   completedHiresCount: number;
   averageRating: number | null;
   reviewCount: number;
-  reviews: Review[];
+  reviews: PublicProfileReview[];
   hiringHistory: PublicProfileHistoryItem[];
   selectedJob: JobSummary | null;
   activeJobs: JobSummary[];
@@ -104,7 +104,7 @@ export type PublicWorkerProfile = {
   averageRating: number | null;
   reviewCount: number;
   credentials: CredentialSummary[];
-  reviews: Review[];
+  reviews: PublicProfileReview[];
   workHistory: PublicProfileHistoryItem[];
   selectedService: ProviderService | null;
   services: ProviderService[];
@@ -431,6 +431,7 @@ export type ConversationSummary = {
 
 export type ConversationDetail = ConversationSummary & {
   messages: ConversationMessage[];
+  jobRequestExpired?: boolean;
 };
 
 export type Review = {
@@ -457,6 +458,13 @@ export type CreateReviewInput = {
   comment?: string | null;
 };
 
+export type PublicProfileReview = {
+  id: string;
+  authorRole: 'client' | 'worker';
+  rating: number;
+  comment: string | null;
+};
+
 export type JobReviewState = {
   eligible: boolean;
   reason:
@@ -478,7 +486,7 @@ export type PublicProfileTrustSummary = {
   reviewCount: number;
   completedJobsCount: number;
   jobsPostedCount: number;
-  reviews: Review[];
+  reviews: PublicProfileReview[];
   history: {
     id: string;
     title: string;

@@ -9,7 +9,7 @@ type Filters = { discoveryCategory?: string; discoveryWorkType?: string; service
 
 function fixture(rows: Row[]) {
   const operations: string[] = [];
-  const supabase = { from(table: string) {
+  const supabase = { rpc: async () => ({ data: [], error: null }), from(table: string) {
     let selected = ''; let limit = Infinity; const predicates: ((row: Row) => boolean)[] = [];
     const q = {
       select(value: string) { selected = value; return q; },

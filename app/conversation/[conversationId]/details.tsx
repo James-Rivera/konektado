@@ -700,7 +700,7 @@ function ReviewDialog({
           <Text style={styles.dialogTitle}>Leave review</Text>
           <Text style={styles.dialogBody}>
             Rate the {revieweeRole === 'client' ? 'client' : 'hired worker'} after this completed job.
-            Reviews cannot be edited after submission.
+            Reviews are public and cannot be edited after submission. Leave out names, addresses, and contact details.
           </Text>
 
           <View style={styles.ratingRow}>
@@ -803,13 +803,16 @@ function getContextSummary(conversation: ConversationDetail) {
 
 function getDetailMetrics(conversation: ConversationDetail) {
   if (conversation.job) {
+    const closureReason = conversation.jobRequestExpired ? 'expired_no_worker' : conversation.job.closureReason;
     return [
       { label: 'Budget', value: formatJobBudget(conversation.job) },
       { label: 'Location', value: getMarketplaceLocation(conversation.job) },
       { label: 'Schedule', value: conversation.job.scheduleText ?? 'Not yet agreed' },
-      { label: 'Job Status', value: getJobClosureLabel(conversation.job.closureReason) ?? formatStatus(conversation.job.status) },
+      { label: 'Job Status', value: getJobClosureLabel(closureReason) ?? formatStatus(conversation.job.status) },
     ];
   }
+
+  if (conversation.jobRequestExpired) return [{ label: 'Job Status', value: 'Expired without a worker' }];
 
   if (conversation.service) {
     return [

@@ -57,83 +57,13 @@ function formatSupabaseError(message: string) {
 async function loadClientStats(clientIds: string[]) {
   const ids = Array.from(new Set(clientIds.filter(Boolean)));
   const stats = new Map<string, ClientStats>();
-
-  for (const id of ids) {
-    stats.set(id, {
-      averageRating: null,
-      reviewCount: 0,
-      jobsPostedCount: 0,
-    });
-  }
-
-  if (!ids.length) {
-    return stats;
-  }
-
-  const [{ data: ownedJobs }, { data: clientJobs }] = await Promise.all([
-    supabase.from('jobs').select('id, owner_id, client_id').in('owner_id', ids),
-    supabase.from('jobs').select('id, owner_id, client_id').in('client_id', ids),
-  ]);
-
-  const jobsByClient = new Map<string, Set<string>>();
-  const jobRows = [
-    ...((ownedJobs as { id: string; owner_id: string; client_id: string | null }[] | null) ?? []),
-    ...((clientJobs as { id: string; owner_id: string; client_id: string | null }[] | null) ?? []),
-  ];
-
-  for (const row of jobRows) {
-    const matchingClientIds = [row.owner_id, row.client_id].filter(
-      (value): value is string => Boolean(value && ids.includes(value)),
-    );
-
-    for (const clientId of matchingClientIds) {
-      const current = jobsByClient.get(clientId) ?? new Set<string>();
-      current.add(row.id);
-      jobsByClient.set(clientId, current);
-    }
-  }
-
-  for (const [id, jobs] of jobsByClient) {
-    const current = stats.get(id) ?? {
-      averageRating: null,
-      reviewCount: 0,
-      jobsPostedCount: 0,
-    };
-
-    stats.set(id, {
-      ...current,
-      jobsPostedCount: jobs.size,
-    });
-  }
-
-  const allJobIds = Array.from(new Set(jobRows.map((job) => job.id)));
-  if (allJobIds.length) {
-    const { data: reviews } = await supabase
-      .from('reviews')
-      .select('job_id, reviewee_id, rating')
-      .in('job_id', allJobIds)
-      .in('reviewee_id', ids);
-
-    const reviewRows = ((reviews as { job_id: string; reviewee_id: string; rating: number }[] | null) ?? [])
-      .filter((row) => ids.includes(row.reviewee_id));
-
-    for (const id of ids) {
-      const clientJobIds = jobsByClient.get(id) ?? new Set<string>();
-      const clientReviews = reviewRows.filter((row) => row.reviewee_id === id && clientJobIds.has(row.job_id));
-      const reviewCount = clientReviews.length;
-      const averageRating = reviewCount
-        ? clientReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
-        : null;
-      const current = stats.get(id) ?? { jobsPostedCount: 0, averageRating: null, reviewCount: 0 };
-
-      stats.set(id, {
-        ...current,
-        averageRating,
-        reviewCount,
-      });
-    }
-  }
-
+  if (!ids.length) return stats;
+  const { data, error } = await supabase.rpc('get_client_reputation_counts', { p_client_ids: ids });
+  if (error) return stats;
+  const rows = (data ?? []) as { client_id: string; average_rating: number | null; review_count: number; jobs_posted_count: number }[];
+  for (const row of rows) stats.set(row.client_id, {
+    averageRating: row.average_rating, reviewCount: row.review_count, jobsPostedCount: row.jobs_posted_count,
+  });
   return stats;
 }
 

@@ -260,7 +260,7 @@ Prepared hardening (DEC-146): the ordinary inbox remains participant-only. Admin
 - The authenticated reviewer must be one of those two participants. The RPC derives the other participant and rejects self-review.
 - A unique reviewer/reviewee/job constraint prevents duplicate reviews.
 - Review rows are immutable after creation; normal users cannot update identity, job linkage, rating, or comment.
-- Public trust summaries expose only aggregate ratings, counts, review text, and safe completed-job labels/dates. They do not expose contact details, private location notes, messages, or verification files.
+- Public profile reviews expose a rating, comment, role label, and an opaque review reference for reports. Authors and authorized staff can access the original review. Reporter-facing review complaints omit the author's identity and job reference, including in existing complaint history.
 
 ## Public vs Private Data
 

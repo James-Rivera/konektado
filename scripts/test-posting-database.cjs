@@ -64,6 +64,8 @@ function concurrent(statement) {
   console.log('PASS: function ACLs, role guards, defaults, search paths and triggers');
   sql('',db,'supabase/tests/panel-job-cancellation.sql');
   console.log('PASS: job cancellation, worker interest and safe reputation counts');
+  sql('',db,'supabase/tests/panel-privacy-expiry.sql');
+  console.log('PASS: review identity, safe complaint evidence, and unanswered job expiry');
   const call = `set role authenticated; select set_config('request.jwt.claim.sub','71000000-0000-4000-8000-000000000001',false); select public.publish_job_draft('72000000-0000-4000-8000-000000000099');`;
   const [a,b] = await Promise.all([concurrent(call),concurrent(call)]);
   assert.equal(a,b,'concurrent publication must return the same listing');
@@ -81,15 +83,18 @@ function concurrent(statement) {
   const completeJob = '94500000-0000-4000-8000-000000000002';
   const cancelChat = '94600000-0000-4000-8000-000000000001';
   const completeChat = '94600000-0000-4000-8000-000000000002';
+  const expiryJob = '94500000-0000-4000-8000-000000000003';
+  const expiryChat = '94600000-0000-4000-8000-000000000003';
   const as = (actor, statement) => `set role authenticated; select set_config('request.jwt.claim.sub','${actor}',false); ${statement}`;
   sql(`insert into public.jobs(id, owner_id, client_id, title, description, category, service_needed, barangay, location_text,
       budget_min, budget_max, rate_type, workers_needed, scheduled_date, time_preference, schedule_flexibility, schedule_timezone)
     select race_job, '${client}', '${client}', 'Race fixture', 'Synthetic cleaning request', 'Home & Local Help',
       'Cleaning', 'San Pedro', 'San Pedro', 100, 200, 'per_job', 1, current_date+1, 'morning', 'flexible', 'Asia/Manila'
-    from unnest(array['${cancelJob}'::uuid,'${completeJob}'::uuid]) race_job;
+    from unnest(array['${cancelJob}'::uuid,'${completeJob}'::uuid,'${expiryJob}'::uuid]) race_job;
     insert into public.conversations(id,job_id,client_id,provider_id,started_by) values
       ('${cancelChat}','${cancelJob}','${client}','${worker}','${worker}'),
-      ('${completeChat}','${completeJob}','${client}','${worker}','${worker}');`);
+      ('${completeChat}','${completeJob}','${client}','${worker}','${worker}'),
+      ('${expiryChat}','${expiryJob}','${client}','${worker}','${worker}');`);
   const hireRace = await Promise.allSettled([
     concurrent(as(client, `select public.cancel_unfilled_job('${cancelJob}', 'not_needed');`)),
     concurrent(as(client, `select public.mark_job_worker_hired('${cancelChat}');`)),
@@ -107,6 +112,15 @@ function concurrent(statement) {
   const completionOutcome = completionRace[0].status === 'fulfilled' ? 'in_progress:pending' : 'completed:none';
   assert.equal(sql(`select j.status || ':' || coalesce(r.status,'none') from jobs j left join app_private.hired_job_cancellations r on r.job_id=j.id where j.id='${completeJob}'`), completionOutcome);
   console.log('PASS: pre-hire cancellation versus hire and post-hire request versus completion race checks');
+  sql(`update public.jobs set scheduled_date=(now() at time zone 'Asia/Manila')::date where id='${expiryJob}'`);
+  const expiryRace = await Promise.allSettled([
+    concurrent(as(worker, `insert into public.messages(conversation_id, sender_id, body) values ('${expiryChat}',auth.uid(),'Synthetic first reply') returning id;`)),
+    concurrent(`select app_private.expire_unanswered_jobs((((now() at time zone 'Asia/Manila')::date+1)::timestamp) at time zone 'Asia/Manila');`),
+  ]);
+  assert.equal(expiryRace[1].status, 'fulfilled', 'the expiry sweep must be safe while a worker replies');
+  const expiryOutcome = expiryRace[0].status === 'fulfilled' ? 'open:1' : 'closed:0';
+  assert.equal(sql(`select status || ':' || (select count(*) from messages where conversation_id='${expiryChat}') from jobs where id='${expiryJob}'`), expiryOutcome);
+  console.log('PASS: a first worker reply and automatic closure cannot both win');
   console.log(`Isolated test database retained for inspection: ${db} on 127.0.0.1:${port}`);
 })().catch(error=>{
   console.error(error.message);

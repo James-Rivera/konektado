@@ -5,6 +5,7 @@ export type NotificationType =
   | 'verification_needs_more_info'
   | 'job_completed'
   | 'job_cancellation'
+  | 'job_expired'
   | 'report_status_updated';
 
 export type NotificationSummary = {

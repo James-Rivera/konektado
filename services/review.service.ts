@@ -3,6 +3,7 @@ import { compactText, loadPublicProfiles } from '@/services/marketplace.helpers'
 import type {
   CreateReviewInput,
   JobReviewState,
+  PublicProfileReview,
   PublicProfileTrustSummary,
   Review,
 } from '@/types/marketplace.types';
@@ -41,7 +42,7 @@ type TrustPayload = {
   reviewCount?: number | string | null;
   completedJobsCount?: number | string | null;
   jobsPostedCount?: number | string | null;
-  recentReviews?: ReviewRow[] | null;
+  recentReviews?: { id: string; rating: number; comment: string | null; author_role?: PublicProfileReview['authorRole'] }[] | null;
   recentHistory?: {
     id: string;
     title: string;
@@ -144,7 +145,12 @@ export async function getPublicProfileTrustSummary(
   if (error) return { data: null, error: error.message };
 
   const payload = (data ?? {}) as TrustPayload;
-  const reviews = await mapReviewRows(payload.recentReviews ?? []);
+  const reviews: PublicProfileReview[] = (payload.recentReviews ?? []).map((row) => ({
+    id: row.id,
+    authorRole: row.author_role ?? (role === 'worker' ? 'client' : 'worker'),
+    rating: Number(row.rating),
+    comment: row.comment,
+  }));
   return {
     data: {
       averageRating:
@@ -166,14 +172,14 @@ export async function getPublicProfileTrustSummary(
   };
 }
 
-export async function listWorkerReviews(userId: string): Promise<ServiceResult<Review[]>> {
+export async function listWorkerReviews(userId: string): Promise<ServiceResult<PublicProfileReview[]>> {
   const result = await getPublicProfileTrustSummary(userId, 'worker');
   return result.error
     ? { data: null, error: result.error }
     : { data: result.data?.reviews ?? [], error: null };
 }
 
-export async function listClientReviews(userId: string): Promise<ServiceResult<Review[]>> {
+export async function listClientReviews(userId: string): Promise<ServiceResult<PublicProfileReview[]>> {
   const result = await getPublicProfileTrustSummary(userId, 'client');
   return result.error
     ? { data: null, error: result.error }

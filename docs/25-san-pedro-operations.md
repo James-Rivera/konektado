@@ -6,7 +6,7 @@ San Pedro staff have agreed to operate verification and complaints. Use assigned
 
 1. Review pending verification in the staff dashboard and record the outcome in the app. Handle resident identity documents only through the assigned account and agreed process.
 2. Open **Reports** regularly on the staff schedule. Move a complaint to **Reviewing**, inspect the complaint and related evidence, and record what was checked in the private notes. Open a reported conversation only when it is relevant to the complaint.
-3. Set **Resolved** or **Dismissed** after deciding the outcome. Write a separate message explaining the decision and any next step to the resident. Hide or restore a reported review only when the relevant moderation decision calls for it, and record the rationale.
+3. Set **Resolved** or **Dismissed** after deciding the outcome. Write a separate message explaining the decision and any next step to the resident. Keep the review author's identity in private evidence. Hide or restore a reported review only when the relevant moderation decision calls for it, and record the rationale.
 4. For a stalled or disputed cancellation, use the complaint process to contact the parties through the agreed channel. The hired participants control the app cancellation decision. Escalate unresolved cases through the designated barangay contact. Agree and publish that contact before pilot acceptance.
 
 ## Handover checklist

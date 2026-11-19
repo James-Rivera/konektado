@@ -568,15 +568,11 @@ export function ProfileHistoryCard({
 }
 
 export function ReviewCard({
-  author,
   body,
-  dateLabel,
   rating,
   title,
 }: {
-  author: string;
   body: string;
-  dateLabel: string;
   rating: string;
   title: string;
 }) {
@@ -587,18 +583,12 @@ export function ReviewCard({
           <MaterialIcons color={color.accentYellow} name="star" size={15} />
           <Text style={styles.reviewRatingText}>{rating}</Text>
         </View>
-        <Text numberOfLines={1} style={styles.reviewDate}>
-          {dateLabel}
-        </Text>
       </View>
       <Text numberOfLines={1} style={styles.reviewTitle}>
         {title}
       </Text>
       <Text numberOfLines={3} style={styles.reviewBody}>
         {body}
-      </Text>
-      <Text numberOfLines={1} style={styles.reviewAuthor}>
-        From: {author}
       </Text>
     </View>
   );
@@ -1425,10 +1415,6 @@ const styles = StyleSheet.create({
     ...typography.captionMedium,
     color: color.text,
   },
-  reviewDate: {
-    ...typography.caption,
-    color: color.textMuted,
-  },
   reviewTitle: {
     ...typography.bodyMedium,
     color: color.text,
@@ -1438,12 +1424,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: color.text,
-  },
-  reviewAuthor: {
-    fontFamily: 'Satoshi-Regular',
-    fontSize: 10,
-    lineHeight: 16,
-    color: color.textMuted,
   },
   emptyPanel: {
     alignItems: 'flex-start',

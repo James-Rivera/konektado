@@ -276,7 +276,7 @@ export default function ConversationDetailScreen() {
     retryMessageId?: string,
     overrideAttachment?: MessageAttachmentDraft | null,
   ) => {
-    if (!conversationId || !isParticipant) return;
+    if (!conversationId || !isParticipant || conversation?.jobRequestExpired) return;
 
     const messageBody = (overrideBody ?? body).trim();
     const messageAttachment = overrideAttachment ?? selectedAttachment;
@@ -332,6 +332,11 @@ export default function ConversationDetailScreen() {
 
     if (result.error) {
       setSendError(result.error);
+      if (result.error.includes('job request expired after its scheduled day')) {
+        replaceMessage(tempMessage.id, null);
+        setConversation((current) => current?.id === conversationId ? { ...current, jobRequestExpired: true } : current);
+        return;
+      }
       if (isProfileCompletionRequiredError(result.error)) {
         const mode =
           getCompletionModeForError(result.error) ??
@@ -546,7 +551,7 @@ export default function ConversationDetailScreen() {
           })}
         </ScrollView>
 
-        {isParticipant ? <View style={styles.composerWrap}>
+        {isParticipant && !conversation?.jobRequestExpired ? <View style={styles.composerWrap}>
           {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
           {selectedAttachment ? (
             <View style={styles.attachmentPreview}>
@@ -597,7 +602,9 @@ export default function ConversationDetailScreen() {
               <MaterialIcons color={color.verificationBlue} name="send" size={24} />
             </Pressable>
           </View>
-        </View> : <View style={styles.composerWrap}><Text style={styles.threadStatus}>Read-only moderation view</Text></View>}
+        </View> : <View style={styles.composerWrap}><Text style={styles.threadStatus}>
+          {isParticipant ? 'This job request expired. You can still view the chat.' : 'Read-only moderation view'}
+        </Text></View>}
       </KeyboardAvoidingView>
       <Modal
         animationType="fade"

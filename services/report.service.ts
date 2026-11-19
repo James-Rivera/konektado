@@ -32,6 +32,13 @@ export async function createReport(input: CreateReportInput): Promise<ServiceRes
   if (!reason) return { data: null, error: 'Choose a report reason before submitting.' };
   if (reason.length > 200 || (details?.length ?? 0) > 10000) return { data: null, error: 'Keep the reason within 200 characters and details within 10,000 characters.' };
   if (!reportedUserId && !jobId && !serviceId && !conversationId && !reviewId) return { data: null, error: 'Choose what you want to report before submitting.' };
+  if (reviewId) {
+    if (reportedUserId || jobId || serviceId || conversationId) return { data: null, error: 'Choose only the review as the report target.' };
+    const { data, error } = await supabase.rpc('submit_review_report', { p_review_id: reviewId, p_reason: reason, p_details: details });
+    if (error) return { data: null, error: toReportError(error.message) };
+    const [report] = await mapReportRows([data as ReportRow]);
+    return { data: report, error: null };
+  }
   const { data, error } = await supabase.from('reports').insert({
     reporter_id: user.data, reported_user_id: reportedUserId, job_id: jobId,
     service_id: serviceId, conversation_id: conversationId, review_id: reviewId, reason, details,
@@ -45,10 +52,9 @@ export async function getMyReports({ limit = 50, statuses }: ListReportsInput = 
   const user = await getCurrentUserId();
   if (user.error) return user;
   if (!user.data) return { data: null, error: 'Please sign in again to continue.' };
-  let query = supabase.from('reports').select(REPORTER_COLUMNS).eq('reporter_id', user.data)
-    .order('created_at', { ascending: false }).limit(normalizeLimit(limit));
-  if (statuses?.length) query = query.in('status', statuses);
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc('get_my_report_page', {
+    p_limit: normalizeLimit(limit), p_statuses: statuses?.length ? statuses : null,
+  });
   if (error) return { data: null, error: toReportError(error.message) };
   return { data: await mapReportRows((data as ReportRow[] | null) ?? []), error: null };
 }

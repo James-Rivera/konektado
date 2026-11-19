@@ -2,6 +2,7 @@ import { manilaDate } from '@/services/job-schedule';
 import type { ConversationSummary, JobClosureReason, JobStatus, JobSummary } from '@/types/marketplace.types';
 
 export function getJobClosureLabel(reason?: JobClosureReason | null) {
+  if (reason === 'expired_no_worker') return 'Expired without a worker';
   if (reason === 'no_worker_found') return 'Closed without a worker';
   return reason ? 'Cancelled' : null;
 }
@@ -31,11 +32,11 @@ export function getJobOwnerActionPolicy(status: JobStatus) {
 }
 
 export function canHireFromConversation(
-  conversation: ConversationSummary | null,
+  conversation: (ConversationSummary & { jobRequestExpired?: boolean }) | null,
   userId?: string | null,
 ) {
   return Boolean(
-    userId && conversation?.clientId === userId && conversation.jobId &&
+    userId && conversation?.clientId === userId && conversation.jobId && !conversation.jobRequestExpired &&
     conversation.status === 'active' && !conversation.hiredAt &&
     conversation.job && ['open', 'reviewing'].includes(conversation.job.status) &&
     !conversation.job.acceptedProviderId,

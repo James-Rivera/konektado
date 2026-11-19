@@ -5,7 +5,7 @@ import type { ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { useProfile } from '@/hooks/use-profile';
 import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { createReport } from '@/services/report.service';
-import type { Review } from '@/types/marketplace.types';
+import type { PublicProfileReview } from '@/types/marketplace.types';
 import { showAlert } from '@/utils/alert';
 
 /** Review reporting uses the shared resident gate and a service-owned target. */
@@ -13,7 +13,7 @@ export function useReviewReport() {
   const { profile } = useProfile();
   const { requireVerified } = useVerificationGate();
   const { showSuccessToast } = useFeedback();
-  const [target, setTarget] = useState<{ review: Review; userId: string } | null>(null);
+  const [target, setTarget] = useState<{ review: PublicProfileReview; userId: string } | null>(null);
   const [submission, setSubmission] = useState<{ id: number; userId: string } | null>(null);
   const pending = useRef<{ id: number; userId: string } | null>(null);
   const sequence = useRef(0);
@@ -32,7 +32,7 @@ export function useReviewReport() {
   const currentTarget = target?.userId === profile?.id ? target : null;
   const submitting = Boolean(submission && submission.userId === profile?.id);
 
-  const open = (review: Review) => {
+  const open = (review: PublicProfileReview) => {
     if (!profile?.id) {
       showAlert('Sign in required', 'Sign in before reporting a review.');
       return;

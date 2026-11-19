@@ -44,7 +44,7 @@ import type {
     JobSummary,
     ProviderService,
     PublicProfileHistoryItem,
-    Review,
+    PublicProfileReview,
 } from '@/types/marketplace.types';
 import type {
     ProfileCompletionAction,
@@ -69,8 +69,8 @@ export default function ProfileScreen() {
   const [workHistory, setWorkHistory] = useState<PublicProfileHistoryItem[]>([]);
   const [hiringHistory, setHiringHistory] = useState<PublicProfileHistoryItem[]>([]);
   const [credentials, setCredentials] = useState<CredentialSummary[]>([]);
-  const [workerReviews, setWorkerReviews] = useState<Review[]>([]);
-  const [clientReviews, setClientReviews] = useState<Review[]>([]);
+  const [workerReviews, setWorkerReviews] = useState<PublicProfileReview[]>([]);
+  const [clientReviews, setClientReviews] = useState<PublicProfileReview[]>([]);
   const [quickActionsVisible, setQuickActionsVisible] = useState(false);
   const [listingSkillSheetVisible, setListingSkillSheetVisible] = useState(false);
   const hasLoadedProfileDataRef = useRef(false);
@@ -512,7 +512,7 @@ function WorkProfileContent({
   onCreateListingForSkill: () => void;
   onManageServices: () => void;
   onOpenService: (serviceId: string) => void;
-  reviews: Review[];
+  reviews: PublicProfileReview[];
   services: ProviderService[];
 }) {
   const skillLabels = uniqueList([
@@ -656,9 +656,7 @@ function WorkProfileContent({
         {reviews.length ? (
           reviews.slice(0, 3).map((review) => (
             <ReviewCard
-              author={review.reviewer?.fullName ?? 'Resident'}
               body={review.comment || 'No written feedback.'}
-              dateLabel={formatShortDate(review.createdAt)}
               key={review.id}
               rating={review.rating.toFixed(1)}
               title="Client feedback"
@@ -751,7 +749,7 @@ function HiringProfileContent({
   onCompleteHiring: () => void;
   onManagePosts: () => void;
   onOpenJob: (jobId: string) => void;
-  reviews: Review[];
+  reviews: PublicProfileReview[];
 }) {
   const neededServices = uniqueList([
     ...(completion?.hiring.neededServices ?? []),
@@ -843,9 +841,7 @@ function HiringProfileContent({
         {reviews.length ? (
           reviews.slice(0, 3).map((review) => (
             <ReviewCard
-              author={review.reviewer?.fullName ?? 'Resident'}
               body={review.comment || 'No written feedback.'}
-              dateLabel={formatShortDate(review.createdAt)}
               key={review.id}
               rating={review.rating.toFixed(1)}
               title="Worker feedback"
@@ -928,7 +924,7 @@ function getWorkMetrics({
   services,
 }: {
   completion: ProfileCompletionStatus | null;
-  reviews: Review[];
+  reviews: PublicProfileReview[];
   services: ProviderService[];
 }): MetricItem[] {
   return [
@@ -944,7 +940,7 @@ function getHiringMetrics({
   reviews,
 }: {
   jobs: JobSummary[];
-  reviews: Review[];
+  reviews: PublicProfileReview[];
 }): MetricItem[] {
   const openJobs = jobs.filter((job) => ['open', 'reviewing', 'in_progress'].includes(job.status));
 
@@ -989,7 +985,7 @@ function getInitials(name: string) {
   return initials || 'K';
 }
 
-function formatAverageRating(reviews: Review[]) {
+function formatAverageRating(reviews: PublicProfileReview[]) {
   if (!reviews.length) return '-';
   return (reviews.reduce((total, review) => total + review.rating, 0) / reviews.length).toFixed(1);
 }

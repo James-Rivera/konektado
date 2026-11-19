@@ -96,7 +96,7 @@ export function CompletedJobReviewCard({
           <View style={styles.dialog}>
             <Text style={styles.dialogTitle}>Review {roleLabel}</Text>
             <Text style={styles.body}>
-              Reviews are tied to this completed job and cannot be edited after submission.
+              Reviews are public and cannot be edited after submission. Leave out names, addresses, and contact details.
             </Text>
             <View style={styles.stars}>
               {Array.from({ length: 5 }).map((_, index) => {

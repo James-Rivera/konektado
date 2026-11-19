@@ -24,7 +24,7 @@ import type {
     PublicClientProfile,
     PublicProfileHistoryItem,
     PublicWorkerProfile,
-    Review,
+    PublicProfileReview,
 } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl } from '@/utils/image-processing';
 
@@ -320,28 +320,18 @@ function CredentialCard({ credential }: { credential: CredentialSummary }) {
   );
 }
 
-function PublicReviewCard({ review, onReport }: { review: Review; onReport?: (review: Review) => void }) {
+function PublicReviewCard({ review, onReport }: { review: PublicProfileReview; onReport?: (review: PublicProfileReview) => void }) {
   return (
     <PublicCard>
       <View style={styles.contextHeaderRow}>
         <View style={styles.cardCopy}>
           <Text style={styles.cardTitle}>{review.rating.toFixed(1)} rating</Text>
-          <Text style={styles.cardMeta}>From {review.reviewer?.fullName ?? 'Resident'}</Text>
+          <Text style={styles.cardMeta}>From a {review.authorRole}</Text>
         </View>
         <MaterialIcons color={color.brandYellow} name="star" size={20} />
       </View>
       {review.comment ? (
         <Text numberOfLines={3} style={styles.bodyText}>{review.comment}</Text>
-      ) : null}
-      {review.jobContext ? (
-        <DetailRows
-          rows={[
-            {
-              icon: 'task-alt',
-              text: `${review.jobContext.title} · ${formatShortDate(review.jobContext.completedAt)}`,
-            },
-          ]}
-        />
       ) : null}
       {onReport ? (
         <Pressable accessibilityRole="button" accessibilityLabel={`Report ${review.rating}/5 review`} onPress={() => onReport(review)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>

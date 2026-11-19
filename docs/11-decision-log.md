@@ -2,6 +2,10 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Panel review privacy and expiry (2026-11-19)
+
+DEC-152: Show review authors by role and remove account and job attribution from public reviews and reporter responses. Retain the original evidence for staff and the author's own submitted review. Expire only open dated requests with no worker message after the scheduled day in Philippine time. Send one in-app notice, keep job and chat history, and register the database schedule only during an approved rollout. [Panel contract](24-panel-updates.md)
+
 ## Panel follow-up for cancellation (2026-11-19)
 
 DEC-151: Keep temporary pausing and permanent cancellation distinct. Before hire the client selects a reason, including no worker found. After hire either participant can request cancellation, the other can accept or decline, and the requester can withdraw. Pending requests block completion. Accepted cancellations retain job and conversation history. Use the complaint workflow for disputes. Keep San Pedro as the pilot and reserve payment, refund, and billing proposals for future research. See [panel update contract](24-panel-updates.md).

@@ -512,12 +512,12 @@ export async function getConversation(conversationId: string): Promise<ServiceRe
   if (error) return { data: null, error: error.message };
   if (!data) return { data: null, error: 'Conversation not found.' };
 
-  const [summary] = await mapConversationRows([data]);
-  const { data: messages, error: messageError } = await supabase
-    .from('messages')
-    .select(MESSAGE_COLUMNS)
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true });
+  const [[summary], { data: messages, error: messageError }, expiry] = await Promise.all([
+    mapConversationRows([data]),
+    supabase.from('messages').select(MESSAGE_COLUMNS).eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true }),
+    data.job_id ? supabase.rpc('get_job_chat_expired', { p_conversation_id: conversationId }) : null,
+  ]);
 
   if (messageError) return { data: null, error: messageError.message };
 
@@ -525,6 +525,7 @@ export async function getConversation(conversationId: string): Promise<ServiceRe
   return {
     data: {
       ...summary,
+      jobRequestExpired: expiry?.data === true || summary.job?.closureReason === 'expired_no_worker',
       messages: await hydrateMessageAttachmentUrls(mappedMessages),
     },
     error: null,
