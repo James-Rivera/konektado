@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { useFeedback } from '@/components/FeedbackProvider';
+import { JobCancellationSheet } from '@/components/JobCancellationSheet';
 import { PresenceDot } from '@/components/PresenceDot';
 import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
 import { Skeleton } from '@/components/Skeleton';
@@ -21,6 +22,7 @@ import {
   reportConversation,
 } from '@/services/conversation.service';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
+import { changeHiredJobCancellation, getHiredJobCancellation } from '@/services/job-cancellation.service';
 import {
   formatJobBudget,
   formatJobPostTitle,
@@ -30,9 +32,9 @@ import {
   isPresenceActive,
 } from '@/services/marketplace.helpers';
 import { createReview, getMyJobReviewState } from '@/services/review.service';
-import type { ConversationDetail, JobReviewState, Review } from '@/types/marketplace.types';
+import type { ConversationDetail, HiredJobCancellationAction, HiredJobCancellationState, JobReviewState, Review } from '@/types/marketplace.types';
 import { showAlert } from '@/utils/alert';
-import { canHireFromConversation, getConversationReviewKey } from '@/utils/marketplace-lifecycle';
+import { canHireFromConversation, getConversationReviewKey, getJobClosureLabel } from '@/utils/marketplace-lifecycle';
 
 type MaterialIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -55,6 +57,11 @@ export default function ConversationDetailsScreen() {
   // Remembers which URL failed, so a new avatar URL gets a fresh attempt.
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [cancellation, setCancellation] = useState<{ key: string; state: HiredJobCancellationState | null; error: string | null } | null>(null);
+  const [cancellationRefresh, setCancellationRefresh] = useState(0);
+  const [cancellationVisible, setCancellationVisible] = useState(false);
+  const [cancellationBusy, setCancellationBusy] = useState(false);
+  const cancellationPendingWrite = useRef(false);
   const [reviewVisible, setReviewVisible] = useState(false);
   // The review key whose state has finished loading; loading is derived from it.
   const [loadedReviewKey, setLoadedReviewKey] = useState<string | null>(null);
@@ -75,6 +82,9 @@ export default function ConversationDetailsScreen() {
     setCompleting(false);
     setReviewSubmitting(false);
     setReporting(false);
+    setCancellationBusy(false);
+    setCancellationVisible(false);
+    cancellationPendingWrite.current = false;
 
     getConversation(conversationId).then((result) => {
       if (request !== loadRequestRef.current || generation !== viewGenerationRef.current) return;
@@ -100,12 +110,23 @@ export default function ConversationDetailsScreen() {
   }, [conversationId, profile?.id]));
 
   const isClient = conversation?.clientId === profile?.id;
+  const hiredConversationId = conversationId && conversation?.id === conversationId && conversation.jobId &&
+    conversation.status === 'hired' && conversation.hiredAt && profile?.id &&
+    [conversation.clientId, conversation.providerId].includes(profile.id) &&
+    conversation.job?.acceptedProviderId === conversation.providerId &&
+    ['in_progress', 'closed'].includes(conversation.job.status) ? conversationId : null;
+  const cancellationKey = hiredConversationId ? `${hiredConversationId}:${profile?.id}:${reviewRefresh}:${cancellationRefresh}` : null;
+  const currentCancellation = cancellationKey && cancellation?.key === cancellationKey ? cancellation : null;
+  const cancellationRequest = currentCancellation?.state?.request;
+  const hasPendingCancellation = cancellationRequest?.status === 'pending';
+  const requestedByMe = cancellationRequest?.requested_by === profile?.id;
   const canMarkHired = canHireFromConversation(conversation, profile?.id);
   const canMarkCompleted =
     Boolean(conversation?.jobId) &&
     isClient &&
     conversation?.status === 'hired' &&
-    conversation?.job?.status === 'in_progress';
+    conversation?.job?.status === 'in_progress' &&
+    !hasPendingCancellation && currentCancellation?.state?.job_status === 'in_progress';
   const context = conversation ? getContextSummary(conversation) : null;
   const other = conversation?.clientId === profile?.id ? conversation?.provider : conversation?.client;
   const otherAvatarUrl = other?.avatarUrl ?? null;
@@ -125,6 +146,17 @@ export default function ConversationDetailsScreen() {
     loading: reviewLoading,
     submittedReview: reviewKey && !reviewLoading ? submittedReview : null,
   });
+
+  useEffect(() => {
+    if (!hiredConversationId || !cancellationKey) return;
+    let active = true;
+    getHiredJobCancellation(hiredConversationId).then((result) => {
+      if (active) setCancellation({ key: cancellationKey, state: result.data, error: result.error });
+    }).catch(() => {
+      if (active) setCancellation({ key: cancellationKey, state: null, error: 'Could not load the cancellation status.' });
+    });
+    return () => { active = false; };
+  }, [hiredConversationId, cancellationKey]);
 
   useEffect(() => {
     if (!reviewJobId || !reviewKey) return;
@@ -217,12 +249,54 @@ export default function ConversationDetailsScreen() {
 
     if (result.error) {
       showAlert('Mark completed', result.error);
+      setCancellationRefresh((value) => value + 1);
       return;
     }
 
     loadRequestRef.current += 1;
     setConversation(result.data);
     showSuccessToast('Job marked completed');
+  };
+
+  const onCancellationAction = async (action: HiredJobCancellationAction, reason?: string) => {
+    if (!hiredConversationId || !cancellationKey || cancellationPendingWrite.current) return 'Wait for the current update to finish.';
+    const generation = viewGenerationRef.current;
+    cancellationPendingWrite.current = true;
+    setCancellationBusy(true);
+    try {
+      const result = await changeHiredJobCancellation({
+        conversationId: hiredConversationId,
+        action,
+        expectedId: cancellationRequest?.id ?? null,
+        reason,
+      });
+      if (generation !== viewGenerationRef.current) return null;
+      if (result.error || !result.data) return result.error ?? 'Could not update the cancellation request.';
+      const state = result.data;
+      setCancellation({ key: cancellationKey, state, error: null });
+      if (state.job_status === 'closed' && state.request?.status === 'accepted') {
+        setConversation((current) => current?.id === hiredConversationId && current.job
+          ? { ...current, job: { ...current.job, status: 'closed', closureReason: 'mutual_cancellation' } }
+          : current);
+      }
+      showSuccessToast(action === 'request' ? 'Cancellation requested' : 'Cancellation updated');
+      return null;
+    } catch {
+      return 'Could not confirm the update. Check your connection and try again.';
+    } finally {
+      if (generation === viewGenerationRef.current) {
+        cancellationPendingWrite.current = false;
+        setCancellationBusy(false);
+      }
+    }
+  };
+
+  const respondToCancellation = async (action: Exclude<HiredJobCancellationAction, 'request'>) => {
+    const error = await onCancellationAction(action);
+    if (error) {
+      showAlert('Job cancellation', error);
+      setCancellationRefresh((value) => value + 1);
+    }
   };
 
   const onSubmitReview = async () => {
@@ -368,6 +442,47 @@ export default function ConversationDetailsScreen() {
 
           {conversation ? (
             <>
+              {hiredConversationId ? (
+                <ActionList title="Job cancellation">
+                  {!currentCancellation ? (
+                    <Text style={styles.metricLabel}>Checking cancellation status…</Text>
+                  ) : currentCancellation.error ? (
+                    <ActionRow description={currentCancellation.error} icon="refresh" label="Retry cancellation status"
+                      onPress={() => setCancellationRefresh((value) => value + 1)} />
+                  ) : (
+                    <>
+                      {cancellationRequest ? (
+                        <View style={styles.cancellationSummary}>
+                          <Text accessibilityRole="header" style={styles.metricValue}>
+                            {hasPendingCancellation ? 'Cancellation requested' : `Cancellation ${cancellationRequest.status}`}
+                          </Text>
+                          <Text style={styles.metricLabel}>{cancellationRequest.reason}</Text>
+                          {hasPendingCancellation ? <Text style={styles.metricLabel}>
+                            {requestedByMe ? 'Waiting for the other person. You can withdraw this request or report a concern.' : 'Accept or decline to let the other person know. For disagreements, use Report below.'}
+                          </Text> : null}
+                        </View>
+                      ) : null}
+                      {hasPendingCancellation && requestedByMe ? (
+                        <>
+                          <ActionRow disabled={cancellationBusy} icon="refresh" label="Check for a response" onPress={() => setCancellationRefresh((value) => value + 1)} />
+                          <ActionRow disabled={cancellationBusy} icon="undo" label="Withdraw request" onPress={() => void respondToCancellation('withdraw')} />
+                        </>
+                      ) : hasPendingCancellation ? (
+                        <>
+                          <ActionRow disabled={cancellationBusy} icon="check-circle" label="Accept cancellation"
+                            onPress={() => showAlert('Accept cancellation?', 'This permanently closes the job. The chat will still be available.', [
+                              { text: 'Go back', style: 'cancel' },
+                              { text: 'Accept cancellation', style: 'destructive', onPress: () => void respondToCancellation('accept') },
+                            ])} />
+                          <ActionRow disabled={cancellationBusy} icon="cancel" label="Decline cancellation" onPress={() => void respondToCancellation('decline')} />
+                        </>
+                      ) : currentCancellation.state?.job_status === 'in_progress' ? (
+                        <ActionRow disabled={cancellationBusy} icon="event-busy" label="Request cancellation" onPress={() => setCancellationVisible(true)} />
+                      ) : null}
+                    </>
+                  )}
+                </ActionList>
+              ) : null}
               <ActionList title="Actions">
                 {canMarkHired ? (
                   <ActionRow icon="check-circle" label="Mark worker hired" onPress={onMarkHired} />
@@ -437,6 +552,10 @@ export default function ConversationDetailsScreen() {
         title="Report conversation"
         visible={reportVisible}
       />
+      {cancellationVisible && hiredConversationId ? (
+        <JobCancellationSheet key={hiredConversationId} mode="hired" onClose={() => setCancellationVisible(false)}
+          onSubmit={(reason) => onCancellationAction('request', reason)} />
+      ) : null}
 
       <DeleteChatDialog
         onCancel={() => setDeleteVisible(false)}
@@ -688,7 +807,7 @@ function getDetailMetrics(conversation: ConversationDetail) {
       { label: 'Budget', value: formatJobBudget(conversation.job) },
       { label: 'Location', value: getMarketplaceLocation(conversation.job) },
       { label: 'Schedule', value: conversation.job.scheduleText ?? 'Not yet agreed' },
-      { label: 'Job Status', value: formatStatus(conversation.job.status) },
+      { label: 'Job Status', value: getJobClosureLabel(conversation.job.closureReason) ?? formatStatus(conversation.job.status) },
     ];
   }
 
@@ -911,6 +1030,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
   },
+  cancellationSummary: { gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
   actionListWrap: {
     gap: 8,
   },

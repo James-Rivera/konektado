@@ -38,7 +38,7 @@ type ProviderStats = {
   completedJobsCount: number;
 };
 
-async function loadProviderStats(providerIds: string[]) {
+async function loadProviderStats(providerIds: string[], requireCounts = false) {
   const ids = Array.from(new Set(providerIds.filter(Boolean)));
   const stats = new Map<string, ProviderStats>();
 
@@ -46,53 +46,23 @@ async function loadProviderStats(providerIds: string[]) {
     return stats;
   }
 
-  const { data: completedJobs } = await supabase
-    .from('jobs')
-    .select('id, accepted_provider_id, status')
-    .in('accepted_provider_id', ids)
-    .in('status', ['completed', 'closed']);
-
-  const completedRows =
-    ((completedJobs as { id: string; accepted_provider_id: string | null; status: string }[] | null) ?? []);
-  const completedJobIds = completedRows.map((row) => row.id);
-
-  if (completedJobIds.length) {
-    const { data: reviews } = await supabase
-      .from('reviews')
-      .select('job_id, reviewee_id, rating')
-      .in('job_id', completedJobIds)
-      .in('reviewee_id', ids);
-
-    const reviewRows =
-      ((reviews as { job_id: string; reviewee_id: string; rating: number }[] | null) ?? [])
-        .filter((row) => ids.includes(row.reviewee_id));
-
-    for (const providerId of ids) {
-      const providerReviews = reviewRows.filter((row) => row.reviewee_id === providerId);
-      const reviewCount = providerReviews.length;
-      const averageRating = reviewCount
-        ? providerReviews.reduce((total, row) => total + row.rating, 0) / reviewCount
-        : null;
-
-      stats.set(providerId, {
-        ...(stats.get(providerId) ?? { completedJobsCount: 0 }),
-        averageRating,
-        reviewCount,
-      });
-    }
+  const { data, error } = await supabase.rpc('get_provider_reputation_counts', { p_provider_ids: ids });
+  if (error) {
+    if (requireCounts) throw new Error('Provider rankings are unavailable. Try again.');
+    return stats;
   }
-
-  for (const row of completedRows) {
-    if (!row.accepted_provider_id) continue;
-
-    const current = stats.get(row.accepted_provider_id) ?? {
-      averageRating: null,
-      reviewCount: 0,
-      completedJobsCount: 0,
-    };
-
-    current.completedJobsCount += 1;
-    stats.set(row.accepted_provider_id, current);
+  const rows = (data ?? []) as {
+    provider_id: string;
+    average_rating: number | null;
+    review_count: number;
+    completed_jobs_count: number;
+  }[];
+  for (const row of rows) {
+    stats.set(row.provider_id, {
+      averageRating: row.average_rating,
+      reviewCount: row.review_count,
+      completedJobsCount: row.completed_jobs_count,
+    });
   }
 
   return stats;
@@ -407,15 +377,7 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
 
   if (filters.rateMin !== null && filters.rateMin !== undefined) query = query.gte('rate_max', filters.rateMin);
   if (filters.rateMax !== null && filters.rateMax !== undefined) query = query.lte('rate_min', filters.rateMax);
-  query = query.limit(limit);
-
-  const { data, error } = await query;
-
-  if (error) {
-    return { data: null, error: error.message };
-  }
-
-  const rows = ((data as ServiceRow[] | null) ?? []).filter((row) => {
+  const matches = (row: ServiceRow) => {
     if (excludeUserId && row.provider_id === excludeUserId) return false;
     if (
       !doesRateOverlap({
@@ -441,23 +403,31 @@ export async function searchServices(filters: ServiceSearchFilters = {}): Promis
     ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text));
-  });
-  // These three enrichment steps are independent: photo moderation only edits
-  // `photo_urls` inside each row (it maps, never filters), so the provider ids
-  // are already known from `rows`. Running them together turns three sequential
-  // round trips into one. No step is skipped - only the ordering changed.
-  const [visibleRows, profiles, stats] = await Promise.all([
-    applyPublicPhotoVisibilityToRows(rows, 'service_photo'),
-    loadPublicProfiles(rows.map((row) => row.provider_id)),
-    loadProviderStats(rows.map((row) => row.provider_id)),
-  ]);
-
-  return {
-    data: visibleRows
-      .map((row) => mapServiceSearchResult(row, profiles, stats))
-      .filter((service) => isPublicProfileVerified(service.provider)),
-    error: null,
   };
+
+  if (filters.compareReputation) query = query.order('id', { ascending: true });
+  const results: ServiceSearchResult[] = [];
+  try {
+    // Comparison must reach older offers. The ordinary feed keeps its recent-page behavior.
+    for (let offset = 0; ; offset += limit) {
+      const { data, error } = await (filters.compareReputation ? query.range(offset, offset + limit - 1) : query.limit(limit));
+      if (error) return { data: null, error: error.message };
+      const page = (data as ServiceRow[] | null) ?? [];
+      const rows = page.filter(matches);
+      const providerIds = rows.map((row) => row.provider_id);
+      const [visibleRows, profiles, stats] = await Promise.all([
+        applyPublicPhotoVisibilityToRows(rows, 'service_photo'),
+        loadPublicProfiles(providerIds),
+        loadProviderStats(providerIds, filters.compareReputation),
+      ]);
+      results.push(...visibleRows.map((row) => mapServiceSearchResult(row, profiles, stats))
+        .filter((service) => isPublicProfileVerified(service.provider)));
+      if (!filters.compareReputation || page.length < limit) break;
+    }
+    return { data: results, error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : 'Could not load services.' };
+  }
 }
 
 function normalizeLimit(value: number | undefined) {

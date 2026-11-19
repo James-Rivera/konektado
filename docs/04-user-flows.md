@@ -278,6 +278,12 @@ Rules:
 7. After completion, both sides can leave feedback.
 8. Client sees Review worker; the accepted worker sees Review client. A submitted review replaces the action with the immutable submitted state.
 
+### Cancellation and waiting for a worker
+
+- Before hiring, Your Posts shows whether a worker has messaged, the client is waiting for a reply, or no one has messaged yet. A client can pause a job or choose a reason and close it permanently.
+- After hiring, either participant opens Conversation Details to request cancellation. The other can accept or decline, and the requester can withdraw. Completion is paused until the request is settled.
+- An accepted cancellation closes the job and preserves the chat and hired worker. A dispute or unanswered request can be reported to San Pedro staff. [Full cancellation rules](24-panel-updates.md)
+
 ## Admin Verification Flow
 
 1. Barangay admin logs in.

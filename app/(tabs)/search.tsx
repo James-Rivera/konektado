@@ -63,6 +63,7 @@ import { searchServices } from '@/services/service-profile.service';
 import type { JobSummary, ServiceSearchResult } from '@/types/marketplace.types';
 import type { UserPreferences } from '@/types/onboarding.types';
 import { showAlert } from '@/utils/alert';
+import { isProviderReputationSort, sortByProviderReputation } from '@/utils/service-reputation';
 
 function getParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0];
@@ -294,6 +295,7 @@ export default function SearchScreen() {
             experienceLevel: appliedFilters.experienceLevel,
             certificationAvailable:
               appliedFilters.certification === 'required_or_available' ? true : undefined,
+            compareReputation: isProviderReputationSort(appliedFilters.sort),
             verifiedOnly: appliedFilters.verifiedOnly,
             limit: SEARCH_LIMIT,
           }).then((result) => {
@@ -970,6 +972,7 @@ export default function SearchScreen() {
         />
 
         <SearchFiltersSheet
+          compareProviders={mode === 'workers'}
           filters={draftFilters}
           groups={sheetGroupOptions}
           onApply={handleApplyFilters}
@@ -1141,6 +1144,7 @@ function rankJobsForSearch(items: JobSummary[], context: RankingContext) {
 
 function rankWorkersForSearch(items: ServiceSearchResult[], context: RankingContext) {
   if (context.filters.sort === 'newest') return items;
+  if (isProviderReputationSort(context.filters.sort)) return sortByProviderReputation(items, context.filters.sort);
 
   return [...items].sort((left, right) => {
     const leftScore =

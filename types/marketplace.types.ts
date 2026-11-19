@@ -9,6 +9,20 @@ export type JobStatus =
 
 export type ConversationStatus = 'active' | 'hired' | 'declined' | 'archived' | 'reported';
 
+export type UnfilledJobCancellationReason = 'not_needed' | 'found_elsewhere' | 'no_worker_found';
+export type JobClosureReason = UnfilledJobCancellationReason | 'mutual_cancellation';
+export type UnfilledJobInterest = 'worker_messaged' | 'awaiting_reply' | 'no_worker_message';
+export type HiredJobCancellationAction = 'request' | 'accept' | 'decline' | 'withdraw';
+export type HiredJobCancellationState = {
+  job_status: JobStatus;
+  request: {
+    id: string;
+    requested_by: string;
+    reason: string;
+    status: 'pending' | 'accepted' | 'declined' | 'withdrawn';
+  } | null;
+};
+
 export type RateType =
   | 'per_service'
   | 'hourly'
@@ -128,6 +142,8 @@ export type JobSummary = {
   certificationRequired: boolean;
   certificationNote: string | null;
   status: JobStatus;
+  closureReason?: JobClosureReason | null;
+  unfilledInterest?: UnfilledJobInterest | null;
   acceptedProviderId: string | null;
   allowMessages: boolean;
   autoReplyEnabled: boolean;
@@ -258,6 +274,7 @@ export type ServiceSearchFilters = {
   excludeUserId?: string | null;
   excludeCurrentUser?: boolean;
   limit?: number;
+  compareReputation?: boolean;
 };
 
 export type ProviderService = {

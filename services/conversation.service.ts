@@ -31,7 +31,7 @@ const MESSAGE_COLUMNS =
   'id, conversation_id, sender_id, body, attachment_path, attachment_mime_type, attachment_width, attachment_height, created_at';
 const MESSAGE_ATTACHMENTS_BUCKET = 'message-attachments';
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, status, closure_reason, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 const SERVICE_COLUMNS =
   'id, provider_id, category, title, description, tags, photo_urls, years_experience, availability_text, rate_text, rate_min, rate_max, rate_type, rate_negotiable, experience_level, certification_available, certification_note, custom_category, custom_category_review_status, barangay, location_text, allow_messages, auto_reply_enabled, auto_pause_enabled, is_active, created_at, updated_at';
 

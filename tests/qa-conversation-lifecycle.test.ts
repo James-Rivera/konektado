@@ -167,6 +167,7 @@ describe('QA conversation lifecycle regressions', () => {
       getConversation: () => new Promise((resolve) => pending.push(resolve)),
       setConversation: (value: unknown) => loaded.push(value), setReviewRefresh() {}, setLoading() {},
       setCompleting() {}, setReviewSubmitting() {}, setReporting() {}, showAlert() {},
+      setCancellationBusy() {}, setCancellationVisible() {}, cancellationPendingWrite: { current: false },
     };
     const firstCleanup = focusCallback(context)();
     firstCleanup();
@@ -191,11 +192,11 @@ describe('QA conversation lifecycle regressions', () => {
   it('offers supported owner actions for every job lifecycle state', () => {
     const getActions = declaredFunction<(input: Record<string, unknown>) => { label: string }[]>('app/job/[jobId].tsx', 'getOwnerJobActions', lifecycleHelpers());
     const expected: Record<string, string[]> = {
-      open: ['Edit job', 'Deactivate job', 'Close job'], reviewing: ['Edit job', 'Deactivate job', 'Close job'],
-      cancelled: ['Edit job', 'Reactivate job', 'Close job'], in_progress: [], completed: [], closed: [],
+      open: ['Edit job', 'Pause job', 'Cancel job request'], reviewing: ['Edit job', 'Pause job', 'Cancel job request'],
+      cancelled: ['Edit job', 'Reactivate job', 'Cancel job request'], in_progress: ['Manage cancellation'], completed: [], closed: [],
     };
     for (const [status, labels] of Object.entries(expected)) {
-      const result = getActions({ job: { status }, updating: false, onClose() {}, onDeactivate() {}, onEdit() {}, onReactivate() {} });
+      const result = getActions({ job: { status }, updating: false, onClose() {}, onDeactivate() {}, onEdit() {}, onManageCancellation() {}, onReactivate() {} });
       assert.deepEqual(Array.from(result, (item) => item.label), labels, status);
     }
   });
@@ -204,12 +205,12 @@ describe('QA conversation lifecycle regressions', () => {
     const getActions = declaredFunction<(input: Record<string, unknown>) => { label: string }[]>('app/post/active.tsx', 'getJobManagementActions', lifecycleHelpers());
     const labels = (status: string, reviewState: object | null = null) => Array.from(getActions({
       job: { status }, updating: false, reviewState,
-      onView() {}, onClose() {}, onDeactivate() {}, onEdit() {}, onReactivate() {}, onReview() {},
+      onView() {}, onClose() {}, onDeactivate() {}, onEdit() {}, onManageCancellation() {}, onReactivate() {}, onReview() {},
     }), (item) => item.label);
 
-    assert.deepEqual(labels('in_progress'), ['View']);
-    assert.deepEqual(labels('open'), ['View', 'Edit job', 'Deactivate job', 'Close job']);
-    assert.deepEqual(labels('cancelled'), ['View', 'Edit job', 'Reactivate job', 'Close job']);
+    assert.deepEqual(labels('in_progress'), ['View', 'Manage cancellation']);
+    assert.deepEqual(labels('open'), ['View', 'Edit job', 'Pause job', 'Cancel job request']);
+    assert.deepEqual(labels('cancelled'), ['View', 'Edit job', 'Reactivate job', 'Cancel job request']);
     assert.deepEqual(labels('completed', { eligible: true }), ['View', 'Review worker']);
     assert.deepEqual(labels('completed', { reason: 'already_reviewed' }), ['View', 'View submitted review']);
   });

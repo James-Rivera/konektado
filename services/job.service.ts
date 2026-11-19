@@ -33,11 +33,12 @@ import type {
   JobStatus,
   JobSummary,
   RateType,
+  UnfilledJobInterest,
 } from '@/types/marketplace.types';
 import { supabase } from '@/utils/supabase';
 
 const JOB_COLUMNS =
-  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, status, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
+  'id, owner_id, client_id, title, description, category, service_needed, tags, photo_urls, barangay, location, location_text, budget_min, budget_max, rate_type, budget_negotiable, workers_needed, scheduled_date, time_preference, exact_time, schedule_flexibility, schedule_timezone, schedule_text, experience_level, certification_required, certification_note, status, closure_reason, accepted_provider_id, allow_messages, auto_reply_enabled, auto_close_enabled, created_at, updated_at, closed_at';
 
 type ClientStats = {
   averageRating: number | null;
@@ -145,6 +146,13 @@ function applyClientStats(job: JobSummary, stats: Map<string, ClientStats>): Job
     clientReviewCount: clientStats?.reviewCount ?? 0,
     clientJobsPostedCount: clientStats?.jobsPostedCount ?? 0,
   };
+}
+
+async function loadUnfilledInterest(jobIds: string[]) {
+  if (!jobIds.length) return new Map<string, UnfilledJobInterest>();
+  const { data, error } = await supabase.rpc('get_my_unfilled_job_interest', { p_job_ids: jobIds });
+  if (error) return new Map<string, UnfilledJobInterest>();
+  return new Map(((data ?? []) as { job_id: string; interest: UnfilledJobInterest }[]).map((row) => [row.job_id, row.interest]));
 }
 
 export async function createJob(input: CreateJobInput): Promise<ServiceResult<JobSummary>> {
@@ -259,12 +267,13 @@ export async function listMyJobs(): Promise<ServiceResult<JobSummary[]>> {
   // Both lookups only need the client ids (`mapJob` uses the same
   // `client_id ?? owner_id`), so they share one round trip.
   const clientIds = rows.map((row) => row.client_id ?? row.owner_id);
-  const [profiles, stats] = await Promise.all([
+  const [profiles, stats, interest] = await Promise.all([
     loadPublicProfiles(clientIds),
     loadClientStats(clientIds),
+    loadUnfilledInterest(rows.filter((row) => ['open', 'reviewing'].includes(row.status) && !row.accepted_provider_id).map((row) => row.id)),
   ]);
   const jobs = rows.map((row) => mapJob(row, profiles));
-  return { data: jobs.map((job) => applyClientStats(job, stats)), error: null };
+  return { data: jobs.map((job) => ({ ...applyClientStats(job, stats), unfilledInterest: interest.get(job.id) ?? null })), error: null };
 }
 
 export async function searchJobs(filters: JobSearchFilters = {}): Promise<ServiceResult<JobSummary[]>> {
@@ -547,7 +556,7 @@ function escapePostgrestFilterValue(value: string) {
   return value.replace(/[,%]/g, '\\$&');
 }
 
-export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDetail>> {
+export async function getJobDetail(jobId: string, viewerId?: string): Promise<ServiceResult<JobDetail>> {
   const { data, error } = await supabase
     .from('jobs')
     .select(JOB_COLUMNS)
@@ -564,16 +573,19 @@ export async function getJobDetail(jobId: string): Promise<ServiceResult<JobDeta
 
   // All three only need the job row, so they share one round trip.
   const clientId = data.client_id ?? data.owner_id;
-  const [[visibleData], profiles, stats] = await Promise.all([
+  const [[visibleData], profiles, stats, interest] = await Promise.all([
     applyPublicPhotoVisibilityToRows([data], 'job_photo'),
     loadPublicProfiles([clientId]),
     loadClientStats([clientId]),
+    viewerId === clientId && ['open', 'reviewing'].includes(data.status) && !data.accepted_provider_id
+      ? loadUnfilledInterest([data.id]) : null,
   ]);
   const job = mapJob(visibleData, profiles);
 
   return {
     data: {
       ...applyClientStats(job, stats),
+      unfilledInterest: interest?.get(job.id) ?? null,
       closedAt: data.closed_at ?? null,
     },
     error: null,
@@ -620,8 +632,4 @@ export function deactivateJob(jobId: string) {
 
 export function reactivateJob(jobId: string) {
   return updateJobStatus({ jobId, status: 'open' });
-}
-
-export function closeJob(jobId: string) {
-  return updateJobStatus({ jobId, status: 'closed' });
 }

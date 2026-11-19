@@ -62,6 +62,8 @@ function concurrent(statement) {
   console.log('PASS: participant-scoped inbox and reported moderation access');
   sql('',db,'supabase/tests/function-permissions.sql');
   console.log('PASS: function ACLs, role guards, defaults, search paths and triggers');
+  sql('',db,'supabase/tests/panel-job-cancellation.sql');
+  console.log('PASS: job cancellation, worker interest and safe reputation counts');
   const call = `set role authenticated; select set_config('request.jwt.claim.sub','71000000-0000-4000-8000-000000000001',false); select public.publish_job_draft('72000000-0000-4000-8000-000000000099');`;
   const [a,b] = await Promise.all([concurrent(call),concurrent(call)]);
   assert.equal(a,b,'concurrent publication must return the same listing');
@@ -73,6 +75,38 @@ function concurrent(statement) {
   assert.equal(editA,editB);
   assert.equal(sql("select content_version from jobs where id='74000000-0000-4000-8000-000000000001'"),'2');
   console.log('PASS: concurrent edit commits update the public row exactly once');
+  const client = '71000000-0000-4000-8000-000000000001';
+  const worker = '71000000-0000-4000-8000-000000000002';
+  const cancelJob = '94500000-0000-4000-8000-000000000001';
+  const completeJob = '94500000-0000-4000-8000-000000000002';
+  const cancelChat = '94600000-0000-4000-8000-000000000001';
+  const completeChat = '94600000-0000-4000-8000-000000000002';
+  const as = (actor, statement) => `set role authenticated; select set_config('request.jwt.claim.sub','${actor}',false); ${statement}`;
+  sql(`insert into public.jobs(id, owner_id, client_id, title, description, category, service_needed, barangay, location_text,
+      budget_min, budget_max, rate_type, workers_needed, scheduled_date, time_preference, schedule_flexibility, schedule_timezone)
+    select race_job, '${client}', '${client}', 'Race fixture', 'Synthetic cleaning request', 'Home & Local Help',
+      'Cleaning', 'San Pedro', 'San Pedro', 100, 200, 'per_job', 1, current_date+1, 'morning', 'flexible', 'Asia/Manila'
+    from unnest(array['${cancelJob}'::uuid,'${completeJob}'::uuid]) race_job;
+    insert into public.conversations(id,job_id,client_id,provider_id,started_by) values
+      ('${cancelChat}','${cancelJob}','${client}','${worker}','${worker}'),
+      ('${completeChat}','${completeJob}','${client}','${worker}','${worker}');`);
+  const hireRace = await Promise.allSettled([
+    concurrent(as(client, `select public.cancel_unfilled_job('${cancelJob}', 'not_needed');`)),
+    concurrent(as(client, `select public.mark_job_worker_hired('${cancelChat}');`)),
+  ]);
+  assert.equal(hireRace.filter(result => result.status === 'fulfilled').length, 1, 'pre-hire cancellation and hiring are mutually exclusive');
+  const hireOutcome = hireRace[0].status === 'fulfilled' ? 'closed:not_needed' : 'in_progress:hired';
+  assert.equal(sql(`select j.status || ':' || coalesce(j.closure_reason,c.status) from jobs j join conversations c on c.job_id=j.id where j.id='${cancelJob}'`), hireOutcome);
+
+  sql(as(client, `select public.mark_job_worker_hired('${completeChat}');`));
+  const completionRace = await Promise.allSettled([
+    concurrent(as(worker, `select public.change_hired_job_cancellation('${completeChat}', 'request', null, 'Availability changed');`)),
+    concurrent(as(client, `select public.complete_hired_job('${completeChat}');`)),
+  ]);
+  assert.equal(completionRace.filter(result => result.status === 'fulfilled').length, 1, 'completion and a pending request are mutually exclusive');
+  const completionOutcome = completionRace[0].status === 'fulfilled' ? 'in_progress:pending' : 'completed:none';
+  assert.equal(sql(`select j.status || ':' || coalesce(r.status,'none') from jobs j left join app_private.hired_job_cancellations r on r.job_id=j.id where j.id='${completeJob}'`), completionOutcome);
+  console.log('PASS: pre-hire cancellation versus hire and post-hire request versus completion race checks');
   console.log(`Isolated test database retained for inspection: ${db} on 127.0.0.1:${port}`);
 })().catch(error=>{
   console.error(error.message);

@@ -6,9 +6,52 @@ import { getProfileEditorProgress, isHiringProfileInputComplete, isWorkProfileIn
 import { validateJobPayload, validateServicePayload } from '@/services/listing-validation';
 import { clearReviewSnapshots, putReviewSnapshot, readReviewSnapshot } from '@/services/posting-review';
 import { runtimeService } from './helpers/runtime-service';
+import { sortByProviderReputation } from '@/utils/service-reputation';
+import type { ServiceSearchResult } from '@/types/marketplace.types';
 import type { CoreProfileInput, ProfileCompletionStatus, WorkProfileInput, HiringProfileInput } from '@/types/profile.types';
 
 type Result = { data: ProfileCompletionStatus | null; error: string | null };
+
+it('service comparison reaches older matching offers and keeps unrated offers eligible', async () => {
+  const rows = Array.from({ length: 42 }, (_, n) => ({ id: `offer-${n}`, provider_id: `provider-${n}` }));
+  const pages: [number, number][] = [];
+  const query = new Proxy({}, { get(_target, key: string) {
+    if (key === 'range') return (first: number, last: number) => {
+      pages.push([first, last]);
+      return Promise.resolve({ data: rows.slice(first, last + 1), error: null });
+    };
+    return () => query;
+  } });
+  const service = runtimeService<{ searchServices(input: object): Promise<{ data: ServiceSearchResult[]; error: string | null }> }>('@/services/service-profile.service', {
+    '@/utils/supabase': { supabase: {
+      from: () => query,
+      rpc: async (_name: string, { p_provider_ids }: { p_provider_ids: string[] }) => ({
+        error: null,
+        data: p_provider_ids.map((provider_id) => ({ provider_id,
+          average_rating: provider_id === 'provider-41' ? 5 : provider_id === 'provider-40' ? 4 : null,
+          review_count: provider_id === 'provider-41' ? 1 : provider_id === 'provider-40' ? 8 : 0,
+          completed_jobs_count: provider_id === 'provider-40' ? 10 : 1,
+        })),
+      }),
+    } },
+    '@/services/marketplace.helpers': {
+      compactText: () => '', doesRateOverlap: () => true, isPublicProfileVerified: () => true,
+      loadPublicProfiles: async () => new Map(),
+      mapService: (row: { id: string }) => ({ id: row.id, createdAt: '2026-11-19T00:00:00Z' }),
+    },
+    '@/services/content-visibility.service': { applyPublicPhotoVisibilityToRows: async (data: unknown) => data },
+    '@/services/profile-completion.service': {},
+  });
+  const result = await service.searchServices({ compareReputation: true, excludeCurrentUser: false, limit: 40 });
+  assert.equal(result.error, null);
+  assert.deepEqual(pages, [[0, 39], [40, 79]]);
+  const rated = sortByProviderReputation(result.data, 'highest_rated');
+  const completed = sortByProviderReputation(result.data, 'most_completed');
+  assert.equal(rated[0]?.id, 'offer-41');
+  assert.equal(completed[0]?.id, 'offer-40');
+  assert.equal(rated.length, 42);
+  assert.equal(rated.at(-1)?.averageRating, null);
+});
 type Profiles = { getMyProfileCompletion(): Promise<Result>; saveWorkProfile(input: WorkProfileInput): Promise<Result>; saveHiringProfile(input: HiringProfileInput): Promise<Result> };
 const work: WorkProfileInput = { headline: '', bio: 'Careful home help', offeredServices: ['Cleaning'], customOfferedServices: [], serviceArea: 'San Pedro', availability: 'Weekends' };
 const hiring: HiringProfileInput = { headline: '', bio: 'Home help needed', neededServices: ['Cleaning'], customNeededServices: [], coordinationStyle: 'App messages', preferredSchedule: 'Weekends' };

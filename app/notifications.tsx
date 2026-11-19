@@ -226,6 +226,8 @@ function getNotificationIcon(type: string) {
       return 'fact-check';
     case 'job_completed':
       return 'task-alt';
+    case 'job_cancellation':
+      return 'event-busy';
     case 'report_status_updated':
       return 'report';
     default:

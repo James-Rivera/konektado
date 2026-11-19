@@ -2,6 +2,10 @@
 
 This file records project decisions that affect scope, architecture, and implementation.
 
+## Panel follow-up for cancellation (2026-11-19)
+
+DEC-151: Keep temporary pausing and permanent cancellation distinct. Before hire the client selects a reason, including no worker found. After hire either participant can request cancellation, the other can accept or decline, and the requester can withdraw. Pending requests block completion. Accepted cancellations retain job and conversation history. Use the complaint workflow for disputes. Keep San Pedro as the pilot and reserve payment, refund, and billing proposals for future research. See [panel update contract](24-panel-updates.md).
+
 ## QA repair release candidate (2026-11-19)
 
 DEC-150: Prepare the tested report and review repairs on the production baseline. Preserve read-only staff access to participant-reported conversations and the existing photo visibility protections. Use the same job action rules in Your Posts and Job Detail. See [QA repair contract](qa/2026-11-19/repair-contract.md) for behavior and the coordinated database and client release.

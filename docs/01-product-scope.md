@@ -14,7 +14,7 @@
 | Jobs | Client creates, edits, closes, or cancels a job post with service category, hiring requirements, schedule, worker count, public approximate location, private location notes, certification preference, and budget range. | Payments and agreements remain outside the app. Private location notes are never public cards/details. |
 | Job Browsing | Providers browse open jobs. | Discovery hides the current user's own posts and supports filters for category/service, nearby, rate range, experience level, certification metadata, verified-only, and date. |
 | Messages / Interest | Verified users message job posters or workers to show interest and coordinate. | This replaces a formal application flow for MVP. |
-| Hiring Decision | Clients can mark a worker as hired from a job-related conversation. | Keep the decision simple: interested, hired, completed, declined/cancelled. |
+| Hiring Decision | The client can hire one worker, pause or permanently cancel an unfilled request, and mark hired work completed. | Either hired participant can request cancellation. The other participant must accept it. A pending request blocks completion. |
 | Reviews | Completed hired-job participants can leave reciprocal rating and feedback. | One immutable client-to-worker review and one immutable worker-to-client review per job; the database derives the correct counterparty. |
 | In-app Notifications | Users can review basic unread/read notifications for messages, verification decisions, completed hired jobs, and report status updates. | In-app center only; no push delivery in MVP. |
 | Admin Dashboard | Basic review queues for verification requests, reports, users, jobs, and reviews. | Admin UI can be simple but must be reliable. |

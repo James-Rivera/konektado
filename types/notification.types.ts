@@ -4,6 +4,7 @@ export type NotificationType =
   | 'verification_rejected'
   | 'verification_needs_more_info'
   | 'job_completed'
+  | 'job_cancellation'
   | 'report_status_updated';
 
 export type NotificationSummary = {

@@ -3,6 +3,7 @@ import { doesServiceMatchWorkType, getCategoryForMvpService, getDiscoveryGroupFo
 import { DEFAULT_HOME_FEED_FILTERS, type HomeFeedFilters } from '@/services/home-feed.service';
 import type { JobSummary } from '@/types/marketplace.types';
 import type { SearchDiscoveryFilters } from '@/types/discovery.types';
+import { isProviderReputationSort } from '@/utils/service-reputation';
 
 export type DiscoverySession = {
   mode: SearchMode;
@@ -73,6 +74,9 @@ export function discoveryReducer(state: DiscoverySession, action: DiscoveryActio
     return {
       ...state,
       mode: action.value,
+      filters: action.value === 'jobs' && isProviderReputationSort(state.filters.sort)
+        ? { ...state.filters, sort: 'relevant' }
+        : state.filters,
       homeFilters: { ...state.homeFilters, feedType: action.value === 'jobs' ? 'jobs' : 'services' },
     };
   }
@@ -90,7 +94,7 @@ export function discoveryReducer(state: DiscoverySession, action: DiscoveryActio
         locationPreference: filters.locationScope === 'same_barangay'
           ? 'same_barangay'
           : state.homeFilters.locationPreference === 'any' ? 'any' : 'nearby',
-        sort: filters.sort === 'relevant' ? 'recommended' : filters.sort,
+        sort: isProviderReputationSort(filters.sort) ? state.homeFilters.sort : filters.sort === 'relevant' ? 'recommended' : filters.sort,
       },
     };
   }

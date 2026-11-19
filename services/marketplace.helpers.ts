@@ -67,6 +67,7 @@ export type JobRow = ScheduleColumns & {
   created_at: string;
   updated_at: string;
   closed_at?: string | null;
+  closure_reason?: JobSummary['closureReason'];
 };
 
 export type ServiceRow = {
@@ -699,6 +700,7 @@ export function mapJob(row: JobRow, profiles: Map<string, PublicProfileSummary>)
     certificationRequired: row.certification_required ?? false,
     certificationNote: row.certification_note ?? null,
     status: row.status,
+    closureReason: row.closure_reason ?? null,
     acceptedProviderId: row.accepted_provider_id,
     allowMessages: row.allow_messages ?? true,
     autoReplyEnabled: row.auto_reply_enabled ?? false,
@@ -782,7 +784,7 @@ export function formatJobSubtitle(job: JobSummary) {
 
 export function formatServiceRatingText(service: ServiceSearchResult) {
   if (service.averageRating && service.reviewCount > 0) {
-    return `${service.averageRating.toFixed(1)} rating`;
+    return `${service.averageRating.toFixed(1)} (${service.reviewCount})`;
   }
 
   return 'No reviews yet';

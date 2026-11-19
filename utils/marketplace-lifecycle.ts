@@ -1,4 +1,23 @@
-import type { ConversationSummary, JobStatus } from '@/types/marketplace.types';
+import { manilaDate } from '@/services/job-schedule';
+import type { ConversationSummary, JobClosureReason, JobStatus, JobSummary } from '@/types/marketplace.types';
+
+export function getJobClosureLabel(reason?: JobClosureReason | null) {
+  if (reason === 'no_worker_found') return 'Closed without a worker';
+  return reason ? 'Cancelled' : null;
+}
+
+export function getUnfilledJobInterestLabel(job: JobSummary) {
+  if (!['open', 'reviewing'].includes(job.status) || job.acceptedProviderId) return null;
+  if (job.unfilledInterest === 'worker_messaged') return 'A worker has messaged';
+  if (job.unfilledInterest === 'awaiting_reply') return 'Waiting for a worker’s reply';
+  if (job.unfilledInterest === 'no_worker_message') return 'No worker has messaged yet';
+  return null;
+}
+
+export function isUnfilledJobSchedulePast(job: JobSummary) {
+  return Boolean(job.schedule?.date && ['open', 'reviewing'].includes(job.status) &&
+    !job.acceptedProviderId && job.schedule.date < manilaDate());
+}
 
 /** Mirrors the supported resident actions; the database remains authoritative. */
 export function getJobOwnerActionPolicy(status: JobStatus) {

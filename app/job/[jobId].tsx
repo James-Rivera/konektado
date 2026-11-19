@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { AdminContextBanner } from '@/components/admin/AdminContextBanner';
 import { CachedRemoteImage } from '@/components/CachedRemoteImage';
 import { EmptyState } from '@/components/EmptyState';
 import { useFeedback } from '@/components/FeedbackProvider';
+import { JobCancellationSheet } from '@/components/JobCancellationSheet';
 import { ListingPhotoCarousel } from '@/components/ListingPhotoCarousel';
 import { MoreActionsSheet } from '@/components/MoreActionsSheet';
 import { ReportSheet, type ReportSheetSubmitValue } from '@/components/ReportSheet';
@@ -21,7 +22,8 @@ import { useVerificationGate } from '@/hooks/use-verification-gate';
 import { useSavedPosts } from '@/hooks/use-saved-posts';
 import { emitConversationPreviewUpdate } from '@/services/conversation-preview-events';
 import { startJobConversation } from '@/services/conversation.service';
-import { closeJob, deactivateJob, getJobDetail, reactivateJob } from '@/services/job.service';
+import { cancelUnfilledJob, getHiredJobConversationId } from '@/services/job-cancellation.service';
+import { deactivateJob, getJobDetail, reactivateJob } from '@/services/job.service';
 import {
     formatClientJobsPostedText,
     formatClientRatingText,
@@ -39,7 +41,7 @@ import { createReport } from '@/services/report.service';
 import type { JobDetail } from '@/types/marketplace.types';
 import { getAvatarDisplayUrl, getDetailImageUrl } from '@/utils/image-processing';
 import { showAlert } from '@/utils/alert';
-import { getJobOwnerActionPolicy } from '@/utils/marketplace-lifecycle';
+import { getJobClosureLabel, getJobOwnerActionPolicy, getUnfilledJobInterestLabel, isUnfilledJobSchedulePast } from '@/utils/marketplace-lifecycle';
 import type { VerificationGateCopy } from '@/utils/verification-gate';
 
 function getParamValue(value: string | string[] | undefined) {
@@ -56,10 +58,11 @@ export default function JobDetailScreen() {
   const params = useLocalSearchParams<{ adminView?: string | string[]; jobId?: string | string[] }>();
   const rawJobId = getParamValue(params.jobId);
   const { adminViewOnly, adminViewRequested } = useAdminViewOnly(params.adminView);
-  const [job, setJob] = useState<JobDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [jobData, setJob] = useState<JobDetail | null>(null);
+  const [loadedJobId, setLoadedJobId] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
+  const [cancellationJobId, setCancellationJobId] = useState<string | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [updatingPost, setUpdatingPost] = useState(false);
@@ -72,13 +75,13 @@ export default function JobDetailScreen() {
     void refreshSavedPosts();
   }, [profile?.id, rawJobId, refreshSavedPosts]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
 
     // Without a job id there is nothing to load; `isLoading` below reports that.
     if (!rawJobId) return;
 
-    getJobDetail(rawJobId).then((result) => {
+    getJobDetail(rawJobId, profile?.id).then((result) => {
       if (!active) return;
 
       if (result.error) {
@@ -87,15 +90,20 @@ export default function JobDetailScreen() {
         setJob(result.data);
       }
 
-      setLoading(false);
+      setLoadedJobId(rawJobId);
+    }).catch(() => {
+      if (!active) return;
+      setLoadedJobId(rawJobId);
+      showAlert('Job details', 'Could not load this job. Check your connection and try again.');
     });
 
     return () => {
       active = false;
     };
-  }, [rawJobId]);
+  }, [profile?.id, rawJobId]));
 
-  const isLoading = Boolean(rawJobId) && loading;
+  const job = jobData?.id === rawJobId ? jobData : null;
+  const isLoading = Boolean(rawJobId) && loadedJobId !== rawJobId;
 
   if (isLoading && !job) {
     return <JobDetailSkeleton showActionBar={!adminViewRequested} />;
@@ -156,6 +164,7 @@ export default function JobDetailScreen() {
     ),
   );
   const isOwnJob = profile?.id === job.clientId;
+  const interestLabel = isOwnJob ? getUnfilledJobInterestLabel(job) : null;
   const saveTarget = { postType: 'job' as const, postId: job.id };
   const messageCta = getJobMessageCta({
     allowMessages: job.allowMessages,
@@ -298,27 +307,34 @@ export default function JobDetailScreen() {
             params: { jobId: job.id, returnTo: 'post' },
           });
         },
-        onClose: () =>
-          confirmJobStatusUpdate({
-            body: 'This marks the job as closed and removes it from active job search results.',
-            label: 'Close job',
-            onConfirm: () =>
-              runJobStatusUpdate({
-                action: () => closeJob(job.id),
-                successMessage: 'Job closed',
-              }),
-            title: 'Close this job?',
-          }),
+        onClose: () => {
+          setOptionsVisible(false);
+          setCancellationJobId(job.id);
+        },
+        onManageCancellation: async () => {
+          setUpdatingPost(true);
+          try {
+            const result = await getHiredJobConversationId(job.id);
+            if (result.error || !result.data) {
+              showAlert('Manage cancellation', result.error ?? 'The hired conversation is unavailable.');
+              return;
+            }
+            setOptionsVisible(false);
+            router.push({ pathname: '/conversation/[conversationId]/details', params: { conversationId: result.data } });
+          } finally {
+            setUpdatingPost(false);
+          }
+        },
         onDeactivate: () =>
           confirmJobStatusUpdate({
             body: 'This hides the job from search. You can reactivate it later from your posts.',
-            label: 'Deactivate',
+            label: 'Pause',
             onConfirm: () =>
               runJobStatusUpdate({
                 action: () => deactivateJob(job.id),
-                successMessage: 'Job deactivated',
+                successMessage: 'Job paused',
               }),
-            title: 'Deactivate this job?',
+            title: 'Pause this job?',
           }),
         onReactivate: () =>
           runJobStatusUpdate({
@@ -379,7 +395,7 @@ export default function JobDetailScreen() {
           <View style={styles.section}>
             <View style={styles.jobTitleRow}>
               <Text style={styles.jobTitle}>{jobTitle}</Text>
-              <StatusPill status={jobStatus} />
+              <StatusPill closureLabel={getJobClosureLabel(job.closureReason)} status={jobStatus} />
             </View>
             <Text style={styles.postedAgo}>{postedAgo}</Text>
 
@@ -404,7 +420,9 @@ export default function JobDetailScreen() {
             <Text style={styles.sectionTitle}>Job summary</Text>
             <DetailGrid
               items={[
-                { label: 'Status', value: formatStatus(jobStatus) },
+                { label: 'Status', value: getJobClosureLabel(job.closureReason) ?? formatStatus(jobStatus) },
+                ...(interestLabel ? [{ label: 'Worker response', value: interestLabel }] : []),
+                ...(isOwnJob && isUnfilledJobSchedulePast(job) ? [{ label: 'Schedule update', value: 'The posted date has passed. Edit the date or close the request.' }] : []),
                 { label: 'Workers needed', value: String(workersNeeded) },
                 { label: 'Worker hired', value: acceptedCount ? 'Yes' : 'No worker hired yet' },
                 { label: 'Service', value: displayServiceNeeded || job.category || 'Service to coordinate' },
@@ -560,6 +578,18 @@ export default function JobDetailScreen() {
         title={isOwnJob ? 'Manage job' : 'Job options'}
         visible={optionsVisible && showHeaderOptions}
       />
+      {cancellationJobId === job.id ? (
+        <JobCancellationSheet key={job.id} mode="unfilled" onClose={() => setCancellationJobId(null)}
+          onSubmit={async (reason) => {
+            const result = await cancelUnfilledJob(job.id, reason);
+            if (result.error) return result.error;
+            setJob((current) => current?.id === job.id
+              ? { ...current, status: 'closed', closureReason: reason, closedAt: new Date().toISOString() }
+              : current);
+            showSuccessToast('Job request closed');
+            return null;
+          }} />
+      ) : null}
       <ReportSheet
         onClose={() => setReportVisible(false)}
         onSubmit={handleReport}
@@ -664,6 +694,7 @@ function formatDate(value: string) {
 }
 
 function formatStatus(status: JobDetail['status']) {
+  if (status === 'cancelled') return 'Paused';
   return status
     .split('_')
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
@@ -779,6 +810,7 @@ function getOwnerJobActions({
   onClose,
   onDeactivate,
   onEdit,
+  onManageCancellation,
   onReactivate,
   updating,
 }: {
@@ -786,6 +818,7 @@ function getOwnerJobActions({
   onClose: () => void;
   onDeactivate: () => void;
   onEdit: () => void;
+  onManageCancellation: () => void;
   onReactivate: () => void;
   updating: boolean;
 }) {
@@ -812,7 +845,7 @@ function getOwnerJobActions({
     actions.push({
       disabled: updating,
       icon: 'pause-circle' as const,
-      label: updating ? 'Updating...' : 'Deactivate job',
+      label: updating ? 'Updating...' : 'Pause job',
       onPress: onDeactivate,
     });
   }
@@ -821,19 +854,23 @@ function getOwnerJobActions({
     actions.push({
       disabled: updating,
       icon: 'task-alt' as const,
-      label: updating ? 'Updating...' : 'Close job',
+      label: 'Cancel job request',
       onPress: onClose,
       tone: 'danger' as const,
     });
   }
 
+  if (job.status === 'in_progress') actions.push({ disabled: updating, icon: 'event-busy' as const, label: 'Manage cancellation', onPress: onManageCancellation });
+
   return actions;
 }
 
 function StatusPill({
+  closureLabel,
   status,
   isLoading = false,
 }: {
+  closureLabel?: string | null;
   status?: JobDetail['status'];
   isLoading?: boolean;
 }) {
@@ -843,7 +880,7 @@ function StatusPill({
 
   return (
     <View style={styles.statusPill}>
-      <Text style={styles.statusPillText}>{formatStatus(status)}</Text>
+      <Text style={styles.statusPillText}>{closureLabel ?? formatStatus(status)}</Text>
     </View>
   );
 }

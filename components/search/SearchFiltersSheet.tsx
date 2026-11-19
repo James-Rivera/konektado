@@ -24,6 +24,7 @@ type FilterOption<T extends string> = {
 };
 
 type SearchFiltersSheetProps = {
+  compareProviders?: boolean;
   filters: SearchDiscoveryFilters;
   groups: FilterOption<'all' | DiscoveryGroupKey>[];
   services: FilterOption<'all' | MvpServiceOption>[];
@@ -67,12 +68,17 @@ const SORT_OPTIONS: FilterOption<SearchDiscoveryFilters['sort']>[] = [
   { key: 'newest', label: 'Newest' },
   { key: 'nearby', label: 'Nearby' },
 ];
+const PROVIDER_SORT_OPTIONS: FilterOption<SearchDiscoveryFilters['sort']>[] = [
+  { key: 'highest_rated', label: 'Highest rated' },
+  { key: 'most_completed', label: 'Most completed' },
+];
 
 const RATE_MINIMUM = 0;
 const RATE_MAXIMUM = 5000;
 const RATE_STEP = 100;
 
 export function SearchFiltersSheet({
+  compareProviders = false,
   filters,
   groups,
   services,
@@ -274,7 +280,7 @@ export function SearchFiltersSheet({
 
         <FilterSection title="Sort">
           <View style={styles.chipRow}>
-            {SORT_OPTIONS.map((option) => (
+            {(compareProviders ? [...SORT_OPTIONS, ...PROVIDER_SORT_OPTIONS] : SORT_OPTIONS).map((option) => (
               <ChoiceChip
                 key={option.key}
                 label={option.label}

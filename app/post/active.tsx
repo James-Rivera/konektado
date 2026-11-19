@@ -5,17 +5,19 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFeedback } from '@/components/FeedbackProvider';
+import { JobCancellationSheet } from '@/components/JobCancellationSheet';
 import { MoreActionsSheet, type MoreSheetAction } from '@/components/MoreActionsSheet';
 import { Skeleton } from '@/components/Skeleton';
 import { color, radius, space, typography } from '@/constants/theme';
 import { useProfile } from '@/hooks/use-profile';
-import { closeJob, deactivateJob, listMyJobs, reactivateJob } from '@/services/job.service';
+import { cancelUnfilledJob, getHiredJobConversationId } from '@/services/job-cancellation.service';
+import { deactivateJob, listMyJobs, reactivateJob } from '@/services/job.service';
 import { formatJobPostTitle, formatServicePostTitle } from '@/services/marketplace.helpers';
 import { getMyJobReviewState } from '@/services/review.service';
 import { listMyServices, updateServiceAvailability } from '@/services/service-profile.service';
 import type { JobReviewState, JobSummary, ProviderService } from '@/types/marketplace.types';
 import { showAlert } from '@/utils/alert';
-import { getJobOwnerActionPolicy } from '@/utils/marketplace-lifecycle';
+import { getJobClosureLabel, getJobOwnerActionPolicy, getUnfilledJobInterestLabel } from '@/utils/marketplace-lifecycle';
 
 type ManageTarget =
   | { job: JobSummary; type: 'job' }
@@ -32,6 +34,7 @@ export default function ActivePostsScreen() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [query, setQuery] = useState('');
   const [manageTarget, setManageTarget] = useState<ManageTarget | null>(null);
+  const [cancellingJob, setCancellingJob] = useState<JobSummary | null>(null);
   const [reviewStates, setReviewStates] = useState<Record<string, JobReviewState>>({});
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
@@ -214,29 +217,36 @@ export default function ActivePostsScreen() {
         onEdit: () => editJob(manageTarget.job),
         onReview: () => viewTarget(manageTarget),
         reviewState: reviewStates[manageTarget.job.id] ?? null,
-        onClose: () =>
-          confirmJobAction({
-            body: 'This marks the job as closed and removes it from active search results.',
-            label: 'Close job',
-            onConfirm: () =>
-              updateJob({
-                job: manageTarget.job,
-                run: () => closeJob(manageTarget.job.id),
-                successMessage: 'Job closed',
-              }),
-            title: 'Close this job?',
-          }),
+        onClose: () => {
+          setManageTarget(null);
+          setCancellingJob(manageTarget.job);
+        },
+        onManageCancellation: async () => {
+          const jobId = manageTarget.job.id;
+          setUpdatingKey(`job-${jobId}`);
+          try {
+            const result = await getHiredJobConversationId(jobId);
+            if (result.error || !result.data) {
+              showAlert('Manage cancellation', result.error ?? 'The hired conversation is unavailable.');
+              return;
+            }
+            setManageTarget(null);
+            router.push({ pathname: '/conversation/[conversationId]/details', params: { conversationId: result.data } });
+          } finally {
+            setUpdatingKey(null);
+          }
+        },
         onDeactivate: () =>
           confirmJobAction({
             body: 'This hides the job from search. You can reactivate it later from your posts.',
-            label: 'Deactivate',
+            label: 'Pause',
             onConfirm: () =>
               updateJob({
                 job: manageTarget.job,
                 run: () => deactivateJob(manageTarget.job.id),
-                successMessage: 'Job deactivated',
+                successMessage: 'Job paused',
               }),
-            title: 'Deactivate this job?',
+            title: 'Pause this job?',
           }),
         onReactivate: () =>
           updateJob({
@@ -341,6 +351,18 @@ export default function ActivePostsScreen() {
           title={manageTarget?.type === 'service' ? 'Manage service' : 'Manage job'}
           visible={Boolean(manageTarget)}
         />
+        {cancellingJob ? (
+          <JobCancellationSheet key={cancellingJob.id} mode="unfilled" onClose={() => setCancellingJob(null)}
+            onSubmit={async (reason) => {
+              const result = await cancelUnfilledJob(cancellingJob.id, reason);
+              if (result.error) return result.error;
+              setJobs((current) => current.map((job) => job.id === cancellingJob.id
+                ? { ...job, status: 'closed', closureReason: reason }
+                : job));
+              showSuccessToast('Job request closed');
+              return null;
+            }} />
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -382,7 +404,7 @@ function ActivePostCard({
           <MaterialIcons color={color.verificationBlue} name="more-vert" size={24} />
         </Pressable>
       </View>
-      <StatusRow label={formatJobStatus(job.status)} tone={getJobStatusTone(job.status)} />
+      <StatusRow label={getJobClosureLabel(job.closureReason) ?? getUnfilledJobInterestLabel(job) ?? formatJobStatus(job.status)} tone={getJobStatusTone(job.status)} />
       <Pressable accessibilityRole="button" onPress={onManage} style={({ pressed }) => [styles.manageButton, pressed && styles.pressed]}>
         <Text style={styles.manageButtonText}>View</Text>
       </Pressable>
@@ -492,6 +514,7 @@ function getJobManagementActions({
   onClose,
   onDeactivate,
   onEdit,
+  onManageCancellation,
   onReactivate,
   onReview,
   onView,
@@ -502,6 +525,7 @@ function getJobManagementActions({
   onClose: () => void;
   onDeactivate: () => void;
   onEdit: () => void;
+  onManageCancellation: () => void;
   onReactivate: () => void;
   onReview: () => void;
   onView: () => void;
@@ -550,7 +574,7 @@ function getJobManagementActions({
     actions.push({
       disabled: updating,
       icon: 'pause-circle',
-      label: updating ? 'Updating...' : 'Deactivate job',
+      label: updating ? 'Updating...' : 'Pause job',
       onPress: onDeactivate,
     });
   }
@@ -559,11 +583,13 @@ function getJobManagementActions({
     actions.push({
       disabled: updating,
       icon: 'task-alt',
-      label: updating ? 'Updating...' : 'Close job',
+      label: 'Cancel job request',
       onPress: onClose,
       tone: 'danger',
     });
   }
+
+  if (job.status === 'in_progress') actions.push({ disabled: updating, icon: 'event-busy', label: 'Manage cancellation', onPress: onManageCancellation });
 
   return actions;
 }
@@ -634,7 +660,7 @@ function getTargetKey(target: ManageTarget) {
 }
 
 function formatJobStatus(status: JobSummary['status']) {
-  if (status === 'cancelled') return 'Inactive job';
+  if (status === 'cancelled') return 'Paused job';
   if (status === 'closed') return 'Closed job';
   if (status === 'completed') return 'Completed job';
   return `Active job - ${status.replace(/_/g, ' ')}`;
